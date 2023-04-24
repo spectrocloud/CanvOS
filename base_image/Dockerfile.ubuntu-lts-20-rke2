@@ -1,0 +1,74 @@
+
+############################Do not edit below this line##################################
+ARG BASE_IMAGE_TAG=v1.5.0
+ARG BASE_IMAGE=quay.io/kairos/core-ubuntu-20-lts:${BASE_IMAGE_TAG}
+ARG IMAGE_REPOSITORY
+ARG SPECTRO_VERSION=v3.3.3
+ARG SPECTRO_LUET_VERSION=v1.0.3
+FROM gcr.io/spectro-dev-public/stylus-framework:${SPECTRO_VERSION} as spectro-base
+FROM ghcr.io/kairos-io/provider-k3s:v1.2.3  as provider-rke2
+
+FROM $BASE_IMAGE
+ARG BASE_IMAGE_TAG
+ARG IMAGE_REPOSITORY
+ARG BASE_IMAGE_NAME=core-ubuntu-20-lts
+ARG BASE_IMAGE
+ARG SPECTRO_VERSION
+ARG K8S_VERSION=1.25.2-rke2r1
+
+ARG ARCH=amd64
+ENV ARCH=${ARCH}
+COPY --from=spectro-base / /
+COPY --from=provider-rke2 / /
+
+RUN mkdir -p /etc/luet/repos.conf.d && \
+    luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+    luet repo add kairos  --type docker --url quay.io/kairos/packages -y && \
+    luet repo update
+
+
+RUN luet install -y  k8s/rke2@$K8S_VERSION && luet cleanup
+RUN luet install -y system/elemental-cli && luet cleanup
+
+
+# ENV OS_NAME=$OS_ID:${SPECTRO_VERSION}
+# ENV OS_REPO=${IMAGE_REPOSITORY}
+# ENV OS_LABEL=${BASE_IMAGE_TAG}_${K8S_VERSION}_${SPECTRO_VERSION}
+# RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
+
+ENV OS_ID=ubuntu
+ENV OS_VERSION=20.04
+ENV OS_NAME=${BASE_IMAGE_NAME}-k3s:${SPECTRO_VERSION}
+ENV OS_REPO=${IMAGE_REPOSITORY}
+ENV OS_LABEL=${BASE_IMAGE_TAG}_${K8S_VERSION}_${SPECTRO_VERSION}
+RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
+
+RUN apt-get update && apt-get install zstd -y
+   
+    
+## Copy any custom files by placing in the directory specified below
+COPY overlay/files/ /
+   
+RUN apt-get update && apt-get upgrade -y
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+            ln -sf "${kernel#/boot/}" /boot/vmlinuz
+RUN kernel=$(ls /lib/modules | head -n1) && \
+            dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+            ln -sf "initrd-${kernel}" /boot/initrd
+RUN kernel=$(ls /lib/modules | head -n1) && depmod -a "${kernel}"
+RUN apt-get clean
+   
+    
+############################Do not edit above this line##################################
+###########################Add any other image customizations here #######################
+
+#Examples
+# To install the nginx package from ubuntu or opensuse repos
+#RUN zypper refresh && zypper install nginx
+# or
+#RUN apt-get update && apt-get install nginx
+
+##########################################################################################
+RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+# Clear cache
+RUN rm -rf /var/cache/* && apt-get clean && rm -rf /var/cache/* && journalctl --vacuum-size=1K && rm /etc/machine-id && rm -rf /var/lib/dbus/machine-id && rm -rf /etc/hostname
