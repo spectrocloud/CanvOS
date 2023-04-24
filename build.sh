@@ -1,7 +1,7 @@
 #!/bin/bash -x
 
 set -xe
-source .versions.env
+source .variables.env
 CANVOS_ENV=kubecon23
 ISO_IMAGE_NAME=$CANVOS_ENV-installer
 
