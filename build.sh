@@ -17,7 +17,7 @@ KAIROS_VERSION="${KAIROS_VERSION:-v1.5.0}"
 
 ### Build Image Information
 BUILD_IMAGE_TAG=build
-DOCKERFILE_BUILD_IMAGE=./build_image/Dockerfile.ubuntu-lts-k3s
+DOCKERFILE_BUILD_IMAGE=./base_images/Dockerfile.ubuntu-lts-22-k3s
 
 echo "Building Build image $DOCKERFILE_BUILD_IMAGE"
 docker build --build-arg SPECTRO_VERSION=$SPECTRO_VERSION \
