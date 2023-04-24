@@ -15,12 +15,12 @@ ARG IMAGE_REPOSITORY
 ARG BASE_IMAGE_NAME=core-opensuse-leap
 ARG BASE_IMAGE
 ARG SPECTRO_VERSION
-ARG K8S_VERSION=rke2r1
+ARG K8S_VERSION=1.25.2-rke2r1
 
 ARG ARCH=amd64
 ENV ARCH=${ARCH}
 COPY --from=spectro-base / /
-COPY --from=provider-kubeadm / /
+COPY --from=provider-rke2 / /
 
 RUN mkdir -p /etc/luet/repos.conf.d && \
     luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
@@ -28,13 +28,15 @@ RUN mkdir -p /etc/luet/repos.conf.d && \
     luet repo update
 
 
-RUN luet install -y  k8s/rke2@$K8S_VERSION && luet cleanup
+RUN luet install -y k8s/rke2@$K8S_VERSION && luet cleanup
 RUN luet install -y system/elemental-cli && luet cleanup
 
-ENV OS_ID=${BASE_IMAGE_NAME}-rke2
+# ENV OS_ID=${BASE_IMAGE_NAME}-k3s
+# ENV OS_VERSION=${K8S_VERSION}_${SPECTRO_VERSION}
+ENV OS_ID=opensuse-leap
+ENV OS_VERSION=15.4
 ENV OS_NAME=$OS_ID:${SPECTRO_VERSION}
 ENV OS_REPO=${IMAGE_REPOSITORY}
-ENV OS_VERSION=${K8S_VERSION}_${SPECTRO_VERSION}
 ENV OS_LABEL=${BASE_IMAGE_TAG}_${K8S_VERSION}_${SPECTRO_VERSION}
 RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
    

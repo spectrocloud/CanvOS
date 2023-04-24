@@ -1,0 +1,3 @@
+*.iso
+*.iso.sha256
+.variables.env

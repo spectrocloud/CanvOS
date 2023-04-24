@@ -2,8 +2,6 @@
 
 set -xe
 source .variables.env
-CANVOS_ENV=kubecon23
-ISO_IMAGE_NAME=$CANVOS_ENV-installer
 
 ### Base Image Settings (Do Not modify accept for advanced Use Cases)
 IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-ttl.sh}"
@@ -17,33 +15,49 @@ KAIROS_VERSION="${KAIROS_VERSION:-v1.5.0}"
 
 ### Build Image Information
 BUILD_IMAGE_TAG=build
-DOCKERFILE_BUILD_IMAGE=./base_images/Dockerfile.ubuntu-lts-22-k3s
+DOCKERFILE_BUILD_IMAGE=./base_images/Dockerfile.${OS_FLAVOR}-${K8S_FLAVOR}
 
+# Set Package Variable in Dockerfile for specific OS Flavor
+if [[ $OS_FLAVOR == ubuntu* ]]; then
+  PACKAGE_VARIABLE="apt"
+elif [ $OS_FLAVOR == "opensuse-leap" ]; then
+  PACKAGE_VARIABLE="zypper"
+fi
+
+# Create Build Image
 echo "Building Build image $DOCKERFILE_BUILD_IMAGE"
 docker build --build-arg SPECTRO_VERSION=$SPECTRO_VERSION \
     --build-arg SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION \
     -t $BUILD_IMAGE_TAG -f $DOCKERFILE_BUILD_IMAGE .
 
+# Create Installer Image to be used in ISO
 echo "Building Installer image $INSTALLER_IMAGE"
 docker build --build-arg BUILD_IMAGE=$BUILD_IMAGE_TAG \
-    -t $INSTALLER_IMAGE -f images/Dockerfile .
+    --build-arg PACKAGE_VARIABLE=$PACKAGE_VARIABLE \
+    -t $INSTALLER_IMAGE -f ./Dockerfile .
 
+# Create Provider Images
 for k8s_version in ${K8S_VERSIONS//,/ }
 do
-    IMAGE=${IMAGE_REPOSITORY}/core-ubuntu-22-lts-k3s:$CANVOS_ENV-v${k8s_version}_${SPECTRO_VERSION}
-    docker build --build-arg K8S_VERSION=$k8s_version \
+    IMAGE=${IMAGE_REPOSITORY}/core-${OS_FLAVOR}-${K8S_FLAVOR}:$CANVOS_ENV-v${k8s_version}_${SPECTRO_VERSION}
+    docker build --build-arg BUILD_IMAGE=$BUILD_IMAGE_TAG \
+                 --build-arg K8S_VERSION=$k8s_version \
                  --build-arg SPECTRO_VERSION=$SPECTRO_VERSION \
                  --build-arg SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION \
+                 --build-arg PACKAGE_VARIABLE=$PACKAGE_VARIABLE \
                  -t $IMAGE \
-                 -f images/Dockerfile ./
+                 -f ./Dockerfile ./
     if [[ "$PUSH_BUILD" == "true" ]]; then
       echo "Pushing image"
       docker push "$IMAGE"
     fi
 done
 
+# Remove Old Installer Images from local Image Cache
 docker rmi $ISO_IMAGE_ID || true
+# Tag new installer image
 docker tag $INSTALLER_IMAGE $ISO_IMAGE_ID
+# Build Installer ISO
 echo "Building $ISO_IMAGE_NAME.iso from $INSTALLER_IMAGE"
 docker run -v $PWD:/cOS \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -51,11 +65,14 @@ docker run -v $PWD:/cOS \
              --debug build-iso --date=false $ISO_IMAGE_ID --local --overlay-iso /cOS/overlay/files-iso  --output /cOS/
 docker rmi $ISO_IMAGE_ID
 
-if [[ "$PUSH_BUILD" == "true" ]]; then
-  echo "Pushing image"
-  docker push "$INSTALLER_IMAGE"
-fi
+# # Push Installer Image uncomment if this is needed
+# if [[ "$PUSH_BUILD" == "true" ]]; then
+#   echo "Pushing image"
+#   docker push "$INSTALLER_IMAGE"
+# fi
 
-aws s3 cp $ISO_IMAGE_NAME.iso s3://edgeforge/images/$ISO_IMAGE_NAME-$SPECTRO_VERSION.iso --profile gh-runner
-rm $ISO_IMAGE_NAME.iso
+# aws s3 cp $ISO_IMAGE_NAME.iso s3://edgeforge/images/$ISO_IMAGE_NAME-$SPECTRO_VERSION.iso --profile gh-runner
+# Clean Local images.  This is used if you are pushing the installer image to something like an S3 bucket for distribution.
+rm -f $ISO_IMAGE_NAME.iso
+rm -f $ISO_IMAGE_NAME.iso.sha256
 docker rmi $BUILD_IMAGE_TAG
