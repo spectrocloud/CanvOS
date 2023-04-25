@@ -1,9 +1,0 @@
-install:
-  poweroff: true
-stages:
-  initramfs:
-    - users:
-        kairos:
-          groups:
-            - sudo
-          passwd: kairos
