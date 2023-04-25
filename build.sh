@@ -3,18 +3,21 @@
 set -xe
 source .variables.env
 
-### Base Image Settings (Do Not modify accept for advanced Use Cases)
-IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-ttl.sh}"
+### Base Image Settings (Do Not modify accept for advanced Use Cases) ###
+#########################################################################
 SPECTRO_VERSION="${SPECTRO_VERSION:-v3.3.3}"
 SPECTRO_LUET_VERSION="${SPECTRO_LUET_VERSION:-v1.0.3}"
 KAIROS_VERSION="${KAIROS_VERSION:-v1.5.0}"
+BUILD_PLATFORM="${BUILD_PLATFORM:-linux/amd64}"
+
+### Base Image Settings User Defined(Do Not modify accept for advanced Use Cases)
+
+IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-ttl.sh}"
 INSTALLER_IMAGE=${IMAGE_REPOSITORY}/${ISO_IMAGE_NAME}:${SPECTRO_VERSION}
 ISO_IMAGE_ID=ttl.sh/${ISO_IMAGE_NAME}:${SPECTRO_VERSION}
-BUILD_PLATFORM="${BUILD_PLATFORM:-linux/amd64}"
-KAIROS_VERSION="${KAIROS_VERSION:-v1.5.0}"
 USER_DATA_FILE="${USER_DATA_FILE:-user-data.yaml}"
 CONTENT_BUNDLE="${CONTENT_BUNDLE:-content_bundle.tar}"
-
+########################################################################
 
 ### Build Image Information
 BUILD_IMAGE_TAG=build
@@ -88,7 +91,7 @@ docker tag $INSTALLER_IMAGE $ISO_IMAGE_ID
 echo "Building $ISO_IMAGE_NAME.iso from $INSTALLER_IMAGE"
 docker run -v $PWD:/cOS \
             -v /var/run/docker.sock:/var/run/docker.sock \
-             -i --rm quay.io/kairos/osbuilder-tools:v0.3.3 --name $ISO_IMAGE_NAME \
+             -i --rm quay.io/kairos/osbuilder-tools:v0.3.3 --name $ISO_IMAGE_NAME_$SPECTRO_VERSION \
              --debug build-iso --date=false $ISO_IMAGE_ID --local --overlay-iso /cOS/overlay/files-iso  --output /cOS/
 # Removes installer images from docker
 docker rmi $ISO_IMAGE_ID
@@ -101,7 +104,7 @@ docker rmi $INSTALLER_IMAGE
 # fi
 
 # ISO Push Command Example
-$PUSH_COMMAND
+$PUSH_ISO_COMMAND
 
 # aws s3 cp $ISO_IMAGE_NAME.iso s3://image.iso
 
