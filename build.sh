@@ -20,11 +20,6 @@ CONTENT_BUNDLE="${CONTENT_BUNDLE:-content_bundle.tar}"
 
 
 
-# Change provider image name ex. ttl.sh/core-ubuntu-lts-22-k3s:demo-v1.24.6-k3s1-v3.3.3
-PROVIDER_IMAGE_NAME="core-${OS_FLAVOR}-${K8S_FLAVOR}:$CANVOS_ENV-v${k8s_version}${K8S_FLAVOR_TAG}-${SPECTRO_VERSION}"
-
-########################################################################
-
 ### Build Image Information
 BUILD_IMAGE_TAG=build
 DOCKERFILE_BUILD_IMAGE=./base_images/Dockerfile.${OS_FLAVOR}-${K8S_FLAVOR}
@@ -68,6 +63,7 @@ docker build --build-arg BUILD_IMAGE=$BUILD_IMAGE_TAG \
 for k8s_version in ${K8S_VERSIONS//,/ }
 
 do
+
 if [ "$K8S_FLAVOR" == "rke2" ]; then
   K8S_FLAVOR_TAG="-rke2r1"
 elif [ "$K8S_FLAVOR" == "k3s" ]; then
@@ -75,6 +71,9 @@ elif [ "$K8S_FLAVOR" == "k3s" ]; then
 elif [ "$K8S_FLAVOR" == "kubeadm" ]; then
   K8S_FLAVOR_TAG=""
 fi
+# Change provider image name ex. ttl.sh/core-ubuntu-lts-22-k3s:demo-v1.24.6-k3s1-v3.3.3
+PROVIDER_IMAGE_NAME="core-${OS_FLAVOR}-${K8S_FLAVOR}:$CANVOS_ENV-v${k8s_version}${K8S_FLAVOR_TAG}-${SPECTRO_VERSION}"
+
     IMAGE=${IMAGE_REPOSITORY}/${PROVIDER_IMAGE_NAME}
     docker build --build-arg BUILD_IMAGE=$BUILD_IMAGE_TAG \
                  --build-arg K8S_VERSION=$k8s_version \
@@ -97,8 +96,11 @@ docker tag $INSTALLER_IMAGE $ISO_IMAGE_ID
 echo "Building $ISO_IMAGE_NAME.iso from $INSTALLER_IMAGE"
 docker run -v $PWD:/cOS \
             -v /var/run/docker.sock:/var/run/docker.sock \
-             -i --rm quay.io/kairos/osbuilder-tools:v0.3.3 --name $ISO_IMAGE_NAME_$SPECTRO_VERSION \
-             --debug build-iso --date=false $ISO_IMAGE_ID --local --overlay-iso /cOS/overlay/files-iso  --output /cOS/
+             -i --rm quay.io/kairos/osbuilder-tools:v0.3.3 \
+             --name "${ISO_IMAGE_NAME}-${SPECTRO_VERSION}" \
+             --debug build-iso --date=false $ISO_IMAGE_ID \
+             --local --overlay-iso /cOS/overlay/files-iso  \
+             --output /cOS/
 # Removes installer images from docker
 docker rmi $ISO_IMAGE_ID
 docker rmi $INSTALLER_IMAGE
@@ -110,7 +112,8 @@ docker rmi $INSTALLER_IMAGE
 # fi
 
 # ISO Push Command Example
-$PUSH_ISO_COMMAND
+# $PUSH_ISO_COMMAND
+aws s3 cp ${ISO_IMAGE_NAME}-${SPECTRO_VERSION}.iso s3://edgeforge/images/${ISO_IMAGE_NAME}-${SPECTRO_VERSION}.iso --profile gh-runner
 
 # aws s3 cp $ISO_IMAGE_NAME.iso s3://image.iso
 
