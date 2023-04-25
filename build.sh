@@ -1,7 +1,7 @@
 #!/bin/bash -x
 
 set -xe
-source .variables.env
+source variables.env
 
 ### Base Image Settings (Do Not modify accept for advanced Use Cases) ###
 #########################################################################
@@ -17,6 +17,12 @@ INSTALLER_IMAGE=${IMAGE_REPOSITORY}/${ISO_IMAGE_NAME}:${SPECTRO_VERSION}
 ISO_IMAGE_ID=ttl.sh/${ISO_IMAGE_NAME}:${SPECTRO_VERSION}
 USER_DATA_FILE="${USER_DATA_FILE:-user-data.yaml}"
 CONTENT_BUNDLE="${CONTENT_BUNDLE:-content_bundle.tar}"
+
+
+
+# Change provider image name ex. ttl.sh/core-ubuntu-lts-22-k3s:demo-v1.24.6-k3s1-v3.3.3
+PROVIDER_IMAGE_NAME="core-${OS_FLAVOR}-${K8S_FLAVOR}:$CANVOS_ENV-v${k8s_version}${K8S_FLAVOR_TAG}-${SPECTRO_VERSION}"
+
 ########################################################################
 
 ### Build Image Information
@@ -69,7 +75,7 @@ elif [ "$K8S_FLAVOR" == "k3s" ]; then
 elif [ "$K8S_FLAVOR" == "kubeadm" ]; then
   K8S_FLAVOR_TAG=""
 fi
-    IMAGE=${IMAGE_REPOSITORY}/core-${OS_FLAVOR}-${K8S_FLAVOR}:$CANVOS_ENV-v${k8s_version}${K8S_FLAVOR_TAG}_${SPECTRO_VERSION}
+    IMAGE=${IMAGE_REPOSITORY}/${PROVIDER_IMAGE_NAME}
     docker build --build-arg BUILD_IMAGE=$BUILD_IMAGE_TAG \
                  --build-arg K8S_VERSION=$k8s_version \
                  --build-arg SPECTRO_VERSION=$SPECTRO_VERSION \
@@ -84,7 +90,7 @@ fi
 done
 
 # Remove Old Installer Images from local Image Cache
-docker rmi $ISO_IMAGE_ID || true
+docker rmi $ISO_IMAGE_ID &>/dev/null || true
 # Tag new installer image to normalize name
 docker tag $INSTALLER_IMAGE $ISO_IMAGE_ID
 # Build Installer ISO

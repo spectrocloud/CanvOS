@@ -23,8 +23,11 @@ ENV PACKAGE_VARIABLE=${PACKAGE_VARIABLE}
 RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
 # Clear cache and cleaning image for usage
-RUN rm -rf /var/cache/*
-RUN rm /tmp/* -rf
-RUN $PACKAGE_VARIABLE clean
-RUN journalctl --vacuum-size=1K
-RUN rm -rf /var/lib/dbus/machine-id
+RUN rm -rf /var/cache/* \
+    && rm /tmp/* -rf \
+    && $PACKAGE_VARIABLE clean \
+    && journalctl --vacuum-size=1K \
+    && rm -rf /var/lib/dbus/machine-id
+
+RUN touch /etc/machine-id \
+    && chmod 444 /etc/machine-id
