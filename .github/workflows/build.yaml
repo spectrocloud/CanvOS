@@ -1,0 +1,64 @@
+name: Build
+run-name: Build Installer ${{ github.event.inputs.version }}
+on:
+  # pull_request:
+  # push:
+  #   branches:
+  #     - main
+      # tags:
+      # - v*
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    # runs-on: ubuntu-latest
+    runs-on: self-hosted
+    env:
+      BASE_IMAGE: quay.io/kairos/core-alpine:latest
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        # env:
+        #   REPO_USER: ${{ secrets.REPO_USER }}
+        #   REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: actions/checkout@v3
+      - name: Build ISO
+        # env:
+        #   REPO_USER: ${{ secrets.REPO_USER }}
+        #   REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
+    
+        shell: bash
+        run: |
+          
+          bash build.sh
+      # - run: |
+      #     if [[ "${{ github.ref }}" =~ .*-.*$ ]]; then
+      #       echo "IS_PRERELEASE=true" > $GITHUB_ENV
+      #     fi
+      # - uses: softprops/action-gh-release@v1
+      #   with:
+      #     files: build/*
+      #     prerelease: ${{ env.IS_PRERELEASE }}
+      #     generate_release_notes: true
+
+
+
+#  echo "machine github.com" > .netrc
+#           echo "    login $REPO_USER" >> .netrc
+#           echo "    password $REPO_TOKEN" >> .netrc
+#           echo "machine api.github.com" >> .netrc
+#           echo "    login $REPO_USER" >> .netrc
+#           echo "    password $REPO_TOKEN" >> .netrc
+#       - uses: docker-practice/actions-setup-docker@master
+#       - uses: earthly/actions-setup@v1
+#       - run: earthly --ci -P +package --BASE_IMAGE="$BASE_IMAGE"
+# #      - run: earthly --ci -P +package-fips --BASE_IMAGE="$BASE_IMAGE" --FIPS_ENABLED=true # skip fips build in PRs

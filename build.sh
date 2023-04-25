@@ -12,16 +12,35 @@ INSTALLER_IMAGE=${IMAGE_REPOSITORY}/${ISO_IMAGE_NAME}:${SPECTRO_VERSION}
 ISO_IMAGE_ID=ttl.sh/${ISO_IMAGE_NAME}:${SPECTRO_VERSION}
 BUILD_PLATFORM="${BUILD_PLATFORM:-linux/amd64}"
 KAIROS_VERSION="${KAIROS_VERSION:-v1.5.0}"
+USER_DATA_FILE="${USER_DATA_FILE:-user-data.yaml}"
+CONTENT_BUNDLE="${CONTENT_BUNDLE:-content_bundle.tar}"
+
 
 ### Build Image Information
 BUILD_IMAGE_TAG=build
 DOCKERFILE_BUILD_IMAGE=./base_images/Dockerfile.${OS_FLAVOR}-${K8S_FLAVOR}
+
+# Check for content or user-data file
+if [ -f $USER_DATA_FILE ]; then
+ cp $USER_DATA_FILE overlay/files-iso/config.yaml
+fi
+
+if [ -f $CONTENT_BUNDLE ]; then
+  zstd -19 -T0 -o overlay/files-iso/opt/spectrocloud/content/spectro-content.tar.zst $CONTENT_BUNDLE
+fi
 
 # Set Package Variable in Dockerfile for specific OS Flavor
 if [[ $OS_FLAVOR == ubuntu* ]]; then
   PACKAGE_VARIABLE="apt"
 elif [ $OS_FLAVOR == "opensuse-leap" ]; then
   PACKAGE_VARIABLE="zypper"
+fi
+if [ "$K8S_FLAVOR" == "rke2" ]; then
+  K8S_FLAVOR_TAG="-rke2r1"
+elif [ "$K8S_FLAVOR" == "k3s" ]; then
+  K8S_FLAVOR_TAG="-k3s1"
+elif [ "$K8S_FLAVOR" == "kubeadm" ]; then
+  K8S_FLAVOR_TAG=""
 fi
 
 # Create Build Image
@@ -38,8 +57,16 @@ docker build --build-arg BUILD_IMAGE=$BUILD_IMAGE_TAG \
 
 # Create Provider Images
 for k8s_version in ${K8S_VERSIONS//,/ }
+
 do
-    IMAGE=${IMAGE_REPOSITORY}/core-${OS_FLAVOR}-${K8S_FLAVOR}:$CANVOS_ENV-v${k8s_version}_${SPECTRO_VERSION}
+if [ "$K8S_FLAVOR" == "rke2" ]; then
+  K8S_FLAVOR_TAG="-rke2r1"
+elif [ "$K8S_FLAVOR" == "k3s" ]; then
+  K8S_FLAVOR_TAG="-k3s1"
+elif [ "$K8S_FLAVOR" == "kubeadm" ]; then
+  K8S_FLAVOR_TAG=""
+fi
+    IMAGE=${IMAGE_REPOSITORY}/core-${OS_FLAVOR}-${K8S_FLAVOR}:$CANVOS_ENV-v${k8s_version}${K8S_FLAVOR_TAG}_${SPECTRO_VERSION}
     docker build --build-arg BUILD_IMAGE=$BUILD_IMAGE_TAG \
                  --build-arg K8S_VERSION=$k8s_version \
                  --build-arg SPECTRO_VERSION=$SPECTRO_VERSION \
@@ -55,7 +82,7 @@ done
 
 # Remove Old Installer Images from local Image Cache
 docker rmi $ISO_IMAGE_ID || true
-# Tag new installer image
+# Tag new installer image to normalize name
 docker tag $INSTALLER_IMAGE $ISO_IMAGE_ID
 # Build Installer ISO
 echo "Building $ISO_IMAGE_NAME.iso from $INSTALLER_IMAGE"
@@ -63,16 +90,23 @@ docker run -v $PWD:/cOS \
             -v /var/run/docker.sock:/var/run/docker.sock \
              -i --rm quay.io/kairos/osbuilder-tools:v0.3.3 --name $ISO_IMAGE_NAME \
              --debug build-iso --date=false $ISO_IMAGE_ID --local --overlay-iso /cOS/overlay/files-iso  --output /cOS/
+# Removes installer images from docker
 docker rmi $ISO_IMAGE_ID
+docker rmi $INSTALLER_IMAGE
 
-# # Push Installer Image uncomment if this is needed
+# Push Installer Image uncomment if this is needed
 # if [[ "$PUSH_BUILD" == "true" ]]; then
 #   echo "Pushing image"
 #   docker push "$INSTALLER_IMAGE"
 # fi
 
-# aws s3 cp $ISO_IMAGE_NAME.iso s3://edgeforge/images/$ISO_IMAGE_NAME-$SPECTRO_VERSION.iso --profile gh-runner
-# Clean Local images.  This is used if you are pushing the installer image to something like an S3 bucket for distribution.
-rm -f $ISO_IMAGE_NAME.iso
-rm -f $ISO_IMAGE_NAME.iso.sha256
+# ISO Push Command Example
+$PUSH_COMMAND
+
+# aws s3 cp $ISO_IMAGE_NAME.iso s3://image.iso
+
+# Clean Local images.  This is used if you are pushing the installer image to something like an S3 bucket for distribution.  Include these if using automated actions.
+
+# rm -f $ISO_IMAGE_NAME.iso
+# rm -f $ISO_IMAGE_NAME.iso.sha256
 docker rmi $BUILD_IMAGE_TAG
