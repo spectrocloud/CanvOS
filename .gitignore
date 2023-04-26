@@ -2,7 +2,7 @@
 *.iso.sha256
 variables.env
 variables.env.old
-*user-data.yaml
+*user-data
 *content-bundle.tar
 config.yaml
 overlay/files-iso/config.yaml

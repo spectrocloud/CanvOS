@@ -3,16 +3,24 @@
 set -xe
 source variables.env
 
-### Base Image Settings (Do Not modify accept for advanced Use Cases) ###
-#########################################################################
+
+KAIROS_VERSION="${KAIROS_VERSION:-v1.5.0}"
+# OS_FLAVOR="ubuntu-lts-22"
+IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-ttl.sh}"
 SPECTRO_VERSION="${SPECTRO_VERSION:-v3.3.3}"
 SPECTRO_LUET_VERSION="${SPECTRO_LUET_VERSION:-v1.0.3}"
-KAIROS_VERSION="${KAIROS_VERSION:-v1.5.0}"
+
+
+### Base Image Settings (Do Not modify accept for advanced Use Cases) ###
+#########################################################################
+
+
+
 BUILD_PLATFORM="${BUILD_PLATFORM:-linux/amd64}"
 
 ### Base Image Settings User Defined(Do Not modify accept for advanced Use Cases)
 
-IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-ttl.sh}"
+
 INSTALLER_IMAGE=${IMAGE_REPOSITORY}/${ISO_IMAGE_NAME}:${SPECTRO_VERSION}
 ISO_IMAGE_ID=ttl.sh/${ISO_IMAGE_NAME}:${SPECTRO_VERSION}
 USER_DATA_FILE="${USER_DATA_FILE:-user-data.yaml}"
@@ -41,10 +49,13 @@ elif [ $OS_FLAVOR == "opensuse-leap" ]; then
 fi
 if [ "$K8S_FLAVOR" == "rke2" ]; then
   K8S_FLAVOR_TAG="-rke2r1"
+  K8S_PROVIDER_VERSION="v1.2.3"
 elif [ "$K8S_FLAVOR" == "k3s" ]; then
   K8S_FLAVOR_TAG="-k3s1"
+  K8S_PROVIDER_VERSION="v1.1.3"
 elif [ "$K8S_FLAVOR" == "kubeadm" ]; then
   K8S_FLAVOR_TAG=""
+  K8S_PROVIDER_VERSION="v1.1.8"
 fi
 
 # Create Build Image
