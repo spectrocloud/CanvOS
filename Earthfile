@@ -97,6 +97,7 @@ installer-image:
     COPY +stylus/system /etc/systemd/system
     COPY +stylus/oem/ /oem/
     COPY +stylus/bin/ /opt/spectrocloud/bin/
+    COPY +kairos-provider-image/ /
 
     COPY overlay/files-iso/ /
     COPY --if-exists user-data /overlay/files-iso/config.yaml
