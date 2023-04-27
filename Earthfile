@@ -28,13 +28,7 @@ elemental:
 
 stylus:
     FROM $STYLUS_BASE
-    SAVE ARTIFACT /opt/spectrocloud/bin/stylus-operator
-    SAVE ARTIFACT /opt/spectrocloud/bin/stylus-agent
-    SAVE ARTIFACT /opt/spectrocloud/manifests/
-    # SAVE ARTIFACT /opt/spectrocloud/charts/*
-    SAVE ARTIFACT /etc/systemd/system
-    SAVE ARTIFACT /oem/
-    SAVE ARTIFACT /opt/spectrocloud/bin/
+    SAVE ARTIFACT ./*
 
 kairos-provider-image:
     IF [ "$K8S_FLAVOR" = "kubeadm" ]
@@ -88,20 +82,9 @@ base-image:
             && mkinitrd
     END
 installer-image:
-    FROM +base-image
-    
-    COPY +stylus/stylus-operator /opt/spectrocloud/bin/stylus-operator
-    COPY +stylus/stylus-agent /opt/spectrocloud/bin/stylus-agent
-    COPY +stylus/manifests /opt/spectrocloud/manifests/
-    # COPY +stylus/charts/ /opt/spectrocloud/charts/
-    COPY +stylus/system /etc/systemd/system
-    COPY +stylus/oem/ /oem/
-    COPY +stylus/bin/ /opt/spectrocloud/bin/
-    COPY +kairos-provider-image/ /
-
-    COPY overlay/files-iso/ /
-    COPY --if-exists user-data /overlay/files-iso/config.yaml
-    COPY --if-exists content /overlay/files-iso/opt/spectrocloud/content/
+    FROM +base-image 
+    COPY +stylus/ /
+    COPY overlay/files/ /
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     
 provider-image:
@@ -119,6 +102,7 @@ provider-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_FLAVOR_TAG
     END
     COPY +kairos-provider-image/ /
+    COPY overlay/files/ /
     RUN luet install -y  k8s/$K8S_FLAVOR@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
@@ -149,8 +133,10 @@ build-iso:
 
     FROM +elemental
     ENV ISO_NAME=${ISO_NAME}
-
+    
     COPY overlay/files-iso/ /overlay/
+    COPY --if-exists user-data /overlay/files-iso/config.yaml
+    COPY --if-exists content /overlay/files-iso/opt/spectrocloud/content/
 
     WITH DOCKER --allow-privileged --load iso-image=(+installer-image --platform=$BUILDPLATFORM)
             RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay --local "iso-image:latest" --output /build/
