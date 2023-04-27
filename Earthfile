@@ -1,12 +1,10 @@
 VERSION 0.6
 FROM alpine
-
-ARG OS_FLAVOR=ubuntu
-ARG OS_VERSION=22
-ARG IMAGE_REPOSITORY=3pings
-ARG K8S_FLAVOR=k3s
-
-
+ARG OS_FLAVOR
+ARG OS_VERSION
+ARG IMAGE_REPOSITORY
+ARG K8S_FLAVOR
+ARG CANVOS_ENV
 ARG STYLUS_VERSION=v3.3.3
 ARG SPECTRO_LUET_VERSION=v1.0.3
 ARG KAIROS_VERSION=v1.5.0
@@ -15,7 +13,6 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-
 
 IF [ "$OS_FLAVOR" = "ubuntu" ]
 
@@ -55,7 +52,7 @@ kairos-provider-image:
     SAVE ARTIFACT ./*
 
 base-image:
-    FROM $BASE_IMAGE
+    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
     ARG ARCH=amd64
     ENV ARCH=${ARCH}
 
@@ -90,7 +87,6 @@ base-image:
             && zypper remove --clean-deps \
             && mkinitrd
     END
-
 installer-image:
     FROM +base-image
     
@@ -107,9 +103,6 @@ installer-image:
     COPY --if-exists content /overlay/files-iso/opt/spectrocloud/content/
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     
-    SAVE IMAGE 3pings/installer:3.3.3-u
-
-
 provider-image:
     ARG K8S_VERSION=1.25.2
     FROM +base-image
@@ -147,23 +140,10 @@ provider-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
     
-    SAVE IMAGE $IMAGE_REPOSITORY/${OS_FLAVOR}:${K8S_VERSION}-${STYLUS_VERSION}
+    SAVE IMAGE --push $IMAGE_REPOSITORY/$OS_FLAVOR:$CANVOS_ENV-$K8S_VERSION-$STYLUS_VERSION
 
-
-# iso:
-#     ARG OSBUILDER_IMAGE
-#     ARG ISO_NAME=installer
-#     ARG IMG=docker:3pings/installer:3.3.3
-#     ARG overlay=overlay/files-iso
-#     FROM $OSBUILDER_IMAGE
-#     WORKDIR /build
-#     COPY . ./
-#     COPY --keep-own +image-rootfs/rootfs /build/image
-#     RUN /entrypoint.sh --name $ISO_NAME --debug build-iso --squash-no-compression --date=false dir:/build/image --overlay-iso /build/${overlay} --output /build/
-#     SAVE ARTIFACT /build/$ISO_NAME.iso kairos.iso AS LOCAL build/$ISO_NAME.iso
-#     SAVE ARTIFACT /build/$ISO_NAME.iso.sha256 kairos.iso.sha256 AS LOCAL build/$ISO_NAME.iso.sha256
 build-iso:
-    ARG ISO_NAME=installer
+    ARG ISO_NAME
     ARG BUILDPLATFORM
 
     FROM +elemental
