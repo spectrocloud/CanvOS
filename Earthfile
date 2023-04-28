@@ -1,5 +1,7 @@
 VERSION 0.6
 FROM alpine
+
+# Variables used in the builds.  Update for ADVANCED use cases only.  
 ARG OS_FLAVOR
 ARG OS_VERSION
 ARG IMAGE_REPOSITORY
@@ -45,6 +47,7 @@ kairos-provider-image:
     FROM $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
+# base build image used to create the base image for all other image types
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
     ARG ARCH=amd64
@@ -56,7 +59,16 @@ base-image:
         luet repo update
 
     RUN luet install -y system/elemental-cli && luet cleanup
-    
+    IF [ "$K8S_FLAVOR" = "kubeadm" ]
+        ARG BASE_K8S_VERSION=$VERSION
+    ELSE IF [ "$K8S_FLAVOR" = "k3s" ]
+        ARG K8S_FLAVOR_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_FLAVOR_TAG
+        
+    ELSE IF [ "$K8S_FLAVOR" = "rke2" ]
+        ARG K8S_FLAVOR_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_FLAVOR_TAG
+    END
     IF [ "$OS_FLAVOR" = "ubuntu-20-lts" ] || [ "$OS_FLAVOR" = "ubuntu-22-lts" ]
 
         RUN apt update && apt install zstd -y && apt upgrade -y
@@ -74,32 +86,35 @@ base-image:
             && rm -rf /var/lib/dbus/machine-id
     ELSE IF [ "$OS_FLAVOR" = "opensuse-leap" ]
         RUN zypper refresh \
-            && zypper update \
+            && zypper update -y \
             && zypper install -y zstd \
             && zypper cc \
             && zypper clean -a \
-            && zypper remove --clean-deps \
             && mkinitrd
     END
+
+# Used to build the installer image.  The installer ISO will be created from this.
 installer-image:
     FROM +base-image 
     COPY +stylus/ /
     COPY overlay/files/ /
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
-    
+
+# Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build  
 provider-image:
-    ARG K8S_VERSION=1.25.2
+    ARG PROVIDER_K8S_VERSION=1.25.2
+    ARG K8S_VERSION
     FROM +base-image
 
     IF [ "$K8S_FLAVOR" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
     ELSE IF [ "$K8S_FLAVOR" = "k3s" ]
         ARG K8S_FLAVOR_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_FLAVOR_TAG
         
     ELSE IF [ "$K8S_FLAVOR" = "rke2" ]
         ARG K8S_FLAVOR_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_FLAVOR_TAG
     END
     COPY +kairos-provider-image/ /
     COPY overlay/files/ /
@@ -125,7 +140,7 @@ provider-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
     
-    SAVE IMAGE --push $IMAGE_REPOSITORY/$OS_FLAVOR:$CANVOS_ENV-$K8S_VERSION-$STYLUS_VERSION
+    SAVE IMAGE --push $IMAGE_REPOSITORY:$OS_FLAVOR-$CANVOS_ENV-$K8S_VERSION-$STYLUS_VERSION
 
 build-iso:
     ARG ISO_NAME
