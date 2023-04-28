@@ -69,8 +69,15 @@ base-image:
         ARG K8S_FLAVOR_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_FLAVOR_TAG
     END
+
     IF [ "$OS_FLAVOR" = "ubuntu-20-lts" ] || [ "$OS_FLAVOR" = "ubuntu-22-lts" ]
 
+        ENV OS_ID=$OS_FLAVOR
+        ENV OS_VERSION=$OS_VERSION.04
+        ENV OS_NAME=core-$OS_FLAVOR-$OS_VERSION-lts-$K8S_FLAVOR_TAG:$STYLUS_VERSION
+        ENV OS_REPO=$IMAGE_REPOSITORY
+        ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
+        RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN apt update && apt install zstd -y && apt upgrade -y
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
@@ -85,6 +92,13 @@ base-image:
             && journalctl --vacuum-size=1K \
             && rm -rf /var/lib/dbus/machine-id
     ELSE IF [ "$OS_FLAVOR" = "opensuse-leap" ]
+        
+        ENV OS_ID=$OS_FLAVOR
+        ENV OS_VERSION=15.4
+        ENV OS_NAME=core-$OS_FLAVOR-$K8S_FLAVOR_TAG:$STYLUS_VERSION
+        ENV OS_REPO=$IMAGE_REPOSITORY
+        ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
+        RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN zypper refresh \
             && zypper update -y \
             && zypper install -y zstd \
@@ -102,6 +116,7 @@ installer-image:
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build  
 provider-image:
+    # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG PROVIDER_K8S_VERSION=1.25.2
     ARG K8S_VERSION
     FROM +base-image
@@ -120,22 +135,6 @@ provider-image:
     COPY overlay/files/ /
     RUN luet install -y  k8s/$K8S_FLAVOR@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
-
-    IF [ "$OS_FLAVOR" = "ubuntu" ]
-        ENV OS_ID=$OS_FLAVOR
-        ENV OS_VERSION=$OS_VERSION.04
-        ENV OS_NAME=core-$OS_FLAVOR-$OS_VERSION-lts-$K8S_FLAVOR_TAG:$STYLUS_VERSION
-        ENV OS_REPO=$IMAGE_REPOSITORY
-        ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
-        RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
-    ELSE IF [ "$OS_FLAVOR" = "opensuse-leap" ]
-        ENV OS_ID=$OS_FLAVOR
-        ENV OS_VERSION=15.4
-        ENV OS_NAME=core-$OS_FLAVOR-$K8S_FLAVOR_TAG:$STYLUS_VERSION
-        ENV OS_REPO=$IMAGE_REPOSITORY
-        ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
-        RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
-    END
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
