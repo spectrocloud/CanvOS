@@ -2,11 +2,11 @@ VERSION 0.6
 FROM alpine
 
 # Variables used in the builds.  Update for ADVANCED use cases only.  
-ARG OS_FLAVOR
+ARG OS_DISTRIBUTION
 ARG OS_VERSION
 ARG IMAGE_REPOSITORY
-ARG K8S_FLAVOR
-ARG CANVOS_ENV
+ARG K8S_DISTRIBUTION
+ARG MY_ENVIRONMENT
 ARG STYLUS_VERSION=v3.3.3
 ARG SPECTRO_LUET_VERSION=v1.0.3
 ARG KAIROS_VERSION=v1.5.0
@@ -16,11 +16,10 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 
-IF [ "$OS_FLAVOR" = "ubuntu" ]
-
-    ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_FLAVOR-$OS_VERSION-lts:$KAIROS_VERSION
-ELSE IF [ "$OS_FLAVOR" = "opensuse-leap" ]
-    ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_FLAVOR:$KAIROS_VERSION
+IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+    ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
+ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+    ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_DISTRIBUTION:$KAIROS_VERSION
 END
 ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$STYLUS_VERSION
 
@@ -33,14 +32,14 @@ stylus:
     SAVE ARTIFACT ./*
 
 kairos-provider-image:
-    IF [ "$K8S_FLAVOR" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_VERSION=v1.1.8
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$PROVIDER_VERSION
-    ELSE IF [ "$K8S_FLAVOR" = "k3s" ]
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_VERSION=v1.2.3
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$PROVIDER_VERSION 
         
-    ELSE IF [ "$K8S_FLAVOR" = "rke2" ]
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         ARG PROVIDER_VERSION=v1.1.3
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$PROVIDER_VERSION
     END
@@ -59,22 +58,22 @@ base-image:
         luet repo update
 
     RUN luet install -y system/elemental-cli && luet cleanup
-    IF [ "$K8S_FLAVOR" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
-    ELSE IF [ "$K8S_FLAVOR" = "k3s" ]
-        ARG K8S_FLAVOR_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_FLAVOR_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
         
-    ELSE IF [ "$K8S_FLAVOR" = "rke2" ]
-        ARG K8S_FLAVOR_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_FLAVOR_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
-    IF [ "$OS_FLAVOR" = "ubuntu-20-lts" ] || [ "$OS_FLAVOR" = "ubuntu-22-lts" ]
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
 
-        ENV OS_ID=$OS_FLAVOR
+        ENV OS_ID=$OS_DISTRIBUTION
         ENV OS_VERSION=$OS_VERSION.04
-        ENV OS_NAME=core-$OS_FLAVOR-$OS_VERSION-lts-$K8S_FLAVOR_TAG:$STYLUS_VERSION
+        ENV OS_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts-$K8S_DISTRIBUTION_TAG:$STYLUS_VERSION
         ENV OS_REPO=$IMAGE_REPOSITORY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
@@ -91,11 +90,11 @@ base-image:
             && apt autoremove \
             && journalctl --vacuum-size=1K \
             && rm -rf /var/lib/dbus/machine-id
-    ELSE IF [ "$OS_FLAVOR" = "opensuse-leap" ]
+    ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
         
-        ENV OS_ID=$OS_FLAVOR
+        ENV OS_ID=$OS_DISTRIBUTION
         ENV OS_VERSION=15.4
-        ENV OS_NAME=core-$OS_FLAVOR-$K8S_FLAVOR_TAG:$STYLUS_VERSION
+        ENV OS_NAME=core-$OS_DISTRIBUTION-$K8S_DISTRIBUTION_TAG:$STYLUS_VERSION
         ENV OS_REPO=$IMAGE_REPOSITORY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
@@ -121,25 +120,25 @@ provider-image:
     ARG K8S_VERSION
     FROM +base-image
 
-    IF [ "$K8S_FLAVOR" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
-    ELSE IF [ "$K8S_FLAVOR" = "k3s" ]
-        ARG K8S_FLAVOR_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_FLAVOR_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_DISTRIBUTION_TAG
         
-    ELSE IF [ "$K8S_FLAVOR" = "rke2" ]
-        ARG K8S_FLAVOR_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_FLAVOR_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
     COPY +kairos-provider-image/ /
     COPY overlay/files/ /
-    RUN luet install -y  k8s/$K8S_FLAVOR@$BASE_K8S_VERSION && luet cleanup
+    RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
     
-    SAVE IMAGE --push $IMAGE_REPOSITORY:$OS_FLAVOR-$CANVOS_ENV-$K8S_VERSION-$STYLUS_VERSION
+    SAVE IMAGE --push $IMAGE_REPOSITORY/$OS_DISTRIBUTION-$MY_ENVIRONMENT:$K8S_DISTRIBUTION-v$K8S_VERSION-$STYLUS_VERSION
 
 build-iso:
     ARG ISO_NAME
@@ -162,7 +161,7 @@ build-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 build-provider-images:
     FROM alpine
-    BUILD +provider-image --K8S_VERSION=1.24.6 --K8S_VERSION=1.25.2
+    BUILD +provider-image --K8S_VERSION=1.24.7 --K8S_VERSION=1.25.2
 
 build-all-images:
     FROM alpine
