@@ -155,8 +155,8 @@ drwxrwxr-x 6 jb   jb         4096 Apr 29 15:42 ..
 
 # Cleanup
 
-This step is not used when you continue to the next tutorial [Getting Started with Edge Native](/knowledgebase/tutorials/edge-native/edge-native-do)  
-These images will be used in that tutorial.
+<!-- This step is not used when you continue to the next tutorial [Getting Started with Edge Native](/knowledgebase/tutorials/edge-native/edge-native-do)  
+These images will be used in that tutorial. -->
 
 To cleanup what you created you can use `docker rmi <image id>`
 
