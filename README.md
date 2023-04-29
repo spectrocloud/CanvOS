@@ -1,19 +1,147 @@
-# WIP
+# Build Edge Native Artifacts
 
-Requirements X86 Hardware with 4cpu and 8GB Memory
+# Prerequisites
 
-## Basic Use Case
-1. Fork or clone repo.  If cloning recommend Staring for change updates.
-2. Add commands to [Dockerfile](./Dockerfile)
-3. Add customizations and rename [user-data.yaml.tmp](./user-data.yaml.tmp) to user-data.yaml
-4. Add customizations and rename [.variables.env.tmp](./variables.env.tmp) to variables.env
-5. Run `build.sh`
+x86 Based Platform  
+[Github Cli](https://cli.github.com/manual/installation)  
+[Docker](https://docs.docker.com/engine/install/)  
 
-`ex. 3pings/core-ubuntu-lts-22-k3s:demo-v1.24.6-k3s1_v3.3.3`
+<InfoBox>
 
-IMAGE_REPOSITORY | Prefix | OS_FLAVOR | K8S_FLAVOR | CANVOS_ENV | k8s_version | K8S_FLAVOR_TAG | SPECTRO_VERSION
-| :---------: | :---------: | :---------: | :---------: | :---------: | :---------: | :---------: | :---------: |
-| ttl.sh | core | ubuntu-lts-22 | k3s | demo | 1.24.6 | k3s1 | 3.3.3 |
+The ability to run priveleged containers is required.
+
+</InfoBox>
+
+This lab was written with the following versions:
+
+**Ubuntu**
+
+```shell
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 22.04.2 LTS
+Release:        22.04
+Codename:       jammy
+```
+4-vCPU
+8GB Memory
+
+**Docker CE**
+
+```shell
+Docker version 23.0.1, build a5ee5b1
+```
+
+**Github Cli**
+
+```shell
+git version 2.34.1
+```
+
+# Enablement
+
+## The Github Repo
+
+1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
+
+```shell
+git clone git@github.com:spectrocloud/CanvOS.git
+```
+
+```shell
+Cloning into 'CanvOS'...
+remote: Enumerating objects: 133, done.
+remote: Counting objects: 100% (133/133), done.
+remote: Compressing objects: 100% (88/88), done.
+Receiving objects: 100% (133/133), 40.16 KiB | 5.02 MiB/s, done.
+Resolving deltas: 100% (60/60), done.
+remote: Total 133 (delta 60), reused 101 (delta 32), pack-reused 0
+```
+
+2. Change into that directory.
+
+```shell
+cd CanvOS
+```
+
+## Change MY_ENVIRONMENT variable value
+
+1. Edit the `.arg` file.  Only modify the `MY_ENVIRONMENT` value.  Make it your initials.  Everything else can stay the same.
+
+```shell
+vi .arg
+```
+Depending on your editor the way you save may be different.  This lab is using VIM.  
+To enable editting in VIM press `i`.  Modify the value.
+
+```shell
+IMAGE_REPOSITORY=ttl.sh
+OS_DISTRIBUTION=ubuntu
+OS_VERSION=22
+K8S_DISTRIBUTION=k3s
+ISO_NAME=palette-edge-installer
+MY_ENVIRONMENT=demo
+```
+
+2. Depending on your editor the way you save may be different.  This lab is using VIM.  To save with VIM, `esc` then `:q` `enter`.
+
+By default, we do not provide a username or password for the images that are being created.  In order to create a username and password for lab / demo purposes we will create a `user-data` file with the attributes that are needed.  A sample, more intricate `user-data` file is located in this repo called `user-data.template`.
+
+3. Create `user-data` file
+
+```shell
+cat <<'EOF' > user-data
+#cloud-config
+install:
+  poweroff: true
+users:
+  - name: kairos
+    passwd: kairos
+EOF
+```
+
+This creates a `user-data` file that will be used by our agent to inject the values when the images are created.  This sets the password for the user `kairos` to `kairos` and instructs the installer to turn the machine off once the installation is complete.
+
+## Create Artifacts
+
+<InfoBox>
+
+The settings shown above point the image registry to `ttl.sh`.  This is an ephemeral registry where the images live for a maximum of 24hours (this is the default).  If you wish to use your registry to make the artifacts exist longer than 24hours you can modify the value of the `IMAGE_REPOSITORY` to match your needs.  This is outside the scope of this quickstart.
+
+</InfoBox>
+
+1. Build the artifacts.
+
+```shell
+./earthly.sh +build-all-images
+```
+
+This will create 2 docker images and an `iso` that can / will be used in the Edge Native Tutorials.
 
 
-### Folder Layout
+# Validation
+
+1. Validate Docker Images are created
+
+```shell
+docker images
+```
+**Sample Output**
+```shell
+REPOSITORY              TAG                  IMAGE ID       CREATED         SIZE
+ttl.sh/ubuntu-jb-demo   k3s-v1.25.2-v3.3.3   fe5c03df75a9   3 minutes ago   2.49GB
+ttl.sh/ubuntu-jb-demo   k3s-v1.24.7-v3.3.3   51bddf269545   3 minutes ago   2.49GB
+earthly/earthly         v0.7.4               d771cc8edc38   2 weeks ago     333MB
+```
+
+```shell
+ls -al build/
+```
+
+```shell
+total 998544
+drwxr-xr-x 2 root root       4096 Apr 29 15:42 .
+drwxrwxr-x 6 jb   jb         4096 Apr 29 15:42 ..
+-rw-r--r-- 1 root root 1022492672 Apr 16  2020 palette-edge-installer.iso
+-rw-r--r-- 1 root root         93 Apr 16  2020 palette-edge-installer.iso.sha256
+```
