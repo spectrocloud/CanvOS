@@ -12,7 +12,7 @@ The ability to run priveleged containers is required.
 
 </InfoBox>
 
-This lab was written with the following versions:
+This how-to was written with the following versions:
 
 **Ubuntu**
 
@@ -23,8 +23,9 @@ Description:    Ubuntu 22.04.2 LTS
 Release:        22.04
 Codename:       jammy
 ```
-4-vCPU
-8GB Memory
+
+4-vCPU  
+8GB Memory  
 
 **Docker CE**
 
@@ -64,14 +65,16 @@ remote: Total 133 (delta 60), reused 101 (delta 32), pack-reused 0
 cd CanvOS
 ```
 
-## Change MY_ENVIRONMENT variable value
+## Update Variables
 
 1. Edit the `.arg` file.  Only modify the `MY_ENVIRONMENT` value.  Make it your initials.  Everything else can stay the same.
 
 ```shell
 vi .arg
 ```
+
 Depending on your editor the way you save may be different.  This lab is using VIM.  
+
 To enable editting in VIM press `i`.  Modify the value.
 
 ```shell
@@ -85,7 +88,7 @@ MY_ENVIRONMENT=demo
 
 2. Depending on your editor the way you save may be different.  This lab is using VIM.  To save with VIM, `esc` then `:q` `enter`.
 
-By default, we do not provide a username or password for the images that are being created.  In order to create a username and password for lab / demo purposes we will create a `user-data` file with the attributes that are needed.  A sample, more intricate `user-data` file is located in this repo called `user-data.template`.
+By default, we do not provide a username or password for the images that are being created.  In order to create a username and password for lab/demo purposes we will create a `user-data` file with the attributes that are needed.  A sample, more intricate `user-data` file is located in this repo called `user-data.template`.
 
 3. Create `user-data` file
 
@@ -102,13 +105,16 @@ EOF
 
 This creates a `user-data` file that will be used by our agent to inject the values when the images are created.  This sets the password for the user `kairos` to `kairos` and instructs the installer to turn the machine off once the installation is complete.
 
-## Create Artifacts
+## Create Edge Artifacts
 
 <InfoBox>
 
-The settings shown above point the image registry to `ttl.sh`.  This is an ephemeral registry where the images live for a maximum of 24hours (this is the default).  If you wish to use your registry to make the artifacts exist longer than 24hours you can modify the value of the `IMAGE_REPOSITORY` to match your needs.  This is outside the scope of this quickstart.
+The settings shown above point the image registry to `ttl.sh`.  This is an ephemeral registry where the images live for a maximum of 24 hours (this is the default).  If you wish to use your registry to make the artifacts exist longer than 24 hours you can modify the value of the `IMAGE_REPOSITORY` to match your needs.  
+
+This is outside the scope of this quickstart.
 
 </InfoBox>
+
 
 1. Build the artifacts.
 
@@ -116,8 +122,7 @@ The settings shown above point the image registry to `ttl.sh`.  This is an ephem
 ./earthly.sh +build-all-images
 ```
 
-This will create 2 docker images and an `iso` that can / will be used in the Edge Native Tutorials.
-
+This will create two `docker images` and an `iso` that can/will be used in the Edge Native Tutorials.
 
 # Validation
 
@@ -126,7 +131,9 @@ This will create 2 docker images and an `iso` that can / will be used in the Edg
 ```shell
 docker images
 ```
+
 **Sample Output**
+
 ```shell
 REPOSITORY              TAG                  IMAGE ID       CREATED         SIZE
 ttl.sh/ubuntu-jb-demo   k3s-v1.25.2-v3.3.3   fe5c03df75a9   3 minutes ago   2.49GB
@@ -147,9 +154,9 @@ drwxrwxr-x 6 jb   jb         4096 Apr 29 15:42 ..
 ```
 
 # Cleanup
-<!-- 
-This step is not used when you continue to the next tutorial [Getting Started with Edge Native](../../01-tutorials/20-edge-native/10-edge-native-do.md)
-These images will be used in that tutorial. -->
+
+This step is not used when you continue to the next tutorial [Getting Started with Edge Native](/knowledgebase/tutorials/edge-native/edge-native-do)  
+These images will be used in that tutorial.
 
 To cleanup what you created you can use `docker rmi <image id>`
 
