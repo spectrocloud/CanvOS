@@ -145,3 +145,23 @@ drwxrwxr-x 6 jb   jb         4096 Apr 29 15:42 ..
 -rw-r--r-- 1 root root 1022492672 Apr 16  2020 palette-edge-installer.iso
 -rw-r--r-- 1 root root         93 Apr 16  2020 palette-edge-installer.iso.sha256
 ```
+
+# Cleanup
+<!-- 
+This step is not used when you continue to the next tutorial [Getting Started with Edge Native](../../01-tutorials/20-edge-native/10-edge-native-do.md)
+These images will be used in that tutorial. -->
+
+To cleanup what you created you can use `docker rmi <image id>`
+
+```shell
+docker rmi fe5c03df75a9
+docker rmi 51bddf269545
+```
+
+These are examples.  Change the image id to match your environment.
+You will also want to delete the `.iso` files.
+
+```shell
+rm build/palette-edge-installer.iso
+rm palette-edge-installer.iso.sha256
+```
