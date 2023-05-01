@@ -165,10 +165,10 @@ build-iso:
 
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 build-provider-images:
-    FROM alpine
-    BUILD +provider-image --K8S_VERSION=1.24.7 --K8S_VERSION=1.25.2
+    # FROM alpine
+    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.7 --K8S_VERSION=1.25.2
 
 build-all-images:
-    FROM alpine
-    BUILD +build-provider-images 
-    BUILD +build-iso
+    # FROM alpine
+    BUILD --platform=linux/amd64 +build-provider-images 
+    BUILD --platform=linux/amd64 +build-iso
