@@ -1,7 +1,28 @@
 
-IMAGE_REPOSITORY=ttl.sh
-OS_DISTRIBUTION=ubuntu
-OS_VERSION=22
-K8S_DISTRIBUTION=k3s
-ISO_NAME=palette-edge-installer
+# Environment name for provider image naming
 MY_ENVIRONMENT=demo
+
+# Image Registry Name
+IMAGE_REGISTRY=ttl.sh
+# OS Distribution (ubuntu, opensuse-leap)
+OS_DISTRIBUTION=opensuse-leap
+# Image Repository Name
+IMAGE_REPOSITORY=$OS_DISTRIBUTION
+# OS Version, only applies to Ubuntu
+OS_VERSION=22
+# Kubernetes Distribution (K3s, RKE2, Kubeadm)
+K8S_DISTRIBUTION=rke2
+# ISO Name
+ISO_NAME=palette-edge-installer
+
+# Image path to tag images.  By default the path is:
+### # IMAGE_TAG=$K8S_DISTRIBUTION-$K8S_VERSION-$STYLUS_VERSION
+### # IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPOSITORY-$MY_ENVIRONMENT:$IMAGE_TAG
+# Which would translate to the below based on the variables in this file.  This is an example and can be overridden by 
+# commenting the below "IMAGE_TAG" and "IMAGE_PATH" variables out and providing your custom path
+
+
+#### EXAMPLE #######
+### IMAGE_PATH=ttl.sh/ubuntu-demo:k3s-1.25.2-v3.3.3
+####################
+
