@@ -175,7 +175,7 @@ base-image:
 
 # Used to build the installer image.  The installer ISO will be created from this.
 installer-image:
-    FROM +base_image
+    FROM +base-image
     COPY +stylus/ /
     COPY overlay/files/ /
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
