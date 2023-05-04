@@ -138,22 +138,22 @@ base-image:
         ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
-        RUN apt update && apt upgrade -y \
-            && apt install --no-install-recommends -y zstd
+        RUN apt update && \
+            apt upgrade -y && \
+            apt install --no-install-recommends -y zstd
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
-        RUN kernel=$(ls /lib/modules | head -n1) \
-            && dracut -f "/boot/initrd-${kernel}" "${kernel}" \
-            && ln -sf "initrd-${kernel}" /boot/initrd
-        RUN kernel=$(ls /lib/modules | head -n1) \
-            && depmod -a "${kernel}"
+        RUN kernel=$(ls /lib/modules | head -n1) && \
+            dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+            ln -sf "initrd-${kernel}" /boot/initrd
+        RUN kernel=$(ls /lib/modules | head -n1) && \
+            depmod -a "${kernel}"
         RUN rm -rf /var/cache/* \
-            && rm /tmp/* -rf \
-            && apt clean \
-            && rm -rf /var/lib/apt/lists/* \
-            && apt --purge autoremove \
-            && journalctl --vacuum-size=1K \
-            && rm -rf /var/lib/dbus/machine-id
+            apt clean && \
+            rm -rf /var/lib/apt/lists/* && \
+            apt --purge autoremove && \
+            journalctl --vacuum-size=1K && \
+            rm -rf /var/lib/dbus/machine-id
 
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
@@ -163,14 +163,14 @@ base-image:
         ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
-        RUN zypper refresh \
-            && zypper update -y \
-            && zypper install -y zstd \
-            && zypper cc \
-            && zypper clean -a \
-            && mkinitrd
+        RUN zypper refresh && \
+            zypper update -y && \
+            zypper install -y zstd && \
+            zypper cc && \
+            zypper clean -a && \
+            mkinitrd
     END
-    
+    RUN rm /tmp/* -rf
 
 # Used to build the installer image.  The installer ISO will be created from this.
 installer-image:
