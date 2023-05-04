@@ -16,6 +16,10 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
+ARG K3S_PROVIDER_VERSION=v1.2.3
+ARG K8S_PROVIDER_VERSION=v1.1.8
+ARG RKE2_PROVIDER_VERSION=v1.1.3
+
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
@@ -92,13 +96,13 @@ stylus:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_VERSION=v1.1.8
+        ARG PROVIDER_VERSION=$K8S_PROVIDER_VERSION
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_VERSION=v1.2.3
+        ARG PROVIDER_VERSION=$K3S_PROVIDER_VERSION
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG PROVIDER_VERSION=v1.1.3
+        ARG PROVIDER_VERSION=$RKE2_PROVIDER_VERSION
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$PROVIDER_VERSION
     END
     FROM $PROVIDER_BASE
@@ -106,7 +110,7 @@ kairos-provider-image:
 
 # base build image used to create the base image for all other image types
 base-image:
-    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
+    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE . as build
     ARG ARCH=amd64
     ENV ARCH=${ARCH}
 
@@ -134,7 +138,7 @@ base-image:
         ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
-        RUN apt update \
+        RUN apt update && apt upgrade -y \
             && apt install --no-install-recommends -y zstd
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
@@ -166,6 +170,7 @@ base-image:
             && zypper clean -a \
             && mkinitrd
     END
+    
 
 # Used to build the installer image.  The installer ISO will be created from this.
 installer-image:
