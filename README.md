@@ -34,7 +34,7 @@ For advanced use cases, there may be a need to add additional packages not inclu
 
 1. Clone this repo
 ```shell
-git@github.com:spectrocloud/CanvOS.git
+git clone git@github.com:spectrocloud/CanvOS.git
 ```
 
 2. Checkout the version you want.
