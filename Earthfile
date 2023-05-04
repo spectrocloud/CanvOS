@@ -4,7 +4,8 @@ FROM alpine
 # Variables used in the builds.  Update for ADVANCED use cases only
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
-ARG IMAGE_REPOSITORY
+ARG IMAGE_REGISTRY
+ARG IMAGE_REPOSITORY=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG MY_ENVIRONMENT
 ARG STYLUS_VERSION=v3.3.3
@@ -28,7 +29,7 @@ build-all-images:
     BUILD +build-iso
 
 build-provider-images:
-    BUILD +provider-image --K8S_VERSION=1.24.7
+    BUILD +provider-image --K8S_VERSION=1.24.6
     BUILD +provider-image --K8S_VERSION=1.25.2
 
 build-iso:
@@ -55,7 +56,10 @@ build-iso:
 provider-image:
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG PROVIDER_K8S_VERSION=1.25.2
+    ARG IMAGE_REPOSITORY
     ARG K8S_VERSION
+    ARG IMAGE_TAG=$K8S_DISTRIBUTION-$K8S_VERSION-$STYLUS_VERSION
+    ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPOSITORY-$MY_ENVIRONMENT:$IMAGE_TAG
     FROM +base-image
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -75,7 +79,8 @@ provider-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    SAVE IMAGE --push $IMAGE_REPOSITORY/$OS_DISTRIBUTION-$MY_ENVIRONMENT:$K8S_DISTRIBUTION-v$K8S_VERSION-$STYLUS_VERSION
+    
+    SAVE IMAGE --push $IMAGE_PATH
 
 elemental:
     FROM $OSBUILDER_IMAGE
@@ -126,7 +131,7 @@ base-image:
         ENV OS_ID=$OS_DISTRIBUTION
         ENV OS_VERSION=$OS_VERSION.04
         ENV OS_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts-$K8S_DISTRIBUTION_TAG:$STYLUS_VERSION
-        ENV OS_REPO=$IMAGE_REPOSITORY
+        ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN apt update \
@@ -151,7 +156,7 @@ base-image:
         ENV OS_ID=$OS_DISTRIBUTION
         ENV OS_VERSION=15.4
         ENV OS_NAME=core-$OS_DISTRIBUTION-$K8S_DISTRIBUTION_TAG:$STYLUS_VERSION
-        ENV OS_REPO=$IMAGE_REPOSITORY
+        ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN zypper refresh \
