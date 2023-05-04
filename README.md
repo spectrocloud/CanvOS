@@ -32,28 +32,70 @@ For advanced use cases, there may be a need to add additional packages not inclu
 
 ### Basic Usage
 
-1. Clone this repo
+1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
+
 ```shell
-git clone git@github.com:spectrocloud/CanvOS.git
+git https://github.com/spectrocloud/CanvOS.git
 ```
 
-2. Checkout the version you want.
+**Sample Output**
+
 ```shell
-git checkout <tag>
+Cloning into 'CanvOS'...
+remote: Enumerating objects: 133, done.
+remote: Counting objects: 100% (133/133), done.
+remote: Compressing objects: 100% (88/88), done.
+Receiving objects: 100% (133/133), 40.16 KiB | 5.02 MiB/s, done.
+Resolving deltas: 100% (60/60), done.
+remote: Total 133 (delta 60), reused 101 (delta 32), pack-reused 0
 ```
 
-3. Modify the `.arg` file as needed
+2. Change into the `CanvOS` directory that was created.
 
-4. Build the images
+```shell
+cd CanvOS
+```
+
+3. View Available tags
+
+```shell
+git tag
+
+v3.3.3
+```
+
+4. Checkout the desired tag
+
+```shell
+git checkout <tag version>
+```
+
+**Sample Output**
+
+```shell
+git checkout v3.3.3
+Note: switching to 'v3.3.3'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+```
+
+5. Modify the `.arg` file as needed
+
+6. Build the images
 ```shell
 ./earthly.sh +build-all-images
 ```
 
-5. Rename images if needed and push to your registry
+7. Rename images if needed and push to your registry
 
-6. Flash VM or Baremetal device with the generated ISO.
+8. Flash VM or Baremetal device with the generated ISO.
 
-7. Build clusters in [Palette](https://console.spectrocloud.com)
+9. Build clusters in [Palette](https://console.spectrocloud.com)
 
 ### How-Tos
 

@@ -17,7 +17,7 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v1.2.3
-ARG K8S_PROVIDER_VERSION=v1.1.8
+ARG KUBEADM_PROVIDER_VERSION=v1.1.8
 ARG RKE2_PROVIDER_VERSION=v1.1.3
 
 
@@ -58,13 +58,14 @@ build-iso:
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
+    FROM +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG PROVIDER_K8S_VERSION=1.25.2
     ARG IMAGE_REPOSITORY
     ARG K8S_VERSION
     ARG IMAGE_TAG=$K8S_DISTRIBUTION-$K8S_VERSION-$STYLUS_VERSION
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPOSITORY-$MY_ENVIRONMENT:$IMAGE_TAG
-    FROM +base-image
+
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
@@ -96,21 +97,18 @@ stylus:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_VERSION=$K8S_PROVIDER_VERSION
-        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$PROVIDER_VERSION
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_VERSION=$K3S_PROVIDER_VERSION
-        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$PROVIDER_VERSION
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG PROVIDER_VERSION=$RKE2_PROVIDER_VERSION
-        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$PROVIDER_VERSION
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
     FROM $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
 # base build image used to create the base image for all other image types
 base-image:
-    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE . as build
+    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
     ARG ARCH=amd64
     ENV ARCH=${ARCH}
 
@@ -119,7 +117,8 @@ base-image:
         luet repo add kairos  --type docker --url quay.io/kairos/packages -y && \
         luet repo update
 
-    RUN luet install -y system/elemental-cli && luet cleanup
+    RUN luet install -y system/elemental-cli && \
+        luet cleanup
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
@@ -148,7 +147,7 @@ base-image:
             ln -sf "initrd-${kernel}" /boot/initrd
         RUN kernel=$(ls /lib/modules | head -n1) && \
             depmod -a "${kernel}"
-        RUN rm -rf /var/cache/* \
+        RUN rm -rf /var/cache/* && \
             apt clean && \
             rm -rf /var/lib/apt/lists/* && \
             apt --purge autoremove && \
@@ -172,9 +171,11 @@ base-image:
     END
     RUN rm /tmp/* -rf
 
+    # SAVE ARTIFACT . 
+
 # Used to build the installer image.  The installer ISO will be created from this.
 installer-image:
-    FROM +base-image
+    FROM +base_image
     COPY +stylus/ /
     COPY overlay/files/ /
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
