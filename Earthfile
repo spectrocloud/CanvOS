@@ -1,7 +1,7 @@
 VERSION 0.6
 FROM alpine
 
-# Variables used in the builds.  Update for ADVANCED use cases only.  
+# Variables used in the builds.  Update for ADVANCED use cases only
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
 ARG IMAGE_REPOSITORY
@@ -23,6 +23,60 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
 END
 ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$STYLUS_VERSION
 
+build-all-images:
+    BUILD +build-provider-images
+    BUILD +build-iso
+
+build-provider-images:
+    BUILD +provider-image --K8S_VERSION=1.24.7
+    BUILD +provider-image --K8S_VERSION=1.25.2
+
+build-iso:
+    ARG ISO_NAME
+    ARG BUILDPLATFORM
+
+    FROM +elemental
+    ENV ISO_NAME=${ISO_NAME}
+
+    COPY overlay/files-iso/ /overlay/
+    COPY --if-exists user-data /overlay/files-iso/config.yaml
+    COPY --if-exists content /overlay/files-iso/opt/spectrocloud/content/
+
+    WITH DOCKER --allow-privileged --load iso-image=(+installer-image --platform=$BUILDPLATFORM)
+            RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay --local "iso-image:latest" --output /build/
+    END
+
+    WORKDIR /build
+    RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
+
+    SAVE ARTIFACT /build/* AS LOCAL ./build/
+
+# Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
+provider-image:
+    # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
+    ARG PROVIDER_K8S_VERSION=1.25.2
+    ARG K8S_VERSION
+    FROM +base-image
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+        ARG BASE_K8S_VERSION=$VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    END
+    COPY +kairos-provider-image/ /
+    COPY overlay/files/ /
+    RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
+    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+
+    RUN touch /etc/machine-id \
+        && chmod 444 /etc/machine-id
+
+    SAVE IMAGE --push $IMAGE_REPOSITORY/$OS_DISTRIBUTION-$MY_ENVIRONMENT:$K8S_DISTRIBUTION-v$K8S_VERSION-$STYLUS_VERSION
+
 elemental:
     FROM $OSBUILDER_IMAGE
     RUN zypper in -y jq docker
@@ -37,8 +91,7 @@ kairos-provider-image:
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_VERSION=v1.2.3
-        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$PROVIDER_VERSION 
-        
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         ARG PROVIDER_VERSION=v1.1.3
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$PROVIDER_VERSION
@@ -63,7 +116,6 @@ base-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-        
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
@@ -96,7 +148,6 @@ base-image:
 
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-        
         ENV OS_ID=$OS_DISTRIBUTION
         ENV OS_VERSION=15.4
         ENV OS_NAME=core-$OS_DISTRIBUTION-$K8S_DISTRIBUTION_TAG:$STYLUS_VERSION
@@ -113,62 +164,7 @@ base-image:
 
 # Used to build the installer image.  The installer ISO will be created from this.
 installer-image:
-    FROM +base-image 
+    FROM +base-image
     COPY +stylus/ /
     COPY overlay/files/ /
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
-
-# Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build  
-provider-image:
-    # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
-    ARG PROVIDER_K8S_VERSION=1.25.2
-    ARG K8S_VERSION
-    FROM +base-image
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG BASE_K8S_VERSION=$VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_DISTRIBUTION_TAG
-        
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    END
-    COPY +kairos-provider-image/ /
-    COPY overlay/files/ /
-    RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
-    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
-
-    RUN touch /etc/machine-id \
-        && chmod 444 /etc/machine-id
-    
-    SAVE IMAGE --push $IMAGE_REPOSITORY/$OS_DISTRIBUTION-$MY_ENVIRONMENT:$K8S_DISTRIBUTION-v$K8S_VERSION-$STYLUS_VERSION
-
-build-iso:
-    ARG ISO_NAME
-    ARG BUILDPLATFORM
-
-    FROM +elemental
-    ENV ISO_NAME=${ISO_NAME}
-    
-    COPY overlay/files-iso/ /overlay/
-    COPY --if-exists user-data /overlay/files-iso/config.yaml
-    COPY --if-exists content /overlay/files-iso/opt/spectrocloud/content/
-
-    WITH DOCKER --allow-privileged --load iso-image=(+installer-image --platform=$BUILDPLATFORM)
-            RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay --local "iso-image:latest" --output /build/
-    END
-
-    WORKDIR /build
-    RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
-
-    SAVE ARTIFACT /build/* AS LOCAL ./build/
-build-provider-images:
-    # FROM alpine
-    BUILD +provider-image --K8S_VERSION=1.24.7 --K8S_VERSION=1.25.2
-
-build-all-images:
-    # FROM alpine
-    BUILD +build-provider-images 
-    BUILD +build-iso
