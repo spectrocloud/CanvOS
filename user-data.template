@@ -8,8 +8,8 @@ stylus:
     edgeHostToken: aUAxxxxxxxxx0ChYCrO
     
     # projectUid <Optional :need to provide if token is not generated using project id>
-    projectUid: 12345677788
-    # tags which will be assigned to devices as labels
+    projectName: stores
+    # tags which will be assigned to devices as labels.  These are examples
     tags:
       key1: value1
       key2: value2
