@@ -153,7 +153,6 @@ base-image:
             apt autoremove -y && \
             journalctl --vacuum-size=1K && \
             rm -rf /var/lib/dbus/machine-id
-        RUN apt remove --purge linux-image-5.15.0-58-generic -y
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
         ENV OS_ID=$OS_DISTRIBUTION
