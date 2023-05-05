@@ -16,6 +16,10 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
+ARG K3S_PROVIDER_VERSION=v1.2.3
+ARG KUBEADM_PROVIDER_VERSION=v1.1.8
+ARG RKE2_PROVIDER_VERSION=v1.1.3
+
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
@@ -54,13 +58,14 @@ build-iso:
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
+    FROM +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG PROVIDER_K8S_VERSION=1.25.2
     ARG IMAGE_REPOSITORY
     ARG K8S_VERSION
     ARG IMAGE_TAG=$K8S_DISTRIBUTION-$K8S_VERSION-$STYLUS_VERSION
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPOSITORY-$MY_ENVIRONMENT:$IMAGE_TAG
-    FROM +base-image
+
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
@@ -92,14 +97,11 @@ stylus:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_VERSION=v1.1.8
-        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$PROVIDER_VERSION
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_VERSION=v1.2.3
-        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$PROVIDER_VERSION
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG PROVIDER_VERSION=v1.1.3
-        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$PROVIDER_VERSION
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
     FROM $PROVIDER_BASE
     SAVE ARTIFACT ./*
@@ -115,7 +117,8 @@ base-image:
         luet repo add kairos  --type docker --url quay.io/kairos/packages -y && \
         luet repo update
 
-    RUN luet install -y system/elemental-cli && luet cleanup
+    RUN luet install -y system/elemental-cli && \
+        luet cleanup
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
@@ -134,23 +137,22 @@ base-image:
         ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
-        RUN apt update \
-            && apt install --no-install-recommends -y zstd
+        RUN apt update && \
+            # apt upgrade -y && \
+            apt install --no-install-recommends -y zstd
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
-        RUN kernel=$(ls /lib/modules | head -n1) \
-            && dracut -f "/boot/initrd-${kernel}" "${kernel}" \
-            && ln -sf "initrd-${kernel}" /boot/initrd
-        RUN kernel=$(ls /lib/modules | head -n1) \
-            && depmod -a "${kernel}"
-        RUN rm -rf /var/cache/* \
-            && rm /tmp/* -rf \
-            && apt clean \
-            && rm -rf /var/lib/apt/lists/* \
-            && apt --purge autoremove \
-            && journalctl --vacuum-size=1K \
-            && rm -rf /var/lib/dbus/machine-id
-
+        RUN kernel=$(ls /lib/modules | head -n1) && \
+            dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+            ln -sf "initrd-${kernel}" /boot/initrd
+        RUN kernel=$(ls /lib/modules | head -n1) && \
+            depmod -a "${kernel}"
+        RUN rm -rf /var/cache/* && \
+            apt clean && \
+            rm -rf /var/lib/apt/lists/* && \
+            apt autoremove -y && \
+            journalctl --vacuum-size=1K && \
+            rm -rf /var/lib/dbus/machine-id
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
         ENV OS_ID=$OS_DISTRIBUTION
@@ -159,13 +161,16 @@ base-image:
         ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
-        RUN zypper refresh \
-            && zypper update -y \
-            && zypper install -y zstd \
-            && zypper cc \
-            && zypper clean -a \
-            && mkinitrd
+        RUN zypper refresh && \
+            zypper update -y && \
+            zypper install -y zstd && \
+            zypper cc && \
+            zypper clean -a && \
+            mkinitrd
     END
+    RUN rm /tmp/* -rf
+
+    # SAVE ARTIFACT . 
 
 # Used to build the installer image.  The installer ISO will be created from this.
 installer-image:
