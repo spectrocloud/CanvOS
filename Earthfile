@@ -138,7 +138,7 @@ base-image:
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN apt update && \
-            apt upgrade -y && \
+            # apt upgrade -y && \
             apt install --no-install-recommends -y zstd
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
@@ -150,10 +150,10 @@ base-image:
         RUN rm -rf /var/cache/* && \
             apt clean && \
             rm -rf /var/lib/apt/lists/* && \
-            apt --purge autoremove && \
+            apt autoremove -y && \
             journalctl --vacuum-size=1K && \
             rm -rf /var/lib/dbus/machine-id
-
+        RUN apt remove --purge linux-image-5.15.0-58-generic -y
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
         ENV OS_ID=$OS_DISTRIBUTION
