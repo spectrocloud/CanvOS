@@ -8,7 +8,7 @@ ARG IMAGE_REGISTRY
 ARG IMAGE_REPOSITORY=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG MY_ENVIRONMENT
-ARG STYLUS_VERSION=v3.4.0-alpha14
+ARG STYLUS_VERSION=v3.4.0-alpha17
 ARG SPECTRO_LUET_VERSION=v1.0.3
 ARG KAIROS_VERSION=v2.0.3
 ARG K3S_FLAVOR_TAG=k3s1
@@ -139,7 +139,7 @@ base-image:
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN apt update && \
             # apt upgrade -y && \
-            apt install --no-install-recommends -y zstd
+            apt install --no-install-recommends -y zstd vim
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
         RUN kernel=$(ls /lib/modules | head -n1) && \
