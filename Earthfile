@@ -163,7 +163,7 @@ base-image:
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN zypper refresh && \
             zypper update -y && \
-            zypper install -y zstd && \
+            zypper install -y zstd vim && \
             zypper cc && \
             zypper clean -a && \
             mkinitrd
