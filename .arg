@@ -12,13 +12,8 @@ ISO_NAME=palette-edge-installer
 # OS_DISTRIBUTION--------------------OS Distribution (ubuntu, opensuse-leap)
 # IMAGE_REPO-------------------------Image Repository Name
 # OS_VERSION-------------------------OS Version, only applies to Ubuntu (20, 22)
-# K8S_DISTRIBUTION-------------------Kubernetes Distribution (K3s, RKE2, Kubeadm)
+# K8S_DISTRIBUTION-------------------Kubernetes Distribution (k3s, rke2, kubeadm)
 # ISO Name---------------------------Name of the Installer ISO
-
-
-#### EXAMPLE OUTPUT IMAGE TAG #######
-### IMAGE_PATH=ttl.sh/ubuntu:k3s-1.25.2-v3.3.3-demo
-####################
 
 
 
