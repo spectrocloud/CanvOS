@@ -14,7 +14,6 @@ ISO_NAME=palette-edge-installer
 # OS_VERSION-------------------------OS Version, only applies to Ubuntu (20, 22)
 # K8S_DISTRIBUTION-------------------Kubernetes Distribution (K3s, RKE2, Kubeadm)
 # ISO Name---------------------------Name of the Installer ISO
-# PE_VERSION-------------------------Git Version for Palette Edge
 
 
 #### EXAMPLE OUTPUT IMAGE TAG #######
