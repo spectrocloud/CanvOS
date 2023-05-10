@@ -8,7 +8,7 @@ ARG IMAGE_REGISTRY
 ARG IMAGE_REPOSITORY=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG MY_ENVIRONMENT
-ARG STYLUS_VERSION=v3.3.3
+ARG PE_VERSION
 ARG SPECTRO_LUET_VERSION=v1.0.3
 ARG KAIROS_VERSION=v1.5.0
 ARG K3S_FLAVOR_TAG=k3s1
@@ -26,7 +26,6 @@ IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_DISTRIBUTION:$KAIROS_VERSION
 END
-ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$STYLUS_VERSION
 
 build-all-images:
     BUILD +build-provider-images
@@ -63,8 +62,7 @@ provider-image:
     ARG PROVIDER_K8S_VERSION=1.25.2
     ARG IMAGE_REPOSITORY
     ARG K8S_VERSION
-    ARG IMAGE_TAG=$K8S_DISTRIBUTION-$K8S_VERSION-$STYLUS_VERSION
-    ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPOSITORY-$MY_ENVIRONMENT:$IMAGE_TAG
+    ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPOSITORY:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -92,6 +90,7 @@ elemental:
     RUN zypper in -y jq docker
 
 stylus:
+    ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$PE_VERSION
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
 
@@ -133,13 +132,13 @@ base-image:
 
         ENV OS_ID=$OS_DISTRIBUTION
         ENV OS_VERSION=$OS_VERSION.04
-        ENV OS_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts-$K8S_DISTRIBUTION_TAG:$STYLUS_VERSION
+        ENV OS_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts-$K8S_DISTRIBUTION_TAG:$PE_VERSION
         ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN apt update && \
             # apt upgrade -y && \
-            apt install --no-install-recommends -y zstd
+            apt install --no-install-recommends -y zstd vim
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
         RUN kernel=$(ls /lib/modules | head -n1) && \
@@ -157,13 +156,13 @@ base-image:
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
         ENV OS_ID=$OS_DISTRIBUTION
         ENV OS_VERSION=15.4
-        ENV OS_NAME=core-$OS_DISTRIBUTION-$K8S_DISTRIBUTION_TAG:$STYLUS_VERSION
+        ENV OS_NAME=core-$OS_DISTRIBUTION-$K8S_DISTRIBUTION_TAG:$PE_VERSION
         ENV OS_REPO=$IMAGE_REGISTRY
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN zypper refresh && \
             zypper update -y && \
-            zypper install -y zstd && \
+            zypper install -y zstd vim && \
             zypper cc && \
             zypper clean -a && \
             mkinitrd
