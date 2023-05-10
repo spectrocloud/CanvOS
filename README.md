@@ -88,7 +88,7 @@ do so (now or later) by using -c with the switch command. Example:
 
 6. Build the images
 ```shell
-./earthly.sh +build-all-images
+./earthly.sh +build-all-images --PE_VERSION=$(git describe --abbrev=0 --tags)
 ```
 
 7. Rename images if needed and push to your registry
