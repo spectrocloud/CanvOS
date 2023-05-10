@@ -1,4 +1,4 @@
-MY_ENVIRONMENT=demo
+CUSTOM_TAG=demo
 IMAGE_REGISTRY=ttl.sh
 OS_DISTRIBUTION=ubuntu
 IMAGE_REPOSITORY=$OS_DISTRIBUTION
@@ -7,16 +7,17 @@ K8S_DISTRIBUTION=k3s
 ISO_NAME=palette-edge-installer
 
 
-# MY_ENVIRONMENT-------------------- Environment name for provider image naming
+# CUSTOM_TAG-------------------------Environment name for provider image naming
 # IMAGE_REGISTRY---------------------Image Registry Name
 # OS_DISTRIBUTION--------------------OS Distribution (ubuntu, opensuse-leap)
 # IMAGE_REPOSITORY-------------------Image Repository Name
 # OS_VERSION-------------------------OS Version, only applies to Ubuntu (20, 22)
 # K8S_DISTRIBUTION-------------------Kubernetes Distribution (K3s, RKE2, Kubeadm)
 # ISO Name---------------------------Name of the Installer ISO
+# PE_VERSION-------------------------Git Version for Palette Edge
 
 
-#### EXAMPLE #######
+#### EXAMPLE OUTPUT IMAGE TAG #######
 ### IMAGE_PATH=ttl.sh/ubuntu-demo:k3s-1.25.2-v3.3.3
 ####################
 
