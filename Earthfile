@@ -26,7 +26,7 @@ IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_DISTRIBUTION:$KAIROS_VERSION
 END
-ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$PE_VERSION
+
 
 build-all-images:
     BUILD +build-provider-images
@@ -91,6 +91,7 @@ elemental:
     RUN zypper in -y jq docker
 
 stylus:
+    ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$PE_VERSION
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
 
