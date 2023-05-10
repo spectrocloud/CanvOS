@@ -5,7 +5,7 @@ IMAGE_REPOSITORY=$OS_DISTRIBUTION
 OS_VERSION=22   
 K8S_DISTRIBUTION=k3s
 ISO_NAME=palette-edge-installer
-PE_VERSION=$(git describe --abbrev=0)
+PE_VERSION=$(git describe --tag --abbrev=0)
 
 
 # CUSTOM_TAG-------------------------Environment name for provider image naming
