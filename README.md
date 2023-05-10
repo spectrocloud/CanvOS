@@ -60,7 +60,9 @@ cd CanvOS
 
 ```shell
 git tag
+```
 
+```shell
 v3.3.3
 ```
 
@@ -91,11 +93,11 @@ do so (now or later) by using -c with the switch command. Example:
 ./earthly.sh +build-all-images --PE_VERSION=$(git describe --abbrev=0 --tags)
 ```
 
-7. Rename images if needed and push to your registry
+8. The output can be used to populate your cluster profile in Palette.
 
-8. Flash VM or Baremetal device with the generated ISO.
+9. Flash VM or Baremetal device with the generated ISO.
 
-9. Build clusters in [Palette](https://console.spectrocloud.com)
+10. Build clusters in [Palette](https://console.spectrocloud.com)
 
 ### How-Tos
 
