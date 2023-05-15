@@ -62,6 +62,7 @@ cd CanvOS
 git tag
 
 v3.3.3
+v3.4.0
 ```
 
 4. Checkout the desired tag
