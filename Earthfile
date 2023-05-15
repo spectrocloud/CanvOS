@@ -16,9 +16,9 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v2.0.2-alpha3
-ARG KUBEADM_PROVIDER_VERSION=v2.0.2-alpha4
-ARG RKE2_PROVIDER_VERSION=v2.0.2-alpha3
+ARG K3S_PROVIDER_VERSION=v2.0.3
+ARG KUBEADM_PROVIDER_VERSION=v2.0.3
+ARG RKE2_PROVIDER_VERSION=v2.0.3
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
@@ -138,7 +138,7 @@ base-image:
         ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN apt update && \
-            # apt upgrade -y && \
+            apt upgrade -y && \
             apt install --no-install-recommends -y zstd vim
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
@@ -163,7 +163,9 @@ base-image:
         RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN zypper refresh && \
             zypper update -y && \
+            zypper up kernel-default && \
             zypper install -y zstd vim && \
+            zypper purge-kernels && \
             zypper cc && \
             zypper clean -a && \
             mkinitrd
