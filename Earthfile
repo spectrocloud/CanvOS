@@ -22,10 +22,13 @@ ARG RKE2_PROVIDER_VERSION=v2.0.3
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
-    ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
+    ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
+    ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-    ARG BASE_IMAGE=$BASE_IMAGE_URL/core-$OS_DISTRIBUTION:$KAIROS_VERSION
+    ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
+    ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 END
+
 
 
 build-all-images:
@@ -116,6 +119,12 @@ base-image:
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo add kairos  --type docker --url quay.io/kairos/packages -y && \
         luet repo update
+    ENV OS_ID=$OS_DISTRIBUTION-$K8S_DISTRIBUTION
+    ENV OS_VERSION=$K8S_VERSION_$PE_VERSION
+    ENV OS_NAME=$OS_ID:$PE_VERSION
+    ENV OS_REPO=$IMAGE_REGISTRY
+    ENV OS_LABEL=$BASE_IMAGE_TAG_$K8S_VERSION_$PE_VERSION
+    RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
 
     RUN luet install -y system/elemental-cli && \
         luet cleanup
@@ -130,16 +139,10 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
-
-        ENV OS_ID=$OS_DISTRIBUTION
-        ENV OS_VERSION=$OS_VERSION.04
-        ENV OS_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts-$K8S_DISTRIBUTION_TAG:$PE_VERSION
-        ENV OS_REPO=$IMAGE_REGISTRY
-        ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
-        RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN apt update && \
-            apt upgrade -y && \
-            apt install --no-install-recommends -y zstd vim
+            apt install --no-install-recommends zstd vim -y
+        # RUN apt update && \
+        #     apt upgrade -y
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
         RUN kernel=$(ls /lib/modules | head -n1) && \
@@ -155,17 +158,11 @@ base-image:
             rm -rf /var/lib/dbus/machine-id
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-        ENV OS_ID=$OS_DISTRIBUTION
-        ENV OS_VERSION=15.4
-        ENV OS_NAME=core-$OS_DISTRIBUTION-$K8S_DISTRIBUTION_TAG:$PE_VERSION
-        ENV OS_REPO=$IMAGE_REGISTRY
-        ENV OS_LABEL=$KAIROS_VERSION_$K8S_VERSION_$SPECTRO_VERSION
-        RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
         RUN zypper refresh && \
             zypper update -y && \
-            zypper up kernel-default && \
+            # zypper up kernel-default && \
+            # zypper purge-kernels && \
             zypper install -y zstd vim && \
-            zypper purge-kernels && \
             zypper cc && \
             zypper clean -a && \
             mkinitrd
