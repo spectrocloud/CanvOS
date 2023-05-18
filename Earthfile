@@ -9,7 +9,7 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
-ARG SPECTRO_LUET_VERSION=v1.0.3
+ARG SPECTRO_LUET_VERSION=v1.0.4
 ARG KAIROS_VERSION=v2.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -22,9 +22,11 @@ ARG RKE2_PROVIDER_VERSION=v2.0.3
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+    ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+    ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 END
@@ -79,7 +81,8 @@ provider-image:
         ARG BASE_K8S_VERSION=$PROVIDER_K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
     COPY +kairos-provider-image/ /
-    COPY overlay/files/ /
+    COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
+    COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
@@ -93,10 +96,12 @@ elemental:
     FROM $OSBUILDER_IMAGE
     RUN zypper in -y jq docker
 
-stylus:
+stylus-image:
     ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$PE_VERSION
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
+    SAVE ARTIFACT /etc/kairos/branding
+    SAVE ARTIFACT /etc/elemental/config.yaml
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -116,18 +121,18 @@ base-image:
     ENV ARCH=${ARCH}
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
-        luet repo add kairos  --type docker --url quay.io/kairos/packages -y && \
+        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+        # luet repo add kairos  --type docker --url quay.io/kairos/packages -y && \
         luet repo update
-    ENV OS_ID=$OS_DISTRIBUTION-$K8S_DISTRIBUTION
+    ENV OS_ID=$BASE_IMAGE_NAME-$K8S_DISTRIBUTION
     ENV OS_VERSION=$K8S_VERSION_$PE_VERSION
     ENV OS_NAME=$OS_ID:$PE_VERSION
     ENV OS_REPO=$IMAGE_REGISTRY
     ENV OS_LABEL=$BASE_IMAGE_TAG_$K8S_VERSION_$PE_VERSION
     RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
 
-    RUN luet install -y system/elemental-cli && \
-        luet cleanup
+    # RUN luet install -y system/elemental-cli && \
+    #     luet cleanup
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
@@ -141,8 +146,8 @@ base-image:
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
         RUN apt update && \
             apt install --no-install-recommends zstd vim -y
-        # RUN apt update && \
-        #     apt upgrade -y
+        RUN apt update && \
+            apt upgrade -y
         RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
         RUN kernel=$(ls /lib/modules | head -n1) && \
@@ -151,22 +156,26 @@ base-image:
         RUN kernel=$(ls /lib/modules | head -n1) && \
             depmod -a "${kernel}"
         RUN rm -rf /var/cache/* && \
-            apt clean && \
-            rm -rf /var/lib/apt/lists/* && \
-            apt autoremove -y && \
-            journalctl --vacuum-size=1K && \
-            rm -rf /var/lib/dbus/machine-id
+            apt clean
+            
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
         RUN zypper refresh && \
             zypper update -y && \
+            mkinitrd
             # zypper up kernel-default && \
             # zypper purge-kernels && \
-            zypper install -y zstd vim && \
-            zypper cc && \
-            zypper clean -a && \
-            mkinitrd
+        RUN zypper install -y zstd vim
+        RUN zypper cc && \
+            zypper clean
+            
     END
+    RUN rm -rf /var/cache/* && \
+        journalctl --vacuum-size=1K && \
+        rm /etc/machine-id && \
+        rm -rf /var/lib/dbus/machine-id
+    RUN touch /etc/machine-id && \ 
+        chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
     # SAVE ARTIFACT . 
@@ -174,6 +183,8 @@ base-image:
 # Used to build the installer image.  The installer ISO will be created from this.
 installer-image:
     FROM +base-image
-    COPY +stylus/ /
+    COPY +stylus-image/ /
     COPY overlay/files/ /
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+    RUN touch /etc/machine-id \
+        && chmod 444 /etc/machine-id
