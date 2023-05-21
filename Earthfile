@@ -123,13 +123,6 @@ base-image:
         SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         # luet repo add kairos  --type docker --url quay.io/kairos/packages -y && \
         luet repo update
-    ENV OS_ID=$BASE_IMAGE_NAME-$K8S_DISTRIBUTION
-    ENV OS_VERSION=$K8S_VERSION_$PE_VERSION
-    ENV OS_NAME=$OS_ID:$PE_VERSION
-    ENV OS_REPO=$IMAGE_REGISTRY
-    ENV OS_LABEL=$BASE_IMAGE_TAG_$K8S_VERSION_$PE_VERSION
-    RUN envsubst >/etc/os-release </usr/lib/os-release.tmpl
-
     # RUN luet install -y system/elemental-cli && \
     #     luet cleanup
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
