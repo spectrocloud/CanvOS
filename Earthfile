@@ -1,5 +1,5 @@
 VERSION 0.6
-FROM alpine
+FROM gcr.io/spectro-images-public/alpine:3.16.2
 
 # Variables used in the builds.  Update for ADVANCED use cases only
 ARG OS_DISTRIBUTION
