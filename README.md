@@ -63,6 +63,7 @@ git tag
 
 v3.3.3
 v3.4.0
+v3.4.1
 ```
 
 4. Checkout the desired tag
@@ -74,8 +75,8 @@ git checkout <tag version>
 **Sample Output**
 
 ```shell
-git checkout v3.3.3
-Note: switching to 'v3.3.3'.
+git checkout v3.4.1
+Note: switching to 'v3.4.1'.
 
 You are in 'detached HEAD' state. You can look around, make experimental
 changes and commit them, and you can discard any commits you make in this
@@ -88,7 +89,7 @@ do so (now or later) by using -c with the switch command. Example:
 5. Modify the `.arg` file as needed
 
 **SAMPLE OUTPUT FOR IMAGE TAGS**  
-`ttl.sh/ubuntu-demo:k3s-1.25.2-v3.3.3`
+`ttl.sh/ubuntu-demo:k3s-1.25.2-v3.4.1`
 
 6. Build the images
 ```shell
