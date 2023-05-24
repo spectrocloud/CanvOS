@@ -40,6 +40,7 @@ build-all-images:
 build-provider-images:
     BUILD +provider-image --K8S_VERSION=1.24.6
     BUILD +provider-image --K8S_VERSION=1.25.2
+    BUILD +provider-image --K8S_VERSION=1.26.4
 
 build-iso:
     ARG ISO_NAME
