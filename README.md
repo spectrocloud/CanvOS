@@ -86,10 +86,29 @@ If you want to create a new branch to retain commits you create, you may
 do so (now or later) by using -c with the switch command. Example:
 ```
 
-5. Modify the `.arg` file as needed
+5. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.1-demo`. The **.arg** file defines the following variables:
 
-**SAMPLE OUTPUT FOR IMAGE TAGS**  
-`ttl.sh/ubuntu-demo:k3s-1.25.2-v3.4.1`
+    * `CUSTOM_TAG` - Environment name for provider image tagging. The default value is `demo`. 
+    <br />
+
+    * `IMAGE_REGISTRY` - Image registry name that will store the image artifacts. The default value points to the *ttl.sh* image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. 
+    <br />
+
+    * `OS_DISTRIBUTION` - OS distribution of your choice. For example, it can be `ubuntu` or `opensuse-leap`. 
+    <br />
+
+    * `IMAGE_REPO` - Image repository name in your chosen registry. 
+    <br />
+
+    * `OS_VERSION` - OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. This example uses `22` for Ubuntu. 
+    <br />
+
+    * `K8S_DISTRIBUTION` - Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm`.
+    <br />
+
+    * `ISO_NAME` - Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*. 
+
+
 
 6. Build the images
 ```shell
@@ -104,6 +123,5 @@ do so (now or later) by using -c with the switch command. Example:
 
 ### How-Tos
 
-* [Building Edge Native Artifacts](https://docs.spectrocloud.com/knowledgebase/how-to/edge-native/edgeforge)
+* [Building Edge Native Artifacts](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos)
 
-### Tutorials
