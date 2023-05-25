@@ -82,6 +82,8 @@ provider-image:
     COPY +kairos-provider-image/ /
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+        RUN luet install -y container-runtime/containerd
     RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
