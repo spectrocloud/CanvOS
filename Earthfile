@@ -124,10 +124,7 @@ base-image:
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
         SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
-        # luet repo add kairos  --type docker --url quay.io/kairos/packages -y && \
         luet repo update
-    # RUN luet install -y system/elemental-cli && \
-    #     luet cleanup
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
