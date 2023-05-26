@@ -144,7 +144,7 @@ ttl.sh/ubuntu     k3s-1.24.7-v3.4.1-demo    fe1486da25df    6 minutes ago   2.49
 earthly/earthly   v0.7.4                    d771cc8edc38     2 weeks ago    333MB
 ```
 
-7. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages. 
+8. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages. 
 
 ```shell
 docker push ttl.sh/ubuntu-demo:k3s-v1.25.2-v3.4.1 && \
@@ -154,12 +154,19 @@ docker push ttl.sh/ubuntu-demo: k3s-v1.24.7-v3.4.1
 > ⚠️ The default registry, [ttl.sh](https://ttl.sh/) is a short-lived registry. Images in the ttl.sh registry have a default time to live of
 24 hours. Once the time limit is up, the images will automatically be removed.
  
+  
+9. Create a cluster profile using the command output. Use the [Model Edge Cluster Profile](https://docs.spectrocloud.com/clusters/edge/site-deployment/model-profile) to help you complete this step.
+  
 
-8. Flash VM or Baremetal device with the generated ISO.
+10. Flash VM or Baremetal device with the generated ISO. Refer to the [Prepare Edge Host for Installation](https://docs.spectrocloud.com/clusters/edge/site-deployment/stage) guide for additonal guidance.
 
-9. Build clusters in [Palette](https://console.spectrocloud.com)
+
+10. Register the Edge host with Palette. Checkout the [Register Edge Host](https://docs.spectrocloud.com/clusters/edge/site-deployment/site-installation/edge-host-registration) guide.
+
+
+11. Build a cluster in [Palette](https://console.spectrocloud.com). 
 
 ### How-Tos
 
-* [Building Edge Native Artifacts](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos)
+* [Building Edge Native Artifacts]([https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos](https://deploy-preview-1318--docs-spectrocloud.netlify.app/clusters/edge/edgeforge-workflow/palette-canvos))
 
