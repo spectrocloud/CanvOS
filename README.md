@@ -148,7 +148,7 @@ earthly/earthly   v0.7.4                    d771cc8edc38     2 weeks ago    333M
 
 ```shell
 docker push ttl.sh/ubuntu-demo:k3s-v1.25.2-v3.4.1 && \
-docker push ttl.sh/ubuntu-demo: k3s-v1.24.7-v3.4.1
+docker push ttl.sh/ubuntu-demo:k3s-v1.24.7-v3.4.1
 ```
 
 > ⚠️ The default registry, [ttl.sh](https://ttl.sh/) is a short-lived registry. Images in the ttl.sh registry have a default time to live of
