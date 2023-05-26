@@ -152,7 +152,7 @@ docker push ttl.sh/ubuntu-demo:k3s-v1.24.7-v3.4.1
 ```
 
 > ⚠️ The default registry, [ttl.sh](https://ttl.sh/) is a short-lived registry. Images in the ttl.sh registry have a default time to live of
-24 hours. Once the time limit is up, the images will automatically be removed.
+24 hours. Once the time limit is up, the images will automatically be removed. To use a permanent registry, set the `.arg` file's `IMAGE_REGISTRY` parameter with the URL of your image registry.
  
   
 9. Create a cluster profile using the command output. Use the [Model Edge Cluster Profile](https://docs.spectrocloud.com/clusters/edge/site-deployment/model-profile) to help you complete this step.
