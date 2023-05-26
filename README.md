@@ -101,12 +101,50 @@ do so (now or later) by using -c with the switch command. Example:
 
 
 
-6. Build the images.
+6. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
+  
 ```shell
 ./earthly.sh +build-all-images --PE_VERSION=$(git describe --abbrev=0 --tags)
 ```
+  
+Output
+```shell
+###################################################################################################
 
-7. The provider images are by default not pushed to a registry. You can push the images by using the docker push command. 
+PASTE THE CONTENTS BELOW INTO YOUR CLUSTER PROFILE IN PALETTE BELOW THE "OPTIONS" ATTRIBUTE
+
+###################################################################################################
+
+
+system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"
+
+
+system.registry: ttl.sh
+system.repo: ubuntu
+system.k8sDistribution: k3s
+system.osName: ubuntu
+system.peVersion: v3.4.0
+system.customTag: demo
+system.osVersion: 22
+```
+  
+  
+7. Validate the expected artifacts are created, the ISO image and the provider OS images.
+  
+```shell
+ls build/ && docker images
+
+palette-edge-installer.iso      
+palette-edge-installer.iso.sha256  
+
+# Output
+REPOSITORY        TAG                       IMAGE ID        CREATED         SIZE
+ttl.sh/ubuntu     k3s-1.25.2-v3.4.1-demo    b3c4956ccc0a    6 minutes ago   2.49GB
+ttl.sh/ubuntu     k3s-1.24.7-v3.4.1-demo    fe1486da25df    6 minutes ago   2.49GB
+earthly/earthly   v0.7.4                    d771cc8edc38     2 weeks ago    333MB
+```
+
+7. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages. 
 
 ```shell
 docker push ttl.sh/ubuntu-demo:k3s-v1.25.2-v3.4.1 && \
