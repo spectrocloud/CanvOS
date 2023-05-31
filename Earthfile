@@ -50,7 +50,7 @@ build-iso:
 
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
-    COPY --if-exists content /overlay/files-iso/opt/spectrocloud/content/
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
 
     WITH DOCKER --allow-privileged --load iso-image=(+installer-image --platform=$BUILDPLATFORM)
             RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay --local "iso-image:latest" --output /build/
