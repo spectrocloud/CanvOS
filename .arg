@@ -1,3 +1,6 @@
+# Refer to the README file for variable descriptions.
+# Change the variables below to customize the build process.
+
 CUSTOM_TAG=demo
 IMAGE_REGISTRY=ttl.sh
 OS_DISTRIBUTION=ubuntu
@@ -6,14 +9,6 @@ OS_VERSION=22
 K8S_DISTRIBUTION=k3s
 ISO_NAME=palette-edge-installer
 
-
-# CUSTOM_TAG-------------------------Environment name for provider image naming
-# IMAGE_REGISTRY---------------------Image Registry Name
-# OS_DISTRIBUTION--------------------OS Distribution (ubuntu, opensuse-leap)
-# IMAGE_REPOSITORY-------------------Image Repository Name
-# OS_VERSION-------------------------OS Version, only applies to Ubuntu (20, 22)
-# K8S_DISTRIBUTION-------------------Kubernetes Distribution (k3s, rke2, kubeadm)
-# ISO Name---------------------------Name of the Installer ISO
 
 
 
