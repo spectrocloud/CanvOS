@@ -125,6 +125,7 @@ kairos-provider-image:
     FROM $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
+
 # base build image used to create the base image for all other image types
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
