@@ -36,7 +36,7 @@ jobs:
           echo "    login $REPO_USER" >> .netrc
           echo "    password $REPO_TOKEN" >> .netrc
       - uses: earthly/actions-setup@v1
-      - run: earthly --ci --push -P --output +build-all-images --PE_VERSION="${{ github.ref | replace('refs/tags/', '') }}"
+      - run: earthly --ci --push -P --output +build-all-images --PE_VERSION=${{ github.ref_name }}
       - run: |
           if [[ "${{ github.ref }}" =~ .*-.*$ ]]; then
             echo "IS_PRERELEASE=true" > $GITHUB_ENV
