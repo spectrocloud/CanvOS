@@ -31,35 +31,49 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 END
 
-
+VERSION:
+    COMMAND
+    FROM gcr.io/spectro-images-public/alpine:3.16.2
+    RUN apk add git
+    COPY .git/ .git
+    RUN echo $(git describe --exact-match --tags || echo "v0.0.0-$(git log --oneline -n 1 | cut -d" " -f1)") > VERSION
+    RUN cat VERSION | cut -c2- > PACKAGE_VERSION
+    SAVE ARTIFACT VERSION PACKAGE_VERSION
 
 build-all-images:
     BUILD +build-provider-images
-    BUILD +build-iso
+    BUILD +iso
 
 build-provider-images:
     BUILD +provider-image --K8S_VERSION=1.24.6
     BUILD +provider-image --K8S_VERSION=1.25.2
 
+iso-image-rootfs:
+    FROM +iso-image
+    SAVE ARTIFACT --keep-own /. rootfs
+
+iso:
+    DO +VERSION
+    ARG VERSION=$(cat VERSION)
+    ARG ISO_NAME=installer-${VERSION}
+    WORKDIR /build
+    COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    SAVE ARTIFACT /build/* AS LOCAL ./build/
+
 build-iso:
     ARG ISO_NAME
     ARG BUILDPLATFORM
-
-    FROM +elemental
+    FROM $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
-
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
-
-    WITH DOCKER --allow-privileged --load iso-image=(+installer-image --platform=$BUILDPLATFORM)
-            RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay --local "iso-image:latest" --output /build/
-    END
-
     WORKDIR /build
+    COPY --keep-own +iso-image-rootfs/rootfs /build/image
+    RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/
+    WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
-
-    SAVE ARTIFACT /build/* AS LOCAL ./build/
+    SAVE ARTIFACT /iso/*
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
@@ -68,7 +82,6 @@ provider-image:
     ARG K8S_VERSION=1.25.2
     ARG IMAGE_REPO
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
-
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
@@ -91,12 +104,7 @@ provider-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    
     SAVE IMAGE --push $IMAGE_PATH
-
-elemental:
-    FROM $OSBUILDER_IMAGE
-    RUN zypper in -y jq docker
 
 stylus-image:
     ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$PE_VERSION
@@ -173,7 +181,7 @@ base-image:
     # SAVE ARTIFACT . 
 
 # Used to build the installer image.  The installer ISO will be created from this.
-installer-image:
+iso-image:
     FROM +base-image
     COPY +stylus-image/ /
     COPY overlay/files/ /
