@@ -8,7 +8,7 @@ The base image definitions reside in the Earthfile located in this repo.  This d
 
 <h1 align="center">
   <br>
-     <img alt="CanvOS Flow" src="https://raw.githubusercontent.com/spectrocloud/CanvOS/main/images/CanvOS.png">
+     <img alt="Edge Components" src="https://raw.githubusercontent.com/spectrocloud/CanvOS/main/images/edge_components.png">
     <br>
 <br>
 
