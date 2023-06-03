@@ -29,15 +29,19 @@ var rootCmd = &cobra.Command{
 
 func init() {
 
+	// Environment variables
 	apiKey := internal.Getenv("SPECTROCLOUD_APIKEY", "")
 	PaletteEndpoint := internal.Getenv("PALETTE_HOST", "https://api.spectrocloud.com")
 	ProjectID := internal.Getenv("PALETTE_PROJECT_ID", "")
+
+	// Global CLI config
 	GlobalCliConfig.PaletteApiKey = &apiKey
 	GlobalCliConfig.PaletteHost = &PaletteEndpoint
 	GlobalCliConfig.ProjectID = &ProjectID
 
 	rootCmd.PersistentFlags().StringVarP(&Verbose, "verbose", "v", "INFO", "Set the debugging mode (DEBUG, INFO, WARN, ERROR, FATAL)")
 	GlobalCliConfig.Verbose = &Verbose
+
 }
 
 func Execute() {

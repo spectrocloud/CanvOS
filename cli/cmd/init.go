@@ -23,6 +23,10 @@ var initCmd = &cobra.Command{
 		GlobalCliConfig.Verbose = &Verbose
 		internal.InitLogger(Verbose)
 
+		if *GlobalCliConfig.PaletteApiKey == "" {
+			log.Fatal().Msg("Palette API Key is required. Please set the SPECTROCLOUD_APIKEY environment variable.")
+		}
+
 		// Initialize the Palette Credentials
 		paletteAuth := internal.PaletteAuth{
 			Host:      *GlobalCliConfig.PaletteHost,
