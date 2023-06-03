@@ -5,9 +5,7 @@ variables.env.old
 *user-data
 *content-bundle.tar
 config.yaml
-overlay/files-iso/config.yaml
-overlay/files-iso/opt/spectrocloud/content/*content.*
-overlay/files-iso/opt/spectrocloud/content/spectro-content.tar.zst
-overlay/files-iso/opt/spectrocloud/content/*-content.tar.zst
 content-*/*
 .canvos
+*.arg
+

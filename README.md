@@ -8,7 +8,7 @@ The base image definitions reside in the Earthfile located in this repo.  This d
 
 <h1 align="center">
   <br>
-     <img alt="CanvOS Flow" src="https://raw.githubusercontent.com/spectrocloud/CanvOS/main/images/CanvOS.png">
+     <img alt="Edge Components" src="https://raw.githubusercontent.com/spectrocloud/CanvOS/main/images/edge_components.png">
     <br>
 <br>
 
@@ -85,8 +85,13 @@ state without impacting any branches by switching back to a branch.
 If you want to create a new branch to retain commits you create, you may
 do so (now or later) by using -c with the switch command. Example:
 ```
+5. Copy the .arg.template file to .arg
 
-5. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.1-demo`. The **.arg** file defines the following variables:
+```shell
+cp .arg.template .arg
+```
+
+6. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.1-demo`. The **.arg** file defines the following variables:
 
 | Parameter        | Description                                                                                                                             | Type   | Default Value          |
 |------------------|-----------------------------------------------------------------------------------------------------------------------------------------|--------|------------------------|
@@ -98,10 +103,7 @@ do so (now or later) by using -c with the switch command. Example:
 | K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm`.                                                       | String | `k3s`                  |
 | ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                             | String | `palette-edge-installer`|
 
-
-
-
-6. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
+7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
   
 ```shell
 ./earthly.sh +build-all-images --PE_VERSION=$(git describe --abbrev=0 --tags)
@@ -127,9 +129,8 @@ system.peVersion: v3.4.0
 system.customTag: demo
 system.osVersion: 22
 ```
-  
-  
-7. Validate the expected artifacts are created, the ISO image and the provider OS images.
+
+8. Validate the expected artifacts are created, the ISO image and the provider OS images.
   
 ```shell
 ls build/ && docker images
@@ -144,7 +145,7 @@ ttl.sh/ubuntu     k3s-1.24.7-v3.4.1-demo    fe1486da25df    6 minutes ago   2.49
 earthly/earthly   v0.7.4                    d771cc8edc38     2 weeks ago    333MB
 ```
 
-8. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages. 
+9. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages. 
 
 ```shell
 docker push ttl.sh/ubuntu-demo:k3s-v1.25.2-v3.4.1 && \
@@ -155,16 +156,16 @@ docker push ttl.sh/ubuntu-demo:k3s-v1.24.7-v3.4.1
 24 hours. Once the time limit is up, the images will automatically be removed. To use a permanent registry, set the `.arg` file's `IMAGE_REGISTRY` parameter with the URL of your image registry.
  
   
-9. Create a cluster profile using the command output. Use the [Model Edge Cluster Profile](https://docs.spectrocloud.com/clusters/edge/site-deployment/model-profile) to help you complete this step.
+10. Create a cluster profile using the command output. Use the [Model Edge Cluster Profile](https://docs.spectrocloud.com/clusters/edge/site-deployment/model-profile) to help you complete this step.
   
 
-10. Flash VM or Baremetal device with the generated ISO. Refer to the [Prepare Edge Host for Installation](https://docs.spectrocloud.com/clusters/edge/site-deployment/stage) guide for additonal guidance.
+11. Flash VM or Baremetal device with the generated ISO. Refer to the [Prepare Edge Host for Installation](https://docs.spectrocloud.com/clusters/edge/site-deployment/stage) guide for additonal guidance.
 
 
-10. Register the Edge host with Palette. Checkout the [Register Edge Host](https://docs.spectrocloud.com/clusters/edge/site-deployment/site-installation/edge-host-registration) guide.
+12. Register the Edge host with Palette. Checkout the [Register Edge Host](https://docs.spectrocloud.com/clusters/edge/site-deployment/site-installation/edge-host-registration) guide.
 
 
-11. Build a cluster in [Palette](https://console.spectrocloud.com). 
+13. Build a cluster in [Palette](https://console.spectrocloud.com). 
 
 ### How-Tos
 
