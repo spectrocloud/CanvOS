@@ -80,7 +80,7 @@ build-iso:
 provider-image:
     FROM +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
-    ARG K8S_VERSION
+    ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
