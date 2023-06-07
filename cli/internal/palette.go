@@ -59,3 +59,24 @@ func GetPacks(ctx context.Context, p PaletteAuth, queryParams string) (Packs, er
 	return responseData, err
 
 }
+
+// GetPaletteVersions returns information about the available Palette Edge Installer versions.
+func GetPaletteVersions(ctx context.Context, p PaletteAuth) ([]string, error) {
+
+	// TODO - Waiting on OPS-1657 to be completed to dyanmically retrieve the Palette Edge Installer versions
+	// https://spectrocloud.atlassian.net/browse/OPS-1657?atlOrigin=eyJpIjoiY2NkNTQ5MjliOWFmNDY1NTg5MjA1MDZmYjkyNDNmNDEiLCJwIjoiamlyYS1zbGFjay1pbnQifQ
+
+	return []string{
+		"3.4.5",
+		"3.4.4",
+		"3.4.3",
+		"3.4.2",
+		"3.4.1",
+		"3.4.0",
+		"3.3.3",
+		"3.3.2",
+		"3.3.1",
+		"3.3.0",
+	}, nil
+
+}

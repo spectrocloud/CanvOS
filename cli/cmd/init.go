@@ -89,13 +89,6 @@ var initCmd = &cobra.Command{
 		microk8s := responses["microk8s"]
 		os := responses["os"]
 
-		// fmt.Println(len(osPack.Items))
-		// fmt.Println(len(cnis.Items))
-		// fmt.Println(len(k3s.Items))
-		// fmt.Println(len(pxkE.Items))
-		// fmt.Println(len(rke2.Items))
-		// fmt.Println(len(microk8s.Items))
-
 		log.Info().Msg("Creating Pack templates....")
 		packs := []internal.Packs{byoos, cnis, k3s, pxkE, rke2, microk8s, os}
 		internal.RemoveDuplicatePacks(&packs)
@@ -109,6 +102,14 @@ var initCmd = &cobra.Command{
 				return err
 			})
 		}
+
+		// Get the Palette Versions
+		paletteVersions, err := internal.GetPaletteVersions(ctx, paletteAuth)
+		if err != nil {
+			log.Info().Msg("Error retrieving the palette versions")
+			internal.LogError(err)
+		}
+
 		// Wait for all requests to finish
 		if err := g.Wait(); err != nil {
 			log.Info().Msg("Error creating the pack templates")
@@ -116,7 +117,7 @@ var initCmd = &cobra.Command{
 		}
 		log.Info().Msg("All Pack templates are created successfully")
 
-		err = internal.CreateMenuOptionsFile(packs)
+		err = internal.CreateMenuOptionsFile(packs, paletteVersions)
 		if err != nil {
 			log.Info().Msg("Error creating the menu options file")
 			internal.LogError(err)

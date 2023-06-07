@@ -32,6 +32,7 @@ func InitLogger(logLevel string) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 }
 
+// LogError logs the error
 func LogError(err error) {
 	pc, file, line, ok := runtime.Caller(1)
 	if ok {

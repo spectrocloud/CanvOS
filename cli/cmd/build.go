@@ -1,8 +1,13 @@
 package cmd
 
 import (
-	"github.com/pterm/pterm"
+	"os"
+
 	"github.com/spf13/cobra"
+	"specrocloud.com/canvos/cmd/build"
+	"specrocloud.com/canvos/internal"
+	log "specrocloud.com/canvos/logger"
+	"specrocloud.com/canvos/prompts"
 )
 
 func init() {
@@ -14,58 +19,96 @@ var buildCmd = &cobra.Command{
 	Short: "Build the Edge Artifacts",
 	Long:  `Build the Edge Artifacts`,
 	Run: func(cmd *cobra.Command, args []string) {
-		var operatingSystems []string = []string{
-			"Ubuntu",
-			"Suse",
+
+		ctx := cmd.Context()
+
+		// Initialize the logger
+		GlobalCliConfig.Verbose = &Verbose
+		internal.InitLogger(Verbose)
+
+		// Check if the CanvOS directory and options file exist
+		checkIfCanvOSDirExists()
+		// Create the user selections struct that will be used to store the user selections
+		var userSelectedOptions internal.UserSelections
+
+		options, err := internal.ReadOptionsFile(internal.DefaultCliMenuOptionsPath)
+		if err != nil {
+			log.Debug("err %s: ", err)
+			log.FatalCLI("Error reading the CanvOS options file")
+
 		}
 
-		var operatingSystems2 []string = []string{
-			"22.04",
-			"20.04",
+		// Check if the user has provided a Palette API Key
+		// If not, prompt the user to enter the API Key
+		if *GlobalCliConfig.PaletteApiKey == "" {
+
+			apiKey, err := prompts.ReadText("Enter your Palette API Key", "", "Palette API Key is required", false, 128)
+			if err != nil {
+				log.Debug("err %s: ", err)
+				log.FatalCLI("error getting API key. Exiting")
+			}
+			GlobalCliConfig.PaletteApiKey = &apiKey
+
 		}
 
-		var kubernetesDistro []string = []string{
-			"Palette eXtended Kubernetes - Edge (PXK-E)",
-			"K3s",
-			"RKE2",
-			"MicroK8s",
+		workflowModes := []prompts.ChoiceItem{
+			{
+				ID:   "Demo",
+				Name: "Demo - Intended for learning purposes and demonstrations.",
+			},
+			{
+				ID:   "Normal",
+				Name: "Normal - Intended for production deployments.",
+			},
 		}
 
-		paletteAPI, _ := pterm.DefaultInteractiveTextInput.Show("Provide your Palette API key")
-		pterm.Println() // Blank line
-		pterm.Info.Printfln("You answered: %s", paletteAPI)
-
-		registry, _ := pterm.DefaultInteractiveTextInput.Show("Provide the image registry (Default: ttl.sh). Press Enter to use default")
-		pterm.Println("Press Enter to Continue") // Blank line
-		pterm.Println()                          // Blank line
-		if registry == "" {
-			registry = "ttl.sh"
+		// User selects the workflow mode
+		wizardMode, err := prompts.SelectID("Select the workflow mode", workflowModes, workflowModes[1].ID, "A workflow mode is required")
+		if err != nil {
+			log.Debug("err %s: ", err)
+			log.FatalCLI("Error selecting the workflow mode. Exiting")
 		}
-		pterm.Info.Printfln("You answered: %s", registry)
 
-		printer := pterm.DefaultInteractiveSelect.WithOptions(operatingSystems).WithDefaultOption(operatingSystems[0])
-		selectedoperatingSystems, _ := printer.Show("Select the OS you want to use. (Default: Ubuntu). Press Enter to use default")
-		pterm.Info.Printfln("Selected OS: %s", pterm.Green(selectedoperatingSystems))
+		userSelectedOptions.Mode = internal.GetWizardModeFromStr(wizardMode.ID)
 
-		printer2 := pterm.DefaultInteractiveSelect.WithOptions(operatingSystems2).WithDefaultOption(operatingSystems[0])
-		selectedoperatingSystems2, _ := printer2.Show("Select the OS version you want to use")
-		pterm.Info.Printfln("Selected OS: %s", pterm.Green(selectedoperatingSystems2))
+		// This transitions the program logic to the respective workflow mode's entry point
+		switch userSelectedOptions.Mode {
+		case 0:
+			log.Debug("Demo Mode")
+			err := build.Demo(ctx, &GlobalCliConfig, options)
+			if err != nil {
+				log.Debug("err %s: ", err)
+				log.FatalCLI("Error running the demo workflow. Exiting")
+			}
 
-		printer3 := pterm.DefaultInteractiveSelect.WithOptions(kubernetesDistro).WithDefaultOption(kubernetesDistro[0])
-		selectedoperatingSystems3, _ := printer3.Show("Select the Kubernetes distribution you want to use. (Default: Palette eXtended Kubernetes - Edge (PXK-E)). Press Enter to use default")
-		pterm.Info.Printfln("Selected Kubernetes Distribution: %s", pterm.Green(selectedoperatingSystems3))
+		case 1:
+			log.Debug("Normal Mode")
+			err := build.Normal(ctx, &GlobalCliConfig, options)
+			if err != nil {
+				log.Debug("err %s: ", err)
+				log.FatalCLI("Error running the normal workflow. Exiting")
+			}
+		default:
+			log.Debug("Invalid workflow mode")
+			log.FatalCLI("Invalid workflow mode. Exiting")
 
-		pterm.Println() // Blank line
-		pterm.Println() // Blank line
-
-		pterm.DefaultSection.Println("Summary")
-		pterm.DefaultSection.Println("-------")
-		pterm.DefaultSection.Println("Palette API Key: ", paletteAPI)
-		pterm.DefaultSection.Println("Image Registry: ", registry)
-		pterm.DefaultSection.Println("Operating System: ", selectedoperatingSystems)
-		pterm.DefaultSection.Println("Operating System Version: ", selectedoperatingSystems2)
-		pterm.DefaultSection.Println("Kubernetes Distribution: ", selectedoperatingSystems3)
-		pterm.Println() // Blank line
-		pterm.Println() // Blank line
+		}
 	},
+}
+
+// checkIfCanvOSDirExists checks if the .canvos directory exists in the local directory.
+// If it does not exist, the program exits with an error message.
+func checkIfCanvOSDirExists() {
+
+	if _, err := os.Stat(internal.DefaultCanvOsDir); os.IsNotExist(err) {
+		log.Error("error %s", err)
+		internal.LogError(err)
+		log.FatalCLI("CanvOS directory does not exist. Please issue the canvos init command to create the .canvos directory")
+	}
+
+	if _, err := os.Stat(internal.DefaultCliMenuOptionsPath); os.IsNotExist(err) {
+		log.Error("error %s", err)
+		internal.LogError(err)
+		log.FatalCLI("CanvOS options file does not exist. Please issue the canvos init command to create the options.json file")
+	}
 }

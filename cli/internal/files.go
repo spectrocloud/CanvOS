@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 )
@@ -111,7 +113,7 @@ func CreateTemplateFile(packs Packs) error {
 
 // CreateMenuOptionsFile creates a JSON file for the menu options used by the build command
 // This file will be located in the .canvos directory
-func CreateMenuOptionsFile(packs []Packs) error {
+func CreateMenuOptionsFile(packs []Packs, pv []string) error {
 
 	pathSeparator := string(os.PathSeparator)
 
@@ -143,6 +145,9 @@ func CreateMenuOptionsFile(packs []Packs) error {
 		}
 
 	}
+
+	// Add the palette versions
+	options.PaletteVersions = pv
 
 	filePath := DefaultCanvOsDir + pathSeparator + "options.json"
 
@@ -214,4 +219,100 @@ func RemoveDuplicatePacks(packs *[]Packs) {
 	}
 
 	*packs = result
+}
+
+// ReadOptionsFile reads the options file and returns the OptionsMenu struct
+func ReadOptionsFile(path string) (*OptionsMenu, error) {
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	byteValue, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	var optionsMenu OptionsMenu
+
+	err = json.Unmarshal(byteValue, &optionsMenu)
+	if err != nil {
+		return nil, err
+	}
+
+	return &optionsMenu, nil
+}
+
+// CreateDemoUserData creates a user-data file for the demo
+func CreateDemoUserData(token string) error {
+
+	fileName := "user-data"
+
+	file, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Define the template with the placeholder for the token
+	template := `
+	#cloud-config
+	stylus:
+	  site:
+		edgeHostToken: $token
+	install:
+	  poweroff: true
+	users:
+	  - name: kairos
+		passwd: kairos
+		`
+
+	// Replace the placeholder with the actual token
+	content := strings.Replace(template, "$token", token, -1)
+
+	// Write the content to the file
+	_, err = file.WriteString(content)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CreateDemoArgsFile creates an args file for the demo
+func CreateDemoArgsFile(u UserSelections) error {
+
+	fileName := ".arg"
+	file, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	template := `
+	CUSTOM_TAG=$CUSTOM_TAG
+	IMAGE_REGISTRY=$IMAGE_REGISTRY
+	OS_DISTRIBUTION=$OS_DISTRIBUTION
+	IMAGE_REPO=$OS_DISTRIBUTION
+	OS_VERSION=$OS_VERSION   
+	K8S_DISTRIBUTION=$K8S_DISTRIBUTION
+	ISO_NAME=$ISO_NAME
+	`
+
+	content := strings.Replace(template, "$CUSTOM_TAG", "demo", -1)
+	content = strings.Replace(content, "$IMAGE_REGISTRY", u.ImageRegistryURL, -1)
+	content = strings.Replace(content, "$OS_DISTRIBUTION", u.OperatingSystemDistro, -1)
+	content = strings.Replace(content, "$OS_VERSION", u.OperatingSystemVersion, -1)
+	content = strings.Replace(content, "$K8S_DISTRIBUTION", u.KubernetesDistro, -1)
+	content = strings.Replace(content, "$ISO_NAME", u.ISOName, -1)
+
+	// Write the content to the file
+	_, err = file.WriteString(content)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
