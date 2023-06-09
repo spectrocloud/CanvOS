@@ -33,10 +33,15 @@ docker stop earthly-buildkitd && docker rm earthly-buildkitd
 docker rmi alpine:latest
 
 # Print the output for use in Palette Profile.
-echo -e '###################################################################################################'
-echo -e '\nPASTE THE CONTENTS BELOW INTO YOUR CLUSTER PROFILE IN PALETTE BELOW THE "OPTIONS" ATTRIBUTE\n'
-echo -e '###################################################################################################'
+echo -e '##########################################################################################################'
+echo -e '\nPASTE THE CONTENTS BELOW INTO YOUR CLUSTER PROFILE IN PALETTE REPLACING ALL THE CONTENT IN THE PROFILE\n'
+echo -e '##########################################################################################################'
 echo -e '\n'
+echo -e 'pack:'
+echo -e '  content:'
+echo -e '    images:'
+echo -e '      - image: "{{.spectro.pack.edge-native-byoi.options.system.uri}}"'
+echo -e 'options:'
 echo -e '  system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"'
 echo -e '\n'
 echo -e "  system.registry: $IMAGE_REGISTRY"
