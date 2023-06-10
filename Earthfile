@@ -31,15 +31,6 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 END
 
-# VERSION:
-#     COMMAND
-#     FROM gcr.io/spectro-images-public/alpine:3.16.2
-#     RUN apk add git
-#     COPY .git/ .git
-#     RUN echo $(git describe --exact-match --tags || echo "v0.0.0-$(git log --oneline -n 1 | cut -d" " -f1)") > VERSION
-#     RUN cat VERSION | cut -c2- > PACKAGE_VERSION
-#     SAVE ARTIFACT VERSION PACKAGE_VERSION
-
 build-all-images:
     BUILD --platform=linux/amd64 +build-provider-images
     BUILD --platform=linux/amd64 +iso
@@ -54,8 +45,6 @@ iso-image-rootfs:
     SAVE ARTIFACT --keep-own /. rootfs
 
 iso:
-    # DO +VERSION
-    # ARG VERSION=$(cat VERSION)
     ARG ISO_NAME=installer
     WORKDIR /build
     COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
