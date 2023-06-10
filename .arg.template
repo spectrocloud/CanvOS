@@ -5,3 +5,4 @@ IMAGE_REPO=$OS_DISTRIBUTION
 OS_VERSION=22   
 K8S_DISTRIBUTION=k3s
 ISO_NAME=palette-edge-installer
+platform=linux/amd64

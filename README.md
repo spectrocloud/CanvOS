@@ -102,6 +102,7 @@ cp .arg.template .arg
 | OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. This example uses `22` for Ubuntu.                                         | String | `22`                   |
 | K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm`.                                                       | String | `k3s`                  |
 | ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                             | String | `palette-edge-installer`|
+| platform         | Type of platform to use for the build.  Used for Cross Platform Build (arm64 to amd64 as example).                                       | string |  `linux/amd64`          | 
 
 7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
   
