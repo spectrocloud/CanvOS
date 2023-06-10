@@ -1,8 +1,11 @@
 package internal
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type CliConfig struct {
@@ -125,6 +128,17 @@ type OptionsCNIs struct {
 	Flannel []string `json:"flannel,omitempty"`
 }
 
+// GetBYOOSVersions returns the available BYOOS versions
+func (o *OptionsMenu) GetBYOOSVersions() []string {
+	var byooVersions []string
+
+	if len(o.OperatingSystems.EdgeNativeByoi) > 0 {
+		byooVersions = append(byooVersions, o.OperatingSystems.EdgeNativeByoi...)
+	}
+
+	return byooVersions
+}
+
 // GetKubernetesDistroOptions returns the available Kubernetes distros
 func (o *OptionsMenu) GetKubernetesDistroOptions() []string {
 
@@ -240,6 +254,8 @@ func (o *OptionsMenu) GetCniVersionOptions(cni string) []string {
 type UserSelections struct {
 	// The CLI wizard mode
 	Mode wizardMode
+	// BYOOSVersion is the BYOOS version
+	BYOOSVersion string
 	// KubernetesDistro is the Kubernetes distribution
 	KubernetesDistro string
 	// KubernetesVersion is the Kubernetes version
@@ -272,6 +288,8 @@ type UserSelections struct {
 	TenantRegistrationToken string
 	// ISOName is the name of the ISO file
 	ISOName string
+	// CustomTag is the custom tag to use for the provider images
+	CustomTag string
 }
 
 type wizardMode int
@@ -320,4 +338,69 @@ func GetWizardModeFromStr(s string) wizardMode {
 	default:
 		return Normal
 	}
+}
+
+// Cluster Profile Struct
+type ClusterProfile struct {
+	Metadata MetadataCP `json:"metadata"`
+	Spec     SpecCP     `json:"spec"`
+}
+type AnnotationsCP struct {
+	Description string `json:"description"`
+}
+type LabelsCP struct {
+	CreatedBy string `json:"createdBy"`
+}
+type MetadataCP struct {
+	Name        string        `json:"name"`
+	Annotations AnnotationsCP `json:"annotations"`
+	Labels      LabelsCP      `json:"labels"`
+}
+type ParametersCP struct {
+	InputParameters  []string `json:"inputParameters"`
+	OutputParameters []string `json:"outputParameters"`
+}
+type TemplatePacks struct {
+	Parameters ParametersCP `json:"parameters"`
+}
+type PacksCP struct {
+	RegistryUID string        `json:"registryUid"`
+	Name        string        `json:"name"`
+	Tag         string        `json:"tag"`
+	Values      string        `json:"values"`
+	PackUID     string        `json:"packUid"`
+	Logo        string        `json:"logo"`
+	Template    TemplatePacks `json:"template"`
+	Manifests   []string      `json:"manifests"`
+	Type        string        `json:"type"`
+	UID         string        `json:"uid"`
+}
+type SpecTemplate struct {
+	CloudType string    `json:"cloudType"`
+	Type      string    `json:"type"`
+	Packs     []PacksCP `json:"packs"`
+}
+type SpecCP struct {
+	Template SpecTemplate `json:"template"`
+	Version  string       `json:"version"`
+}
+
+type PaletteAPIError struct {
+	Code    string      `json:"code"`
+	Details interface{} `json:"details"`
+	Message string      `json:"message"`
+	Ref     string      `json:"ref"`
+}
+
+// MashallClusterProfile marshalls the ClusterProfile struct into a JSON string.
+func (cp *ClusterProfile) mashallClusterProfile() (string, error) {
+
+	output, err := json.MarshalIndent(cp, " ", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	log.Info().Msgf("Cluster Profile: %s", string(output))
+
+	return string(output), nil
 }

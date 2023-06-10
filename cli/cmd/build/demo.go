@@ -11,6 +11,13 @@ import (
 // Demo is the workflow orchestrator for the demo mode
 func Demo(ctx context.Context, config *internal.CliConfig, options *internal.OptionsMenu) error {
 
+	// Initialize the Palette Credentials
+	paletteAuth := internal.PaletteAuth{
+		Host:      *config.PaletteHost,
+		APIKey:    *config.PaletteApiKey,
+		ProjectID: *config.ProjectID,
+	}
+
 	var userSelectedOptions internal.UserSelections
 
 	tenantRegistrationToken, err := prompts.ReadText("Provide your Palette Tenant registration token", "", "A Palette Tenant registration token is required.", false, 128)
@@ -28,6 +35,8 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 		log.FatalCLI("Error creating the demo user data. Exiting")
 	}
 
+	userSelectedOptions.CustomTag = "palette-learn"
+
 	latestUbuntuVersions := options.GetOperatingSystemVersionOptions("Ubuntu")
 
 	userSelectedOptions.OperatingSystemDistro = "ubuntu"
@@ -44,12 +53,15 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 	userSelectedOptions.PaletteEdgeInstallerVersion = options.PaletteVersions[0]
 	userSelectedOptions.CreateClusterProfile = true
 
-	userSelectedOptions.ClusterProfileSuffix = internal.GenerateClusterProfileName("demo")
+	userSelectedOptions.ClusterProfileSuffix = "demo"
 
 	userSelectedOptions.ImageRegistryURL = "ttl.sh"
 	userSelectedOptions.ImageRegistryRepository = "ubuntu"
 
 	userSelectedOptions.ISOName = "palette-edge-installer"
+
+	ByoosVersions := options.GetBYOOSVersions()
+	userSelectedOptions.BYOOSVersion = ByoosVersions[0]
 
 	err = internal.CreateDemoArgsFile(userSelectedOptions)
 	if err != nil {
@@ -57,10 +69,17 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 		log.FatalCLI("Error creating the demo args file. Exiting")
 	}
 
-	_ = internal.CreateEdgeClusterProfilePayLoad(userSelectedOptions)
+	cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(userSelectedOptions)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("Error creating the cluster profile payload. Exiting")
+	}
+
+	log.InfoCLI("Creating the cluster profile in Palette....")
+	err = internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
 	}
 
 	return nil

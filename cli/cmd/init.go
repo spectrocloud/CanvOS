@@ -122,6 +122,16 @@ var initCmd = &cobra.Command{
 			log.Info().Msg("Error creating the menu options file")
 			internal.LogError(err)
 		}
+
+		// The CanvOS repository is downloaded so that the user has the Eartly scripts and required assets.
+		// The plan is to host this logic in the Palette CLI and not in the CanvOS repository.
+		log.Info().Msg("Downloading CanvOS assets...")
+		err = internal.CloneCanvOS(cmd.Context())
+		if err != nil {
+			log.Info().Msg("Error cloning the CanvOS repository")
+			internal.LogError(err)
+		}
+
 		log.Info().Msg("Init completed successfully. Use the the canvos build command to build the Edge Artifacts.")
 
 	},

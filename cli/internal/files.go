@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog/log"
 )
 
@@ -314,5 +316,21 @@ func CreateDemoArgsFile(u UserSelections) error {
 		return err
 	}
 
+	return nil
+}
+
+// CloneCanvOS clones the CanvOS repo
+func CloneCanvOS(ctx context.Context) error {
+
+	path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS"
+
+	_, err := git.PlainCloneContext(ctx, path, false, &git.CloneOptions{
+		URL:   "https://github.com/spectrocloud/CanvOS.git",
+		Depth: 1,
+	})
+	if err != nil {
+		log.Info().Msgf("error cloning CanvOS repo: %v", err)
+		return err
+	}
 	return nil
 }

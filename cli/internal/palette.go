@@ -3,7 +3,9 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 )
@@ -15,7 +17,6 @@ func GetPacks(ctx context.Context, p PaletteAuth, queryParams string) (Packs, er
 
 	urlReq := p.Host + "/v1/packs?" + queryParams
 
-	// get the OS pack
 	httpClient := DefaultHTTPClient()
 
 	req, err := http.NewRequest("GET", urlReq, nil)
@@ -46,6 +47,17 @@ func GetPacks(ctx context.Context, p PaletteAuth, queryParams string) (Packs, er
 
 	log.Debug().Msgf("HTTP Request Status: %s", response.Status)
 	log.Debug().Interface("Respose Body", response.Body)
+
+	if response.StatusCode != 200 {
+		var responseError PaletteAPIError
+		err = json.NewDecoder(response.Body).Decode(&responseError)
+		if err != nil {
+			log.Info().Msg("Error converting the pack information to JSON")
+			LogError(err)
+			return Packs{}, err
+		}
+		return Packs{}, errors.New(responseError.Message)
+	}
 
 	var responseData Packs
 	err = json.NewDecoder(response.Body).Decode(&responseData)
@@ -78,5 +90,64 @@ func GetPaletteVersions(ctx context.Context, p PaletteAuth) ([]string, error) {
 		"3.3.1",
 		"3.3.0",
 	}, nil
+
+}
+
+// CreateClusterProfileInPalette creates a new cluster profile in Palette.
+func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp ClusterProfile) error {
+
+	urlReq := p.Host + "/v1//clusterprofiles"
+
+	httpClient := DefaultHTTPClient()
+
+	jsonValue, err := cp.mashallClusterProfile()
+	if err != nil {
+		log.Info().Msg("Error marshalling the cluster profile")
+		log.Debug().Err(err)
+		LogError(err)
+	}
+
+	payload := strings.NewReader(jsonValue)
+
+	req, err := http.NewRequest("POST", urlReq, payload)
+	if err != nil {
+		log.Info().Msg("Error creating a cluster profile request")
+		log.Debug().Err(err)
+		LogError(err)
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("ApiKey", p.APIKey)
+
+	if p.ProjectID != "" {
+		req.Header.Add("ProjectId", p.ProjectID)
+	}
+
+	req.Header.Add("User-Agent", GetUserAgentString(Version))
+
+	response, err := httpClient.Do(req)
+	if err != nil {
+		log.Info().Msg("Error retrieving the pack information from Palette")
+		LogError(err)
+	}
+
+	defer response.Body.Close()
+
+	log.Info().Msgf("HTTP Request Status: %s", response.Status)
+	log.Info().Interface("Respose Body", response.Body)
+
+	if response.StatusCode != 200 {
+		var responseError PaletteAPIError
+		err = json.NewDecoder(response.Body).Decode(&responseError)
+		if err != nil {
+			log.Info().Msg("Error converting the pack information to JSON")
+			LogError(err)
+			return err
+		}
+		return errors.New(responseError.Message)
+	}
+
+	return nil
 
 }
