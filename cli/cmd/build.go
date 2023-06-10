@@ -51,6 +51,17 @@ var buildCmd = &cobra.Command{
 
 		}
 
+		if *GlobalCliConfig.ProjectID == "" {
+
+			projectId, err := prompts.ReadText("Enter your Palette Project ID. Or press Enter to leave empty and use the Tenant instead of a project", "", "Palette API Key is required", true, 128)
+			if err != nil {
+				log.Debug("err %s: ", err)
+				log.FatalCLI("error getting API key. Exiting")
+			}
+			GlobalCliConfig.ProjectID = &projectId
+
+		}
+
 		workflowModes := []prompts.ChoiceItem{
 			{
 				ID:   "Demo",
