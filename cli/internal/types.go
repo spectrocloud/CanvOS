@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 type CliConfig struct {
@@ -126,6 +124,8 @@ type OptionsOperatingSystems struct {
 }
 type OptionsCNIs struct {
 	Calico  AvailblePacks `json:"calico,omitempty"`
+	Cilium  AvailblePacks `json:"cilium,omitempty"`
+	Custom  AvailblePacks `json:"custom,omitempty"`
 	Flannel AvailblePacks `json:"flannel,omitempty"`
 }
 
@@ -182,20 +182,28 @@ func (o *OptionsMenu) GetKubernetesDistroVersions(os string) []string {
 
 	if os == "K3s" {
 		if len(o.Kubernetes.Edgek3S.Versions) > 0 {
-			k8sDistroVersions = append(k8sDistroVersions, "k3s")
+			for _, v := range o.Kubernetes.Edgek3S.Versions {
+				k8sDistroVersions = append(k8sDistroVersions, v.Version)
+			}
 		}
 	}
 
 	if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
-		k8sDistroVersions = append(k8sDistroVersions, "Palette eXtended Kubernetes - Edge (PXK-E)")
+		for _, v := range o.Kubernetes.EdgeK8S.Versions {
+			k8sDistroVersions = append(k8sDistroVersions, v.Version)
+		}
 	}
 
 	if len(o.Kubernetes.EdgeMicrok8S.Versions) > 0 {
-		k8sDistroVersions = append(k8sDistroVersions, "MicroK8s")
+		for _, v := range o.Kubernetes.EdgeMicrok8S.Versions {
+			k8sDistroVersions = append(k8sDistroVersions, v.Version)
+		}
 	}
 
 	if len(o.Kubernetes.EdgeRke2.Versions) > 0 {
-		k8sDistroVersions = append(k8sDistroVersions, "RKE2")
+		for _, v := range o.Kubernetes.EdgeRke2.Versions {
+			k8sDistroVersions = append(k8sDistroVersions, v.Version)
+		}
 	}
 
 	return k8sDistroVersions
@@ -242,15 +250,27 @@ func (o *OptionsMenu) GetCniOptions() []string {
 	var cniOptions []string
 
 	if len(o.Cnis.Calico.Versions) > 0 {
-		for _, calico := range o.Cnis.Calico.Versions {
-			cniOptions = append(cniOptions, calico.Version)
-		}
+
+		cniOptions = append(cniOptions, "Calico")
+
 	}
 
 	if len(o.Cnis.Flannel.Versions) > 0 {
-		for _, flannel := range o.Cnis.Flannel.Versions {
-			cniOptions = append(cniOptions, flannel.Version)
-		}
+
+		cniOptions = append(cniOptions, "Flannel")
+
+	}
+
+	if len(o.Cnis.Cilium.Versions) > 0 {
+
+		cniOptions = append(cniOptions, "Cilium")
+
+	}
+
+	if len(o.Cnis.Custom.Versions) > 0 {
+
+		cniOptions = append(cniOptions, "Custom CNI")
+
 	}
 
 	return cniOptions
@@ -274,7 +294,128 @@ func (o *OptionsMenu) GetCniVersionOptions(cni string) []string {
 		}
 	}
 
+	if str == "cilium" {
+		for _, cilium := range o.Cnis.Cilium.Versions {
+			cniVersions = append(cniVersions, cilium.Version)
+		}
+	}
+
+	if str == "custom cni" {
+		for _, custom := range o.Cnis.Custom.Versions {
+			cniVersions = append(cniVersions, custom.Version)
+		}
+	}
+
 	return cniVersions
+}
+
+// GetPackUIDs returns the pack and registry UID for a given Kubernetes distro and version
+// The return values are  the PackUID and RegistryUID in that order
+func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
+
+	var packUID, registryUID string
+
+	if name == "k3s" {
+		for _, v := range o.Kubernetes.Edgek3S.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.Kubernetes.Edgek3S.RegistryUID
+	}
+
+	if name == "k8s" {
+		for _, v := range o.Kubernetes.EdgeK8S.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.Kubernetes.EdgeK8S.RegistryUID
+	}
+
+	if name == "microk8s" {
+		for _, v := range o.Kubernetes.EdgeMicrok8S.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.Kubernetes.EdgeMicrok8S.RegistryUID
+	}
+
+	if name == "rke2" {
+		for _, v := range o.Kubernetes.EdgeRke2.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.Kubernetes.EdgeRke2.RegistryUID
+	}
+
+	if name == "calico" {
+		for _, v := range o.Cnis.Calico.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.Cnis.Calico.RegistryUID
+	}
+
+	if name == "cilium" {
+		for _, v := range o.Cnis.Cilium.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.Cnis.Cilium.RegistryUID
+	}
+
+	if name == "custom cni" {
+		for _, v := range o.Cnis.Custom.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.Cnis.Custom.RegistryUID
+	}
+
+	if name == "flannel" {
+		for _, v := range o.Cnis.Flannel.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.Cnis.Flannel.RegistryUID
+	}
+
+	if name == "ubuntu" {
+		for _, v := range o.OperatingSystems.Ubuntu.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.OperatingSystems.Ubuntu.RegistryUID
+	}
+
+	if name == "opensuse" {
+		for _, v := range o.OperatingSystems.OpenSuSE.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.OperatingSystems.OpenSuSE.RegistryUID
+	}
+
+	if name == "byoos" || name == "edge-native-byoi" {
+		for _, v := range o.OperatingSystems.EdgeNativeByoi.Versions {
+			if v.Version == version {
+				packUID = v.UID
+			}
+		}
+		registryUID = o.OperatingSystems.EdgeNativeByoi.RegistryUID
+	}
+
+	return packUID, registryUID
+
 }
 
 // The UserProvidedOptions holds the options provided by the user
@@ -427,7 +568,9 @@ func (cp *ClusterProfile) mashallClusterProfile() (string, error) {
 		return "", err
 	}
 
-	log.Info().Msgf("Cluster Profile: %s", string(output))
-
 	return string(output), nil
+}
+
+type CreateClusterProfileResponse struct {
+	UID string `json:"uid"`
 }

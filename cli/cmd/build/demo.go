@@ -69,17 +69,24 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 		log.FatalCLI("Error creating the demo args file. Exiting")
 	}
 
-	cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(userSelectedOptions)
+	cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(userSelectedOptions, options)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("Error creating the cluster profile payload. Exiting")
 	}
 
 	log.InfoCLI("Creating the cluster profile in Palette....")
-	err = internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
+	cpId, err := internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
 	if err != nil {
 		log.InfoCLI("err %s: ", err)
 		log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
+	}
+
+	log.InfoCLI("Publishing the cluster profile in Palette....")
+	err = internal.PublishClusterProfileInPalette(ctx, paletteAuth, cpId)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
 	}
 
 	return nil

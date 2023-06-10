@@ -31,7 +31,7 @@ func GetPacks(ctx context.Context, p PaletteAuth, queryParams string) (Packs, er
 	req.Header.Add("ApiKey", p.APIKey)
 
 	if p.ProjectID != "" {
-		req.Header.Add("ProjectId", p.ProjectID)
+		req.Header.Add("ProjectUid", p.ProjectID)
 	}
 
 	req.Header.Add("User-Agent", GetUserAgentString(Version))
@@ -94,9 +94,9 @@ func GetPaletteVersions(ctx context.Context, p PaletteAuth) ([]string, error) {
 }
 
 // CreateClusterProfileInPalette creates a new cluster profile in Palette.
-func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp ClusterProfile) error {
+func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp ClusterProfile) (CreateClusterProfileResponse, error) {
 
-	urlReq := p.Host + "/v1//clusterprofiles"
+	urlReq := p.Host + "/v1/clusterprofiles"
 
 	httpClient := DefaultHTTPClient()
 
@@ -105,6 +105,7 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 		log.Info().Msg("Error marshalling the cluster profile")
 		log.Debug().Err(err)
 		LogError(err)
+		return CreateClusterProfileResponse{}, err
 	}
 
 	payload := strings.NewReader(jsonValue)
@@ -121,7 +122,7 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 	req.Header.Add("ApiKey", p.APIKey)
 
 	if p.ProjectID != "" {
-		req.Header.Add("ProjectId", p.ProjectID)
+		req.Header.Add("ProjectUid", p.ProjectID)
 	}
 
 	req.Header.Add("User-Agent", GetUserAgentString(Version))
@@ -130,14 +131,68 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 	if err != nil {
 		log.Info().Msg("Error retrieving the pack information from Palette")
 		LogError(err)
+		return CreateClusterProfileResponse{}, err
 	}
 
 	defer response.Body.Close()
 
-	log.Info().Msgf("HTTP Request Status: %s", response.Status)
-	log.Info().Interface("Respose Body", response.Body)
+	if response.StatusCode != 201 {
+		var responseError PaletteAPIError
+		err = json.NewDecoder(response.Body).Decode(&responseError)
+		if err != nil {
+			log.Info().Msg("Error converting the pack information to JSON")
+			LogError(err)
+			return CreateClusterProfileResponse{}, err
+		}
+		return CreateClusterProfileResponse{}, errors.New(responseError.Message)
+	}
 
-	if response.StatusCode != 200 {
+	var responseData CreateClusterProfileResponse
+	err = json.NewDecoder(response.Body).Decode(&responseData)
+	if err != nil {
+		log.Info().Msg("Error converting the pack information to JSON")
+		LogError(err)
+		return CreateClusterProfileResponse{}, err
+	}
+
+	return responseData, err
+
+}
+
+// PublishClusterProfileInPalette publishes a cluster profile in Palette.
+func PublishClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp CreateClusterProfileResponse) error {
+
+	urlReq := p.Host + "/v1/clusterprofiles/" + cp.UID + "/publish"
+
+	httpClient := DefaultHTTPClient()
+
+	req, err := http.NewRequest("PATCH", urlReq, nil)
+	if err != nil {
+		log.Info().Msg("Error creating a cluster profile request")
+		log.Debug().Err(err)
+		LogError(err)
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("ApiKey", p.APIKey)
+
+	if p.ProjectID != "" {
+		req.Header.Add("ProjectUid", p.ProjectID)
+	}
+
+	req.Header.Add("User-Agent", GetUserAgentString(Version))
+
+	response, err := httpClient.Do(req)
+	if err != nil {
+		log.Info().Msg("Error retrieving the pack information from Palette")
+		LogError(err)
+		return err
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != 204 {
 		var responseError PaletteAPIError
 		err = json.NewDecoder(response.Body).Decode(&responseError)
 		if err != nil {
@@ -148,6 +203,6 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 		return errors.New(responseError.Message)
 	}
 
-	return nil
+	return err
 
 }
