@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"specrocloud.com/canvos/internal"
+	log "specrocloud.com/canvos/logger"
 )
 
 func init() {
@@ -24,7 +24,7 @@ var initCmd = &cobra.Command{
 		internal.InitLogger(Verbose)
 
 		if *GlobalCliConfig.PaletteApiKey == "" {
-			log.Fatal().Msg("Palette API Key is required. Please set the SPECTROCLOUD_APIKEY environment variable.")
+			log.FatalCLI("Palette API Key is required. Please set the SPECTROCLOUD_APIKEY environment variable.")
 		}
 
 		// Initialize the Palette Credentials
@@ -44,10 +44,15 @@ var initCmd = &cobra.Command{
 			"os":       "filters=spec.cloudTypes=edge-nativeANDspec.layer=os&limit=50&orderBy=spec.version=-1",
 		}
 
+		log.InfoCLI("Checking system specifications....")
+		log.InfoCLI("")
+		// Check the system specifications
+		internal.SystemPrerequisitesChecks()
+
 		// Create the CanvOS directory. If it already exists, it will be skipped
 		err := internal.CreateCanvOsDir(internal.DefaultCanvOsDir)
 		if err != nil {
-			log.Info().Msg("Error creating the CanvOS directory")
+			log.FatalCLI("Error creating the CanvOS directory")
 			internal.LogError(err)
 		}
 
@@ -55,7 +60,7 @@ var initCmd = &cobra.Command{
 
 		// Variable to store Pack request responses
 		var responses = make(map[string]internal.Packs)
-		log.Info().Msg("Downloading Pack templates....")
+		log.InfoCLI("Downloading Pack templates....")
 		// Make all Pack data requests concurrently
 		for key, filter := range packsRequestFilters {
 			k := key
@@ -74,11 +79,10 @@ var initCmd = &cobra.Command{
 
 		// Wait for all requests to finish
 		if err := g.Wait(); err != nil {
-			log.Info().Msg("Error retrieving the pack information from Palette")
-			log.Debug().Err(err).Msg("Error retrieving the pack information from Palette")
-			internal.LogError(err)
+			log.FatalCLI("Error retrieving the pack information from Palette")
+
 		}
-		log.Info().Msg("Downloads complete")
+		log.InfoCLI("Downloads complete")
 
 		// Use the responses map
 		byoos := responses["byoos"]
@@ -89,7 +93,7 @@ var initCmd = &cobra.Command{
 		microk8s := responses["microk8s"]
 		os := responses["os"]
 
-		log.Info().Msg("Creating Pack templates....")
+		log.InfoCLI("Creating Pack templates....")
 		packs := []internal.Packs{byoos, cnis, k3s, pxkE, rke2, microk8s, os}
 		internal.RemoveDuplicatePacks(&packs)
 		for _, pack := range packs {
@@ -106,33 +110,40 @@ var initCmd = &cobra.Command{
 		// Get the Palette Versions
 		paletteVersions, err := internal.GetPaletteVersions(ctx, paletteAuth)
 		if err != nil {
-			log.Info().Msg("Error retrieving the palette versions")
 			internal.LogError(err)
+			log.InfoCLI("Error retrieving the palette versions")
+
 		}
 
 		// Wait for all requests to finish
 		if err := g.Wait(); err != nil {
-			log.Info().Msg("Error creating the pack templates")
 			internal.LogError(err)
+			log.FatalCLI("Error creating the pack templates")
+
 		}
-		log.Info().Msg("All Pack templates are created successfully")
+		log.InfoCLI("All Pack templates are created successfully")
 
 		err = internal.CreateMenuOptionsFile(packs, paletteVersions)
 		if err != nil {
-			log.Info().Msg("Error creating the menu options file")
 			internal.LogError(err)
+			log.FatalCLI("Error creating the menu options file")
+
 		}
 
 		// The CanvOS repository is downloaded so that the user has the Eartly scripts and required assets.
 		// The plan is to host this logic in the Palette CLI and not in the CanvOS repository.
-		log.Info().Msg("Downloading CanvOS assets...")
+		log.InfoCLI("Downloading CanvOS assets...")
 		err = internal.CloneCanvOS(cmd.Context())
 		if err != nil {
-			log.Info().Msg("Error cloning the CanvOS repository")
+			log.FatalCLI("Error cloning the CanvOS repository")
 			internal.LogError(err)
 		}
-
-		log.Info().Msg("Init completed successfully. Use the the canvos build command to build the Edge Artifacts.")
+		log.InfoCLI("")
+		log.InfoCLI("✅ Init downloaded all required assets successfully")
+		log.InfoCLI("")
+		log.InfoCLI("")
+		log.InfoCLI("--------------------------------------------------------------")
+		log.InfoCLI("Use the the canvos build command to build the Edge Artifacts.")
 
 	},
 }
