@@ -84,64 +84,6 @@ func TestDynamicCreateMenuOptionsFile(t *testing.T) {
 	}
 }
 
-func TestCreateMenuOptionsFile(t *testing.T) {
-	// arrange
-	packs := []Packs{
-		{
-			Items: []Pack{
-				{
-					Spec: Spec{
-						Name:    "edge-k8s",
-						Version: "1.0",
-						Type:    "k8s",
-						Layer:   "k8s",
-					},
-				},
-				{
-					Spec: Spec{
-						Name:    "cni-calico",
-						Version: "2.0",
-						Type:    "cni",
-						Layer:   "cni",
-					},
-				},
-				{
-					Spec: Spec{
-						Name:    "edge-native-byoi",
-						Version: "3.0",
-						Type:    "os",
-						Layer:   "os",
-					},
-				},
-			},
-		},
-	}
-
-	paletteVersions := []string{"1.0", "2.0", "3.0"}
-
-	// temporarily change DefaultCanvOsDir to a temp dir
-	tempDir := filepath.Join(DefaultCanvOsDir, t.TempDir())
-	os.MkdirAll(tempDir, os.ModePerm)
-	defer os.RemoveAll(tempDir)
-
-	// act
-	err := CreateMenuOptionsFile(packs, paletteVersions)
-
-	// assert
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-
-	// Check if the file was created in the expected location
-	_, err = os.Stat(DefaultCanvOsDir + string(os.PathSeparator) + "options.json")
-	if err != nil {
-		t.Fatalf("Expected options.json to be created, got error: %v", err)
-	}
-
-	// Optionally: Load the file and check if it contains the expected content
-	// This depends on how exactly the function is supposed to format the output
-}
-
 func TestCreateDemoUserData(t *testing.T) {
 	token := "testToken"
 
@@ -194,7 +136,7 @@ func TestCreateDemoArgsFile(t *testing.T) {
 	}
 
 	fileName := ".arg"
-	// defer os.Remove(fileName) // Cleanup after the test
+	defer os.Remove(fileName) // Cleanup after the test
 
 	content, err := os.ReadFile(fileName)
 	if err != nil {
@@ -211,15 +153,133 @@ func TestCreateDemoArgsFile(t *testing.T) {
 	ISO_NAME=palette-edge-installer
 	`
 
-	// Remove leading and trailing whitespaces and newline characters
-	// expectedContent = strings.TrimSpace(expectedContent)
-	// fileContent := strings.TrimSpace(string(content))
-
 	if normalizeSpace(string(content)) != normalizeSpace(expectedContent) {
 		t.Fatalf("Unexpected file content. Got \n%s\n, expected \n%s\n", content, expectedContent)
 	}
 
-	// if fileContent != expectedContent {
-	// 	t.Errorf("unexpected content: \n want %v \n got  %v", expectedContent, fileContent)
-	// }
+}
+
+func TestCreateMenuOptionsFile(t *testing.T) {
+	// arrange
+	packs := []Packs{
+		{
+			Items: []Pack{
+				{
+					Spec: Spec{
+						Name:        "edge-k3s",
+						Version:     "1.20.4",
+						RegistryUID: "5eecc89d0b150045ae661cef",
+					},
+					Metadata: Metadata{
+						UID: "60917d9a5b3dba346b597f97",
+					},
+				},
+				{
+					Spec: Spec{
+						Name:        "edge-k8s",
+						Version:     "1.22.1",
+						RegistryUID: "5eecc89d0b150045ae661cef",
+					},
+					Metadata: Metadata{
+						UID: "626808fdd9c58677ccdd6390",
+					},
+				},
+				{
+					Spec: Spec{
+						Name:        "cni-flannel",
+						Version:     "0.13.0",
+						RegistryUID: "ruid3",
+					},
+					Metadata: Metadata{
+						UID: "136802fdd9c58677ccdd6390",
+					},
+				},
+				{
+					Spec: Spec{
+						Name:        "edge-native-ubuntu",
+						Version:     "20.04",
+						RegistryUID: "5eecc89d0b150045ae661cef",
+					},
+					Metadata: Metadata{
+						UID: "266802fdd9c58677ccdd6390",
+					},
+				},
+			},
+		},
+	}
+
+	paletteVersions := []string{"1.0", "2.0", "3.0"}
+
+	// temporarily change DefaultCanvOsDir to a temp dir
+	tempDir := filepath.Join(DefaultCanvOsDir, t.TempDir())
+	os.MkdirAll(tempDir, os.ModePerm)
+	defer os.RemoveAll(tempDir)
+
+	// act
+	err := CreateMenuOptionsFile(packs, paletteVersions)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// Check if the file was created in the expected location
+	_, err = os.Stat(DefaultCanvOsDir + string(os.PathSeparator) + "options.json")
+	if err != nil {
+		t.Fatalf("Expected options.json to be created, got error: %v", err)
+	}
+
+	// Load the file and check if it contains the expected content
+	file, _ := os.ReadFile(DefaultCanvOsDir + string(os.PathSeparator) + "options.json")
+	var options OptionsMenu
+	_ = json.Unmarshal([]byte(file), &options)
+
+	// The expected output after the CreateMenuOptionsFile
+	expectedOptions := OptionsMenu{
+		Kubernetes: OptionsKubernetes{
+			Edgek3S: AvailblePacks{
+				RegistryUID: "5eecc89d0b150045ae661cef",
+				Versions: []PackVersion{
+					{
+						Version: "1.20.4",
+						UID:     "60917d9a5b3dba346b597f97",
+					},
+				},
+			},
+			EdgeK8S: AvailblePacks{
+				RegistryUID: "5eecc89d0b150045ae661cef",
+				Versions: []PackVersion{
+					{
+						Version: "1.22.1",
+						UID:     "626808fdd9c58677ccdd6390",
+					},
+				},
+			},
+		},
+		OperatingSystems: OptionsOperatingSystems{
+			Ubuntu: AvailblePacks{
+				RegistryUID: "5eecc89d0b150045ae661cef",
+				Versions: []PackVersion{
+					{
+						Version: "20.04",
+						UID:     "266802fdd9c58677ccdd6390",
+					},
+				},
+			},
+		},
+		Cnis: OptionsCNIs{
+			Flannel: AvailblePacks{
+				RegistryUID: "ruid3",
+				Versions: []PackVersion{
+					{
+						Version: "0.13.0",
+						UID:     "136802fdd9c58677ccdd6390",
+					},
+				},
+			},
+		},
+		PaletteVersions: paletteVersions,
+	}
+
+	if !reflect.DeepEqual(options, expectedOptions) {
+		t.Fatalf("Expected %v, got %v", expectedOptions, options)
+	}
 }

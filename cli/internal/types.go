@@ -113,27 +113,40 @@ type OptionsMenu struct {
 	PaletteVersions  []string                `json:"palette_versions,omitempty"`
 }
 type OptionsKubernetes struct {
-	Edgek3S      []string `json:"edge-k3s,omitempty"`
-	EdgeK8S      []string `json:"edge-k8s,omitempty"`
-	EdgeMicrok8S []string `json:"edge-microk8s,omitempty"`
-	EdgeRke2     []string `json:"edge-rke2,omitempty"`
+	Edgek3S      AvailblePacks `json:"edge-k3s,omitempty"`
+	EdgeK8S      AvailblePacks `json:"edge-k8s,omitempty"`
+	EdgeMicrok8S AvailblePacks `json:"edge-microk8s,omitempty"`
+	EdgeRke2     AvailblePacks `json:"edge-rke2,omitempty"`
 }
+
 type OptionsOperatingSystems struct {
-	EdgeNativeByoi []string `json:"edge-native-byoi,omitempty"`
-	Ubuntu         []string `json:"edge-native-ubuntu,omitempty"`
-	OpenSuSE       []string `json:"edge-native-opensuse,omitempty"`
+	EdgeNativeByoi AvailblePacks `json:"edge-native-byoi,omitempty"`
+	Ubuntu         AvailblePacks `json:"edge-native-ubuntu,omitempty"`
+	OpenSuSE       AvailblePacks `json:"edge-native-opensuse,omitempty"`
 }
 type OptionsCNIs struct {
-	Calico  []string `json:"calico,omitempty"`
-	Flannel []string `json:"flannel,omitempty"`
+	Calico  AvailblePacks `json:"calico,omitempty"`
+	Flannel AvailblePacks `json:"flannel,omitempty"`
+}
+
+type AvailblePacks struct {
+	RegistryUID string        `json:"registryUid"`
+	Versions    []PackVersion `json:"versions"`
+}
+
+type PackVersion struct {
+	Version string `json:"version"`
+	UID     string `json:"uid"`
 }
 
 // GetBYOOSVersions returns the available BYOOS versions
 func (o *OptionsMenu) GetBYOOSVersions() []string {
 	var byooVersions []string
 
-	if len(o.OperatingSystems.EdgeNativeByoi) > 0 {
-		byooVersions = append(byooVersions, o.OperatingSystems.EdgeNativeByoi...)
+	if len(o.OperatingSystems.EdgeNativeByoi.Versions) > 0 {
+		for _, v := range o.OperatingSystems.EdgeNativeByoi.Versions {
+			byooVersions = append(byooVersions, v.Version)
+		}
 	}
 
 	return byooVersions
@@ -144,19 +157,19 @@ func (o *OptionsMenu) GetKubernetesDistroOptions() []string {
 
 	var k8sDistros []string
 
-	if len(o.Kubernetes.Edgek3S) > 0 {
+	if len(o.Kubernetes.Edgek3S.Versions) > 0 {
 		k8sDistros = append(k8sDistros, "K3s")
 	}
 
-	if len(o.Kubernetes.EdgeK8S) > 0 {
+	if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
 		k8sDistros = append(k8sDistros, "Palette eXtended Kubernetes - Edge (PXK-E)")
 	}
 
-	if len(o.Kubernetes.EdgeMicrok8S) > 0 {
+	if len(o.Kubernetes.EdgeMicrok8S.Versions) > 0 {
 		k8sDistros = append(k8sDistros, "MicroK8s")
 	}
 
-	if len(o.Kubernetes.EdgeRke2) > 0 {
+	if len(o.Kubernetes.EdgeRke2.Versions) > 0 {
 		k8sDistros = append(k8sDistros, "RKE2")
 	}
 
@@ -168,19 +181,21 @@ func (o *OptionsMenu) GetKubernetesDistroVersions(os string) []string {
 	var k8sDistroVersions []string
 
 	if os == "K3s" {
-		k8sDistroVersions = append(k8sDistroVersions, o.Kubernetes.Edgek3S...)
+		if len(o.Kubernetes.Edgek3S.Versions) > 0 {
+			k8sDistroVersions = append(k8sDistroVersions, "k3s")
+		}
 	}
 
-	if os == "Palette eXtended Kubernetes - Edge (PXK-E)" {
-		k8sDistroVersions = append(k8sDistroVersions, o.Kubernetes.EdgeK8S...)
+	if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
+		k8sDistroVersions = append(k8sDistroVersions, "Palette eXtended Kubernetes - Edge (PXK-E)")
 	}
 
-	if os == "MicroK8s" {
-		k8sDistroVersions = append(k8sDistroVersions, o.Kubernetes.EdgeMicrok8S...)
+	if len(o.Kubernetes.EdgeMicrok8S.Versions) > 0 {
+		k8sDistroVersions = append(k8sDistroVersions, "MicroK8s")
 	}
 
-	if os == "RKE2" {
-		k8sDistroVersions = append(k8sDistroVersions, o.Kubernetes.EdgeRke2...)
+	if len(o.Kubernetes.EdgeRke2.Versions) > 0 {
+		k8sDistroVersions = append(k8sDistroVersions, "RKE2")
 	}
 
 	return k8sDistroVersions
@@ -190,11 +205,11 @@ func (o *OptionsMenu) GetKubernetesDistroVersions(os string) []string {
 func (o *OptionsMenu) GetOperatingSystemDistroOptions() []string {
 	var osDistros []string
 
-	if len(o.OperatingSystems.Ubuntu) > 0 {
+	if len(o.OperatingSystems.Ubuntu.Versions) > 0 {
 		osDistros = append(osDistros, "Ubuntu")
 	}
 
-	if len(o.OperatingSystems.OpenSuSE) > 0 {
+	if len(o.OperatingSystems.OpenSuSE.Versions) > 0 {
 		osDistros = append(osDistros, "OpenSuSE")
 	}
 
@@ -208,11 +223,15 @@ func (o *OptionsMenu) GetOperatingSystemVersionOptions(os string) []string {
 	str := strings.ToLower(os)
 
 	if str == "ubuntu" {
-		osVersions = append(osVersions, o.OperatingSystems.Ubuntu...)
+		for _, v := range o.OperatingSystems.Ubuntu.Versions {
+			osVersions = append(osVersions, v.Version)
+		}
 	}
 
 	if str == "opensuse" {
-		osVersions = append(osVersions, o.OperatingSystems.OpenSuSE...)
+		for _, v := range o.OperatingSystems.OpenSuSE.Versions {
+			osVersions = append(osVersions, v.Version)
+		}
 	}
 
 	return osVersions
@@ -222,12 +241,16 @@ func (o *OptionsMenu) GetOperatingSystemVersionOptions(os string) []string {
 func (o *OptionsMenu) GetCniOptions() []string {
 	var cniOptions []string
 
-	if len(o.Cnis.Calico) > 0 {
-		cniOptions = append(cniOptions, "Calico")
+	if len(o.Cnis.Calico.Versions) > 0 {
+		for _, calico := range o.Cnis.Calico.Versions {
+			cniOptions = append(cniOptions, calico.Version)
+		}
 	}
 
-	if len(o.Cnis.Flannel) > 0 {
-		cniOptions = append(cniOptions, "Flannel")
+	if len(o.Cnis.Flannel.Versions) > 0 {
+		for _, flannel := range o.Cnis.Flannel.Versions {
+			cniOptions = append(cniOptions, flannel.Version)
+		}
 	}
 
 	return cniOptions
@@ -240,11 +263,15 @@ func (o *OptionsMenu) GetCniVersionOptions(cni string) []string {
 	str := strings.ToLower(cni)
 
 	if str == "calico" {
-		cniVersions = append(cniVersions, o.Cnis.Calico...)
+		for _, calico := range o.Cnis.Calico.Versions {
+			cniVersions = append(cniVersions, calico.Version)
+		}
 	}
 
 	if str == "flannel" {
-		cniVersions = append(cniVersions, o.Cnis.Flannel...)
+		for _, flannel := range o.Cnis.Flannel.Versions {
+			cniVersions = append(cniVersions, flannel.Version)
+		}
 	}
 
 	return cniVersions

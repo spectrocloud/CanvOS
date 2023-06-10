@@ -113,8 +113,8 @@ func CreateTemplateFile(packs Packs) error {
 	return nil
 }
 
-// CreateMenuOptionsFile creates a JSON file for the menu options used by the build command
-// This file will be located in the .canvos directory
+// // CreateMenuOptionsFile creates a JSON file for the menu options used by the build command
+// // This file will be located in the .canvos directory
 func CreateMenuOptionsFile(packs []Packs, pv []string) error {
 
 	pathSeparator := string(os.PathSeparator)
@@ -122,30 +122,95 @@ func CreateMenuOptionsFile(packs []Packs, pv []string) error {
 	options := OptionsMenu{}
 
 	for _, p := range packs {
-
 		for _, pack := range p.Items {
 			switch pack.Spec.Name {
 			case "edge-k3s":
-				options.Kubernetes.Edgek3S = append(options.Kubernetes.Edgek3S, pack.Spec.Version)
+				options.Kubernetes.Edgek3S.RegistryUID = pack.Spec.RegistryUID
+
+				k3s := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+				options.Kubernetes.Edgek3S.Versions = append(options.Kubernetes.Edgek3S.Versions, k3s)
+
 			case "edge-k8s":
-				options.Kubernetes.EdgeK8S = append(options.Kubernetes.EdgeK8S, pack.Spec.Version)
+				options.Kubernetes.EdgeK8S.RegistryUID = pack.Spec.RegistryUID
+
+				k8s := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+				options.Kubernetes.EdgeK8S.Versions = append(options.Kubernetes.EdgeK8S.Versions, k8s)
+
 			case "edge-microk8s":
-				options.Kubernetes.EdgeMicrok8S = append(options.Kubernetes.EdgeMicrok8S, pack.Spec.Version)
+				options.Kubernetes.EdgeMicrok8S.RegistryUID = pack.Spec.RegistryUID
+
+				microk8s := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+				options.Kubernetes.EdgeMicrok8S.Versions = append(options.Kubernetes.EdgeMicrok8S.Versions, microk8s)
+
 			case "edge-rke2":
-				options.Kubernetes.EdgeRke2 = append(options.Kubernetes.EdgeRke2, pack.Spec.Version)
+				options.Kubernetes.EdgeRke2.RegistryUID = pack.Spec.RegistryUID
+
+				rke2 := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+
+				options.Kubernetes.EdgeRke2.Versions = append(options.Kubernetes.EdgeRke2.Versions, rke2)
+
 			case "edge-native-byoi":
-				options.OperatingSystems.EdgeNativeByoi = append(options.OperatingSystems.EdgeNativeByoi, pack.Spec.Version)
+				options.OperatingSystems.EdgeNativeByoi.RegistryUID = pack.Spec.RegistryUID
+
+				byoi := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+
+				options.OperatingSystems.EdgeNativeByoi.Versions = append(options.OperatingSystems.EdgeNativeByoi.Versions, byoi)
 			case "cni-calico":
-				options.Cnis.Calico = append(options.Cnis.Calico, pack.Spec.Version)
+				options.Cnis.Calico.RegistryUID = pack.Spec.RegistryUID
+
+				calico := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+
+				options.Cnis.Calico.Versions = append(options.Cnis.Calico.Versions, calico)
+
 			case "cni-flannel":
-				options.Cnis.Flannel = append(options.Cnis.Flannel, pack.Spec.Version)
-			case "edge-native-opensuse":
-				options.OperatingSystems.OpenSuSE = append(options.OperatingSystems.OpenSuSE, pack.Spec.Version)
+				options.Cnis.Flannel.RegistryUID = pack.Spec.RegistryUID
+
+				flannel := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+
+				options.Cnis.Flannel.Versions = append(options.Cnis.Flannel.Versions, flannel)
+
 			case "edge-native-ubuntu":
-				options.OperatingSystems.Ubuntu = append(options.OperatingSystems.Ubuntu, pack.Spec.Version)
+				options.OperatingSystems.Ubuntu.RegistryUID = pack.Spec.RegistryUID
+
+				ubuntu := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+
+				options.OperatingSystems.Ubuntu.Versions = append(options.OperatingSystems.Ubuntu.Versions, ubuntu)
+
+			case "edge-native-opensuse":
+				options.OperatingSystems.OpenSuSE.RegistryUID = pack.Spec.RegistryUID
+
+				opensuse := PackVersion{
+					Version: pack.Spec.Version,
+					UID:     pack.Metadata.UID,
+				}
+
+				options.OperatingSystems.OpenSuSE.Versions = append(options.OperatingSystems.OpenSuSE.Versions, opensuse)
 			}
 		}
-
 	}
 
 	// Add the palette versions
@@ -184,6 +249,7 @@ func DynamicCreateMenuOptionsFile(packs []Packs) error {
 			}
 
 			options[layer][name] = append(options[layer][name], version)
+
 		}
 	}
 
