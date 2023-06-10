@@ -29,6 +29,7 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 	userSelectedOptions.TenantRegistrationToken = tenantRegistrationToken
 
 	// Create the demo user data using the tenant registration token
+	log.InfoCLI("Creating the Edge Installer User Data file....")
 	err = internal.CreateDemoUserData(userSelectedOptions.TenantRegistrationToken)
 	if err != nil {
 		log.Debug("err %s: ", err)
@@ -63,10 +64,18 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 	ByoosVersions := options.GetBYOOSVersions()
 	userSelectedOptions.BYOOSVersion = ByoosVersions[0]
 
+	log.InfoCLI("Creating the .args file....")
 	err = internal.CreateDemoArgsFile(userSelectedOptions)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("Error creating the demo args file. Exiting")
+	}
+
+	log.InfoCLI("Starting the build process...")
+	err = internal.StartBuildProcessScript(userSelectedOptions)
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error starting the build process script. Exiting")
 	}
 
 	cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(userSelectedOptions, options)

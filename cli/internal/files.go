@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -369,7 +370,7 @@ func CreateDemoArgsFile(u UserSelections) error {
 	ISO_NAME=$ISO_NAME
 	`
 
-	content := strings.Replace(template, "$CUSTOM_TAG", "demo", -1)
+	content := strings.Replace(template, "$CUSTOM_TAG", u.CustomTag, -1)
 	content = strings.Replace(content, "$IMAGE_REGISTRY", u.ImageRegistryURL, -1)
 	content = strings.Replace(content, "$OS_DISTRIBUTION", u.OperatingSystemDistro, -1)
 	content = strings.Replace(content, "$OS_VERSION", u.OperatingSystemVersion, -1)
@@ -399,4 +400,78 @@ func CloneCanvOS(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// StartBuildProcessScript starts the build process script
+// This is the CanvOS Earthly build script
+func StartBuildProcessScript(u UserSelections) error {
+
+	err := moveRequiredCanvOSFiles()
+	if err != nil {
+		log.Debug().Msgf("error moving required files: %v", err)
+		return err
+	}
+
+	path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS" + string(os.PathSeparator) + "earthly.sh"
+
+	edgeInstallerVersion := fmt.Sprintf("--PE_VERSUION=%s", u.PaletteEdgeInstallerVersion)
+
+	cmd := exec.Command("sudo", path, "+build-all-images", edgeInstallerVersion)
+
+	// Create pipes for capturing the output
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Println("Error creating StdoutPipe:", err)
+		return err
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		fmt.Println("Error starting command:", err)
+		return err
+	}
+
+	// Create a goroutine to read and display the command output
+	go func() {
+		_, err := io.Copy(os.Stdout, stdout)
+		if err != nil {
+			fmt.Println("Error copying output:", err)
+		}
+	}()
+
+	// Wait for the command to complete
+	if err := cmd.Wait(); err != nil {
+		fmt.Println("Command execution failed:", err)
+	}
+
+	return nil
+
+}
+
+// moveRequiredCanvOSFiles moves the required files from the .canvos repo to the .canvos/canvOS directory
+// The two files are:
+// 1. .arg
+// 2. user-data
+func moveRequiredCanvOSFiles() error {
+
+	destinationFolder := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS" + string(os.PathSeparator)
+	argFile := ".arg"
+
+	err := os.Rename(argFile, destinationFolder+string(os.PathSeparator)+".arg")
+	if err != nil {
+		log.Info().Msgf("error moving %v to %v: %v", argFile, destinationFolder, err)
+		return fmt.Errorf("error moving %v to %v: %w", argFile, destinationFolder, err)
+	}
+
+	userDataFile := "user-data"
+
+	// Moving sourceFile2 to destinationDir
+	err = os.Rename(userDataFile, destinationFolder+string(os.PathSeparator)+"user-data")
+	if err != nil {
+		log.Info().Msgf("error moving %v to %v: %v", userDataFile, destinationFolder, err)
+		return fmt.Errorf("error moving %v to %v: %w", userDataFile, destinationFolder, err)
+	}
+
+	return nil
+
 }
