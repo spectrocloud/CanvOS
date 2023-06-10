@@ -127,7 +127,7 @@ var initCmd = &cobra.Command{
 		err = internal.CreateMenuOptionsFile(packs, paletteVersions)
 		if err != nil {
 			internal.LogError(err)
-			log.FatalCLI("Error creating the menu options file")
+			log.FatalCLI("Error creating the menu options file.")
 
 		}
 
@@ -136,15 +136,15 @@ var initCmd = &cobra.Command{
 		log.InfoCLI("Downloading CanvOS assets...")
 		err = internal.CloneCanvOS(cmd.Context())
 		if err != nil {
-			log.FatalCLI("Error cloning the CanvOS repository")
+			log.FatalCLI("Error cloning the CanvOS repository.")
 			internal.LogError(err)
 		}
 		log.InfoCLI("")
-		log.InfoCLI("✅ Init downloaded all required assets successfully")
+		log.InfoCLI("✅ Init downloaded all required assets successfully.")
 		log.InfoCLI("")
 		log.InfoCLI("")
 		log.InfoCLI("--------------------------------------------------------------")
-		log.InfoCLI("Use the the canvos build command to build the Edge Artifacts.")
+		log.InfoCLI("Use the the canvos build command to build the Edge Artifacts 💾 💿")
 
 	},
 }

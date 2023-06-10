@@ -65,13 +65,13 @@ func checkSystemSpecifications(infoProvider SystemInfoProvider) SystemCheckRespo
 	cpuCount := infoProvider.NumCPU()
 	if cpuCount < MinCPUs {
 		response.Checks = append(response.Checks, CheckResult{
-			Name:    "CPU Count",
+			Name:    "8 CPU Count",
 			Success: false,
 			Error:   "Insufficient CPU count. Minimum requirement: 4 CPUs",
 		})
 	} else {
 		response.Checks = append(response.Checks, CheckResult{
-			Name:    "CPU Count",
+			Name:    "8 CPU Count",
 			Success: true,
 		})
 	}
@@ -80,21 +80,22 @@ func checkSystemSpecifications(infoProvider SystemInfoProvider) SystemCheckRespo
 	v, err := infoProvider.VirtualMemory()
 	if err != nil {
 		response.Checks = append(response.Checks, CheckResult{
-			Name:    "Memory",
+			Name:    "16 GB Memory",
 			Success: false,
 			Error:   "Failed to retrieve system memory information",
 		})
 	} else {
-		availableMemory := v.Free
+		// Check the total memory available
+		availableMemory := v.Total
 		if availableMemory < MinMemory {
 			response.Checks = append(response.Checks, CheckResult{
-				Name:    "Memory",
+				Name:    "16 GB Memory",
 				Success: false,
 				Error:   "Insufficient memory. Minimum requirement: 8 GB",
 			})
 		} else {
 			response.Checks = append(response.Checks, CheckResult{
-				Name:    "Memory",
+				Name:    "16 GB Memory",
 				Success: true,
 			})
 		}
@@ -104,7 +105,7 @@ func checkSystemSpecifications(infoProvider SystemInfoProvider) SystemCheckRespo
 	stat, err := infoProvider.DiskStat()
 	if err != nil {
 		response.Checks = append(response.Checks, CheckResult{
-			Name:    "Disk Space",
+			Name:    "50 GB Disk Space",
 			Success: false,
 			Error:   "Failed to retrieve disk space information",
 		})
@@ -112,13 +113,13 @@ func checkSystemSpecifications(infoProvider SystemInfoProvider) SystemCheckRespo
 		availableSpace := stat.Bfree * uint64(stat.Bsize)
 		if availableSpace < MinFreeSpace {
 			response.Checks = append(response.Checks, CheckResult{
-				Name:    "Disk Space",
+				Name:    "50 GB Disk Space",
 				Success: false,
 				Error:   "Insufficient disk space. Minimum requirement: 50 GB",
 			})
 		} else {
 			response.Checks = append(response.Checks, CheckResult{
-				Name:    "Disk Space",
+				Name:    "50 GB Disk Space",
 				Success: true,
 			})
 		}
@@ -127,13 +128,13 @@ func checkSystemSpecifications(infoProvider SystemInfoProvider) SystemCheckRespo
 	// Check architecture
 	if infoProvider.GOARCH() != "amd64" {
 		response.Checks = append(response.Checks, CheckResult{
-			Name:    "Architecture",
+			Name:    "x86 Architecture",
 			Success: false,
 			Error:   "Unsupported architecture. Only x86_64 (amd64) architecture is supported.",
 		})
 	} else {
 		response.Checks = append(response.Checks, CheckResult{
-			Name:    "Architecture",
+			Name:    "x86 Architecture",
 			Success: true,
 		})
 	}
