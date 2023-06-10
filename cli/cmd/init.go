@@ -47,7 +47,8 @@ var initCmd = &cobra.Command{
 		log.InfoCLI("Checking system specifications....")
 		log.InfoCLI("")
 		// Check the system specifications
-		internal.SystemPrerequisitesChecks()
+		hostMachineProvider := &internal.HostSystemProvider{}
+		internal.SystemPrerequisitesChecks(hostMachineProvider)
 
 		// Create the CanvOS directory. If it already exists, it will be skipped
 		err := internal.CreateCanvOsDir(internal.DefaultCanvOsDir)

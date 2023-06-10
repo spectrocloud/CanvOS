@@ -10,34 +10,59 @@ import (
 	log "specrocloud.com/canvos/logger"
 )
 
-const (
-	MinCPUs      = 4
-	MinMemory    = 8 * 1024 * 1024 * 1024  // 8 GB in bytes
-	MinFreeSpace = 50 * 1024 * 1024 * 1024 // 50 GB in bytes
-)
-
 type CheckResult struct {
 	Name    string
 	Success bool
 	Error   string
 }
 
+type HostSystemProvider struct{}
+
+func (r *HostSystemProvider) NumCPU() int {
+	return runtime.NumCPU()
+}
+
+func (r *HostSystemProvider) VirtualMemory() (*mem.VirtualMemoryStat, error) {
+	return mem.VirtualMemory()
+}
+
+func (r *HostSystemProvider) DiskStat() (*unix.Statfs_t, error) {
+	var stat unix.Statfs_t
+	err := unix.Statfs("/", &stat)
+	return &stat, err
+}
+
+func (r *HostSystemProvider) GOARCH() string {
+	return runtime.GOARCH
+}
+
 type SystemCheckResponse struct {
 	Checks []CheckResult
 }
 
-// checkSystemSpecifications checks the system specifications and returns a SystemCheckResponse
-// containing the results of the checks.
-// The following checks are performed:
-// - CPU count: minimum 4 CPUs
-// - Available memory: minimum 8 GB
-// - Available disk space: minimum 50 GB
-// - Architecture: only x86_64 (amd64) architecture is supported
-func checkSystemSpecifications() SystemCheckResponse {
+type SystemInfoProvider interface {
+	NumCPU() int
+	VirtualMemory() (*mem.VirtualMemoryStat, error)
+	DiskStat() (*unix.Statfs_t, error)
+	GOARCH() string
+}
+
+type CommandExecutor interface {
+	RunCommand(name string, arg ...string) error
+}
+
+type HostCommandExecutor struct{}
+
+func (h *HostCommandExecutor) RunCommand(name string, arg ...string) error {
+	cmd := exec.Command(name, arg...)
+	return cmd.Run()
+}
+
+func checkSystemSpecifications(infoProvider SystemInfoProvider) SystemCheckResponse {
 	var response SystemCheckResponse
 
 	// Check CPU count
-	cpuCount := runtime.NumCPU()
+	cpuCount := infoProvider.NumCPU()
 	if cpuCount < MinCPUs {
 		response.Checks = append(response.Checks, CheckResult{
 			Name:    "CPU Count",
@@ -52,7 +77,7 @@ func checkSystemSpecifications() SystemCheckResponse {
 	}
 
 	// Check available memory
-	v, err := mem.VirtualMemory()
+	v, err := infoProvider.VirtualMemory()
 	if err != nil {
 		response.Checks = append(response.Checks, CheckResult{
 			Name:    "Memory",
@@ -76,8 +101,8 @@ func checkSystemSpecifications() SystemCheckResponse {
 	}
 
 	// Check available disk space
-	var stat unix.Statfs_t
-	if err := unix.Statfs("/", &stat); err != nil {
+	stat, err := infoProvider.DiskStat()
+	if err != nil {
 		response.Checks = append(response.Checks, CheckResult{
 			Name:    "Disk Space",
 			Success: false,
@@ -100,7 +125,7 @@ func checkSystemSpecifications() SystemCheckResponse {
 	}
 
 	// Check architecture
-	if runtime.GOARCH != "amd64" {
+	if infoProvider.GOARCH() != "amd64" {
 		response.Checks = append(response.Checks, CheckResult{
 			Name:    "Architecture",
 			Success: false,
@@ -117,9 +142,8 @@ func checkSystemSpecifications() SystemCheckResponse {
 }
 
 // checkDockerInstallation checks if Docker is installed and returns a CheckResult containing the result of the check.
-func checkDockerInstallation() CheckResult {
-	cmd := exec.Command("docker", "--version")
-	err := cmd.Run()
+func checkDockerInstallation(executor CommandExecutor) CheckResult {
+	err := executor.RunCommand("docker", "--version")
 	if err != nil {
 		return CheckResult{
 			Name:    "Docker",
@@ -134,10 +158,8 @@ func checkDockerInstallation() CheckResult {
 	}
 }
 
-// checkGitInstallation checks if Git is installed and returns a CheckResult containing the result of the check.
-func checkGitInstallation() CheckResult {
-	cmd := exec.Command("git", "--version")
-	err := cmd.Run()
+func checkGitInstallation(executor CommandExecutor) CheckResult {
+	err := executor.RunCommand("git", "--version")
 	if err != nil {
 		return CheckResult{
 			Name:    "Git",
@@ -153,11 +175,12 @@ func checkGitInstallation() CheckResult {
 }
 
 // SystemPrerequisitesChecks performs the system prerequisites checks and prints the results to the CLI.
-func SystemPrerequisitesChecks() {
+// SystemInfoProvider accepts a SystemInfoProvider interface that provides the system information.
+func SystemPrerequisitesChecks(s SystemInfoProvider) {
 
 	var printFailedCheckMsg bool
 
-	systemCheckResponse := checkSystemSpecifications()
+	systemCheckResponse := checkSystemSpecifications(s)
 	if len(systemCheckResponse.Checks) > 0 {
 		log.InfoCLI("System checks summary:")
 		for _, check := range systemCheckResponse.Checks {
@@ -170,13 +193,15 @@ func SystemPrerequisitesChecks() {
 		log.InfoCLI("No system checks performed.")
 	}
 
-	dockerCheckResult := checkDockerInstallation()
+	cmdOnHost := &HostCommandExecutor{}
+
+	dockerCheckResult := checkDockerInstallation(cmdOnHost)
 	log.InfoCLI("Docker: %s\n", getStatusText(dockerCheckResult))
 	if !dockerCheckResult.Success {
 		log.InfoCLI("Error: %s\n", dockerCheckResult.Error)
 	}
 
-	gitCheckResult := checkGitInstallation()
+	gitCheckResult := checkGitInstallation(cmdOnHost)
 	log.InfoCLI("Git: %s\n", getStatusText(gitCheckResult))
 	if !gitCheckResult.Success {
 		log.InfoCLI("Error: %s\n", gitCheckResult.Error)
