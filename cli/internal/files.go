@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/rs/zerolog/log"
+	log "specrocloud.com/canvos/logger"
 )
 
 // CreateCanvOsDir creates the directory for the CanvOS template files
@@ -46,17 +46,17 @@ func CreateTemplateFile(packs Packs) error {
 	// OS, K8s, CNI
 
 	if err := os.MkdirAll(DefaultCanvOsDir+pathSeparator+"os", 0755); err != nil {
-		log.Debug().Msg("Error creating the OS directory")
+		log.Debug("Error creating the OS directory")
 		return err
 	}
 
 	if err := os.MkdirAll(DefaultCanvOsDir+pathSeparator+"k8s", 0755); err != nil {
-		log.Debug().Msg("Error creating the k8s directory")
+		log.Debug("Error creating the k8s directory")
 		return err
 	}
 
 	if err := os.MkdirAll(DefaultCanvOsDir+pathSeparator+"cni", 0755); err != nil {
-		log.Debug().Msg("Error creating the cni directory")
+		log.Debug("Error creating the cni directory")
 		return err
 	}
 
@@ -70,7 +70,7 @@ func CreateTemplateFile(packs Packs) error {
 			filePath := DefaultCanvOsDir + pathSeparator + p.Spec.Layer + pathSeparator + p.Spec.Name + "-" + p.Spec.Version + ".yaml"
 			file, err := os.Create(filePath)
 			if err != nil {
-				log.Debug().Msgf("Error creating the template file for %s", p.Spec.Name)
+				log.Debug("Error creating the template file for %s", p.Spec.Name)
 				return err
 			}
 			defer file.Close()
@@ -83,7 +83,7 @@ func CreateTemplateFile(packs Packs) error {
 			filePath := DefaultCanvOsDir + pathSeparator + p.Spec.Layer + pathSeparator + p.Spec.Name + "-" + p.Spec.Version + ".yaml"
 			file, err := os.Create(filePath)
 			if err != nil {
-				log.Debug().Msgf("Error creating the template file for %s", p.Spec.Name)
+				log.Debug("Error creating the template file for %s", p.Spec.Name)
 				return err
 			}
 			defer file.Close()
@@ -96,7 +96,7 @@ func CreateTemplateFile(packs Packs) error {
 			filePath := DefaultCanvOsDir + pathSeparator + p.Spec.Layer + pathSeparator + p.Spec.Name + "-" + p.Spec.Version + ".yaml"
 			file, err := os.Create(filePath)
 			if err != nil {
-				log.Debug().Msgf("Error creating the template file for %s", p.Spec.Name)
+				log.Debug("Error creating the template file for %s", p.Spec.Name)
 				return err
 			}
 			defer file.Close()
@@ -361,15 +361,15 @@ func CreateDemoArgsFile(u UserSelections) error {
 	defer file.Close()
 
 	template := `
-	CUSTOM_TAG=$CUSTOM_TAG
-	IMAGE_REGISTRY=$IMAGE_REGISTRY
-	OS_DISTRIBUTION=$OS_DISTRIBUTION
-	IMAGE_REPO=$OS_DISTRIBUTION
-	OS_VERSION=$OS_VERSION   
-	K8S_DISTRIBUTION=$K8S_DISTRIBUTION
-	ISO_NAME=$ISO_NAME
-	PE_VERSION=v$TAG
-    platform=$PLATFORM
+CUSTOM_TAG=$CUSTOM_TAG
+IMAGE_REGISTRY=$IMAGE_REGISTRY
+OS_DISTRIBUTION=$OS_DISTRIBUTION
+IMAGE_REPO=$OS_DISTRIBUTION
+OS_VERSION=$OS_VERSION   
+K8S_DISTRIBUTION=$K8S_DISTRIBUTION
+ISO_NAME=$ISO_NAME
+PE_VERSION=v$TAG
+platform=$PLATFORM
 	`
 
 	content := strings.Replace(template, "$CUSTOM_TAG", u.CustomTag, -1)
@@ -416,7 +416,7 @@ func CloneCanvOS(ctx context.Context) error {
 		Depth: 1,
 	})
 	if err != nil {
-		log.Info().Msgf("error cloning CanvOS repo: %v", err)
+		log.Info("error cloning CanvOS repo: %v", err)
 		return err
 	}
 	return nil
@@ -427,25 +427,26 @@ func CloneCanvOS(ctx context.Context) error {
 func StartBuildProcessScript(ctx context.Context, u UserSelections) error {
 	err := moveRequiredCanvOSFiles()
 	if err != nil {
-		log.Debug().Msgf("error moving required files: %v", err)
+		log.Debug("error moving required files: %v", err)
 		return err
 	}
 
-	path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS" + string(os.PathSeparator) + "earthly.sh"
+	workingDir := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS"
+	// path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS" + string(os.PathSeparator) + "earthly.sh"
 
-	cmd := exec.CommandContext(ctx, "sudo", path, "+build-all-images")
-	cmd.Dir = DefaultCanvOsDir + string(os.PathSeparator) + "canvOS"
+	cmd := exec.CommandContext(ctx, "sudo", "./earthly.sh", "+build-all-images")
+	cmd.Dir = workingDir
 
 	// Create pipes for capturing the output
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		fmt.Println("Error creating StdoutPipe:", err)
+		log.InfoCLI("Error creating StdoutPipe: %v", err)
 		return err
 	}
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
-		fmt.Println("Error starting command:", err)
+		log.InfoCLI("Error starting command: %s", err)
 		return err
 	}
 
@@ -453,13 +454,14 @@ func StartBuildProcessScript(ctx context.Context, u UserSelections) error {
 	go func() {
 		_, err := io.Copy(os.Stdout, stdout)
 		if err != nil {
-			fmt.Println("Error copying output:", err)
+			log.InfoCLI("Error copying output: %v", err)
+			return
 		}
 	}()
 
 	// Wait for the command to complete
 	if err := cmd.Wait(); err != nil {
-		fmt.Println("Command execution failed:", err)
+		log.InfoCLI("Command execution failed: %v", err)
 		return err
 	}
 
@@ -477,7 +479,7 @@ func moveRequiredCanvOSFiles() error {
 
 	err := os.Rename(argFile, destinationFolder+string(os.PathSeparator)+".arg")
 	if err != nil {
-		log.Info().Msgf("error moving %v to %v: %v", argFile, destinationFolder, err)
+		log.Info("error moving %v to %v: %v", argFile, destinationFolder, err)
 		return fmt.Errorf("error moving %v to %v: %w", argFile, destinationFolder, err)
 	}
 
@@ -486,7 +488,7 @@ func moveRequiredCanvOSFiles() error {
 	// Moving sourceFile2 to destinationDir
 	err = os.Rename(userDataFile, destinationFolder+string(os.PathSeparator)+"user-data")
 	if err != nil {
-		log.Info().Msgf("error moving %v to %v: %v", userDataFile, destinationFolder, err)
+		log.Info("error moving %v to %v: %v", userDataFile, destinationFolder, err)
 		return fmt.Errorf("error moving %v to %v: %w", userDataFile, destinationFolder, err)
 	}
 

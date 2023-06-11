@@ -79,8 +79,6 @@ func GetPaletteVersions(ctx context.Context, p PaletteAuth) ([]string, error) {
 	// https://spectrocloud.atlassian.net/browse/OPS-1657?atlOrigin=eyJpIjoiY2NkNTQ5MjliOWFmNDY1NTg5MjA1MDZmYjkyNDNmNDEiLCJwIjoiamlyYS1zbGFjay1pbnQifQ
 
 	return []string{
-		"3.4.5",
-		"3.4.4",
 		"3.4.3",
 		"3.4.2",
 		"3.4.1",

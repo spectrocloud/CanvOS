@@ -47,4 +47,6 @@ func listPaletteImages(ctx context.Context, d *client.Client, u UserSelections) 
 		}
 	}
 
+	return output, nil
+
 }

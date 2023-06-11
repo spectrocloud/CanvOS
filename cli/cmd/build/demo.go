@@ -82,6 +82,7 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 	// cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(userSelectedOptions, options)
 	// if err != nil {
 	// 	log.Debug("err %s: ", err)
+
 	// 	log.FatalCLI("Error creating the cluster profile payload. Exiting")
 	// }
 
