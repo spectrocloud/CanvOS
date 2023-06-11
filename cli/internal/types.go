@@ -458,6 +458,8 @@ type UserSelections struct {
 	ISOName string
 	// CustomTag is the custom tag to use for the provider images
 	CustomTag string
+	// Platform is the platform to use for the provider images
+	Platform string
 }
 
 type wizardMode int

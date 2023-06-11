@@ -368,14 +368,19 @@ func CreateDemoArgsFile(u UserSelections) error {
 	OS_VERSION=$OS_VERSION   
 	K8S_DISTRIBUTION=$K8S_DISTRIBUTION
 	ISO_NAME=$ISO_NAME
+	PE_VERSION=v$TAG
+    platform=$PLATFORM
 	`
 
 	content := strings.Replace(template, "$CUSTOM_TAG", u.CustomTag, -1)
 	content = strings.Replace(content, "$IMAGE_REGISTRY", u.ImageRegistryURL, -1)
 	content = strings.Replace(content, "$OS_DISTRIBUTION", u.OperatingSystemDistro, -1)
-	content = strings.Replace(content, "$OS_VERSION", u.OperatingSystemVersion, -1)
+	// The Eartly scrips adds the version to the end of the OS version string so we only need to provide the major release
+	content = strings.Replace(content, "$OS_VERSION", getOSMajorRelease(u.OperatingSystemVersion), -1)
 	content = strings.Replace(content, "$K8S_DISTRIBUTION", u.KubernetesDistro, -1)
 	content = strings.Replace(content, "$ISO_NAME", u.ISOName, -1)
+	content = strings.Replace(content, "$TAG", u.PaletteEdgeInstallerVersion, -1)
+	content = strings.Replace(content, "$PLATFORM", u.Platform, -1)
 
 	// Write the content to the file
 	_, err = file.WriteString(content)
@@ -386,9 +391,24 @@ func CreateDemoArgsFile(u UserSelections) error {
 	return nil
 }
 
+// getOSMajorRelease returns the major release of the OS
+// The first characters before the first dot
+// are considered the major release
+func getOSMajorRelease(osVersion string) string {
+
+	// Split the string by the dot
+	s := strings.Split(osVersion, ".")
+	// Get the first element
+	majorRelease := s[0]
+
+	return majorRelease
+}
+
 // CloneCanvOS clones the CanvOS repo
 func CloneCanvOS(ctx context.Context) error {
-
+	// get the first characters before the first dot
+	// Example: 20.04.2
+	// Result: 20
 	path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS"
 
 	_, err := git.PlainCloneContext(ctx, path, false, &git.CloneOptions{
@@ -404,8 +424,7 @@ func CloneCanvOS(ctx context.Context) error {
 
 // StartBuildProcessScript starts the build process script
 // This is the CanvOS Earthly build script
-func StartBuildProcessScript(u UserSelections) error {
-
+func StartBuildProcessScript(ctx context.Context, u UserSelections) error {
 	err := moveRequiredCanvOSFiles()
 	if err != nil {
 		log.Debug().Msgf("error moving required files: %v", err)
@@ -414,9 +433,8 @@ func StartBuildProcessScript(u UserSelections) error {
 
 	path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS" + string(os.PathSeparator) + "earthly.sh"
 
-	edgeInstallerVersion := fmt.Sprintf("--PE_VERSUION=%s", u.PaletteEdgeInstallerVersion)
-
-	cmd := exec.Command("sudo", path, "+build-all-images", edgeInstallerVersion)
+	cmd := exec.CommandContext(ctx, "sudo", path, "+build-all-images")
+	cmd.Dir = DefaultCanvOsDir + string(os.PathSeparator) + "canvOS"
 
 	// Create pipes for capturing the output
 	stdout, err := cmd.StdoutPipe()
@@ -442,10 +460,10 @@ func StartBuildProcessScript(u UserSelections) error {
 	// Wait for the command to complete
 	if err := cmd.Wait(); err != nil {
 		fmt.Println("Command execution failed:", err)
+		return err
 	}
 
 	return nil
-
 }
 
 // moveRequiredCanvOSFiles moves the required files from the .canvos repo to the .canvos/canvOS directory
