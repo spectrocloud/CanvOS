@@ -9,7 +9,7 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
-ARG SPECTRO_LUET_VERSION=v1.0.6
+ARG SPECTRO_LUET_VERSION=v1.0.4
 ARG KAIROS_VERSION=v2.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -31,32 +31,21 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 END
 
-VERSION:
-    COMMAND
-    FROM gcr.io/spectro-images-public/alpine:3.16.2
-    RUN apk add git
-    COPY .git/ .git
-    RUN echo $(git describe --exact-match --tags || echo "v0.0.0-$(git log --oneline -n 1 | cut -d" " -f1)") > VERSION
-    RUN cat VERSION | cut -c2- > PACKAGE_VERSION
-    SAVE ARTIFACT VERSION PACKAGE_VERSION
-
 build-all-images:
-    BUILD +build-provider-images
-    BUILD +iso
+    BUILD --platform=linux/amd64 +build-provider-images
+    BUILD --platform=linux/amd64 +iso
 
 build-provider-images:
-    BUILD +provider-image --K8S_VERSION=1.24.6
-    BUILD +provider-image --K8S_VERSION=1.25.2
-    BUILD +provider-image --K8S_VERSION=1.26.4
+    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
+    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
+    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
 
 iso-image-rootfs:
     FROM +iso-image
     SAVE ARTIFACT --keep-own /. rootfs
 
 iso:
-    DO +VERSION
-    ARG VERSION=$(cat VERSION)
-    ARG ISO_NAME=installer-${VERSION}
+    ARG ISO_NAME=installer
     WORKDIR /build
     COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
@@ -85,7 +74,7 @@ provider-image:
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG BASE_K8S_VERSION=$VERSION
+        ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
@@ -124,6 +113,7 @@ kairos-provider-image:
     END
     FROM $PROVIDER_BASE
     SAVE ARTIFACT ./*
+
 
 # base build image used to create the base image for all other image types
 base-image:
