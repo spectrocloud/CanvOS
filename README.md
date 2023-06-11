@@ -64,6 +64,7 @@ git tag
 v3.3.3
 v3.4.0
 v3.4.1
+v3.4.3
 ```
 
 4. Checkout the desired tag
@@ -75,8 +76,8 @@ git checkout <tag version>
 **Sample Output**
 
 ```shell
-git checkout v3.4.1
-Note: switching to 'v3.4.1'.
+git checkout v3.4.3
+Note: switching to 'v3.4.3'.
 
 You are in 'detached HEAD' state. You can look around, make experimental
 changes and commit them, and you can discard any commits you make in this
@@ -91,7 +92,7 @@ do so (now or later) by using -c with the switch command. Example:
 cp .arg.template .arg
 ```
 
-6. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.1-demo`. The **.arg** file defines the following variables:
+6. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
 
 | Parameter        | Description                                                                                                                             | Type   | Default Value          |
 |------------------|-----------------------------------------------------------------------------------------------------------------------------------------|--------|------------------------|
@@ -102,12 +103,13 @@ cp .arg.template .arg
 | OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. This example uses `22` for Ubuntu.                                         | String | `22`                   |
 | K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm`.                                                       | String | `k3s`                  |
 | ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                             | String | `palette-edge-installer`|
+| PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.           | String | `GH tag`               | 
 | platform         | Type of platform to use for the build.  Used for Cross Platform Build (arm64 to amd64 as example).                                       | string |  `linux/amd64`          | 
 
 7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
   
 ```shell
-./earthly.sh +build-all-images --PE_VERSION=$(git describe --abbrev=0 --tags)
+./earthly.sh +build-all-images
 ```
   
 Output
@@ -140,17 +142,20 @@ palette-edge-installer.iso
 palette-edge-installer.iso.sha256  
 
 # Output
-REPOSITORY        TAG                       IMAGE ID        CREATED         SIZE
-ttl.sh/ubuntu     k3s-1.25.2-v3.4.1-demo    b3c4956ccc0a    6 minutes ago   2.49GB
-ttl.sh/ubuntu     k3s-1.24.7-v3.4.1-demo    fe1486da25df    6 minutes ago   2.49GB
-earthly/earthly   v0.7.4                    d771cc8edc38     2 weeks ago    333MB
+REPOSITORY                                     TAG                                  IMAGE ID       CREATED        SIZE
+ttl.sh/ubuntu                                  k3s-1.24.6-v3.4.3-demo               cad8acdd2797   17 hours ago   4.62GB
+ttl.sh/ubuntu                                  k3s-1.24.6-v3.4.3-demo_linux_amd64   cad8acdd2797   17 hours ago   4.62GB
+ttl.sh/ubuntu                                  k3s-1.25.2-v3.4.3-demo               f6e490f53971   17 hours ago   4.62GB
+ttl.sh/ubuntu                                  k3s-1.25.2-v3.4.3-demo_linux_amd64   f6e490f53971   17 hours ago   4.62GB
 ```
+
+Earthly is a multi-architecture build tool.  In this example we are building images for AMD64 hardware which is reflected by the tags above.  In the future we will support ARM64 builds and those tags will be included.  We only need to push the image tag that DOES NOT have the architecture reference i.e `linux_amd64` in the above example.
 
 9. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages. 
 
 ```shell
-docker push ttl.sh/ubuntu-demo:k3s-v1.25.2-v3.4.1 && \
-docker push ttl.sh/ubuntu-demo:k3s-v1.24.7-v3.4.1
+docker push ttl.sh/ubuntu-demo:k3s-1.25.2-v3.4.3-demo && \
+docker push ttl.sh/ubuntu-demo:k3s-1.24.6-v3.4.3-demo
 ```
 
 > ⚠️ The default registry, [ttl.sh](https://ttl.sh/) is a short-lived registry. Images in the ttl.sh registry have a default time to live of
