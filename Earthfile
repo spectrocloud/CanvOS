@@ -17,7 +17,7 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v2.0.3
-ARG KUBEADM_PROVIDER_VERSION=v2.0.3
+ARG KUBEADM_PROVIDER_VERSION=v2.0.5-beta1
 ARG RKE2_PROVIDER_VERSION=v2.0.3
 
 
@@ -38,6 +38,7 @@ build-all-images:
 build-provider-images:
     BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
     BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
+    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
 
 iso-image-rootfs:
     FROM +iso-image
