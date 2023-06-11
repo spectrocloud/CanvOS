@@ -154,8 +154,8 @@ Earthly is a multi-architecture build tool.  In this example we are building ima
 9. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages.
 
 ```shell
-docker push ttl.sh/ubuntu-demo:k3s-1.25.2-v3.4.3-demo && \
-docker push ttl.sh/ubuntu-demo:k3s-1.24.6-v3.4.3-demo
+docker push ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo && \
+docker push ttl.sh/ubuntu:k3s-1.24.6-v3.4.3-demo
 ```
 
 > ⚠️ The default registry, [ttl.sh](https://ttl.sh/) is a short-lived registry. Images in the ttl.sh registry have a default time to live of
