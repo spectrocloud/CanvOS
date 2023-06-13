@@ -125,7 +125,7 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 	log.InfoCLI("")
 	log.InfoCLI("")
 	log.InfoCLI("🚀 Edge artifacts built successfully.")
-	finalMsg := fmt.Sprintf("🚀 Go ahead and prepare your Edge host using the ISO image created in the build/ folder and use the cluster profile %s created in Palette.", cp.Metadata.Name)
+	finalMsg := fmt.Sprintf("Go ahead and prepare your Edge host using the ISO image created in the build/ folder and use the cluster profile %s created in Palette.", cp.Metadata.Name)
 	log.InfoCLI(finalMsg)
 	return nil
 }

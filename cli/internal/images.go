@@ -154,10 +154,13 @@ func printProgressDetail(progressDetail map[string]interface{}) {
 	progress, progressOk := progressDetail["progress"].(string)
 
 	if idOk && statusOk {
+		var output string
 		if progressOk {
-			log.InfoCLI("ID: %s, Status: %s, Progress: %s\n", id, status, progress)
+			output = fmt.Sprintf("ID: %s, Status: %s, Progress: %s\n", id, status, progress)
 		} else {
-			log.InfoCLI("ID: %s, Status: %s\n", id, status)
+			output = fmt.Sprintf("ID: %s, Status: %s\n", id, status)
 		}
+
+		log.InfoCLI("%s", output)
 	}
 }
