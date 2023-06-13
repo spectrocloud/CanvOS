@@ -123,11 +123,14 @@ func normalizeSpace(s string) string {
 
 func TestCreateDemoArgsFile(t *testing.T) {
 	u := UserSelections{
-		ImageRegistryURL:       "ttl.sh",
-		OperatingSystemDistro:  "ubuntu",
-		OperatingSystemVersion: "22.04",
-		KubernetesDistro:       "k3s",
-		ISOName:                "palette-edge-installer",
+		CustomTag:                   "demo",
+		ImageRegistryURL:            "ttl.sh",
+		OperatingSystemDistro:       "ubuntu",
+		OperatingSystemVersion:      "22",
+		KubernetesDistro:            "k3s",
+		ISOName:                     "palette-edge-installer",
+		PaletteEdgeInstallerVersion: "3.4.3",
+		Platform:                    "linux/amd64",
 	}
 
 	err := CreateDemoArgsFile(u)
@@ -148,9 +151,11 @@ func TestCreateDemoArgsFile(t *testing.T) {
 	IMAGE_REGISTRY=ttl.sh
 	OS_DISTRIBUTION=ubuntu
 	IMAGE_REPO=ubuntu
-	OS_VERSION=22.04
+	OS_VERSION=22
 	K8S_DISTRIBUTION=k3s
 	ISO_NAME=palette-edge-installer
+	PE_VERSION=v3.4.3
+	platform=linux/amd64
 	`
 
 	if normalizeSpace(string(content)) != normalizeSpace(expectedContent) {

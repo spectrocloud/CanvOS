@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"fmt"
 
 	"specrocloud.com/canvos/internal"
 	log "specrocloud.com/canvos/logger"
@@ -12,11 +13,11 @@ import (
 func Demo(ctx context.Context, config *internal.CliConfig, options *internal.OptionsMenu) error {
 
 	// Initialize the Palette Credentials
-	// paletteAuth := internal.PaletteAuth{
-	// 	Host:      *config.PaletteHost,
-	// 	APIKey:    *config.PaletteApiKey,
-	// 	ProjectID: *config.ProjectID,
-	// }
+	paletteAuth := internal.PaletteAuth{
+		Host:      *config.PaletteHost,
+		APIKey:    *config.PaletteApiKey,
+		ProjectID: *config.ProjectID,
+	}
 
 	var userSelectedOptions internal.UserSelections
 
@@ -79,26 +80,52 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 		log.FatalCLI("Error starting the build process script. Exiting")
 	}
 
-	// cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(userSelectedOptions, options)
-	// if err != nil {
-	// 	log.Debug("err %s: ", err)
+	registryAuth := internal.RegistryAuthConfig{}
+	encodedRegistryCredentials, err := registryAuth.GetEncodedAuth()
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error getting the registry credentials. Exiting")
+	}
 
-	// 	log.FatalCLI("Error creating the cluster profile payload. Exiting")
-	// }
+	dockerClient, err := internal.NewDockerClient()
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error creating the docker client. Exiting")
+	}
 
-	// log.InfoCLI("Creating the cluster profile in Palette....")
-	// cpId, err := internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
-	// if err != nil {sudo apt-get install terminator
-	// 	log.InfoCLI("err %s: ", err)
-	// 	log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
-	// }
+	// Push the provider images to the registry
+	log.InfoCLI("Pushing the provider images to the registry....")
+	err = internal.PushProviderImages(ctx, dockerClient, encodedRegistryCredentials, userSelectedOptions)
+	if err != nil {
+		log.Debug("err %s: ", err)
+		errMsg := fmt.Sprintf("Error pushing the provider images. %s", err.Error())
+		log.FatalCLI(errMsg)
+	}
 
-	// log.InfoCLI("Publishing the cluster profile in Palette....")
-	// err = internal.PublishClusterProfileInPalette(ctx, paletteAuth, cpId)
-	// if err != nil {
-	// 	log.InfoCLI("err %s: ", err)
-	// 	log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
-	// }
+	cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(userSelectedOptions, options)
+	if err != nil {
+		log.Debug("err %s: ", err)
 
+		log.FatalCLI("Error creating the cluster profile payload. Exiting")
+	}
+
+	log.InfoCLI("Creating the cluster profile in Palette....")
+	cpId, err := internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
+	}
+
+	log.InfoCLI("Publishing the cluster profile in Palette....")
+	err = internal.PublishClusterProfileInPalette(ctx, paletteAuth, cpId)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
+	}
+	log.InfoCLI("")
+	log.InfoCLI("")
+	log.InfoCLI("🚀 Edge artifacts built successfully.")
+	finalMsg := fmt.Sprintf("🚀 Go ahead and prepare your Edge host using the ISO image created in the build/ folder and use the cluster profile %s created in Palette.", cp.Metadata.Name)
+	log.InfoCLI(finalMsg)
 	return nil
 }

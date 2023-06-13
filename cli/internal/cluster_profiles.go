@@ -64,6 +64,7 @@ func CreateEdgeClusterDemoProfilePayLoad(options UserSelections, rawValues *Opti
 	output.Metadata.Name = GenerateClusterProfileName(options.ClusterProfileSuffix)
 	output.Metadata.Annotations.Description = "CanvOS created Edge cluster profile"
 	output.Metadata.Labels.CreatedBy = "canvos"
+	output.Metadata.Labels.Type = "edge"
 	output.Spec.Template.CloudType = "edge-native"
 	output.Spec.Template.Type = "cluster"
 	output.Spec.Version = "1.0.0"

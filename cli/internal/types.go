@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"time"
@@ -520,6 +521,7 @@ type AnnotationsCP struct {
 }
 type LabelsCP struct {
 	CreatedBy string `json:"createdBy"`
+	Type      string `json:"type"`
 }
 type MetadataCP struct {
 	Name        string        `json:"name"`
@@ -575,4 +577,22 @@ func (cp *ClusterProfile) mashallClusterProfile() (string, error) {
 
 type CreateClusterProfileResponse struct {
 	UID string `json:"uid"`
+}
+
+// RegistryAuthConfig holds the authentication configuration for the image registry
+type RegistryAuthConfig struct {
+	// Username is the username to use for authentication with the registry
+	Username string
+	// Password is the password to use for authentication with the registry. This could also be a token.
+	Password string
+}
+
+// getEncodedAuth gets the encoded authentication configuration
+func (r *RegistryAuthConfig) GetEncodedAuth() (string, error) {
+	authConfigBytes, err := json.Marshal(r)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.URLEncoding.EncodeToString(authConfigBytes), nil
 }
