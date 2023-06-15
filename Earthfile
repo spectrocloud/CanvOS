@@ -56,7 +56,7 @@ iso-image-rootfs:
 iso:
     ARG ISO_NAME=installer
     WORKDIR /build
-    COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    COPY --platform=${TARGETOS}/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 build-iso:
@@ -70,7 +70,7 @@ build-iso:
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     WORKDIR /build
     COPY --keep-own +iso-image-rootfs/rootfs /build/image
-    RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $TARGETARCH
+    RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
     SAVE ARTIFACT /iso/*
