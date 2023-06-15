@@ -20,6 +20,8 @@ ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v2.0.3
 ARG KUBEADM_PROVIDER_VERSION=v2.0.5-beta1
 ARG RKE2_PROVIDER_VERSION=v2.0.3
+ARG LUET_REPO=luet-repo
+ARG KAIROS_REPO=packages
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" && "$BASE_IMAGE" == "" ]
@@ -30,6 +32,11 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" && "$BASE_IMAGE" == "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
+END
+
+IF [ "$ARCH" == "arm64" ]
+    ARG LUET_REPO=luet-repo-arm
+    ARG KAIROS_REPO=packages-arm64
 END
 
 build-all-images:
@@ -129,7 +136,7 @@ base-image:
     ARG TARGETARCH
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/$LUET_REPO  --priority 1 -y && \
         luet repo update
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
@@ -168,7 +175,7 @@ base-image:
             zypper clean
             
     END
-    RUN luet repo add kairos -y --url quay.io/kairos/packages --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
+    RUN luet repo add kairos -y --url quay.io/kairos/$KAIROS_REPO --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm /etc/machine-id && \
