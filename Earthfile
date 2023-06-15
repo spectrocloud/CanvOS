@@ -9,8 +9,9 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
-ARG SPECTRO_LUET_VERSION=v1.0.4
-ARG KAIROS_VERSION=v2.0.3
+ARG BASE_IMAGE
+ARG SPECTRO_LUET_VERSION=v1.0.7
+ARG KAIROS_VERSION=v2.2.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -21,24 +22,24 @@ ARG KUBEADM_PROVIDER_VERSION=v2.0.5-beta1
 ARG RKE2_PROVIDER_VERSION=v2.0.3
 
 
-IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+IF [ "$OS_DISTRIBUTION" = "ubuntu" && "$BASE_IMAGE" == "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" && "$BASE_IMAGE" == "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 END
 
 build-all-images:
-    BUILD --platform=linux/amd64 +build-provider-images
-    BUILD --platform=linux/amd64 +iso
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +iso
 
 build-provider-images:
-    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
-    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
-    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
+    #BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
+    #BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
 
 iso-image-rootfs:
     FROM +iso-image
@@ -67,6 +68,8 @@ build-iso:
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
+    ARG TARGETOS
+    ARG TARGETARCH
     FROM +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
@@ -97,7 +100,9 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-    ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$PE_VERSION
+    ARG TARGETOS
+    ARG TARGETARCH
+    ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-${TARGETOS}-${TARGETARCH}:$PE_VERSION
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
@@ -120,6 +125,8 @@ base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
     ARG ARCH=amd64
     ENV ARCH=${ARCH}
+    ARG TARGETOS
+    ARG TARGETARCH
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
         SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
@@ -161,6 +168,7 @@ base-image:
             zypper clean
             
     END
+    RUN luet repo add kairos -y --url quay.io/kairos/packages --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm /etc/machine-id && \
