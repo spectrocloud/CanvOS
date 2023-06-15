@@ -10,12 +10,13 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG BASE_IMAGE
+ARG ARCH
 ARG SPECTRO_LUET_VERSION=v1.0.7
 ARG KAIROS_VERSION=v2.2.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.6.1
+ARG OSBUILDER_VERSION=v0.7.6
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v2.0.3
 ARG KUBEADM_PROVIDER_VERSION=v2.0.5-beta1
@@ -61,6 +62,7 @@ iso:
 build-iso:
     ARG ISO_NAME
     ARG BUILDPLATFORM
+    ARG TARGETARCH
     FROM $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
@@ -68,7 +70,7 @@ build-iso:
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     WORKDIR /build
     COPY --keep-own +iso-image-rootfs/rootfs /build/image
-    RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/
+    RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $TARGETARCH
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
     SAVE ARTIFACT /iso/*
@@ -116,6 +118,8 @@ stylus-image:
     SAVE ARTIFACT /etc/elemental/config.yaml
 
 kairos-provider-image:
+    ARG TARGETOS
+    ARG TARGETARCH
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
@@ -123,7 +127,7 @@ kairos-provider-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
-    FROM $PROVIDER_BASE
+    FROM --platform=${TARGETOS}/${TARGETARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
 
@@ -136,7 +140,7 @@ base-image:
     ARG TARGETARCH
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/$LUET_REPO  --priority 1 -y && \
+        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/${LUET_REPO}  --priority 1 -y && \
         luet repo update
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
@@ -175,7 +179,7 @@ base-image:
             zypper clean
             
     END
-    RUN luet repo add kairos -y --url quay.io/kairos/$KAIROS_REPO --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
+    RUN luet repo add kairos -y --url quay.io/kairos/${KAIROS_REPO} --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm /etc/machine-id && \

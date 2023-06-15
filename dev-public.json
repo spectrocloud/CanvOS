@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "spectro-dev-public",
+  "private_key_id": "8f110eb868d15dc1504fe9ef5942f67d65cd7dd7",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCfFL0Bhq2daYEh\nnkUcSqkNoZ61DWGS40HA7IwaAgKQj7QKPmgjRoL/0JWLdsJ3U545xBvYM+Ad5Nb/\nwT2kRouu/afXzqPcr7oc8TRZ9MWgWka5bfmtrhKMDCoGjNsxqK9mLXUhOkxnk4tw\nlSNzjVBSAq22eIFz2zXjsNvs6jl4zy8aKfCVuRwQraJw7xY4HrwHRNPRw8DDfNCA\nneHYcM/fMcb/Oak4unH9R9bTMas9QI662ssBxjFdfcsXuAYNSNi2iUX2grJ2stsv\nqHtzl1pOguZEw3Wew5mcb2JkXDANqvCEoAcxDrRwbio+SdzeTdpdPUUeD0grZ9Hz\nblWEPDGVAgMBAAECggEAA5ia6zFptFDBwApNYqXXa3z3Uv1x8rmbb2qJgj8AYtc0\nyTR+8ykxZeoHr2boX30u6vxhasJFczeMmqx6IcAMgVCvniPINYFtciELv2rWmtjf\nl2qChegU+ECAJLTDcbxv9p3Zc35XYtIFiW59piuQIMJ5vdG8j2tprPN/DTyAPxha\nxsBakS6DjtJNq4Sc65Glu0yYGKhbU/ieS5MvA+w6+sZYAUKeXQBQzrzbhIsv++4q\n94XB/aC9VMPjq1KPHX1NjZ8eaCyT7JzZNDWWZ5faWY6/ftdT1ncm3ERSTfKTRmQc\nDBaHikthEytxN44rsgNU6rcS85dRdb3IkSVX2IiuEQKBgQDM1VDV1CgQXk0nq/Ic\n+OWgkWfrV4Pgo/SKfIyJ49GT0a5OTcY+0xCTFBZNvxAssFMpABDu5zrgy/CPNioe\nwXynO9CD3LPJJp5YxTEMS5OJbeA5w1/kJbMDNcekmsdjWByc222Gp1v872O6PmF6\nRW1Zi+GQrtOec/qrfoJK4adxiQKBgQDG0afjdGX6RcwiU+3zbUMT3dS34LoLyMwM\n9Y5vAXP3MSPzyy0m5hua0cA46uISni5M/JXuhsMisJ4Bsq/IW10Tr08WYCO89Q4P\nqwrlwDSOBSpPnHZfT5hZrTYzapAumuDvUVD6kEdCVrPMiIYbMy5GOzLPMIwXbs8o\n41r6rCq4rQKBgFLRhQeP6ksD9eouaYwxTpbnc78B+X5gjEVaKnCuPlSoGPPsGlXY\nfQEaxBHXSLDo8hbHwhD2SSYPD0q4ObuJu97aHmrSV5bjGG8H+9bez95nIJv6VNEo\nNQL9QaVaN3gBbkA1sEkbbeQM3qO1CTCo1Ze5KRCYv1N3zUh9tCyWpF8RAoGAGt9X\ni9y9s9gfQTyK2u4XtOW0zK2pN9KKEe5WtBZEMFMKAvehQLK1ZHWZP5gvukh7BZjW\nQwkf8t5gXOZj7/a5W+HEFMglzHJq1h9ON8OE1vVHxL7nGPbPJr/MpaJvnnz8jhw1\nj8hUeVjysGB7j82ZIZD6yxpKtRgbE/G26E7A73kCgYEAlJK/6ZfZEPv3vSXmNfWN\nG8hZ9wAIlBIF+z9MsvIZoiBiFkCC/Wnv8jM2uk/MsNCt6O/oUW7JfJhWLTvRU7b3\nmUspHEFl34dZ6nt0H5vjoCvJC0nzjezLMQCmmZX5XnRSb/+2MZWvANHoLVn76y21\nu9RdEwVNjKSPI3TGjpiFPEM=\n-----END PRIVATE KEY-----\n",
+  "client_email": "spectro-dev-public-push@spectro-dev-public.iam.gserviceaccount.com",
+  "client_id": "116920648536470681903",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/spectro-dev-public-push%40spectro-dev-public.iam.gserviceaccount.com"
+}
