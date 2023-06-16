@@ -3,6 +3,8 @@ package build
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"specrocloud.com/canvos/internal"
 	log "specrocloud.com/canvos/logger"
@@ -67,7 +69,7 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 	userSelectedOptions.BYOOSVersion = ByoosVersions[0]
 
 	log.InfoCLI("Creating the .args file....")
-	err = internal.CreateDemoArgsFile(userSelectedOptions)
+	err = internal.CreateArgsFile(userSelectedOptions)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("Error creating the demo args file. Exiting")
@@ -78,6 +80,21 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("Error starting the build process script. Exiting")
+	}
+
+	sourceBuildFolder := filepath.Join(internal.DefaultCanvOsDir, "CanvOS", "build")
+
+	destinationFolder, err := os.Getwd()
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error getting the current working directory. Exiting")
+	}
+
+	// Copy the build folder to root
+	err = internal.CopyDirectory(sourceBuildFolder, destinationFolder)
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error copying the build folder to root. Exiting")
 	}
 
 	registryAuth := internal.RegistryAuthConfig{}

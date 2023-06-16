@@ -64,12 +64,12 @@ var buildCmd = &cobra.Command{
 
 		workflowModes := []prompts.ChoiceItem{
 			{
-				ID:   "Demo",
-				Name: "Demo - Intended for learning purposes and demonstrations.",
-			},
-			{
 				ID:   "Normal",
 				Name: "Normal - Intended for production deployments.",
+			},
+			{
+				ID:   "Demo",
+				Name: "Demo - Intended for learning purposes and demonstrations.",
 			},
 		}
 

@@ -139,6 +139,14 @@ var initCmd = &cobra.Command{
 			log.FatalCLI("Error cloning the CanvOS repository.")
 			internal.LogError(err)
 		}
+
+		err = internal.CopyTemplateFiles()
+		if err != nil {
+			internal.LogError(err)
+			log.FatalCLI("Error copying the template files to the root folder.")
+
+		}
+
 		log.InfoCLI("")
 		log.InfoCLI("✅ Init downloaded all required assets successfully.")
 		log.InfoCLI("")

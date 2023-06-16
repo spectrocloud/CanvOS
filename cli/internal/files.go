@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -351,11 +352,11 @@ func CreateDemoUserData(token string) error {
 }
 
 // CreateDemoArgsFile creates an args file for the demo
-func CreateDemoArgsFile(u UserSelections) error {
-
+func CreateArgsFile(u UserSelections) error {
 	fileName := ".arg"
 	file, err := os.Create(fileName)
 	if err != nil {
+		log.Debug("error creating args file")
 		return err
 	}
 	defer file.Close()
@@ -385,6 +386,7 @@ platform=$PLATFORM
 	// Write the content to the file
 	_, err = file.WriteString(content)
 	if err != nil {
+		log.Debug("error writing to args file")
 		return err
 	}
 
@@ -494,4 +496,99 @@ func moveRequiredCanvOSFiles() error {
 
 	return nil
 
+}
+
+// CopyTemplateFiles copies the default template files "Dockerfile" and "user-data" to the root directory
+// If the files already exist, they are not copied
+func CopyTemplateFiles() error {
+
+	// Check if the files already exist
+	// If they do, do not copy them
+	// If they do not, copy them
+	// Dockerfile
+	_, err := os.Stat("Dockerfile")
+	if os.IsNotExist(err) {
+		// File does not exist
+		// Copy the file
+		err = copyFile(DefaultCanvOsDir+string(os.PathSeparator)+"canvOS"+string(os.PathSeparator)+"Dockerfile", "Dockerfile")
+		if err != nil {
+			log.Debug("error copying Dockerfile: %v", err)
+			return fmt.Errorf("error copying Dockerfile: %w", err)
+		}
+	}
+
+	// user-data
+	_, err = os.Stat("user-data")
+	if os.IsNotExist(err) {
+		// File does not exist
+		// Copy the file
+		err = copyFile(DefaultCanvOsDir+string(os.PathSeparator)+"canvOS"+string(os.PathSeparator)+"user-data.template", "user-data")
+		if err != nil {
+			log.Debug("error copying user-data: %v", err)
+			return fmt.Errorf("error copying user-data: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// copyFile copies a file from source to destination
+func copyFile(sourcePath, destinationPath string) error {
+	// Open the source file for reading
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	// Create the destination file
+	destinationFile, err := os.OpenFile(destinationPath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer destinationFile.Close()
+
+	// Copy the contents of the source file to the destination file
+	_, err = io.Copy(destinationFile, sourceFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CopyDirectory copies a directory from source to destination
+func CopyDirectory(srcDir, dstDir string) error {
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("error walking the path %q: %w", path, err)
+		}
+
+		dstPath := filepath.Join(dstDir, path[len(srcDir):])
+
+		if info.IsDir() {
+			// if the item is a directory, create it at the destination
+			return os.MkdirAll(dstPath, info.Mode())
+		} else {
+			// if the item is a file, copy it to the destination directory
+			srcFile, err := os.Open(path)
+			if err != nil {
+				return fmt.Errorf("error opening the source file %q: %w", path, err)
+			}
+			defer srcFile.Close()
+
+			dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, info.Mode())
+			if err != nil {
+				return fmt.Errorf("error creating the destination file %q: %w", dstPath, err)
+			}
+			defer dstFile.Close()
+
+			_, err = io.Copy(dstFile, srcFile)
+			if err != nil {
+				return fmt.Errorf("error copying content from %q to %q: %w", path, dstPath, err)
+			}
+		}
+
+		return nil
+	})
 }

@@ -133,7 +133,7 @@ func TestCreateDemoArgsFile(t *testing.T) {
 		Platform:                    "linux/amd64",
 	}
 
-	err := CreateDemoArgsFile(u)
+	err := CreateArgsFile(u)
 	if err != nil {
 		t.Fatalf("expected no error but got: %v", err)
 	}

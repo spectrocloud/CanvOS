@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -153,6 +154,33 @@ func (o *OptionsMenu) GetBYOOSVersions() []string {
 	return byooVersions
 }
 
+// GetKubernetesDistroPaletteValue returns the raw Palette value for the Kubernetes distro
+func GetKubernetesDistroPaletteValue(value string) (string, error) {
+
+	var output string
+
+	switch value {
+	case "K3s":
+		output = "k3s"
+
+	case "Palette eXtended Kubernetes - Edge (PXK-E)":
+		output = "k8s"
+
+	case "MicroK8s":
+		output = "microk8s"
+
+	case "RKE2":
+		output = "rke2"
+	case "Kubeadm":
+		output = "kubeadm"
+
+	default:
+		return "", fmt.Errorf("invalid Kubernetes distro value: %s", value)
+	}
+
+	return output, nil
+}
+
 // GetKubernetesDistroOptions returns the available Kubernetes distros
 func (o *OptionsMenu) GetKubernetesDistroOptions() []string {
 
@@ -162,17 +190,22 @@ func (o *OptionsMenu) GetKubernetesDistroOptions() []string {
 		k8sDistros = append(k8sDistros, "K3s")
 	}
 
-	if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
-		k8sDistros = append(k8sDistros, "Palette eXtended Kubernetes - Edge (PXK-E)")
-	}
+	// The following distros are not yet supported
 
-	if len(o.Kubernetes.EdgeMicrok8S.Versions) > 0 {
-		k8sDistros = append(k8sDistros, "MicroK8s")
-	}
+	// if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
+	// 	k8sDistros = append(k8sDistros, "Palette eXtended Kubernetes - Edge (PXK-E)")
+	// }
+
+	// if len(o.Kubernetes.EdgeMicrok8S.Versions) > 0 {
+	// 	k8sDistros = append(k8sDistros, "MicroK8s")
+	// }
 
 	if len(o.Kubernetes.EdgeRke2.Versions) > 0 {
 		k8sDistros = append(k8sDistros, "RKE2")
 	}
+
+	// Add Kubeadm as an option
+	k8sDistros = append(k8sDistros, "Kubeadm")
 
 	return k8sDistros
 }
