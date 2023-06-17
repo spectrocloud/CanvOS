@@ -54,7 +54,7 @@ type Metadata struct {
 }
 type SpecAnnotations struct {
 	ImageID             string `json:"imageId"`
-	OsName              string `json:"osName"`
+	Olname              string `json:"olname"`
 	OsSpectroVersion    string `json:"os_spectro_version"`
 	VersionAutoSelected string `json:"versionAutoSelected"`
 	VersionHint         string `json:"versionHint"`
@@ -159,20 +159,22 @@ func GetKubernetesDistroPaletteValue(value string) (string, error) {
 
 	var output string
 
-	switch value {
-	case "K3s":
+	lowerValue := strings.ToLower(value)
+
+	switch lowerValue {
+	case "k3s":
 		output = "k3s"
 
-	case "Palette eXtended Kubernetes - Edge (PXK-E)":
+	case "Palette eXtended Kubernetes - Edge (PXK-E)", "pxk-e", "k8s", "palette extended kubernetes - edge (pxk-e)":
 		output = "k8s"
 
-	case "MicroK8s":
+	case "microk8s":
 		output = "microk8s"
 
-	case "RKE2":
+	case "rke2":
 		output = "rke2"
-	case "Kubeadm":
-		output = "kubeadm"
+	case "kubeadm": // Kubeadm is PXK-E
+		output = "k8s"
 
 	default:
 		return "", fmt.Errorf("invalid Kubernetes distro value: %s", value)
@@ -192,9 +194,9 @@ func (o *OptionsMenu) GetKubernetesDistroOptions() []string {
 
 	// The following distros are not yet supported
 
-	// if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
-	// 	k8sDistros = append(k8sDistros, "Palette eXtended Kubernetes - Edge (PXK-E)")
-	// }
+	if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
+		k8sDistros = append(k8sDistros, "Palette eXtended Kubernetes - Edge (PXK-E)")
+	}
 
 	// if len(o.Kubernetes.EdgeMicrok8S.Versions) > 0 {
 	// 	k8sDistros = append(k8sDistros, "MicroK8s")
@@ -204,40 +206,43 @@ func (o *OptionsMenu) GetKubernetesDistroOptions() []string {
 		k8sDistros = append(k8sDistros, "RKE2")
 	}
 
-	// Add Kubeadm as an option
-	k8sDistros = append(k8sDistros, "Kubeadm")
+	// // Add Kubeadm as an option
+	// k8sDistros = append(k8sDistros, "Kubeadm")
 
 	return k8sDistros
 }
 
 // GetOperatingSystemOptions returns the available operating systems version for a given Kubernetes distro
-func (o *OptionsMenu) GetKubernetesDistroVersions(os string) []string {
+func (o *OptionsMenu) GetKubernetesDistroVersions(value string) []string {
 	var k8sDistroVersions []string
 
-	if os == "K3s" {
+	k8s := strings.ToLower(value)
+
+	switch k8s {
+	case "k3s":
 		if len(o.Kubernetes.Edgek3S.Versions) > 0 {
 			for _, v := range o.Kubernetes.Edgek3S.Versions {
 				k8sDistroVersions = append(k8sDistroVersions, v.Version)
 			}
 		}
-	}
-
-	if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
-		for _, v := range o.Kubernetes.EdgeK8S.Versions {
-			k8sDistroVersions = append(k8sDistroVersions, v.Version)
+	case "k8s", "kubeadm":
+		if len(o.Kubernetes.EdgeK8S.Versions) > 0 {
+			for _, v := range o.Kubernetes.EdgeK8S.Versions {
+				k8sDistroVersions = append(k8sDistroVersions, v.Version)
+			}
 		}
-	}
+	case "microk8s":
 
-	if len(o.Kubernetes.EdgeMicrok8S.Versions) > 0 {
-		for _, v := range o.Kubernetes.EdgeMicrok8S.Versions {
-			k8sDistroVersions = append(k8sDistroVersions, v.Version)
+		if len(o.Kubernetes.EdgeMicrok8S.Versions) > 0 {
+			for _, v := range o.Kubernetes.EdgeMicrok8S.Versions {
+				k8sDistroVersions = append(k8sDistroVersions, v.Version)
+			}
 		}
-	}
-
-	if len(o.Kubernetes.EdgeRke2.Versions) > 0 {
+	case "rke2":
 		for _, v := range o.Kubernetes.EdgeRke2.Versions {
 			k8sDistroVersions = append(k8sDistroVersions, v.Version)
 		}
+
 	}
 
 	return k8sDistroVersions
@@ -270,7 +275,7 @@ func (o *OptionsMenu) GetOperatingSystemVersionOptions(os string) []string {
 		}
 	}
 
-	if str == "opensuse" {
+	if str == "opensuse" || str == "opensuse leap" {
 		for _, v := range o.OperatingSystems.OpenSuSE.Versions {
 			osVersions = append(osVersions, v.Version)
 		}
@@ -308,6 +313,27 @@ func (o *OptionsMenu) GetCniOptions() []string {
 	}
 
 	return cniOptions
+}
+
+// GetCNIPaletteValue returns the raw Palette value for the Kubernetes distro
+func GetCNIPaletteValue(value string) (string, error) {
+
+	var output string
+
+	switch value {
+	case "Calico", "calico", "CALICO":
+		output = "calico"
+	case "Flannel", "flannel", "FLANNEL":
+		output = "flannel"
+	case "Cilium", "cilium", "CILIUM":
+		output = "cilium"
+	case "Custom CNI", "custom cni", "CUSTOM CNI":
+		output = "custom"
+	default:
+		return "", fmt.Errorf("invalid CNI value: %s", value)
+	}
+
+	return output, nil
 }
 
 // getCniVersionOptions returns the available CNI version options for a given CNI
@@ -349,7 +375,9 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 
 	var packUID, registryUID string
 
-	if name == "k3s" {
+	lname := strings.ToLower(name)
+
+	if lname == "k3s" {
 		for _, v := range o.Kubernetes.Edgek3S.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -358,7 +386,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Kubernetes.Edgek3S.RegistryUID
 	}
 
-	if name == "k8s" {
+	if lname == "k8s" {
 		for _, v := range o.Kubernetes.EdgeK8S.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -367,7 +395,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Kubernetes.EdgeK8S.RegistryUID
 	}
 
-	if name == "microk8s" {
+	if lname == "microk8s" {
 		for _, v := range o.Kubernetes.EdgeMicrok8S.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -376,7 +404,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Kubernetes.EdgeMicrok8S.RegistryUID
 	}
 
-	if name == "rke2" {
+	if lname == "rke2" {
 		for _, v := range o.Kubernetes.EdgeRke2.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -385,7 +413,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Kubernetes.EdgeRke2.RegistryUID
 	}
 
-	if name == "calico" {
+	if lname == "calico" {
 		for _, v := range o.Cnis.Calico.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -394,7 +422,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Cnis.Calico.RegistryUID
 	}
 
-	if name == "cilium" {
+	if lname == "cilium" {
 		for _, v := range o.Cnis.Cilium.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -403,7 +431,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Cnis.Cilium.RegistryUID
 	}
 
-	if name == "custom cni" {
+	if lname == "custom cni" {
 		for _, v := range o.Cnis.Custom.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -412,7 +440,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Cnis.Custom.RegistryUID
 	}
 
-	if name == "flannel" {
+	if lname == "flannel" {
 		for _, v := range o.Cnis.Flannel.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -421,7 +449,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Cnis.Flannel.RegistryUID
 	}
 
-	if name == "ubuntu" {
+	if lname == "ubuntu" {
 		for _, v := range o.OperatingSystems.Ubuntu.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -430,7 +458,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.OperatingSystems.Ubuntu.RegistryUID
 	}
 
-	if name == "opensuse" {
+	if lname == "opensuse" || lname == "opensuse-leap" {
 		for _, v := range o.OperatingSystems.OpenSuSE.Versions {
 			if v.Version == version {
 				packUID = v.UID
@@ -439,7 +467,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.OperatingSystems.OpenSuSE.RegistryUID
 	}
 
-	if name == "byoos" || name == "edge-native-byoi" {
+	if lname == "byoos" || name == "edge-native-byoi" {
 		for _, v := range o.OperatingSystems.EdgeNativeByoi.Versions {
 			if v.Version == version {
 				packUID = v.UID

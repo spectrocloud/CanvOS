@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	log "specrocloud.com/canvos/logger"
 )
 
 // GenerateClusterProfileName generates a name for the cluster profile using a provided suffix.
@@ -45,19 +45,19 @@ func CreateEdgeClusterDemoProfilePayLoad(options UserSelections, rawValues *Opti
 
 	osTemplate, err := getByoosPackValues(options)
 	if err != nil {
-		log.Debug().Msgf("err %s: ", err)
+		log.Debug("err %s: ", err)
 		return output, errors.New("error getting the edge-native-byoi pack values")
 	}
 
 	k8sTemplate, err := getKubernetesPackValues(options)
 	if err != nil {
-		log.Debug().Msgf("err %s: ", err)
+		log.Debug("err %s: ", err)
 		return output, errors.New("error getting the kubernetes pack values")
 	}
 
 	cniTemplate, err := getCniPackValues(options)
 	if err != nil {
-		log.Debug().Msgf("err %s: ", err)
+		log.Debug("err %s: ", err)
 		return output, errors.New("error getting the cni pack values")
 	}
 
@@ -132,35 +132,99 @@ func CreateEdgeClusterDemoProfilePayLoad(options UserSelections, rawValues *Opti
 func CreateEdgeClusterProfilePayLoad(options UserSelections, rawValues *OptionsMenu) (ClusterProfile, error) {
 	var output ClusterProfile
 
-	// osTemplate, err := getByoosPackValues(options)
-	// if err != nil {
-	// 	log.Debug().Msgf("err %s: ", err)
-	// 	return output, errors.New("error getting the edge-native-byoi pack values")
-	// }
+	osTemplate, err := getByoosPackValues(options)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		return output, errors.New("error getting the edge-native-byoi pack values")
+	}
 
-	// k8sTemplate, err := getKubernetesPackValues(options)
-	// if err != nil {
-	// 	log.Debug().Msgf("err %s: ", err)
-	// 	return output, errors.New("error getting the kubernetes pack values")
-	// }
+	k8sTemplate, err := getKubernetesPackValues(options)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		return output, errors.New("error getting the kubernetes pack values")
+	}
 
-	// cniTemplate, err := getCniPackValues(options)
-	// if err != nil {
-	// 	log.Debug().Msgf("err %s: ", err)
-	// 	return output, errors.New("error getting the cni pack values")
-	// }
+	cniTemplate, err := getCniPackValues(options)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		return output, errors.New("error getting the cni pack values")
+	}
 
-	// output.Metadata.Name = GenerateClusterProfileName(options.ClusterProfileSuffix)
-	// output.Metadata.Annotations.Description = "CanvOS created Edge cluster profile"
-	// output.Metadata.Labels.CreatedBy = "canvos"
-	// output.Metadata.Labels.Type = "edge"
-	// output.Spec.Template.CloudType = "edge-native"
-	// output.Spec.Template.Type = "cluster"
-	// output.Spec.Version = "1.0.0"
+	output.Metadata.Name = GenerateClusterProfileName(options.ClusterProfileSuffix)
+	output.Metadata.Annotations.Description = "CanvOS created Edge cluster profile"
+	output.Metadata.Labels.CreatedBy = "canvos"
+	output.Metadata.Labels.Type = "edge"
+	output.Spec.Template.CloudType = "edge-native"
+	output.Spec.Template.Type = "cluster"
+	output.Spec.Version = "1.0.0"
 
-	// byoosPackUID, byoosRegistryID := rawValues.GetPackUIDs("edge-native-byoi", options.BYOOSVersion)
-	// k8sPackUID, k8sRegistryID := rawValues.GetPackUIDs(options.KubernetesDistro, options.KubernetesVersion)
-	// cniPackUID, cniRegistryID := rawValues.GetPackUIDs(options.CNI, options.CNIVersion)
+	byoosPackUID, byoosRegistryID := rawValues.GetPackUIDs("edge-native-byoi", options.BYOOSVersion)
+	k8sPackUID, k8sRegistryID := rawValues.GetPackUIDs(options.KubernetesDistro, options.KubernetesVersion)
+	cniPackUID, cniRegistryID := rawValues.GetPackUIDs(options.CNI, options.CNIVersion)
+
+	k8sDistro, err := GetKubernetesDistroPaletteValue(options.KubernetesDistro)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		return output, errors.New("error getting the kubernetes distro palette value")
+	}
+
+	cni, err := GetCNIPaletteValue(options.CNI)
+	if err != nil {
+		log.InfoCLI("err %s: ", err)
+		return output, errors.New("error getting the cni palette value")
+	}
+
+	output.Spec.Template.Packs = []PacksCP{
+		{
+			Name:        "edge-native-byoi",
+			RegistryUID: byoosRegistryID,
+			Tag:         options.BYOOSVersion,
+			Values:      osTemplate,
+			PackUID:     byoosPackUID,
+			Logo:        "https://registry.spectrocloud.com/v1/edge-native-byoi/blobs/sha256:b6081bca439eeb01a8d43b3cb6895df4c088f80af978856ddc0da568e5c09365?type=image/png",
+			Type:        "spectro",
+			UID:         byoosPackUID,
+			Template: TemplatePacks{
+				Parameters: ParametersCP{
+					InputParameters:  []string{},
+					OutputParameters: []string{},
+				},
+			},
+			Manifests: []string{},
+		},
+		{
+			Name:        fmt.Sprintf("edge-%s", k8sDistro),
+			RegistryUID: k8sRegistryID,
+			Tag:         options.KubernetesVersion,
+			Values:      k8sTemplate,
+			PackUID:     k8sPackUID,
+			Type:        "spectro",
+			UID:         k8sPackUID,
+			Template: TemplatePacks{
+				Parameters: ParametersCP{
+					InputParameters:  []string{},
+					OutputParameters: []string{},
+				},
+			},
+			Manifests: []string{},
+		},
+		{
+			Name:        fmt.Sprintf("cni-%s", cni),
+			RegistryUID: cniRegistryID,
+			Tag:         options.CNIVersion,
+			Values:      cniTemplate,
+			PackUID:     cniPackUID,
+			Type:        "spectro",
+			UID:         cniPackUID,
+			Template: TemplatePacks{
+				Parameters: ParametersCP{
+					InputParameters:  []string{},
+					OutputParameters: []string{},
+				},
+			},
+			Manifests: []string{},
+		},
+	}
 
 	return output, nil
 
@@ -199,6 +263,23 @@ func getByoosPackValues(options UserSelections) (string, error) {
 // byoosSystemUriValues returns the values for the system.uri section of the edge-native-byoi pack.
 // Do not mofidy the whitespace in this string.
 func byoosSystemUriValues(options UserSelections) string {
+
+	options.KubernetesDistro = strings.ToLower(options.KubernetesDistro)
+	options.OperatingSystemDistro = strings.ToLower(options.OperatingSystemDistro)
+
+	// The following logic is to handle allowed values in the .args file and to ensure correct output matching the earthly generated output
+	if options.KubernetesDistro == "k8s" {
+		options.KubernetesDistro = "kubeadm"
+
+	}
+
+	if options.OperatingSystemDistro == "opensuse" {
+		options.OperatingSystemDistro = "opensuse-leap"
+	}
+
+	// the major version of the OS version is the first number in the version string
+	osVersion := strings.Split(options.OperatingSystemVersion, ".")[0]
+
 	newValue := fmt.Sprintf(
 		`  system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"
   system.registry: %s
@@ -214,7 +295,7 @@ func byoosSystemUriValues(options UserSelections) string {
 		options.OperatingSystemDistro,
 		options.PaletteEdgeInstallerVersion,
 		options.CustomTag,
-		options.OperatingSystemVersion)
+		osVersion)
 
 	return newValue
 }
@@ -228,14 +309,16 @@ func getKubernetesPackValues(options UserSelections) (string, error) {
 	)
 
 	switch options.KubernetesDistro {
-	case "k3s":
+	case "k3s", "K3s":
 		k8sName = "edge-k3s-"
-	case "k8s":
+	case "k8s", "K8s":
 		k8sName = "edge-k8s-"
-	case "rke2":
+	case "rke2", "Rke2":
 		k8sName = "edge-rke2-"
-	case "microk8s":
+	case "microk8s", "Microk8s":
 		k8sName = "edge-microk8s-"
+	case "Kubeadm", "kubeadm":
+		k8sName = "edge-k8s-"
 	default:
 		return values, errors.New("invalid kubernetes distro")
 	}
@@ -244,7 +327,7 @@ func getKubernetesPackValues(options UserSelections) (string, error) {
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		log.Info().Msgf("err %s: ", err)
+		log.InfoCLI("err %s: ", err)
 		return values, err
 	}
 
@@ -260,11 +343,11 @@ func getCniPackValues(options UserSelections) (string, error) {
 	)
 
 	switch options.CNI {
-	case "calico":
+	case "calico", "Calico":
 		cniName = "cni-calico-"
-	case "flannel":
+	case "flannel", "Flannel":
 		cniName = "cni-flannel-"
-	case "cilium":
+	case "cilium", "Cilium":
 		cniName = "cni-cilium-"
 	default:
 		return values, errors.New("invalid cni")
@@ -275,7 +358,7 @@ func getCniPackValues(options UserSelections) (string, error) {
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		log.Info().Msgf("err %s: ", err)
+		log.InfoCLI("err %s: ", err)
 		return values, err
 	}
 

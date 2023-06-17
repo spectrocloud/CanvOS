@@ -69,7 +69,7 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 	userSelectedOptions.BYOOSVersion = ByoosVersions[0]
 
 	log.InfoCLI("Creating the .args file....")
-	err = internal.CreateArgsFile(userSelectedOptions)
+	err = internal.CreateArgsFile("", userSelectedOptions)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("Error creating the demo args file. Exiting")

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -121,47 +122,109 @@ func normalizeSpace(s string) string {
 	return strings.Join(strings.Fields(s), "\n")
 }
 
-func TestCreateDemoArgsFile(t *testing.T) {
-	u := UserSelections{
-		CustomTag:                   "demo",
-		ImageRegistryURL:            "ttl.sh",
-		OperatingSystemDistro:       "ubuntu",
-		OperatingSystemVersion:      "22",
-		KubernetesDistro:            "k3s",
-		ISOName:                     "palette-edge-installer",
-		PaletteEdgeInstallerVersion: "3.4.3",
-		Platform:                    "linux/amd64",
+func TestCreateArgsFile(t *testing.T) {
+	testCases := []struct {
+		name     string
+		user     UserSelections
+		expected string
+	}{
+		{
+			name: "Test case 1",
+			user: UserSelections{
+				CustomTag:                   "demo",
+				ImageRegistryURL:            "ttl.sh",
+				ImageRegistryRepository:     "ubuntu",
+				OperatingSystemDistro:       "ubuntu",
+				OperatingSystemVersion:      "22.04",
+				KubernetesDistro:            "k3s",
+				ISOName:                     "palette-edge-installer",
+				PaletteEdgeInstallerVersion: "3.4.3",
+				Platform:                    "linux/amd64",
+			},
+			expected: `
+                CUSTOM_TAG=demo
+                IMAGE_REGISTRY=ttl.sh
+                OS_DISTRIBUTION=ubuntu
+                IMAGE_REPO=ubuntu
+                OS_VERSION=22
+                K8S_DISTRIBUTION=k3s
+                ISO_NAME=palette-edge-installer
+                PE_VERSION=v3.4.3
+                platform=linux/amd64
+            `,
+		},
+		{
+			name: "Test case 2",
+			user: UserSelections{
+				CustomTag:                   "test",
+				ImageRegistryURL:            "registry.com",
+				ImageRegistryRepository:     "custom",
+				OperatingSystemDistro:       "opensuse",
+				OperatingSystemVersion:      "15.04",
+				KubernetesDistro:            "k8s",
+				ISOName:                     "palette-edge",
+				PaletteEdgeInstallerVersion: "3.4.3",
+				Platform:                    "linux/amd64",
+			},
+			expected: `
+                CUSTOM_TAG=test
+                IMAGE_REGISTRY=registry.com
+                OS_DISTRIBUTION=opensuse-leap
+                IMAGE_REPO=custom
+                OS_VERSION=15
+                K8S_DISTRIBUTION=kubeadm
+                ISO_NAME=palette-edge
+                PE_VERSION=v3.4.3
+                platform=linux/amd64
+            `,
+		},
+		{
+			name: "Test case 3",
+			user: UserSelections{
+				CustomTag:                   "demo",
+				ImageRegistryURL:            "ttl.sh",
+				ImageRegistryRepository:     "ubuntu",
+				OperatingSystemDistro:       "Ubuntu",
+				OperatingSystemVersion:      "22.04",
+				KubernetesDistro:            "k3s",
+				ISOName:                     "palette-edge",
+				PaletteEdgeInstallerVersion: "3.4.3",
+				Platform:                    "linux/amd64",
+			},
+			expected: `
+                CUSTOM_TAG=demo
+                IMAGE_REGISTRY=ttl.sh
+                OS_DISTRIBUTION=ubuntu
+                IMAGE_REPO=ubuntu
+                OS_VERSION=22
+                K8S_DISTRIBUTION=k3s
+                ISO_NAME=palette-edge
+                PE_VERSION=v3.4.3
+                platform=linux/amd64
+            `,
+		},
 	}
 
-	err := CreateArgsFile(u)
-	if err != nil {
-		t.Fatalf("expected no error but got: %v", err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fileName := fmt.Sprintf(".arg_%s", tc.name) // Unique file for each test
+			defer os.Remove(fileName)                   // Cleanup after the test
+
+			err := CreateArgsFile(fileName, tc.user)
+			if err != nil {
+				t.Fatalf("expected no error but got: %v", err)
+			}
+
+			content, err := os.ReadFile(fileName)
+			if err != nil {
+				t.Fatalf("expected no error but got: %v", err)
+			}
+
+			if normalizeSpace(string(content)) != normalizeSpace(tc.expected) {
+				t.Fatalf("Unexpected file content. Got \n%s\n, expected \n%s\n", content, tc.expected)
+			}
+		})
 	}
-
-	fileName := ".arg"
-	defer os.Remove(fileName) // Cleanup after the test
-
-	content, err := os.ReadFile(fileName)
-	if err != nil {
-		t.Fatalf("expected no error but got: %v", err)
-	}
-
-	expectedContent := `
-	CUSTOM_TAG=demo
-	IMAGE_REGISTRY=ttl.sh
-	OS_DISTRIBUTION=ubuntu
-	IMAGE_REPO=ubuntu
-	OS_VERSION=22
-	K8S_DISTRIBUTION=k3s
-	ISO_NAME=palette-edge-installer
-	PE_VERSION=v3.4.3
-	platform=linux/amd64
-	`
-
-	if normalizeSpace(string(content)) != normalizeSpace(expectedContent) {
-		t.Fatalf("Unexpected file content. Got \n%s\n, expected \n%s\n", content, expectedContent)
-	}
-
 }
 
 func TestCreateMenuOptionsFile(t *testing.T) {

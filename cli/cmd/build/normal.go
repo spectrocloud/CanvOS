@@ -2,7 +2,6 @@ package build
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"specrocloud.com/canvos/internal"
@@ -14,11 +13,11 @@ import (
 func Normal(ctx context.Context, config *internal.CliConfig, options *internal.OptionsMenu) error {
 
 	// Initialize the Palette Credentials
-	// paletteAuth := internal.PaletteAuth{
-	// 	Host:      *config.PaletteHost,
-	// 	APIKey:    *config.PaletteApiKey,
-	// 	ProjectID: *config.ProjectID,
-	// }
+	paletteAuth := internal.PaletteAuth{
+		Host:      *config.PaletteHost,
+		APIKey:    *config.PaletteApiKey,
+		ProjectID: *config.ProjectID,
+	}
 
 	var (
 		userSelectedOptions internal.UserSelections
@@ -32,14 +31,28 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	}
 	userSelectedOptions.PaletteEdgeInstallerVersion = uVersion
 
-	uOSDistro, err := prompts.Select("Select the Operating System (OS) Distribution", options.GetOperatingSystemDistroOptions(), options.GetOperatingSystemDistroOptions()[0], "An Operating System Distro is required")
+	// Get all the OS Choices
+	osChoices := []prompts.ChoiceItem{}
+	for _, o := range options.GetOperatingSystemDistroOptions() {
+
+		if o == "opensuse" {
+			o = "opensuse-leap"
+		}
+
+		osChoices = append(osChoices, prompts.ChoiceItem{
+			Name: o,
+			ID:   o,
+		})
+	}
+
+	uOSDistro, err := prompts.SelectID("Select the Operating System (OS) Distribution", osChoices, "ubuntu", "An Operating System Distro is required")
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("error selecting the OS distribution. Exiting")
 	}
-	userSelectedOptions.OperatingSystemDistro = strings.ToLower(uOSDistro)
+	userSelectedOptions.OperatingSystemDistro = uOSDistro.ID
 
-	uOSVersion, err := prompts.Select("Select the Operating System (OS) Version", options.GetOperatingSystemVersionOptions(uOSDistro), options.GetOperatingSystemVersionOptions(uOSDistro)[0], "An Operating System Version is required")
+	uOSVersion, err := prompts.Select("Select the Operating System (OS) Version", options.GetOperatingSystemVersionOptions(userSelectedOptions.OperatingSystemDistro), options.GetOperatingSystemVersionOptions(userSelectedOptions.OperatingSystemDistro)[0], "An Operating System Version is required")
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("error selecting the OS version. Exiting")
@@ -73,12 +86,12 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	userSelectedOptions.ImageRegistryRepository = uRegistry[1]
 
 	registryAuth := &internal.RegistryAuthConfig{}
-	registryAuth.Username, err = prompts.ReadText("Provide your Container Registry Username", "", "A Container Registry Username is required.", false, 128)
+	registryAuth.Username, err = prompts.ReadText("Provide your Container Registry Username", "", "A Container Registry Username is required.", true, 128)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("error getting Container Registry Username. Exiting")
 	}
-	registryAuth.Password, err = prompts.ReadPassword("Provide your Container Registry Password", "", "A Container Registry Password is required.", false, 128)
+	registryAuth.Password, err = prompts.ReadPassword("Provide your Container Registry Password", "", "A Container Registry Password is required.", true, 128)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("error getting Container Registry Password. Exiting")
@@ -104,6 +117,10 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	if uClusterProfileChoice == "Yes" {
 		userSelectedOptions.CreateClusterProfile = true
 	}
+	ByoosVersions := options.GetBYOOSVersions()
+	userSelectedOptions.BYOOSVersion = ByoosVersions[0]
+
+	userSelectedOptions.KubernetesVersion = options.GetKubernetesDistroVersions(userSelectedOptions.KubernetesDistro)[0]
 
 	// The logic for if the user wants a cluster profile created
 	if userSelectedOptions.CreateClusterProfile {
@@ -122,30 +139,12 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 		}
 		userSelectedOptions.CNIVersion = uCNIVersion
 
-		uImageSuffix, err := prompts.ReadText("Provide your image name suffix. The default cluster profile name is edge-<suffix>-<YYYY-MM-DD>-<SHA-256>", "", "An Image suffix is required.", false, 12)
+		uImageSuffix, err := prompts.ReadText("Provide the cluster profile image name suffix. The default cluster profile name is edge-<suffix>-<YYYY-MM-DD>-<SHA-256>", "", "An Image suffix is required.", false, 12)
 		if err != nil {
 			log.Debug("err %s: ", err)
 			log.FatalCLI("error getting Image suffix. Exiting")
 		}
 		userSelectedOptions.ClusterProfileSuffix = uImageSuffix
-		// cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(*userSelectedOptions, options)
-		// if err != nil {
-		// 	log.Debug("err %s: ", err)
-		// 	log.FatalCLI("Error creating the cluster profile payload. Exiting")
-		// }
-		// log.InfoCLI("Creating the cluster profile in Palette....")
-		// cpId, err := internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
-		// if err != nil {
-		// 	log.InfoCLI("err %s: ", err)
-		// 	log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
-		// }
-
-		// log.InfoCLI("Publishing the cluster profile in Palette....")
-		// err = internal.PublishClusterProfileInPalette(ctx, paletteAuth, cpId)
-		// if err != nil {
-		// 	log.InfoCLI("err %s: ", err)
-		// 	log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
-		// }
 
 	}
 
@@ -174,7 +173,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 
 	// Create the .arg file
 	log.InfoCLI("Creating the .args file....")
-	err = internal.CreateArgsFile(userSelectedOptions)
+	err = internal.CreateArgsFile("", userSelectedOptions)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("Error creating the demo args file. Exiting")
@@ -202,47 +201,50 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	// 	log.FatalCLI("Error copying the build folder to root. Exiting")
 	// }
 
-	encodedRegistryCredentials, err := registryAuth.GetEncodedAuth()
-	if err != nil {
-		log.Debug("err %s: ", err)
-		log.FatalCLI("Error getting the registry credentials. Exiting")
-	}
+	// encodedRegistryCredentials, err := registryAuth.GetEncodedAuth()
+	// if err != nil {
+	// 	log.Debug("err %s: ", err)
+	// 	log.FatalCLI("Error getting the registry credentials. Exiting")
+	// }
 
-	dockerClient, err := internal.NewDockerClient()
-	if err != nil {
-		log.Debug("err %s: ", err)
-		log.FatalCLI("Error creating the docker client. Exiting")
-	}
+	// dockerClient, err := internal.NewDockerClient()
+	// if err != nil {
+	// 	log.Debug("err %s: ", err)
+	// 	log.FatalCLI("Error creating the docker client. Exiting")
+	// }
 
 	// Push the provider images to the registry
 	log.InfoCLI("Pushing the provider images to the registry....")
-	err = internal.PushProviderImages(ctx, dockerClient, encodedRegistryCredentials, userSelectedOptions)
-	if err != nil {
-		log.Debug("err %s: ", err)
-		errMsg := fmt.Sprintf("Error pushing the provider images. %s", err.Error())
-		log.FatalCLI(errMsg)
-	}
-
-	// if userSelectedOptions.CreateClusterProfile {
-	// 	log.InfoCLI("Creating the cluster profile in Palette....")
-	// 	cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(*userSelectedOptions, options)
-	// 	if err != nil {
-	// 		log.Debug("err %s: ", err)
-	// 		log.FatalCLI("Error creating the cluster profile payload. Exiting")
-	// 	}
-	// 	cpId, err := internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
-	// 	if err != nil {
-	// 		log.InfoCLI("err %s: ", err)
-	// 		log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
-	// 	}
-
-	// 	log.InfoCLI("Publishing the cluster profile in Palette....")
-	// 	err = internal.PublishClusterProfileInPalette(ctx, paletteAuth, cpId)
-	// 	if err != nil {
-	// 		log.InfoCLI("err %s: ", err)
-	// 		log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
-	// 	}
+	// err = internal.PushProviderImages(ctx, dockerClient, encodedRegistryCredentials, userSelectedOptions)
+	// if err != nil {
+	// 	log.Debug("err %s: ", err)
+	// 	errMsg := fmt.Sprintf("Error pushing the provider images. %s", err.Error())
+	// 	log.FatalCLI(errMsg)
 	// }
+
+	if userSelectedOptions.CreateClusterProfile {
+		cp, err := internal.CreateEdgeClusterProfilePayLoad(userSelectedOptions, options)
+		if err != nil {
+			log.Debug("err %s: ", err)
+			log.FatalCLI("Error creating the cluster profile payload. Exiting")
+		}
+
+		// log.InfoCLI("Creating the cluster profile in Palette.... %v", cp)
+		log.InfoCLI("Creating the cluster profile in Palette....")
+		cpId, err := internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
+		if err != nil {
+			log.InfoCLI("err %s: ", err)
+			log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
+		}
+
+		// log.InfoCLI("Publishing the cluster profile in Palette....")
+		err = internal.PublishClusterProfileInPalette(ctx, paletteAuth, cpId)
+		if err != nil {
+			log.InfoCLI("err %s: ", err)
+			log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
+		}
+		log.InfoCLI("Creating the cluster profile in Palette....")
+	}
 
 	return nil
 }

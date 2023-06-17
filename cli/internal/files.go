@@ -352,8 +352,12 @@ func CreateDemoUserData(token string) error {
 }
 
 // CreateDemoArgsFile creates an args file for the demo
-func CreateArgsFile(u UserSelections) error {
-	fileName := ".arg"
+// The default file name is .arg but can be changed with the fileName parameter
+func CreateArgsFile(fileName string, u UserSelections) error {
+
+	if fileName == "" {
+		fileName = ".arg"
+	}
 	file, err := os.Create(fileName)
 	if err != nil {
 		log.Debug("error creating args file")
@@ -361,11 +365,23 @@ func CreateArgsFile(u UserSelections) error {
 	}
 	defer file.Close()
 
+	u.KubernetesDistro = strings.ToLower(u.KubernetesDistro)
+	u.OperatingSystemDistro = strings.ToLower(u.OperatingSystemDistro)
+	// The following logic is to handle allowed values in the .args file and to ensure correct output matching the earthly generated output
+	if u.KubernetesDistro == "k8s" {
+		u.KubernetesDistro = "kubeadm"
+
+	}
+
+	if u.OperatingSystemDistro == "opensuse" {
+		u.OperatingSystemDistro = "opensuse-leap"
+	}
+
 	template := `
 CUSTOM_TAG=$CUSTOM_TAG
 IMAGE_REGISTRY=$IMAGE_REGISTRY
 OS_DISTRIBUTION=$OS_DISTRIBUTION
-IMAGE_REPO=$OS_DISTRIBUTION
+IMAGE_REPO=$IMAGE_REPO
 OS_VERSION=$OS_VERSION   
 K8S_DISTRIBUTION=$K8S_DISTRIBUTION
 ISO_NAME=$ISO_NAME
@@ -376,9 +392,10 @@ platform=$PLATFORM
 	content := strings.Replace(template, "$CUSTOM_TAG", u.CustomTag, -1)
 	content = strings.Replace(content, "$IMAGE_REGISTRY", u.ImageRegistryURL, -1)
 	content = strings.Replace(content, "$OS_DISTRIBUTION", u.OperatingSystemDistro, -1)
+	content = strings.Replace(content, "$IMAGE_REPO", u.ImageRegistryRepository, -1)
 	// The Eartly scrips adds the version to the end of the OS version string so we only need to provide the major release
 	content = strings.Replace(content, "$OS_VERSION", getOSMajorRelease(u.OperatingSystemVersion), -1)
-	content = strings.Replace(content, "$K8S_DISTRIBUTION", u.KubernetesDistro, -1)
+	content = strings.Replace(content, "$K8S_DISTRIBUTION", strings.ToLower(u.KubernetesDistro), -1)
 	content = strings.Replace(content, "$ISO_NAME", u.ISOName, -1)
 	content = strings.Replace(content, "$TAG", u.PaletteEdgeInstallerVersion, -1)
 	content = strings.Replace(content, "$PLATFORM", u.Platform, -1)
