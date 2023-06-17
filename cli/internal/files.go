@@ -328,16 +328,16 @@ func CreateDemoUserData(token string) error {
 
 	// Define the template with the placeholder for the token
 	template := `
-	#cloud-config
-	stylus:
-	  site:
-		edgeHostToken: $token
-	install:
-	  poweroff: true
-	users:
-	  - name: kairos
-		passwd: kairos
-		`
+#cloud-config
+stylus:
+	site:
+	edgeHostToken: $token
+install:
+	poweroff: true
+users:
+	- name: kairos
+	passwd: kairos
+`
 
 	// Replace the placeholder with the actual token
 	content := strings.Replace(template, "$token", token, -1)
@@ -443,6 +443,8 @@ func CloneCanvOS(ctx context.Context) error {
 
 // StartBuildProcessScript starts the build process script
 // This is the CanvOS Earthly build script
+// All the required files are moved to the correct location before the script is started
+// the default location is .canvOS/canvOS/
 func StartBuildProcessScript(ctx context.Context, u UserSelections) error {
 	err := moveRequiredCanvOSFiles()
 	if err != nil {
@@ -488,9 +490,10 @@ func StartBuildProcessScript(ctx context.Context, u UserSelections) error {
 }
 
 // moveRequiredCanvOSFiles moves the required files from the .canvos repo to the .canvos/canvOS directory
-// The two files are:
+// The three files are:
 // 1. .arg
 // 2. user-data
+// 3. Dockerfile
 func moveRequiredCanvOSFiles() error {
 
 	destinationFolder := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS" + string(os.PathSeparator)
@@ -509,6 +512,14 @@ func moveRequiredCanvOSFiles() error {
 	if err != nil {
 		log.Info("error moving %v to %v: %v", userDataFile, destinationFolder, err)
 		return fmt.Errorf("error moving %v to %v: %w", userDataFile, destinationFolder, err)
+	}
+
+	// Move the Dockerfile to the destinationDir
+	dockerFile := "Dockerfile"
+	err = os.Rename(dockerFile, destinationFolder+string(os.PathSeparator)+"Dockerfile")
+	if err != nil {
+		log.Info("error moving %v to %v: %v", dockerFile, destinationFolder, err)
+		return fmt.Errorf("error moving %v to %v: %w", dockerFile, destinationFolder, err)
 	}
 
 	return nil

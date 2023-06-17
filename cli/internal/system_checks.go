@@ -2,10 +2,8 @@ package internal
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"runtime"
-	"syscall"
 
 	"github.com/shirou/gopsutil/mem"
 	"golang.org/x/sys/unix"
@@ -177,57 +175,6 @@ func checkGitInstallation(executor CommandExecutor) CheckResult {
 	}
 }
 
-// checkDockerPermissions checks if the current user has permissions to access the Docker daemon socket.
-func checkDockerSocketPermissions() CheckResult {
-	dockerSocket := "/var/run/docker.sock"
-	_, err := os.Stat(dockerSocket)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// return false, fmt.Errorf("docker daemon socket does not exist")
-			return CheckResult{
-				Name:    "Docker Privileges",
-				Success: false,
-				Error:   "Docker daemon socket does not exist",
-			}
-		} else {
-
-			return CheckResult{
-				Name:    "Docker Privileges",
-				Success: false,
-				Error:   "Unable to access docker daemon socket",
-			}
-		}
-	}
-
-	uid := uint32(os.Geteuid())
-	gid := uint32(os.Getegid())
-	socketInfo, err := os.Stat(dockerSocket)
-	if err != nil {
-		return CheckResult{
-			Name:    "Docker Privileges",
-			Success: false,
-			Error:   "Unable to access docker daemon socket",
-		}
-	}
-
-	socketUid := socketInfo.Sys().(*syscall.Stat_t).Uid
-	socketGid := socketInfo.Sys().(*syscall.Stat_t).Gid
-
-	if uid != 0 && (uid != socketUid || gid != socketGid) {
-		return CheckResult{
-			Name:    "Docker Privileges",
-			Success: false,
-			Error: "current user does not have permissions to access the Docker daemon socket. " +
-				"Please start the binary as root or add the current user to the docker group.",
-		}
-	}
-
-	return CheckResult{
-		Name:    "Docker Privileges",
-		Success: true,
-	}
-}
-
 // SystemPrerequisitesChecks performs the system prerequisites checks and prints the results to the CLI.
 // SystemInfoProvider accepts a SystemInfoProvider interface that provides the system information.
 func SystemPrerequisitesChecks(s SystemInfoProvider) {
@@ -259,12 +206,6 @@ func SystemPrerequisitesChecks(s SystemInfoProvider) {
 	log.InfoCLI("Git: %s\n", getStatusText(gitCheckResult))
 	if !gitCheckResult.Success {
 		log.InfoCLI("Error: %s\n", gitCheckResult.Error)
-	}
-
-	dockerSocketCheckResult := checkDockerSocketPermissions()
-	log.InfoCLI("Elevated Docker Privileges: %s\n", getStatusText(dockerSocketCheckResult))
-	if !dockerSocketCheckResult.Success {
-		log.InfoCLI("Error: %s\n", dockerSocketCheckResult.Error)
 	}
 
 	if printFailedCheckMsg {
