@@ -128,6 +128,44 @@ func CreateEdgeClusterDemoProfilePayLoad(options UserSelections, rawValues *Opti
 	return output, nil
 }
 
+// CreateEdgeClusterProfilePayLoad creates the payload for the Edge cluster profile API call.
+func CreateEdgeClusterProfilePayLoad(options UserSelections, rawValues *OptionsMenu) (ClusterProfile, error) {
+	var output ClusterProfile
+
+	// osTemplate, err := getByoosPackValues(options)
+	// if err != nil {
+	// 	log.Debug().Msgf("err %s: ", err)
+	// 	return output, errors.New("error getting the edge-native-byoi pack values")
+	// }
+
+	// k8sTemplate, err := getKubernetesPackValues(options)
+	// if err != nil {
+	// 	log.Debug().Msgf("err %s: ", err)
+	// 	return output, errors.New("error getting the kubernetes pack values")
+	// }
+
+	// cniTemplate, err := getCniPackValues(options)
+	// if err != nil {
+	// 	log.Debug().Msgf("err %s: ", err)
+	// 	return output, errors.New("error getting the cni pack values")
+	// }
+
+	// output.Metadata.Name = GenerateClusterProfileName(options.ClusterProfileSuffix)
+	// output.Metadata.Annotations.Description = "CanvOS created Edge cluster profile"
+	// output.Metadata.Labels.CreatedBy = "canvos"
+	// output.Metadata.Labels.Type = "edge"
+	// output.Spec.Template.CloudType = "edge-native"
+	// output.Spec.Template.Type = "cluster"
+	// output.Spec.Version = "1.0.0"
+
+	// byoosPackUID, byoosRegistryID := rawValues.GetPackUIDs("edge-native-byoi", options.BYOOSVersion)
+	// k8sPackUID, k8sRegistryID := rawValues.GetPackUIDs(options.KubernetesDistro, options.KubernetesVersion)
+	// cniPackUID, cniRegistryID := rawValues.GetPackUIDs(options.CNI, options.CNIVersion)
+
+	return output, nil
+
+}
+
 // getByoosPackValues returns the values for the edge-native-byoi pack.
 func getByoosPackValues(options UserSelections) (string, error) {
 	var values string

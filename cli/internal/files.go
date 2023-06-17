@@ -559,34 +559,38 @@ func copyFile(sourcePath, destinationPath string) error {
 
 // CopyDirectory copies a directory from source to destination
 func CopyDirectory(srcDir, dstDir string) error {
+	// Ensure srcDir ends with file path separator
+	if string(srcDir[len(srcDir)-1]) != string(os.PathSeparator) {
+		srcDir += string(os.PathSeparator)
+	}
+
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("error walking the path %q: %w", path, err)
 		}
 
-		dstPath := filepath.Join(dstDir, path[len(srcDir):])
+		relativePath := path[len(srcDir):]
+		dstPath := filepath.Join(dstDir, relativePath)
 
 		if info.IsDir() {
-			// if the item is a directory, create it at the destination
 			return os.MkdirAll(dstPath, info.Mode())
-		} else {
-			// if the item is a file, copy it to the destination directory
-			srcFile, err := os.Open(path)
-			if err != nil {
-				return fmt.Errorf("error opening the source file %q: %w", path, err)
-			}
-			defer srcFile.Close()
+		}
 
-			dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, info.Mode())
-			if err != nil {
-				return fmt.Errorf("error creating the destination file %q: %w", dstPath, err)
-			}
-			defer dstFile.Close()
+		srcFile, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("error opening the source file %q: %w", path, err)
+		}
+		defer srcFile.Close()
 
-			_, err = io.Copy(dstFile, srcFile)
-			if err != nil {
-				return fmt.Errorf("error copying content from %q to %q: %w", path, dstPath, err)
-			}
+		dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, info.Mode())
+		if err != nil {
+			return fmt.Errorf("error creating the destination file %q: %w", dstPath, err)
+		}
+		defer dstFile.Close()
+
+		_, err = io.Copy(dstFile, srcFile)
+		if err != nil {
+			return fmt.Errorf("error copying content from %q to %q: %w", path, dstPath, err)
 		}
 
 		return nil

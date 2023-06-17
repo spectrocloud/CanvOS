@@ -82,7 +82,7 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 		log.FatalCLI("Error starting the build process script. Exiting")
 	}
 
-	sourceBuildFolder := filepath.Join(internal.DefaultCanvOsDir, "CanvOS", "build")
+	sourceBuildFolder := filepath.Join(internal.DefaultCanvOsDir, "canvOS", "build")
 
 	destinationFolder, err := os.Getwd()
 	if err != nil {

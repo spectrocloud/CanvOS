@@ -24,7 +24,7 @@ func NewDockerClient() (*client.Client, error) {
 		client.FromEnv,
 		client.WithAPIVersionNegotiation(),
 		client.WithTLSClientConfigFromEnv(),
-		client.WithTimeout(30*time.Second),
+		client.WithTimeout(300*time.Second),
 		client.WithHTTPHeaders(map[string]string{
 			"User-Agent": GetUserAgentString(Version),
 		}),
@@ -49,7 +49,8 @@ func PushProviderImages(ctx context.Context, d *client.Client, encodedCredential
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Push the images to the registry
-	for _, imageName := range images {
+	for index, imageName := range images {
+		index := index
 		imageName := imageName
 		g.Go(func() error {
 			var err error
@@ -60,11 +61,20 @@ func PushProviderImages(ctx context.Context, d *client.Client, encodedCredential
 				return errors.New(errMessage)
 			}
 
-			err = processStream(reader)
-			if err != nil {
-				log.Debug("err %s: ", err)
-				log.Info("Error processing the image upload stream output")
+			// Process the stream output but only for the last image
+			// This is to avoid printing the stream output multiple times
+			// since the stream output is the same for all images
+
+			if index == len(images)-1 {
+
+				err = processStream(reader)
+				if err != nil {
+					log.Debug("err %s: ", err)
+					log.Info("Error processing the image upload stream output")
+				}
+
 			}
+
 			return err
 		})
 
@@ -116,7 +126,6 @@ func validateImagesExist(ctx context.Context, d *client.Client, u UserSelections
 // pushImages pushes the container provider images created by the build script to the image registry provided by the user.
 // The Docker client's HTTP client timeout is set to 300 seconds to allow for the images to be pushed to the registry.
 func pushImage(ctx context.Context, d *client.Client, imageName string, authConfigEncoded string) (io.ReadCloser, error) {
-	d.HTTPClient().Timeout = 300 * time.Second
 	return d.ImagePush(ctx, imageName, types.ImagePushOptions{
 		RegistryAuth: authConfigEncoded,
 	})
@@ -127,9 +136,6 @@ func pushImage(ctx context.Context, d *client.Client, imageName string, authConf
 // The stream is closed when the reader is closed.
 func processStream(reader io.ReadCloser) error {
 	defer reader.Close()
-
-	// This is to help the user see the info message before the progress detail
-	time.Sleep(3 * time.Second)
 
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {

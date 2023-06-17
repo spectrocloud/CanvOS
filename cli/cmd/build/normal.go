@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"specrocloud.com/canvos/internal"
@@ -167,7 +168,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 
 	}
 
-	// Assumptions section: customize as we learn more about the user beahvior usage
+	// Assumptions section: customize as we learn more about the user behavior usage
 	userSelectedOptions.ISOName = "palette-edge-installer"
 	userSelectedOptions.Platform = "linux/amd64"
 
@@ -180,6 +181,68 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	}
 
 	log.InfoCLI("Starting the build process...")
+	// err = internal.StartBuildProcessScript(ctx, userSelectedOptions)
+	// if err != nil {
+	// 	log.Debug("err %s: ", err)
+	// 	log.FatalCLI("Error starting the build process script. Exiting")
+	// }
+
+	// sourceBuildFolder := filepath.Join(internal.DefaultCanvOsDir, "canvOS", "build")
+
+	// destinationFolder, err := os.Getwd()
+	// if err != nil {
+	// 	log.Debug("err %s: ", err)
+	// 	log.FatalCLI("Error getting the current working directory. Exiting")
+	// }
+
+	// // Copy the build folder to root
+	// err = internal.CopyDirectory(sourceBuildFolder, destinationFolder)
+	// if err != nil {
+	// 	log.Debug("err %s: ", err)
+	// 	log.FatalCLI("Error copying the build folder to root. Exiting")
+	// }
+
+	encodedRegistryCredentials, err := registryAuth.GetEncodedAuth()
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error getting the registry credentials. Exiting")
+	}
+
+	dockerClient, err := internal.NewDockerClient()
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error creating the docker client. Exiting")
+	}
+
+	// Push the provider images to the registry
+	log.InfoCLI("Pushing the provider images to the registry....")
+	err = internal.PushProviderImages(ctx, dockerClient, encodedRegistryCredentials, userSelectedOptions)
+	if err != nil {
+		log.Debug("err %s: ", err)
+		errMsg := fmt.Sprintf("Error pushing the provider images. %s", err.Error())
+		log.FatalCLI(errMsg)
+	}
+
+	// if userSelectedOptions.CreateClusterProfile {
+	// 	log.InfoCLI("Creating the cluster profile in Palette....")
+	// 	cp, err := internal.CreateEdgeClusterDemoProfilePayLoad(*userSelectedOptions, options)
+	// 	if err != nil {
+	// 		log.Debug("err %s: ", err)
+	// 		log.FatalCLI("Error creating the cluster profile payload. Exiting")
+	// 	}
+	// 	cpId, err := internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
+	// 	if err != nil {
+	// 		log.InfoCLI("err %s: ", err)
+	// 		log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
+	// 	}
+
+	// 	log.InfoCLI("Publishing the cluster profile in Palette....")
+	// 	err = internal.PublishClusterProfileInPalette(ctx, paletteAuth, cpId)
+	// 	if err != nil {
+	// 		log.InfoCLI("err %s: ", err)
+	// 		log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
+	// 	}
+	// }
 
 	return nil
 }
