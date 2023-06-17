@@ -576,38 +576,42 @@ func copyFile(sourcePath, destinationPath string) error {
 
 // CopyDirectory copies a directory from source to destination
 func CopyDirectory(srcDir, dstDir string) error {
-	// Ensure srcDir ends with file path separator
-	if string(srcDir[len(srcDir)-1]) != string(os.PathSeparator) {
-		srcDir += string(os.PathSeparator)
-	}
-
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("error walking the path %q: %w", path, err)
 		}
 
-		relativePath := path[len(srcDir):]
+		relativePath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return fmt.Errorf("error getting relative path %q: %w", path, err)
+		}
 		dstPath := filepath.Join(dstDir, relativePath)
 
 		if info.IsDir() {
-			return os.MkdirAll(dstPath, info.Mode())
-		}
+			if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+				os.MkdirAll(dstPath, info.Mode())
+			}
+		} else {
+			if _, err := os.Stat(filepath.Dir(dstPath)); os.IsNotExist(err) {
+				os.MkdirAll(filepath.Dir(dstPath), os.ModePerm)
+			}
 
-		srcFile, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("error opening the source file %q: %w", path, err)
-		}
-		defer srcFile.Close()
+			srcFile, err := os.Open(path)
+			if err != nil {
+				return fmt.Errorf("error opening the source file %q: %w", path, err)
+			}
+			defer srcFile.Close()
 
-		dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, info.Mode())
-		if err != nil {
-			return fmt.Errorf("error creating the destination file %q: %w", dstPath, err)
-		}
-		defer dstFile.Close()
+			dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, info.Mode())
+			if err != nil {
+				return fmt.Errorf("error creating the destination file %q: %w", dstPath, err)
+			}
+			defer dstFile.Close()
 
-		_, err = io.Copy(dstFile, srcFile)
-		if err != nil {
-			return fmt.Errorf("error copying content from %q to %q: %w", path, dstPath, err)
+			_, err = io.Copy(dstFile, srcFile)
+			if err != nil {
+				return fmt.Errorf("error copying content from %q to %q: %w", path, dstPath, err)
+			}
 		}
 
 		return nil
