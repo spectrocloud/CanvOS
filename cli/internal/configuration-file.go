@@ -7,7 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rs/zerolog/log"
+	"github.com/go-playground/validator/v10"
+	log "specrocloud.com/canvos/logger"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -17,54 +19,55 @@ func GetUserVaues(file string) (UserSelections, CliConfig, error) {
 	var (
 		userSelections UserSelections
 		cliConfig      CliConfig
+		configValues   ConfigFile
 	)
 
 	fileType, err := determineFileType(file)
 	if err != nil {
-		log.Debug().Err(err)
+		log.Debug(LogError(err))
 		return userSelections, cliConfig, err
 	}
 
 	if err == nil && fileType == "yaml" {
-		configValues, err := readConfigFileYaml(file)
+		configValues, err = readConfigFileYaml(file)
 		if err != nil {
-			log.Debug().Err(err)
+			log.Debug(LogError(err))
 			return userSelections, cliConfig, err
 		}
 
-		registry := strings.Split(configValues.Config.RegistryConfig.RegistryURL, "/")[0]
-		registryNamespace := strings.Split(configValues.Config.RegistryConfig.RegistryURL, "/")[1:]
+		registry := strings.Split(*configValues.Config.RegistryConfig.RegistryURL, "/")[0]
+		registryNamespace := strings.Split(*configValues.Config.RegistryConfig.RegistryURL, "/")[1:]
 
 		userSelections = UserSelections{
 			// Sofware
-			OperatingSystemDistro:  configValues.Config.Software.OsDistro,
-			OperatingSystemVersion: configValues.Config.Software.OsVersion,
-			KubernetesDistro:       configValues.Config.Software.KubernetesDistro,
-			CNI:                    configValues.Config.Software.ContainerNetworkInterface,
-			CNIVersion:             configValues.Config.Software.ContainerNetworkInterfaceVersion,
+			OperatingSystemDistro:  *configValues.Config.Software.OsDistro,
+			OperatingSystemVersion: *configValues.Config.Software.OsVersion,
+			KubernetesDistro:       *configValues.Config.Software.KubernetesDistro,
+			CNI:                    *configValues.Config.Software.ContainerNetworkInterface,
+			CNIVersion:             *configValues.Config.Software.ContainerNetworkInterfaceVersion,
 			// Registry
 			ImageRegistryURL:        registry,
 			ImageRegistryRepository: registryNamespace[0],
-			ImageRegistryUsername:   configValues.Config.RegistryConfig.RegistryUsername,
-			ImageRegistryPassword:   configValues.Config.RegistryConfig.RegistryPassword,
+			ImageRegistryUsername:   *configValues.Config.RegistryConfig.RegistryUsername,
+			ImageRegistryPassword:   *configValues.Config.RegistryConfig.RegistryPassword,
 			// Edge Installer
-			PaletteEdgeInstallerVersion: configValues.Config.EdgeInstaller.InstallerVersion,
-			TenantRegistrationToken:     configValues.Config.EdgeInstaller.TenantRegistrationToken,
-			ISOName:                     configValues.Config.EdgeInstaller.IsoImageName,
+			PaletteEdgeInstallerVersion: *configValues.Config.EdgeInstaller.InstallerVersion,
+			TenantRegistrationToken:     *configValues.Config.EdgeInstaller.TenantRegistrationToken,
+			ISOName:                     *configValues.Config.EdgeInstaller.IsoImageName,
 			// Cluster Profile
-			CreateClusterProfile: configValues.Config.ClusterProfile.CreateClusterProfile,
-			ClusterProfileSuffix: configValues.Config.ClusterProfile.Suffix,
+			CreateClusterProfile: *configValues.Config.ClusterProfile.CreateClusterProfile,
+			ClusterProfileSuffix: *configValues.Config.ClusterProfile.Suffix,
 			// Platform
-			Platform: configValues.Config.Platform,
+			Platform: *configValues.Config.Platform,
 			// Custom Tag
-			CustomTag: configValues.Config.CustomTag,
+			CustomTag: *configValues.Config.CustomTag,
 		}
 
 		// Palette
 		cliConfig = CliConfig{
-			PaletteApiKey: &configValues.Config.Palette.ApiKey,
-			ProjectID:     &configValues.Config.Palette.ProjectID,
-			PaletteHost:   &configValues.Config.Palette.PaletteHost,
+			PaletteApiKey: configValues.Config.Palette.ApiKey,
+			ProjectID:     configValues.Config.Palette.ProjectID,
+			PaletteHost:   configValues.Config.Palette.PaletteHost,
 		}
 
 	}
@@ -80,13 +83,24 @@ func readConfigFileYaml(file string) (ConfigFile, error) {
 
 	fileContent, err := os.ReadFile(file)
 	if err != nil {
+		log.Debug(LogError(err))
 		return c, fmt.Errorf("unable to read the file %s", file)
 	}
 
 	err = yaml.Unmarshal(fileContent, &c)
 	if err != nil {
-		err = errors.New("unable to unmarshall the YAML file")
+		log.Debug(LogError(err))
+		return c, errors.New("unable to unmarshall the YAML file")
 	}
+
+	// Validate the configuration file
+	v := validator.New()
+	err = v.Struct(c)
+	if err != nil {
+		log.Debug(LogError(err))
+		return c, fmt.Errorf("invalid configuration file: %s", err.(validator.ValidationErrors))
+	}
+
 	return c, err
 }
 
@@ -154,6 +168,7 @@ config:
 	// Create a new file
 	file, err := os.Create("config.yml")
 	if err != nil {
+		log.Debug(LogError(err))
 		return fmt.Errorf("error creating file: %w", err)
 	}
 	defer file.Close()
@@ -161,11 +176,13 @@ config:
 	// Write content to file
 	_, err = io.WriteString(file, content)
 	if err != nil {
+		log.Debug(LogError(err))
 		return fmt.Errorf("error writing to file: %w", err)
 	}
 
 	// Save changes to disk
 	if err := file.Sync(); err != nil {
+		log.Debug(LogError(err))
 		return fmt.Errorf("error saving file: %w", err)
 	}
 

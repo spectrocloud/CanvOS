@@ -30,20 +30,32 @@ func TestReadConfigFileYaml(t *testing.T) {
 	// Assert
 	// Here you would add specific checks to make sure the config file was correctly read.
 	// For example, if you know the config file should have "ubuntu" as the osDistro:
-	if config.Config.Software.OsDistro != "ubuntu" {
-		t.Fatalf("Unexpected osDistro. Expected ubuntu but received %s", config.Config.Software.OsDistro)
+	if *config.Config.Software.OsDistro != "ubuntu" {
+		t.Fatalf("Unexpected osDistro. Expected ubuntu but received %s", *config.Config.Software.OsDistro)
 	}
-	if config.Config.Palette.ApiKey != "1234567890" {
-		t.Fatalf("Unexpected api key. Expected 1234567890 but received %s", config.Config.Palette.ApiKey)
+	if *config.Config.Palette.ApiKey != "1234567890" {
+		t.Fatalf("Unexpected api key. Expected 1234567890 but received %s", *config.Config.Palette.ApiKey)
 	}
-	if config.Config.CustomTag != "palette-learn" {
-		t.Fatalf("Unexpected custom tag. Expected palette-learn but received %s", config.Config.CustomTag)
+	if *config.Config.CustomTag != "palette-learn" {
+		t.Fatalf("Unexpected custom tag. Expected palette-learn but received %s", *config.Config.CustomTag)
 	}
-	if config.Config.RegistryConfig.RegistryURL != "myUsername/edge" {
-		t.Fatalf("Unexpected registry url. Expected myUsername/edge but received %s", config.Config.RegistryConfig.RegistryURL)
+	if *config.Config.RegistryConfig.RegistryURL != "myUsername/edge" {
+		t.Fatalf("Unexpected registry url. Expected myUsername/edge but received %s", *config.Config.RegistryConfig.RegistryURL)
 	}
 
 	// Add more checks based on your specific config structure and expected values...
+}
+
+func TestReadConfigFileFailureYaml(t *testing.T) {
+	// Prepare
+	filePath := "../tests/config_test_fail.yml"
+
+	// An error is expected here because the config file is invalid
+	_, err := readConfigFileYaml(filePath)
+	if err == nil {
+		t.Fatalf("Failed to read the config file: %s", err.Error())
+	}
+
 }
 
 func TestGenerateExampleConfigFile(t *testing.T) {

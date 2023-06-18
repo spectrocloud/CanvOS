@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 
@@ -39,7 +40,7 @@ func LogError(err error) string {
 
 	if ok {
 		// Create a string that contains the function name and the file name and line number
-		output = "Error: " + err.Error() + " in " + runtime.FuncForPC(pc).Name() + " at " + file + ":" + string(line)
+		output = "Error: " + err.Error() + " in " + runtime.FuncForPC(pc).Name() + " at " + file + ":" + fmt.Sprint(line)
 
 	}
 

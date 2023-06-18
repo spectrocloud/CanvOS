@@ -7,6 +7,7 @@ require (
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/docker/docker v24.0.2+incompatible
 	github.com/go-git/go-git/v5 v5.7.0
+	github.com/go-playground/validator/v10 v10.14.1
 	github.com/manifoldco/promptui v0.9.0
 	github.com/rs/zerolog v1.29.1
 	github.com/schollz/progressbar/v3 v3.13.1
@@ -14,7 +15,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spectrocloud/palette-cli v0.0.0-20230606191753-cf66c2310c59
 	github.com/spf13/cobra v1.7.0
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	golang.org/x/exp v0.0.0-20230223210539-50820d90acfd
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.8.0
@@ -34,6 +35,7 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.4.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -47,6 +49,8 @@ require (
 	github.com/go-openapi/strfmt v0.20.0 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/go-openapi/validate v0.20.2 // indirect
+	github.com/go-playground/locales v0.14.1 // indirect
+	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -55,6 +59,7 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
+	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect

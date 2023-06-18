@@ -8,8 +8,8 @@ config:
     # Allowed values are: k3s, rke2, kubeadm
     # kubeadm is the equivalent of Palette eXtended Kubernetes - Edge (PXK -E)
     kubernetesDistro: kubeadm
-    containerNetworkInterface: calico
-    containerNetworkInterfaceVersion: 0.12.5
+    # containerNetworkInterface: 
+    # containerNetworkInterfaceVersion: 
   # The registry configuration values to use when uploading the provider images
   registryConfig:
     registryURL: myUsername/edge
@@ -30,7 +30,7 @@ config:
 
   # The Cluster Profile configuration values to use when creating the Cluster Profile
   clusterProfile:
-    createClusterProfile: true
+    createClusterProfile: false
     suffix: learn
 
   # Allowed values: linux/amd64

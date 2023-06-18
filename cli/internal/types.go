@@ -660,48 +660,97 @@ func (r *RegistryAuthConfig) GetEncodedAuth() (string, error) {
 	return base64.URLEncoding.EncodeToString(authConfigBytes), nil
 }
 
-// The configuration file suppported types.
+// The configuration file for creating the Edge artifacts
 type ConfigFile struct {
-	Config ConfigDetails `yaml:"config"`
+	// Config is the configuration details for creating the Edge artifacts.
+	Config *ConfigDetails `yaml:"config"`
 }
 
 type ConfigDetails struct {
-	Software       SoftwareDetails       `yaml:"software"`
-	RegistryConfig RegistryConfigDetails `yaml:"registryConfig"`
-	Palette        PaletteDetails        `yaml:"palette"`
-	EdgeInstaller  EdgeInstallerDetails  `yaml:"edgeInstaller"`
-	ClusterProfile ClusterProfileDetails `yaml:"clusterProfile"`
-	Platform       string                `yaml:"platform"`
-	CustomTag      string                `yaml:"customTag"`
+	// Software is the software configuration for the Edge host
+	Software *SoftwareDetails `yaml:"software" validate:"required"`
+	// RegistryConfig is the registry configuration for uploading the provider images
+	RegistryConfig *RegistryConfigDetails `yaml:"registryConfig" validate:"required"`
+	// Palette contains the credentials for the Palette API
+	Palette *PaletteDetails `yaml:"palette"`
+	// EdgeInstaller contains the tenant registration token for the Edge host and the version of the Palette Edge Installer
+	EdgeInstaller *EdgeInstallerDetails `yaml:"edgeInstaller" validate:"required"`
+	// ClusterProfile contains the cluster profile details
+	ClusterProfile *ClusterProfileDetails `yaml:"clusterProfile" validate:"required"`
+	// Select the target platform for the provider images
+	Platform *string `yaml:"platform" validate:"required,oneof=linux/amd64"`
+	// CustomTag is the custom tag to use for the provider images
+	CustomTag *string `yaml:"customTag" validate:"required"`
 }
 
 type SoftwareDetails struct {
-	OsDistro                         string `yaml:"osDistro"`
-	OsVersion                        string `yaml:"osVersion"`
-	KubernetesDistro                 string `yaml:"kubernetesDistro"`
-	ContainerNetworkInterface        string `yaml:"containerNetworkInterface"`
-	ContainerNetworkInterfaceVersion string `yaml:"containerNetworkInterfaceVersion"`
+	OsDistro                         *string `yaml:"osDistro" validate:"required"`
+	OsVersion                        *string `yaml:"osVersion" validate:"required"`
+	KubernetesDistro                 *string `yaml:"kubernetesDistro" validate:"required"`
+	ContainerNetworkInterface        *string `yaml:"containerNetworkInterface" validate:"required_with=CreateClusterProfile"`
+	ContainerNetworkInterfaceVersion *string `yaml:"containerNetworkInterfaceVersion" validate:"required_with=ContainerNetworkInterface CreateClusterProfile"`
 }
 
 type RegistryConfigDetails struct {
-	RegistryURL      string `yaml:"registryURL"`
-	RegistryUsername string `yaml:"registryUsername"`
-	RegistryPassword string `yaml:"registryPassword"`
+	RegistryURL      *string `yaml:"registryURL" validate:"required"`
+	RegistryUsername *string `yaml:"registryUsername" validate:"alphanum"`
+	RegistryPassword *string `yaml:"registryPassword"`
 }
 
 type PaletteDetails struct {
-	ApiKey      string `yaml:"apiKey"`
-	ProjectID   string `yaml:"projectID"`
-	PaletteHost string `yaml:"paletteHost"`
+	ApiKey      *string `yaml:"apiKey" validate:"alphanum"`
+	ProjectID   *string `yaml:"projectID" validate:"alphanum"`
+	PaletteHost *string `yaml:"paletteHost" validate:"url"`
 }
 
 type EdgeInstallerDetails struct {
-	TenantRegistrationToken string `yaml:"tenantRegistrationToken"`
-	InstallerVersion        string `yaml:"installerVersion"`
-	IsoImageName            string `yaml:"isoImageName"`
+	TenantRegistrationToken *string `yaml:"tenantRegistrationToken" validate:"required,alphanum"`
+	InstallerVersion        *string `yaml:"installerVersion" validate:"required,semver"`
+	IsoImageName            *string `yaml:"isoImageName"`
 }
 
 type ClusterProfileDetails struct {
-	CreateClusterProfile bool   `yaml:"createClusterProfile"`
-	Suffix               string `yaml:"suffix"`
+	CreateClusterProfile *bool   `yaml:"createClusterProfile" validate:"boolean"`
+	Suffix               *string `yaml:"suffix" validate:"alphanum,required_with=CreateClusterProfile"`
+}
+
+func (c *ConfigFile) SetEmptyValues() *ConfigDetails {
+
+	if c.Config == nil {
+		c.Config = &ConfigDetails{}
+	}
+
+	if c.Config.Software == nil {
+		c.Config.Software = &SoftwareDetails{
+			OsDistro:                         nil,
+			OsVersion:                        nil,
+			KubernetesDistro:                 nil,
+			ContainerNetworkInterface:        nil,
+			ContainerNetworkInterfaceVersion: nil,
+		}
+	}
+
+	if c.Config.EdgeInstaller == nil {
+		c.Config.EdgeInstaller = &EdgeInstallerDetails{
+			InstallerVersion:        nil,
+			TenantRegistrationToken: &tenantRegistrationToken,
+			IsoImageName:            &isoName,
+		}
+	}
+
+	if configValues.Config.ClusterProfile == nil {
+		configValues.Config.ClusterProfile = &ClusterProfileDetails{
+			CreateClusterProfile: &CreateClusterProfile,
+			Suffix:               &clusterProfileSuffix,
+		}
+	}
+
+	if configValues.Config.Platform == nil {
+		configValues.Config.Platform = &platform
+	}
+
+	if configValues.Config.CustomTag == nil {
+		configValues.Config.CustomTag = &customTag
+	}
+	return c.Config
 }
