@@ -12,6 +12,8 @@ var (
 	Verbose string = "INFO"
 	// GlobalCliConfig is the global CLI config
 	GlobalCliConfig internal.CliConfig
+	// ConfigFile is the path to the config file
+	ConfigFile *string
 )
 
 var rootCmd = &cobra.Command{
@@ -38,9 +40,12 @@ func init() {
 	GlobalCliConfig.PaletteApiKey = &apiKey
 	GlobalCliConfig.PaletteHost = &PaletteEndpoint
 	GlobalCliConfig.ProjectID = &ProjectID
+	GlobalCliConfig.ConfigFile = ConfigFile
 
 	rootCmd.PersistentFlags().StringVarP(&Verbose, "verbose", "v", "INFO", "Set the debugging mode (DEBUG, INFO, WARN, ERROR, FATAL)")
+	rootCmd.PersistentFlags().StringVarP(ConfigFile, "config", "c", "", "Specify the path to a config file")
 	GlobalCliConfig.Verbose = &Verbose
+	GlobalCliConfig.ConfigFile = ConfigFile
 
 }
 

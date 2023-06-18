@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"specrocloud.com/canvos/internal"
+	log "specrocloud.com/canvos/logger"
 )
 
 func init() {
@@ -18,6 +18,6 @@ var versionCmd = &cobra.Command{
 	Long:  `Prints the current version number of CanvOS`,
 	Run: func(cmd *cobra.Command, args []string) {
 		version := fmt.Sprintf("canvos v%s", internal.Version)
-		log.Info().Msg(version)
+		log.InfoCLI(version)
 	},
 }

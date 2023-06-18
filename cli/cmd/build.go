@@ -72,38 +72,54 @@ var buildCmd = &cobra.Command{
 				Name: "Demo - Intended for learning purposes and demonstrations.",
 			},
 		}
+		// Automation Mode
+		if *GlobalCliConfig.ConfigFile != "" {
 
-		// User selects the workflow mode
-		wizardMode, err := prompts.SelectID("Select the workflow mode", workflowModes, workflowModes[1].ID, "A workflow mode is required")
-		if err != nil {
-			log.Debug("err %s: ", err)
-			log.FatalCLI("Error selecting the workflow mode. Exiting")
-		}
-
-		userSelectedOptions.Mode = internal.GetWizardModeFromStr(wizardMode.ID)
-
-		// This transitions the program logic to the respective workflow mode's entry point
-		switch userSelectedOptions.Mode {
-		case 0:
-			log.Debug("Demo Mode")
-			err := build.Demo(ctx, &GlobalCliConfig, options)
-			if err != nil {
-				log.Debug("err %s: ", err)
-				log.FatalCLI("Error running the demo workflow. Exiting")
+			// check the config file exists
+			if _, err := os.Stat(*GlobalCliConfig.ConfigFile); os.IsNotExist(err) {
+				log.FatalCLI("Config file does not exist or the file path is incorrect. Exiting")
 			}
 
-		case 1:
-			log.Debug("Normal Mode")
-			err := build.Normal(ctx, &GlobalCliConfig, options)
-			if err != nil {
-				log.Debug("err %s: ", err)
-				log.FatalCLI("Error running the normal workflow. Exiting")
-			}
-		default:
-			log.Debug("Invalid workflow mode")
-			log.FatalCLI("Invalid workflow mode. Exiting")
+			log.InfoCLI("Config file found. Starting in automation mode")
 
 		}
+
+		if *GlobalCliConfig.ConfigFile == "" {
+
+			// User selects the workflow mode
+			wizardMode, err := prompts.SelectID("Select the workflow mode", workflowModes, workflowModes[1].ID, "A workflow mode is required")
+			if err != nil {
+				log.Debug("err %s: ", err)
+				log.FatalCLI("Error selecting the workflow mode. Exiting")
+			}
+
+			userSelectedOptions.Mode = internal.GetWizardModeFromStr(wizardMode.ID)
+
+			// This transitions the program logic to the respective workflow mode's entry point
+			switch userSelectedOptions.Mode {
+			case 0:
+				log.Debug("Demo Mode")
+				err := build.Demo(ctx, &GlobalCliConfig, options)
+				if err != nil {
+					log.Debug("err %s: ", err)
+					log.FatalCLI("Error running the demo workflow. Exiting")
+				}
+
+			case 1:
+				log.Debug("Normal Mode")
+				err := build.Normal(ctx, &GlobalCliConfig, options)
+				if err != nil {
+					log.Debug("err %s: ", err)
+					log.FatalCLI("Error running the normal workflow. Exiting")
+				}
+			default:
+				log.Debug("Invalid workflow mode")
+				log.FatalCLI("Invalid workflow mode. Exiting")
+
+			}
+
+		}
+
 	},
 }
 

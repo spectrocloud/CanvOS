@@ -18,6 +18,8 @@ type CliConfig struct {
 	PaletteHost *string
 	// ProjectID is the Palette project ID
 	ProjectID *string
+	// ConfigFile is the path to the config file
+	ConfigFile *string
 }
 
 // PaletteAuth is the authentication information for the Palette API

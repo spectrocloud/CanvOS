@@ -449,11 +449,10 @@ func StartBuildProcessScript(ctx context.Context, u UserSelections) error {
 	err := moveRequiredCanvOSFiles()
 	if err != nil {
 		log.Debug("error moving required files: %v", err)
-		return err
+		return fmt.Errorf("error moving required files: %v", err)
 	}
 
 	workingDir := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS"
-	// path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS" + string(os.PathSeparator) + "earthly.sh"
 
 	cmd := exec.CommandContext(ctx, "sudo", "./earthly.sh", "+build-all-images")
 	cmd.Dir = workingDir
