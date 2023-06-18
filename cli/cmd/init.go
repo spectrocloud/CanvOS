@@ -22,6 +22,21 @@ var initCmd = &cobra.Command{
 		// Initialize the logger
 		GlobalCliConfig.Verbose = &Verbose
 		internal.InitLogger(Verbose)
+		// Check for a configuration file
+		if *GlobalCliConfig.ConfigFile != "" {
+			// Read the configuration file
+			_, cliConfig, err := internal.GetUserVaues(*GlobalCliConfig.ConfigFile)
+			if err != nil {
+				log.Debug(internal.LogError(err))
+				log.FatalCLI("Error reading the configuration file")
+			}
+
+			// Update the GlobalCliConfig
+			GlobalCliConfig.PaletteApiKey = cliConfig.PaletteApiKey
+			GlobalCliConfig.PaletteHost = cliConfig.PaletteHost
+			GlobalCliConfig.ProjectID = cliConfig.ProjectID
+
+		}
 
 		if *GlobalCliConfig.PaletteApiKey == "" {
 			log.FatalCLI("Palette API Key is required. Please set the SPECTROCLOUD_APIKEY environment variable.")
@@ -53,8 +68,8 @@ var initCmd = &cobra.Command{
 		// Create the CanvOS directory. If it already exists, it will be skipped
 		err := internal.CreateCanvOsDir(internal.DefaultCanvOsDir)
 		if err != nil {
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error creating the CanvOS directory")
-			internal.LogError(err)
 		}
 
 		g, ctx := errgroup.WithContext(ctx)
@@ -70,7 +85,7 @@ var initCmd = &cobra.Command{
 				var err error
 				response, err := internal.GetPacks(ctx, paletteAuth, f)
 				if err != nil {
-					internal.LogError(err)
+					log.Debug(internal.LogError(err))
 				} else {
 					responses[k] = response
 				}
@@ -80,6 +95,7 @@ var initCmd = &cobra.Command{
 
 		// Wait for all requests to finish
 		if err := g.Wait(); err != nil {
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error retrieving the pack information from Palette")
 
 		}
@@ -102,7 +118,7 @@ var initCmd = &cobra.Command{
 			g.Go(func() error {
 				err := internal.CreateTemplateFile(p)
 				if err != nil {
-					internal.LogError(err)
+					log.Debug(internal.LogError(err))
 				}
 				return err
 			})
@@ -111,14 +127,14 @@ var initCmd = &cobra.Command{
 		// Get the Palette Versions
 		paletteVersions, err := internal.GetPaletteVersions(ctx, paletteAuth)
 		if err != nil {
-			internal.LogError(err)
+			log.Debug(internal.LogError(err))
 			log.InfoCLI("Error retrieving the palette versions")
 
 		}
 
 		// Wait for all requests to finish
 		if err := g.Wait(); err != nil {
-			internal.LogError(err)
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error creating the pack templates")
 
 		}
@@ -126,7 +142,7 @@ var initCmd = &cobra.Command{
 
 		err = internal.CreateMenuOptionsFile(packs, paletteVersions)
 		if err != nil {
-			internal.LogError(err)
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error creating the menu options file.")
 
 		}
@@ -136,13 +152,13 @@ var initCmd = &cobra.Command{
 		log.InfoCLI("Downloading CanvOS assets...")
 		err = internal.CloneCanvOS(cmd.Context())
 		if err != nil {
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error cloning the CanvOS repository.")
-			internal.LogError(err)
 		}
 
 		err = internal.CopyTemplateFiles()
 		if err != nil {
-			internal.LogError(err)
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error copying the template files to the root folder.")
 
 		}

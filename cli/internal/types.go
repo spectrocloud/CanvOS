@@ -659,3 +659,49 @@ func (r *RegistryAuthConfig) GetEncodedAuth() (string, error) {
 
 	return base64.URLEncoding.EncodeToString(authConfigBytes), nil
 }
+
+// The configuration file suppported types.
+type ConfigFile struct {
+	Config ConfigDetails `yaml:"config"`
+}
+
+type ConfigDetails struct {
+	Software       SoftwareDetails       `yaml:"software"`
+	RegistryConfig RegistryConfigDetails `yaml:"registryConfig"`
+	Palette        PaletteDetails        `yaml:"palette"`
+	EdgeInstaller  EdgeInstallerDetails  `yaml:"edgeInstaller"`
+	ClusterProfile ClusterProfileDetails `yaml:"clusterProfile"`
+	Platform       string                `yaml:"platform"`
+	CustomTag      string                `yaml:"customTag"`
+}
+
+type SoftwareDetails struct {
+	OsDistro                         string `yaml:"osDistro"`
+	OsVersion                        string `yaml:"osVersion"`
+	KubernetesDistro                 string `yaml:"kubernetesDistro"`
+	ContainerNetworkInterface        string `yaml:"containerNetworkInterface"`
+	ContainerNetworkInterfaceVersion string `yaml:"containerNetworkInterfaceVersion"`
+}
+
+type RegistryConfigDetails struct {
+	RegistryURL      string `yaml:"registryURL"`
+	RegistryUsername string `yaml:"registryUsername"`
+	RegistryPassword string `yaml:"registryPassword"`
+}
+
+type PaletteDetails struct {
+	ApiKey      string `yaml:"apiKey"`
+	ProjectID   string `yaml:"projectID"`
+	PaletteHost string `yaml:"paletteHost"`
+}
+
+type EdgeInstallerDetails struct {
+	TenantRegistrationToken string `yaml:"tenantRegistrationToken"`
+	InstallerVersion        string `yaml:"installerVersion"`
+	IsoImageName            string `yaml:"isoImageName"`
+}
+
+type ClusterProfileDetails struct {
+	CreateClusterProfile bool   `yaml:"createClusterProfile"`
+	Suffix               string `yaml:"suffix"`
+}

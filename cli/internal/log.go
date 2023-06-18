@@ -33,15 +33,16 @@ func InitLogger(logLevel string) {
 }
 
 // LogError logs the error
-func LogError(err error) {
+func LogError(err error) string {
+	var output string
 	pc, file, line, ok := runtime.Caller(1)
+
 	if ok {
-		log.Err(err).
-			Str("file", file).
-			Int("line", line).
-			Str("function", runtime.FuncForPC(pc).Name()).
-			Send()
-	} else {
-		log.Err(err).Send()
+		// Create a string that contains the function name and the file name and line number
+		output = "Error: " + err.Error() + " in " + runtime.FuncForPC(pc).Name() + " at " + file + ":" + string(line)
+
 	}
+
+	return output
+
 }

@@ -1,0 +1,49 @@
+config:
+  # The foundation software distributions and versions to use for the  Edge host
+  # All the supported Kubernetes versions will be created by default.
+  software:
+    # Allowed values are: ubuntu, opensuse-leap 
+    osDistro: ubuntu
+    osVersion: 16.04
+    # Allowed values are: k3s, rke2, kubeadm
+    # kubeadm is the equivalent of Palette eXtended Kubernetes - Edge (PXK -E)
+    kubernetesDistro: kubeadm
+    containerNetworkInterface: calico
+    containerNetworkInterfaceVersion: v0.12.5
+  # The registry configuration values to use when uploading the provider images
+  registryConfig:
+    registryURL: myUsername/edge
+    registryUsername: myUsername
+    registryPassword: superSecretPassword
+
+  # Palette credentials and project ID. If the project ID is not provided, then the default scope is Tenant.
+  palette:
+    apiKey: 1234567890
+    projectID: 1234567890
+    paletteHost: https://api.spectrocloud.com
+
+  # The Edge Installer configuration values to use when creating the Edge Installer ISO
+  edgeInstaller:
+    tenantRegistrationToken: 1234567890
+    installerVersion: 3.4.3
+    isoImageName: palette-learn
+
+  # The Cluster Profile configuration values to use when creating the Cluster Profile
+  clusterProfile:
+    createClusterProfile: true
+    suffix: learn
+
+  # Allowed values: linux/amd64
+  platform: linux/amd64
+  # The custom tag to apply to the provider images. 
+  # The provider images name follow the format: <kubernetesDistro>-<k8sVersion>-v<installerVersion>-<customTag>_<platform>
+  customTag: palette-learn
+
+
+
+  
+
+  
+  
+  
+  

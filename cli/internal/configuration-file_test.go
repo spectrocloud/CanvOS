@@ -1,0 +1,128 @@
+package internal
+
+import (
+	"os"
+	"reflect"
+	"testing"
+)
+
+func TestDetermineFileTypeYaml(t *testing.T) {
+	want := "yaml"
+	got, err := determineFileType("../tests/config_test.yml")
+	if err != nil {
+		t.Fatalf("Failed to determine file type due to error: %s", err.Error())
+	}
+	if got != want {
+		t.Fatalf("Failed to determine the file type. Expected %s but received %s", want, got)
+	}
+}
+
+func TestReadConfigFileYaml(t *testing.T) {
+	// Prepare
+	filePath := "../tests/config_test.yml"
+
+	// Act
+	config, err := readConfigFileYaml(filePath)
+	if err != nil {
+		t.Fatalf("Failed to read the config file: %s", err.Error())
+	}
+
+	// Assert
+	// Here you would add specific checks to make sure the config file was correctly read.
+	// For example, if you know the config file should have "ubuntu" as the osDistro:
+	if config.Config.Software.OsDistro != "ubuntu" {
+		t.Fatalf("Unexpected osDistro. Expected ubuntu but received %s", config.Config.Software.OsDistro)
+	}
+	if config.Config.Palette.ApiKey != "1234567890" {
+		t.Fatalf("Unexpected api key. Expected 1234567890 but received %s", config.Config.Palette.ApiKey)
+	}
+	if config.Config.CustomTag != "palette-learn" {
+		t.Fatalf("Unexpected custom tag. Expected palette-learn but received %s", config.Config.CustomTag)
+	}
+	if config.Config.RegistryConfig.RegistryURL != "myUsername/edge" {
+		t.Fatalf("Unexpected registry url. Expected myUsername/edge but received %s", config.Config.RegistryConfig.RegistryURL)
+	}
+
+	// Add more checks based on your specific config structure and expected values...
+}
+
+func TestGenerateExampleConfigFile(t *testing.T) {
+	err := GenerateExampleConfigFile()
+	if err != nil {
+		t.Fatalf("Failed to generate config file: %s", err.Error())
+	}
+
+	// Check if file exists
+	_, err = os.Stat("config.yml")
+	if os.IsNotExist(err) {
+		t.Fatalf("The config file was not created")
+	} else if err != nil {
+		t.Fatalf("Failed to verify if config file exists: %s", err.Error())
+	}
+
+	// Clean up: delete the file after the test
+	err = os.Remove("config.yml")
+	if err != nil {
+		t.Errorf("Failed to clean up: %s", err.Error())
+	}
+}
+
+func TestGetUserValues(t *testing.T) {
+	tests := []struct {
+		name        string
+		inputFile   string
+		wantErr     bool
+		wantUserSel UserSelections
+		wantCliConf CliConfig
+	}{
+		{
+			name:      "Valid config file",
+			inputFile: "../tests/config_test.yml",
+			wantErr:   false,
+			wantUserSel: UserSelections{
+				OperatingSystemDistro:       "ubuntu",
+				OperatingSystemVersion:      "16.04",
+				KubernetesDistro:            "kubeadm",
+				CNI:                         "calico",
+				CNIVersion:                  "v0.12.5",
+				ImageRegistryURL:            "myUsername",
+				ImageRegistryRepository:     "edge",
+				ImageRegistryUsername:       "myUsername",
+				ImageRegistryPassword:       "superSecretPassword",
+				PaletteEdgeInstallerVersion: "3.4.3",
+				TenantRegistrationToken:     "1234567890",
+				ISOName:                     "palette-learn",
+				CreateClusterProfile:        true,
+				ClusterProfileSuffix:        "learn",
+				Platform:                    "linux/amd64",
+				CustomTag:                   "palette-learn",
+			},
+			wantCliConf: CliConfig{
+				PaletteApiKey: ptrStr("1234567890"),
+				ProjectID:     ptrStr("1234567890"),
+				PaletteHost:   ptrStr("https://api.spectrocloud.com"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userSel, cliConf, err := GetUserVaues(tt.inputFile)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetUserVaues() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(userSel, tt.wantUserSel) {
+				t.Errorf("GetUserVaues() got = %v, want %v", userSel, tt.wantUserSel)
+			}
+			if !reflect.DeepEqual(cliConf, tt.wantCliConf) {
+				t.Errorf("GetUserVaues() got = %v, want %v", cliConf, tt.wantCliConf)
+			}
+		})
+	}
+}
+
+func ptrStr(s string) *string {
+	return &s
+}
