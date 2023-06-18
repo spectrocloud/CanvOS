@@ -2,6 +2,9 @@ package build
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"specrocloud.com/canvos/internal"
@@ -21,7 +24,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 
 	var (
 		userSelectedOptions internal.UserSelections
-		// clusterProfile      *internal.ClusterProfile
+		finalMsg            string = "Go ahead and prepare your Edge host using the ISO image created in the build/ folder"
 	)
 
 	uVersion, err := prompts.Select("Select the Palette Edge Installer version", options.PaletteVersions, options.PaletteVersions[0], "A Palette Edge Installer version is required")
@@ -71,7 +74,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 		log.FatalCLI("error getting the Kubernetes Distro. Exiting")
 	}
 
-	uRegistryRaw, err := prompts.ReadTextRegex("Provide your Container Registry URL + Namespace - Example: dockerhub.com/canvos", "", "A Container Registry URL is required.  Example: dockerhub.com/canvos", `^[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$`)
+	uRegistryRaw, err := prompts.ReadTextRegex("Provide your Container Registry URL + Namespace - Example: dockerhub.com/canvos", "", "A Container Registry URL is required.  Example: dockerhub.com/canvos", `^([a-zA-Z0-9\-\._]+)(\/([a-zA-Z0-9\-\._]+))?(\/([a-zA-Z0-9\-\._]+))?$`)
 	if err != nil {
 		log.Debug("err %s: ", err)
 		log.FatalCLI("error getting Container Registry URL. Exiting")
@@ -180,47 +183,47 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	}
 
 	log.InfoCLI("Starting the build process...")
-	// err = internal.StartBuildProcessScript(ctx, userSelectedOptions)
-	// if err != nil {
-	// 	log.Debug("err %s: ", err)
-	// 	log.FatalCLI("Error starting the build process script. Exiting")
-	// }
+	err = internal.StartBuildProcessScript(ctx, userSelectedOptions)
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error starting the build process script. Exiting")
+	}
 
-	// sourceBuildFolder := filepath.Join(internal.DefaultCanvOsDir, "canvOS", "build")
+	sourceBuildFolder := filepath.Join(internal.DefaultCanvOsDir, "canvOS", "build")
 
-	// destinationFolder, err := os.Getwd()
-	// if err != nil {
-	// 	log.Debug("err %s: ", err)
-	// 	log.FatalCLI("Error getting the current working directory. Exiting")
-	// }
+	destinationFolder, err := os.Getwd()
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error getting the current working directory. Exiting")
+	}
+	destinationFolder = filepath.Join(destinationFolder, "build")
+	// Copy the build folder to root
+	err = internal.CopyDirectory(sourceBuildFolder, destinationFolder)
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error copying the build folder to root. Exiting")
+	}
 
-	// // Copy the build folder to root
-	// err = internal.CopyDirectory(sourceBuildFolder, destinationFolder)
-	// if err != nil {
-	// 	log.Debug("err %s: ", err)
-	// 	log.FatalCLI("Error copying the build folder to root. Exiting")
-	// }
+	encodedRegistryCredentials, err := registryAuth.GetEncodedAuth()
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error getting the registry credentials. Exiting")
+	}
 
-	// encodedRegistryCredentials, err := registryAuth.GetEncodedAuth()
-	// if err != nil {
-	// 	log.Debug("err %s: ", err)
-	// 	log.FatalCLI("Error getting the registry credentials. Exiting")
-	// }
-
-	// dockerClient, err := internal.NewDockerClient()
-	// if err != nil {
-	// 	log.Debug("err %s: ", err)
-	// 	log.FatalCLI("Error creating the docker client. Exiting")
-	// }
+	dockerClient, err := internal.NewDockerClient()
+	if err != nil {
+		log.Debug("err %s: ", err)
+		log.FatalCLI("Error creating the docker client. Exiting")
+	}
 
 	// Push the provider images to the registry
 	log.InfoCLI("Pushing the provider images to the registry....")
-	// err = internal.PushProviderImages(ctx, dockerClient, encodedRegistryCredentials, userSelectedOptions)
-	// if err != nil {
-	// 	log.Debug("err %s: ", err)
-	// 	errMsg := fmt.Sprintf("Error pushing the provider images. %s", err.Error())
-	// 	log.FatalCLI(errMsg)
-	// }
+	err = internal.PushProviderImages(ctx, dockerClient, encodedRegistryCredentials, userSelectedOptions)
+	if err != nil {
+		log.Debug("err %s: ", err)
+		errMsg := fmt.Sprintf("Error pushing the provider images. %s", err.Error())
+		log.FatalCLI(errMsg)
+	}
 
 	if userSelectedOptions.CreateClusterProfile {
 		cp, err := internal.CreateEdgeClusterProfilePayLoad(userSelectedOptions, options)
@@ -229,7 +232,6 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 			log.FatalCLI("Error creating the cluster profile payload. Exiting")
 		}
 
-		// log.InfoCLI("Creating the cluster profile in Palette.... %v", cp)
 		log.InfoCLI("Creating the cluster profile in Palette....")
 		cpId, err := internal.CreateClusterProfileInPalette(ctx, paletteAuth, cp)
 		if err != nil {
@@ -237,14 +239,20 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 			log.FatalCLI("Error creating the cluster profile in Palette. Exiting")
 		}
 
-		// log.InfoCLI("Publishing the cluster profile in Palette....")
+		log.InfoCLI("Publishing the cluster profile in Palette....")
 		err = internal.PublishClusterProfileInPalette(ctx, paletteAuth, cpId)
 		if err != nil {
 			log.InfoCLI("err %s: ", err)
 			log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
 		}
 		log.InfoCLI("Creating the cluster profile in Palette....")
+		finalMsg = fmt.Sprintf("Go ahead and prepare your Edge host using the ISO image created in the build/ folder and use the cluster profile %s created in Palette.", cp.Metadata.Name)
+
 	}
+	log.InfoCLI("")
+	log.InfoCLI("")
+	log.InfoCLI("🚀 Edge artifacts built successfully.")
+	log.InfoCLI(finalMsg)
 
 	return nil
 }

@@ -90,6 +90,8 @@ func Demo(ctx context.Context, config *internal.CliConfig, options *internal.Opt
 		log.FatalCLI("Error getting the current working directory. Exiting")
 	}
 
+	destinationFolder = filepath.Join(destinationFolder, "build")
+
 	// Copy the build folder to root
 	err = internal.CopyDirectory(sourceBuildFolder, destinationFolder)
 	if err != nil {
