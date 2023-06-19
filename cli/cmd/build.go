@@ -33,16 +33,19 @@ var buildCmd = &cobra.Command{
 
 		if *GlobalCliConfig.ConfigFile != "" {
 			// Read the configuration file
-			cUserSelections, cCluConfig, err := internal.GetUserVaues(*GlobalCliConfig.ConfigFile)
+			_cUserSelections, _cCluConfig, err := internal.GetUserVaues(ctx, *GlobalCliConfig.ConfigFile)
 			if err != nil {
 				log.Debug(internal.LogError(err))
 				log.FatalCLI("Error reading the configuration file")
 			}
 
+			cCluConfig = _cCluConfig
 			// Update the GlobalCliConfig
 			GlobalCliConfig.PaletteApiKey = cCluConfig.PaletteApiKey
 			GlobalCliConfig.PaletteHost = cCluConfig.PaletteHost
 			GlobalCliConfig.ProjectID = cCluConfig.ProjectID
+
+			cUserSelections = _cUserSelections
 		}
 
 		// Check if the CanvOS directory and options file exist

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +15,7 @@ import (
 )
 
 // GetUserVaues reads the input file and returns a UserSelections struct
-func GetUserVaues(file string) (UserSelections, CliConfig, error) {
+func GetUserVaues(ctx context.Context, file string) (UserSelections, CliConfig, error) {
 
 	var (
 		userSelections    UserSelections
@@ -24,14 +25,14 @@ func GetUserVaues(file string) (UserSelections, CliConfig, error) {
 		registryNamespace []string
 	)
 
-	fileType, err := determineFileType(file)
+	fileType, err := determineFileType(ctx, file)
 	if err != nil {
 		log.Debug(LogError(err))
 		return userSelections, cliConfig, err
 	}
 
 	if err == nil && fileType == "yaml" {
-		configValues, err = readConfigFileYaml(file)
+		configValues, err = readConfigFileYaml(ctx, file)
 		if err != nil {
 			log.Debug(LogError(err))
 			return userSelections, cliConfig, err
@@ -81,7 +82,7 @@ func GetUserVaues(file string) (UserSelections, CliConfig, error) {
 }
 
 // This function reads a yaml input file and returns a list of Lambdas
-func readConfigFileYaml(file string) (ConfigFile, error) {
+func readConfigFileYaml(ctx context.Context, file string) (ConfigFile, error) {
 
 	var c ConfigFile
 
@@ -114,7 +115,7 @@ func readConfigFileYaml(file string) (ConfigFile, error) {
 }
 
 // This function validates the existence of an input file and ensures its prefix is json | yaml | yml
-func determineFileType(file string) (string, error) {
+func determineFileType(ctx context.Context, file string) (string, error) {
 	f, err := os.Stat(file)
 	var fileType string
 	if err == nil {
@@ -135,7 +136,7 @@ func determineFileType(file string) (string, error) {
 }
 
 // This function generates an example configuration file for the user to get started.
-func GenerateExampleConfigFile() error {
+func GenerateExampleConfigFile(ctx context.Context) error {
 	content := `
 config:
   # The foundation software distributions and versions to use for the  Edge host

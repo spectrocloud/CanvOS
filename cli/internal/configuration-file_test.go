@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"os"
 	"reflect"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func TestDetermineFileTypeYaml(t *testing.T) {
 	want := "yaml"
-	got, err := determineFileType("../tests/config_test.yml")
+	got, err := determineFileType(context.Background(), "../tests/config_test.yml")
 	if err != nil {
 		t.Fatalf("Failed to determine file type due to error: %s", err.Error())
 	}
@@ -20,9 +21,8 @@ func TestDetermineFileTypeYaml(t *testing.T) {
 func TestReadConfigFileYaml(t *testing.T) {
 	// Prepare
 	filePath := "../tests/config_test.yml"
-
 	// Act
-	config, err := readConfigFileYaml(filePath)
+	config, err := readConfigFileYaml(context.Background(), filePath)
 	if err != nil {
 		t.Fatalf("Failed to read the config file: %s", err.Error())
 	}
@@ -50,7 +50,7 @@ func TestReadConfigFileFailureYaml(t *testing.T) {
 	// Prepare
 	filePath := "../tests/config_test_fail.yml"
 	// An error is expected here because the config file is invalid
-	_, err := readConfigFileYaml(filePath)
+	_, err := readConfigFileYaml(context.Background(), filePath)
 	if err == nil {
 		t.Fatal("An error was expected but none was received")
 	}
@@ -58,7 +58,7 @@ func TestReadConfigFileFailureYaml(t *testing.T) {
 }
 
 func TestGenerateExampleConfigFile(t *testing.T) {
-	err := GenerateExampleConfigFile()
+	err := GenerateExampleConfigFile(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to generate config file: %s", err.Error())
 	}
@@ -118,7 +118,7 @@ func TestGetUserValues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			userSel, cliConf, err := GetUserVaues(tt.inputFile)
+			userSel, cliConf, err := GetUserVaues(context.Background(), tt.inputFile)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetUserVaues() error = %v, wantErr %v", err, tt.wantErr)

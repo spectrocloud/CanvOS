@@ -25,7 +25,7 @@ var initCmd = &cobra.Command{
 		// Check for a configuration file
 		if *GlobalCliConfig.ConfigFile != "" {
 			// Read the configuration file
-			_, cliConfig, err := internal.GetUserVaues(*GlobalCliConfig.ConfigFile)
+			_, cliConfig, err := internal.GetUserVaues(ctx, *GlobalCliConfig.ConfigFile)
 			if err != nil {
 				log.Debug(internal.LogError(err))
 				log.FatalCLI("Error reading the configuration file")
