@@ -116,7 +116,7 @@ func validateImagesExist(ctx context.Context, d *client.Client, u UserSelections
 	}
 
 	if len(imagesOutput) == 0 {
-		return imagesOutput, errors.New("No Edge provider images found. Try to issue the build command again")
+		return imagesOutput, errors.New("no Edge provider images found. Try to issue the build command again")
 	}
 
 	return imagesOutput, nil

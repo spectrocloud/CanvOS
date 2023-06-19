@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,6 +65,24 @@ func Automation(ctx context.Context, userSelectedOptions *internal.UserSelection
 	if err != nil {
 		log.Debug(internal.LogError(err))
 		log.FatalCLI("Error copying the build folder to root. Exiting")
+	}
+
+	// Copy the content folder to the .canvos folder so it's available for Earthly
+	buildContentDstFolder, err := internal.GetContentDir()
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.InfoCLI("no content folder found. Continuing...")
+		} else {
+			log.Debug(internal.LogError(err))
+			log.FatalCLI("Error getting the content folder. Exiting")
+		}
+	}
+	if buildContentDstFolder != "" {
+		err = internal.MoveContentFolder("content-", buildContentDstFolder)
+		if err != nil {
+			log.Debug(internal.LogError(err))
+			log.FatalCLI("Error copying the build folder to root. Exiting")
+		}
 	}
 
 	encodedRegistryCredentials, err := registryAuth.GetEncodedAuth()

@@ -45,7 +45,7 @@ func GetPacks(ctx context.Context, p PaletteAuth, queryParams string) (Packs, er
 	defer response.Body.Close()
 
 	log.Debug("HTTP Request Status: %s", response.Status)
-	log.Debug("Respose Body", response.Body)
+	log.Debug("Respose Body %v", response.Body)
 
 	if response.StatusCode != 200 {
 		var responseError PaletteAPIError

@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -109,9 +110,9 @@ func TestGetUserValues(t *testing.T) {
 				CustomTag:                   "palette-learn",
 			},
 			wantCliConf: CliConfig{
-				PaletteApiKey: ptrStr("1234567890"),
-				ProjectID:     ptrStr("1234567890"),
-				PaletteHost:   ptrStr("https://api.spectrocloud.com"),
+				PaletteApiKey: StrPtr("1234567890"),
+				ProjectID:     StrPtr("1234567890"),
+				PaletteHost:   StrPtr("https://api.spectrocloud.com"),
 			},
 		},
 	}
@@ -134,6 +135,72 @@ func TestGetUserValues(t *testing.T) {
 	}
 }
 
-func ptrStr(s string) *string {
-	return &s
+func TestMoveContentFolder(t *testing.T) {
+	// Create a temporary directory to work in.
+	tempDir, err := os.MkdirTemp("", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Created temporary directory: %s", tempDir)
+
+	// Assume source directory with existing content.
+	sourceDir := "../tests/content-123456"
+	t.Logf("Source directory: %s", sourceDir)
+
+	// Run the function.
+	err = MoveContentFolder(sourceDir, tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Moved source directory to temporary directory")
+
+	// Check that the directory starting with "content-" was moved.
+	files, err := os.ReadDir(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := false
+	for _, file := range files {
+		if file.Name() == "content-123456" {
+			moved = true
+			t.Logf("Found %s in temporary directory", file.Name())
+			break
+		}
+	}
+
+	if !moved {
+		t.Fatalf("Directory content-123456 was not moved to target directory")
+	}
+
+	// Check that the directory is no longer in the source directory.
+	_, err = os.Stat(sourceDir)
+	if err == nil {
+		t.Errorf("Directory content-123456 was not removed from source directory")
+	} else if !os.IsNotExist(err) {
+		t.Error(err)
+	} else {
+		t.Log("Confirmed source directory was removed from original location")
+	}
+
+	// Move the folder back to the original location.
+	err = MoveContentFolder(filepath.Join(tempDir, "content-123456"), filepath.Dir(sourceDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Moved directory back to original location")
+
+	// Check that the directory is in the original location.
+	_, err = os.Stat(sourceDir)
+	if os.IsNotExist(err) {
+		t.Errorf("Directory content-123456 was not moved back to original location")
+	} else {
+		t.Log("Confirmed directory is back in original location")
+	}
+
+	// Clean up temporary directory at the end of the test.
+	err = os.RemoveAll(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Cleaned up temporary directory")
 }

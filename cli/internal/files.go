@@ -576,6 +576,7 @@ func copyFile(sourcePath, destinationPath string) error {
 	// Copy the contents of the source file to the destination file
 	_, err = io.Copy(destinationFile, sourceFile)
 	if err != nil {
+		log.Debug(LogError(err))
 		return err
 	}
 
@@ -586,11 +587,13 @@ func copyFile(sourcePath, destinationPath string) error {
 func CopyDirectory(srcDir, dstDir string) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			log.Debug(LogError(err))
 			return fmt.Errorf("error walking the path %q: %w", path, err)
 		}
 
 		relativePath, err := filepath.Rel(srcDir, path)
 		if err != nil {
+			log.Debug(LogError(err))
 			return fmt.Errorf("error getting relative path %q: %w", path, err)
 		}
 		dstPath := filepath.Join(dstDir, relativePath)
@@ -606,22 +609,70 @@ func CopyDirectory(srcDir, dstDir string) error {
 
 			srcFile, err := os.Open(path)
 			if err != nil {
+				log.Debug(LogError(err))
 				return fmt.Errorf("error opening the source file %q: %w", path, err)
 			}
 			defer srcFile.Close()
 
 			dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, info.Mode())
 			if err != nil {
+				log.Debug(LogError(err))
 				return fmt.Errorf("error creating the destination file %q: %w", dstPath, err)
 			}
 			defer dstFile.Close()
 
 			_, err = io.Copy(dstFile, srcFile)
 			if err != nil {
+				log.Debug(LogError(err))
 				return fmt.Errorf("error copying content from %q to %q: %w", path, dstPath, err)
 			}
 		}
 
 		return nil
 	})
+}
+
+// MoveContentFolder moves all folders with the prefix to the targetDir
+func MoveContentFolder(sourceDir string, targetDir string) error {
+	// Make sure the target directory exists
+	err := os.MkdirAll(targetDir, os.ModePerm)
+	if err != nil {
+		log.Debug(LogError(err))
+		return err
+	}
+
+	_, err = os.Stat(sourceDir)
+	if err != nil {
+		log.Debug(LogError(err))
+		return err
+	}
+
+	err = os.Rename(sourceDir, filepath.Join(targetDir, filepath.Base(sourceDir)))
+	if err != nil {
+		log.Debug(LogError(err))
+		return err
+	}
+
+	return nil
+}
+
+// GetContentDir returns the path to the content directory.
+// We assume that the content directory is the only directory in the current directory that starts with "content-".
+func GetContentDir() (string, error) {
+	// Get a list of files in the current directory.
+	files, err := os.ReadDir(".")
+	if err != nil {
+		return "", err
+	}
+
+	// Look for a directory that starts with "content-".
+	for _, file := range files {
+		if file.IsDir() && strings.HasPrefix(file.Name(), "content-") {
+			// Return the full path of the directory.
+			return filepath.Abs(file.Name())
+		}
+	}
+
+	// Return an error if no directory was found.
+	return "", os.ErrNotExist
 }
