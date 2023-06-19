@@ -55,9 +55,10 @@ func Automation(ctx context.Context, userSelectedOptions *internal.UserSelection
 			log.FatalCLI("Error getting the content folder. Exiting")
 		}
 	}
+	log.InfoCLI("Folder to copy: %s", conteFolder)
 	buildContentDstFolder := filepath.Join(internal.DefaultCanvOsDir, "canvOS", conteFolder)
 	if buildContentDstFolder != "" {
-		err = internal.MoveContentFolder("content-", buildContentDstFolder)
+		err = internal.MoveContentFolder(conteFolder, buildContentDstFolder)
 		if err != nil {
 			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error copying the build folder - Error: %s", err.Error())

@@ -667,7 +667,7 @@ func GetContentDir() (string, error) {
 
 	// Look for a directory that starts with "content-".
 	for _, file := range files {
-		if file.IsDir() && strings.HasPrefix(file.Name(), "content-") {
+		if file.IsDir() && strings.HasPrefix(file.Name(), "content") {
 			// Return the name of the directory.
 			return file.Name(), nil
 		}

@@ -195,7 +195,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	}
 	buildContentDstFolder := filepath.Join(internal.DefaultCanvOsDir, "canvOS", conteFolder)
 	if buildContentDstFolder != "" {
-		err = internal.MoveContentFolder("content-", buildContentDstFolder)
+		err = internal.MoveContentFolder(conteFolder, buildContentDstFolder)
 		if err != nil {
 			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error copying the build folder. Error %v", err.Error())
