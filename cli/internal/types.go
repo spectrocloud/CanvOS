@@ -389,7 +389,7 @@ func (o *OptionsMenu) GetPackUIDs(name, version string) (string, string) {
 		registryUID = o.Kubernetes.Edgek3S.RegistryUID
 	}
 
-	if lname == "k8s" {
+	if lname == "k8s" || lname == "kubeadm" {
 		for _, v := range o.Kubernetes.EdgeK8S.Versions {
 			if v.Version == version {
 				packUID = v.UID

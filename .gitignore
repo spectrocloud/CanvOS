@@ -8,4 +8,4 @@ config.yaml
 content-*/*
 .canvos
 *.arg
-
+.config.yml

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"specrocloud.com/canvos/internal"
 	log "specrocloud.com/canvos/logger"
@@ -30,17 +29,12 @@ func Automation(ctx context.Context, userSelectedOptions *internal.UserSelection
 		Password: userSelectedOptions.ImageRegistryPassword,
 	}
 
-	uRegistry := strings.Split(userSelectedOptions.ImageRegistryURL, "/")
-	if len(uRegistry) != 2 {
-		log.FatalCLI("error getting Container Registry URL. Exiting")
-	}
-
-	userSelectedOptions.ImageRegistryURL = uRegistry[0]
-	userSelectedOptions.ImageRegistryRepository = uRegistry[1]
-
 	// Set the latest version of the BYOOS pack
 	ByoosVersions := options.GetBYOOSVersions()
 	userSelectedOptions.BYOOSVersion = ByoosVersions[0]
+
+	// Get Kubernetes versions
+	userSelectedOptions.KubernetesVersion = options.GetKubernetesDistroVersions(userSelectedOptions.KubernetesDistro)[0]
 
 	// Create the .arg file
 	log.InfoCLI("Creating the .args file....")
