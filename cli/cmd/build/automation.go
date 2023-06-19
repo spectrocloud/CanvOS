@@ -68,7 +68,7 @@ func Automation(ctx context.Context, userSelectedOptions *internal.UserSelection
 	}
 
 	// Copy the content folder to the .canvos folder so it's available for Earthly
-	buildContentDstFolder, err := internal.GetContentDir()
+	conteFolder, err := internal.GetContentDir()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			log.InfoCLI("no content folder found. Continuing...")
@@ -77,7 +77,7 @@ func Automation(ctx context.Context, userSelectedOptions *internal.UserSelection
 			log.FatalCLI("Error getting the content folder. Exiting")
 		}
 	}
-	buildContentDstFolder = filepath.Join(internal.DefaultCanvOsDir, "canvOS", "content")
+	buildContentDstFolder := filepath.Join(internal.DefaultCanvOsDir, "canvOS", conteFolder)
 	if buildContentDstFolder != "" {
 		err = internal.MoveContentFolder("content-", buildContentDstFolder)
 		if err != nil {

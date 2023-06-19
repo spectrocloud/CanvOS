@@ -204,8 +204,9 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 		log.Debug(internal.LogError(err))
 		log.FatalCLI("Error copying the build folder to root. Exiting")
 	}
-	// Copy the .content folder to the .canvos folder so it's available for Earthly
-	buildContentDstFolder, err := internal.GetContentDir()
+
+	// Copy the content folder to the .canvos folder so it's available for Earthly
+	conteFolder, err := internal.GetContentDir()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			log.InfoCLI("no content folder found. Continuing...")
@@ -214,6 +215,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 			log.FatalCLI("Error getting the content folder. Exiting")
 		}
 	}
+	buildContentDstFolder := filepath.Join(internal.DefaultCanvOsDir, "canvOS", conteFolder)
 	if buildContentDstFolder != "" {
 		err = internal.MoveContentFolder("content-", buildContentDstFolder)
 		if err != nil {
