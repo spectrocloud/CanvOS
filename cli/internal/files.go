@@ -662,14 +662,14 @@ func GetContentDir() (string, error) {
 	// Get a list of files in the current directory.
 	files, err := os.ReadDir(".")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error reading directory: %w", err)
 	}
 
 	// Look for a directory that starts with "content-".
 	for _, file := range files {
 		if file.IsDir() && strings.HasPrefix(file.Name(), "content-") {
-			// Return the full path of the directory.
-			return filepath.Abs(file.Name())
+			// Return the name of the directory.
+			return file.Name(), nil
 		}
 	}
 
