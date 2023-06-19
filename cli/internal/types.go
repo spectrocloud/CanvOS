@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -668,15 +669,15 @@ type ConfigFile struct {
 
 type ConfigDetails struct {
 	// Software is the software configuration for the Edge host
-	Software *SoftwareDetails `yaml:"software" validate:"required"`
+	Software *SoftwareDetails `yaml:"software" validate:"required,dive"`
 	// RegistryConfig is the registry configuration for uploading the provider images
-	RegistryConfig *RegistryConfigDetails `yaml:"registryConfig" validate:"required"`
+	RegistryConfig *RegistryConfigDetails `yaml:"registryConfig" validate:"required,dive"`
 	// Palette contains the credentials for the Palette API
-	Palette *PaletteDetails `yaml:"palette"`
+	Palette *PaletteDetails `yaml:"palette" validate:"dive"`
 	// EdgeInstaller contains the tenant registration token for the Edge host and the version of the Palette Edge Installer
-	EdgeInstaller *EdgeInstallerDetails `yaml:"edgeInstaller" validate:"required"`
+	EdgeInstaller *EdgeInstallerDetails `yaml:"edgeInstaller" validate:"required,dive"`
 	// ClusterProfile contains the cluster profile details
-	ClusterProfile *ClusterProfileDetails `yaml:"clusterProfile" validate:"required"`
+	ClusterProfile *ClusterProfileDetails `yaml:"clusterProfile" validate:"required,dive"`
 	// Select the target platform for the provider images
 	Platform *string `yaml:"platform" validate:"required,oneof=linux/amd64"`
 	// CustomTag is the custom tag to use for the provider images
@@ -692,8 +693,11 @@ type SoftwareDetails struct {
 }
 
 type RegistryConfigDetails struct {
-	RegistryURL      *string `yaml:"registryURL" validate:"required"`
+	// RegistryURL is the URL of the image registry. This can be a public or private registry. Example: docker.io, ttl.sh, myDockerHub/myRepo
+	RegistryURL *string `yaml:"registryURL" validate:"required"`
+	// Empty values allowed for public registries.
 	RegistryUsername *string `yaml:"registryUsername" validate:"alphanum"`
+	// Empty values allowed for public registries.
 	RegistryPassword *string `yaml:"registryPassword"`
 }
 
@@ -714,43 +718,88 @@ type ClusterProfileDetails struct {
 	Suffix               *string `yaml:"suffix" validate:"alphanum,required_with=CreateClusterProfile"`
 }
 
-func (c *ConfigFile) SetEmptyValues() *ConfigDetails {
+// Validate validates the configuration file
+func (c *ConfigFile) Validate() error {
 
 	if c.Config == nil {
-		c.Config = &ConfigDetails{}
+		return errors.New("a config block is required")
 	}
 
 	if c.Config.Software == nil {
-		c.Config.Software = &SoftwareDetails{
-			OsDistro:                         nil,
-			OsVersion:                        nil,
-			KubernetesDistro:                 nil,
-			ContainerNetworkInterface:        nil,
-			ContainerNetworkInterfaceVersion: nil,
-		}
+		return errors.New("a software block is required")
+	}
+
+	if c.Config.Software.OsDistro == nil {
+		return errors.New("an osDistro is required")
+	}
+
+	if c.Config.Software.OsVersion == nil {
+		return errors.New("an osVersion is required")
+	}
+
+	if c.Config.Software.KubernetesDistro == nil {
+		return errors.New("a kubernetesDistro is required")
+	}
+
+	if c.Config.Software.ContainerNetworkInterface == nil {
+		return errors.New("a containerNetworkInterface is required")
+	}
+
+	if c.Config.Software.ContainerNetworkInterfaceVersion == nil {
+		return errors.New("a containerNetworkInterfaceVersion is required")
+	}
+
+	if c.Config.RegistryConfig == nil {
+		return errors.New("a registryConfig block is required")
+	}
+
+	if c.Config.RegistryConfig.RegistryURL == nil {
+		return errors.New("a registryURL is required")
+	}
+
+	if c.Config.RegistryConfig.RegistryUsername == nil {
+		return errors.New("a registryUsername is required")
+	}
+
+	if c.Config.RegistryConfig.RegistryPassword == nil {
+		return errors.New("a registryPassword is required")
 	}
 
 	if c.Config.EdgeInstaller == nil {
-		c.Config.EdgeInstaller = &EdgeInstallerDetails{
-			InstallerVersion:        nil,
-			TenantRegistrationToken: &tenantRegistrationToken,
-			IsoImageName:            &isoName,
-		}
+		return errors.New("an edgeInstaller block is required")
 	}
 
-	if configValues.Config.ClusterProfile == nil {
-		configValues.Config.ClusterProfile = &ClusterProfileDetails{
-			CreateClusterProfile: &CreateClusterProfile,
-			Suffix:               &clusterProfileSuffix,
-		}
+	if c.Config.EdgeInstaller.InstallerVersion == nil {
+		return errors.New("an installerVersion is required")
 	}
 
-	if configValues.Config.Platform == nil {
-		configValues.Config.Platform = &platform
+	if c.Config.EdgeInstaller.TenantRegistrationToken == nil {
+		return errors.New("a tenantRegistrationToken is required")
 	}
 
-	if configValues.Config.CustomTag == nil {
-		configValues.Config.CustomTag = &customTag
+	if c.Config.EdgeInstaller.IsoImageName == nil {
+		return errors.New("an isoImageName is required")
 	}
-	return c.Config
+
+	if c.Config.ClusterProfile == nil {
+		return errors.New("a clusterProfile block is required")
+	}
+
+	if c.Config.ClusterProfile.CreateClusterProfile == nil {
+		return errors.New("a createClusterProfile is required")
+	}
+
+	if c.Config.ClusterProfile.Suffix == nil {
+		return errors.New("a suffix is required")
+	}
+
+	if c.Config.Platform == nil {
+		return errors.New("a platform is required")
+	}
+
+	if c.Config.CustomTag == nil {
+		return errors.New("a customTag is required")
+	}
+
+	return nil
 }

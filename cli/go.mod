@@ -7,6 +7,7 @@ require (
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/docker/docker v24.0.2+incompatible
 	github.com/go-git/go-git/v5 v5.7.0
+	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/go-playground/validator/v10 v10.14.1
 	github.com/manifoldco/promptui v0.9.0
 	github.com/rs/zerolog v1.29.1
@@ -21,6 +22,7 @@ require (
 	golang.org/x/sys v0.8.0
 	golang.org/x/text v0.9.0
 	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.27.2
 )
 
@@ -86,7 +88,6 @@ require (
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/term v0.8.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.4.0 // indirect
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491 // indirect
 )

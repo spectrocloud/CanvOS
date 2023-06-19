@@ -10,16 +10,18 @@ import (
 	"github.com/go-playground/validator/v10"
 	log "specrocloud.com/canvos/logger"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // GetUserVaues reads the input file and returns a UserSelections struct
 func GetUserVaues(file string) (UserSelections, CliConfig, error) {
 
 	var (
-		userSelections UserSelections
-		cliConfig      CliConfig
-		configValues   ConfigFile
+		userSelections    UserSelections
+		cliConfig         CliConfig
+		configValues      ConfigFile
+		registry          string
+		registryNamespace []string
 	)
 
 	fileType, err := determineFileType(file)
@@ -35,8 +37,10 @@ func GetUserVaues(file string) (UserSelections, CliConfig, error) {
 			return userSelections, cliConfig, err
 		}
 
-		registry := strings.Split(*configValues.Config.RegistryConfig.RegistryURL, "/")[0]
-		registryNamespace := strings.Split(*configValues.Config.RegistryConfig.RegistryURL, "/")[1:]
+		if *configValues.Config.RegistryConfig.RegistryURL != "" {
+			registry = strings.Split(*configValues.Config.RegistryConfig.RegistryURL, "/")[0]
+			registryNamespace = strings.Split(*configValues.Config.RegistryConfig.RegistryURL, "/")[1:]
+		}
 
 		userSelections = UserSelections{
 			// Sofware
@@ -93,6 +97,12 @@ func readConfigFileYaml(file string) (ConfigFile, error) {
 		return c, errors.New("unable to unmarshall the YAML file")
 	}
 
+	err = c.Validate()
+	if err != nil {
+		log.Debug(LogError(err))
+		return c, err
+	}
+
 	// Validate the configuration file
 	v := validator.New()
 	err = v.Struct(c)
@@ -100,7 +110,6 @@ func readConfigFileYaml(file string) (ConfigFile, error) {
 		log.Debug(LogError(err))
 		return c, fmt.Errorf("invalid configuration file: %s", err.(validator.ValidationErrors))
 	}
-
 	return c, err
 }
 
@@ -139,7 +148,7 @@ config:
     # kubeadm is the equivalent of Palette eXtended Kubernetes - Edge (PXK -E)
     kubernetesDistro: kubeadm
     containerNetworkInterface: calico
-    containerNetworkInterfaceVersion: v0.12.5
+    containerNetworkInterfaceVersion: 0.12.5
   # The registry configuration values to use when uploading the provider images
   registryConfig:
 	registryURL: myUsername/edge
@@ -158,6 +167,7 @@ config:
   # The Cluster Profile configuration values to use when creating the Cluster Profile
   clusterProfile:
     createClusterProfile: true
+	# The suffix is part of the cluster profile name. The name format is: edge-<suffix>-<YYYY-MM-DD>-<SHA-256>
     suffix: learn
   # Allowed values: linux/amd64
   platform: linux/amd64

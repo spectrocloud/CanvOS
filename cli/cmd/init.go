@@ -21,7 +21,7 @@ var initCmd = &cobra.Command{
 
 		// Initialize the logger
 		GlobalCliConfig.Verbose = &Verbose
-		internal.InitLogger(Verbose)
+		log.SetLevel(*GlobalCliConfig.Verbose)
 		// Check for a configuration file
 		if *GlobalCliConfig.ConfigFile != "" {
 			// Read the configuration file
@@ -35,7 +35,6 @@ var initCmd = &cobra.Command{
 			GlobalCliConfig.PaletteApiKey = cliConfig.PaletteApiKey
 			GlobalCliConfig.PaletteHost = cliConfig.PaletteHost
 			GlobalCliConfig.ProjectID = cliConfig.ProjectID
-
 		}
 
 		if *GlobalCliConfig.PaletteApiKey == "" {

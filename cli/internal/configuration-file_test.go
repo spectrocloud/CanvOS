@@ -49,11 +49,10 @@ func TestReadConfigFileYaml(t *testing.T) {
 func TestReadConfigFileFailureYaml(t *testing.T) {
 	// Prepare
 	filePath := "../tests/config_test_fail.yml"
-
 	// An error is expected here because the config file is invalid
 	_, err := readConfigFileYaml(filePath)
 	if err == nil {
-		t.Fatalf("Failed to read the config file: %s", err.Error())
+		t.Fatal("An error was expected but none was received")
 	}
 
 }
@@ -96,7 +95,7 @@ func TestGetUserValues(t *testing.T) {
 				OperatingSystemVersion:      "16.04",
 				KubernetesDistro:            "kubeadm",
 				CNI:                         "calico",
-				CNIVersion:                  "v0.12.5",
+				CNIVersion:                  "0.12.5",
 				ImageRegistryURL:            "myUsername",
 				ImageRegistryRepository:     "edge",
 				ImageRegistryUsername:       "myUsername",

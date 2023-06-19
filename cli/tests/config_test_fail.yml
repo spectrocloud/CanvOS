@@ -30,7 +30,7 @@ config:
 
   # The Cluster Profile configuration values to use when creating the Cluster Profile
   clusterProfile:
-    createClusterProfile: false
+    createClusterProfile: true
     suffix: learn
 
   # Allowed values: linux/amd64

@@ -24,7 +24,26 @@ var buildCmd = &cobra.Command{
 
 		// Initialize the logger
 		GlobalCliConfig.Verbose = &Verbose
-		internal.InitLogger(Verbose)
+		log.SetLevel(*GlobalCliConfig.Verbose)
+
+		var (
+			cUserSelections internal.UserSelections
+			cCluConfig      internal.CliConfig
+		)
+
+		if *GlobalCliConfig.ConfigFile != "" {
+			// Read the configuration file
+			cUserSelections, cCluConfig, err := internal.GetUserVaues(*GlobalCliConfig.ConfigFile)
+			if err != nil {
+				log.Debug(internal.LogError(err))
+				log.FatalCLI("Error reading the configuration file")
+			}
+
+			// Update the GlobalCliConfig
+			GlobalCliConfig.PaletteApiKey = cCluConfig.PaletteApiKey
+			GlobalCliConfig.PaletteHost = cCluConfig.PaletteHost
+			GlobalCliConfig.ProjectID = cCluConfig.ProjectID
+		}
 
 		// Check if the CanvOS directory and options file exist
 		checkIfCanvOSDirExists()
@@ -33,7 +52,7 @@ var buildCmd = &cobra.Command{
 
 		options, err := internal.ReadOptionsFile(internal.DefaultCliMenuOptionsPath)
 		if err != nil {
-			log.Debug("err %s: ", err)
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error reading the CanvOS options file")
 
 		}
@@ -44,7 +63,7 @@ var buildCmd = &cobra.Command{
 
 			apiKey, err := prompts.ReadText("Enter your Palette API Key", "", "Palette API Key is required", false, 128)
 			if err != nil {
-				log.Debug("err %s: ", err)
+				log.Debug(internal.LogError(err))
 				log.FatalCLI("error getting API key. Exiting")
 			}
 			GlobalCliConfig.PaletteApiKey = &apiKey
@@ -55,7 +74,7 @@ var buildCmd = &cobra.Command{
 
 			projectId, err := prompts.ReadText("Enter your Palette Project ID. Or press Enter to leave empty and use the Tenant instead of a project", "", "Palette API Key is required", true, 128)
 			if err != nil {
-				log.Debug("err %s: ", err)
+				log.Debug(internal.LogError(err))
 				log.FatalCLI("error getting API key. Exiting")
 			}
 			GlobalCliConfig.ProjectID = &projectId
@@ -80,7 +99,12 @@ var buildCmd = &cobra.Command{
 				log.FatalCLI("Config file does not exist or the file path is incorrect. Exiting")
 			}
 
-			log.InfoCLI("Config file found. Starting in automation mode")
+			log.InfoCLI("Config file provided. Starting in automation mode ...")
+			err := build.Automation(ctx, &cUserSelections, &GlobalCliConfig, options)
+			if err != nil {
+				log.Debug(internal.LogError(err))
+				log.FatalCLI("Error running the automation workflow. Exiting")
+			}
 
 		}
 
@@ -89,7 +113,7 @@ var buildCmd = &cobra.Command{
 			// User selects the workflow mode
 			wizardMode, err := prompts.SelectID("Select the workflow mode", workflowModes, workflowModes[1].ID, "A workflow mode is required")
 			if err != nil {
-				log.Debug("err %s: ", err)
+				log.Debug(internal.LogError(err))
 				log.FatalCLI("Error selecting the workflow mode. Exiting")
 			}
 
@@ -101,7 +125,7 @@ var buildCmd = &cobra.Command{
 				log.Debug("Demo Mode")
 				err := build.Demo(ctx, &GlobalCliConfig, options)
 				if err != nil {
-					log.Debug("err %s: ", err)
+					log.Debug(internal.LogError(err))
 					log.FatalCLI("Error running the demo workflow. Exiting")
 				}
 
@@ -109,7 +133,7 @@ var buildCmd = &cobra.Command{
 				log.Debug("Normal Mode")
 				err := build.Normal(ctx, &GlobalCliConfig, options)
 				if err != nil {
-					log.Debug("err %s: ", err)
+					log.Debug(internal.LogError(err))
 					log.FatalCLI("Error running the normal workflow. Exiting")
 				}
 			default:

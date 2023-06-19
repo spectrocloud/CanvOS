@@ -29,7 +29,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 
 	uVersion, err := prompts.Select("Select the Palette Edge Installer version", options.PaletteVersions, options.PaletteVersions[0], "A Palette Edge Installer version is required")
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error selecting the Palette Edge Installer version. Exiting")
 	}
 	userSelectedOptions.PaletteEdgeInstallerVersion = uVersion
@@ -50,33 +50,33 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 
 	uOSDistro, err := prompts.SelectID("Select the Operating System (OS) Distribution", osChoices, "ubuntu", "An Operating System Distro is required")
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error selecting the OS distribution. Exiting")
 	}
 	userSelectedOptions.OperatingSystemDistro = uOSDistro.ID
 
 	uOSVersion, err := prompts.Select("Select the Operating System (OS) Version", options.GetOperatingSystemVersionOptions(userSelectedOptions.OperatingSystemDistro), options.GetOperatingSystemVersionOptions(userSelectedOptions.OperatingSystemDistro)[0], "An Operating System Version is required")
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error selecting the OS version. Exiting")
 	}
 	userSelectedOptions.OperatingSystemVersion = uOSVersion
 
 	uKubernetesDistro, err := prompts.Select("Select the Kubernetes Distro", options.GetKubernetesDistroOptions(), options.GetKubernetesDistroOptions()[0], "A Kubernetes Distro is required")
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error selecting the Kubernetes Distro. Exiting")
 	}
 
 	userSelectedOptions.KubernetesDistro, err = internal.GetKubernetesDistroPaletteValue(uKubernetesDistro)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error getting the Kubernetes Distro. Exiting")
 	}
 
 	uRegistryRaw, err := prompts.ReadTextRegex("Provide your Container Registry URL + Namespace - Example: dockerhub.com/canvos", "", "A Container Registry URL is required.  Example: dockerhub.com/canvos", `^([a-zA-Z0-9\-\._]+)(\/([a-zA-Z0-9\-\._]+))?(\/([a-zA-Z0-9\-\._]+))?$`)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error getting Container Registry URL. Exiting")
 	}
 
@@ -91,26 +91,26 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	registryAuth := &internal.RegistryAuthConfig{}
 	registryAuth.Username, err = prompts.ReadText("Provide your Container Registry Username", "", "A Container Registry Username is required.", true, 128)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error getting Container Registry Username. Exiting")
 	}
 	registryAuth.Password, err = prompts.ReadPassword("Provide your Container Registry Password", "", "A Container Registry Password is required.", true, 128)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error getting Container Registry Password. Exiting")
 	}
 	userSelectedOptions.ImageRegistryPassword = registryAuth.Password
 
 	uCustomTag, err := prompts.ReadText("Specify the custom image tag you want applied to all provider images", "", "A Custom Tag is required.", false, 128)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error getting Custom Tag. Exiting")
 	}
 	userSelectedOptions.CustomTag = uCustomTag
 
 	uClusterProfileChoice, err := prompts.Select("Would you like a cluster profile created in Palette", []string{"Yes", "No"}, "Yes", "You must selecte an option. Either Yes or No")
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error getting Custom Tag. Exiting")
 	}
 
@@ -130,21 +130,21 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 
 		uCNI, err := prompts.Select("Select the Container Network Interface (CNI)", options.GetCniOptions(), options.GetCniOptions()[0], "A Container Network Interface (CNI) is required")
 		if err != nil {
-			log.Debug("err %s: ", err)
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("error selecting the Container Network Interface (CNI). Exiting")
 		}
 		userSelectedOptions.CNI = uCNI
 
 		uCNIVersion, err := prompts.Select("Select the Container Network Interface (CNI) Version", options.GetCniVersionOptions(uCNI), options.GetCniVersionOptions(uCNI)[0], "A Container Network Interface (CNI) Version is required")
 		if err != nil {
-			log.Debug("err %s: ", err)
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("error selecting the Container Network Interface (CNI) Version. Exiting")
 		}
 		userSelectedOptions.CNIVersion = uCNIVersion
 
 		uImageSuffix, err := prompts.ReadText("Provide the cluster profile image name suffix. The default cluster profile name is edge-<suffix>-<YYYY-MM-DD>-<SHA-256>", "", "An Image suffix is required.", false, 12)
 		if err != nil {
-			log.Debug("err %s: ", err)
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("error getting Image suffix. Exiting")
 		}
 		userSelectedOptions.ClusterProfileSuffix = uImageSuffix
@@ -153,7 +153,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 
 	uConfirmUserData, err := prompts.Select("Confirm you reviewed and updated the user-data file in the local directory with the required Edge Installer configurations", []string{"Yes", "No"}, "Yes", "You must selecte an option. Either Yes or No")
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error getting Custom Tag. Exiting")
 	}
 	if uConfirmUserData == "No" {
@@ -162,7 +162,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	}
 	uConfirmDockerFile, err := prompts.Select("Confirm you reviewed and updated the Dockerfile file in the local directory with the required additional software packages and dependencies", []string{"Yes", "No"}, "Yes", "You must selecte an option. Either Yes or No")
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("error getting Custom Tag. Exiting")
 	}
 	if uConfirmDockerFile == "No" {
@@ -178,14 +178,14 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	log.InfoCLI("Creating the .args file....")
 	err = internal.CreateArgsFile("", userSelectedOptions)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("Error creating the demo args file. Exiting")
 	}
 
 	log.InfoCLI("Starting the build process...")
 	err = internal.StartBuildProcessScript(ctx, userSelectedOptions)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("Error starting the build process script. Exiting")
 	}
 
@@ -193,26 +193,26 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 
 	destinationFolder, err := os.Getwd()
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("Error getting the current working directory. Exiting")
 	}
 	destinationFolder = filepath.Join(destinationFolder, "build")
 	// Copy the build folder to root
 	err = internal.CopyDirectory(sourceBuildFolder, destinationFolder)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("Error copying the build folder to root. Exiting")
 	}
 
 	encodedRegistryCredentials, err := registryAuth.GetEncodedAuth()
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("Error getting the registry credentials. Exiting")
 	}
 
 	dockerClient, err := internal.NewDockerClient()
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		log.FatalCLI("Error creating the docker client. Exiting")
 	}
 
@@ -220,7 +220,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	log.InfoCLI("Pushing the provider images to the registry....")
 	err = internal.PushProviderImages(ctx, dockerClient, encodedRegistryCredentials, userSelectedOptions)
 	if err != nil {
-		log.Debug("err %s: ", err)
+		log.Debug(internal.LogError(err))
 		errMsg := fmt.Sprintf("Error pushing the provider images. %s", err.Error())
 		log.FatalCLI(errMsg)
 	}
@@ -228,7 +228,7 @@ func Normal(ctx context.Context, config *internal.CliConfig, options *internal.O
 	if userSelectedOptions.CreateClusterProfile {
 		cp, err := internal.CreateEdgeClusterProfilePayLoad(userSelectedOptions, options)
 		if err != nil {
-			log.Debug("err %s: ", err)
+			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error creating the cluster profile payload. Exiting")
 		}
 

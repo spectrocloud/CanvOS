@@ -18,7 +18,7 @@ func TestNewDockerClient(t *testing.T) {
 	}
 
 	// Verify that the client has the expected timeout value
-	expectedTimeout := 30 * time.Second
+	expectedTimeout := 300 * time.Second
 	actualTimeout := client.HTTPClient().Timeout
 	if actualTimeout != expectedTimeout {
 		t.Errorf("Expected timeout of %s, but got %s", expectedTimeout, actualTimeout)
