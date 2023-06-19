@@ -21,6 +21,8 @@ type CliConfig struct {
 	ProjectID *string
 	// ConfigFile is the path to the config file
 	ConfigFile *string
+	// GenerateExampleConfig is to generate an example config file
+	GenerateExampleConfig *bool
 }
 
 // PaletteAuth is the authentication information for the Palette API

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rs/zerolog/log"
+	log "specrocloud.com/canvos/logger"
 )
 
 // GetPacks returns information about the packs.
@@ -21,9 +21,8 @@ func GetPacks(ctx context.Context, p PaletteAuth, queryParams string) (Packs, er
 
 	req, err := http.NewRequest("GET", urlReq, nil)
 	if err != nil {
-		log.Info().Msg("Error creating a pack information request")
-		log.Debug().Err(err).Msg(queryParams)
-		LogError(err)
+		log.Debug(LogError(err))
+		return Packs{}, err
 	}
 
 	req.Header.Add("Content-Type", "application/json")
@@ -38,22 +37,21 @@ func GetPacks(ctx context.Context, p PaletteAuth, queryParams string) (Packs, er
 
 	response, err := httpClient.Do(req)
 	if err != nil {
-		log.Info().Msg("Error retrieving the pack information from Palette")
-		log.Debug().Err(err).Msg(queryParams)
-		LogError(err)
+		log.Debug(LogError(err))
+		log.Debug("Query Parameters: " + queryParams)
+		return Packs{}, err
 	}
 
 	defer response.Body.Close()
 
-	log.Debug().Msgf("HTTP Request Status: %s", response.Status)
-	log.Debug().Interface("Respose Body", response.Body)
+	log.Debug("HTTP Request Status: %s", response.Status)
+	log.Debug("Respose Body", response.Body)
 
 	if response.StatusCode != 200 {
 		var responseError PaletteAPIError
 		err = json.NewDecoder(response.Body).Decode(&responseError)
 		if err != nil {
-			log.Info().Msg("Error converting the pack information to JSON")
-			LogError(err)
+			log.Debug(LogError(err))
 			return Packs{}, err
 		}
 		return Packs{}, errors.New(responseError.Message)
@@ -62,9 +60,7 @@ func GetPacks(ctx context.Context, p PaletteAuth, queryParams string) (Packs, er
 	var responseData Packs
 	err = json.NewDecoder(response.Body).Decode(&responseData)
 	if err != nil {
-		log.Info().Msg("Error converting the pack information to JSON")
-		log.Debug().Err(err).Msg(queryParams)
-		LogError(err)
+		log.Debug(LogError(err))
 		return Packs{}, err
 	}
 
@@ -100,9 +96,7 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 
 	jsonValue, err := cp.mashallClusterProfile()
 	if err != nil {
-		log.Info().Msg("Error marshalling the cluster profile")
-		log.Debug().Err(err)
-		LogError(err)
+		log.Debug(LogError(err))
 		return CreateClusterProfileResponse{}, err
 	}
 
@@ -110,8 +104,7 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 
 	req, err := http.NewRequest("POST", urlReq, payload)
 	if err != nil {
-		log.Info().Msg("Error creating a cluster profile request")
-		log.Debug().Err(err)
+		log.Debug(LogError(err))
 		LogError(err)
 	}
 
@@ -127,8 +120,7 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 
 	response, err := httpClient.Do(req)
 	if err != nil {
-		log.Info().Msg("Error retrieving the pack information from Palette")
-		LogError(err)
+		log.Debug(LogError(err))
 		return CreateClusterProfileResponse{}, err
 	}
 
@@ -138,8 +130,7 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 		var responseError PaletteAPIError
 		err = json.NewDecoder(response.Body).Decode(&responseError)
 		if err != nil {
-			log.Info().Msg("Error converting the pack information to JSON")
-			LogError(err)
+			log.Debug(LogError(err))
 			return CreateClusterProfileResponse{}, err
 		}
 		return CreateClusterProfileResponse{}, errors.New(responseError.Message)
@@ -148,8 +139,7 @@ func CreateClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Cluste
 	var responseData CreateClusterProfileResponse
 	err = json.NewDecoder(response.Body).Decode(&responseData)
 	if err != nil {
-		log.Info().Msg("Error converting the pack information to JSON")
-		LogError(err)
+		log.Debug(LogError(err))
 		return CreateClusterProfileResponse{}, err
 	}
 
@@ -166,8 +156,7 @@ func PublishClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Creat
 
 	req, err := http.NewRequest("PATCH", urlReq, nil)
 	if err != nil {
-		log.Info().Msg("Error creating a cluster profile request")
-		log.Debug().Err(err)
+		log.Debug(LogError(err))
 		LogError(err)
 	}
 
@@ -183,8 +172,7 @@ func PublishClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Creat
 
 	response, err := httpClient.Do(req)
 	if err != nil {
-		log.Info().Msg("Error retrieving the pack information from Palette")
-		LogError(err)
+		log.Debug(LogError(err))
 		return err
 	}
 
@@ -194,8 +182,7 @@ func PublishClusterProfileInPalette(ctx context.Context, p PaletteAuth, cp Creat
 		var responseError PaletteAPIError
 		err = json.NewDecoder(response.Body).Decode(&responseError)
 		if err != nil {
-			log.Info().Msg("Error converting the pack information to JSON")
-			LogError(err)
+			log.Debug(LogError(err))
 			return err
 		}
 		return errors.New(responseError.Message)

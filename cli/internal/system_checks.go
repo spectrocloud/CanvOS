@@ -10,36 +10,49 @@ import (
 	log "specrocloud.com/canvos/logger"
 )
 
+// CheckResult is a struct to hold the result of a system check
 type CheckResult struct {
-	Name    string
+	// Name is the name of the check
+	Name string
+	// Success is a boolean to indicate if the check was successful
 	Success bool
-	Error   string
+	// Error is a string to hold the error message if the check failed
+	Error string
 }
 
+// HostSystemProvider is a struct to hold the host system information
 type HostSystemProvider struct{}
 
+// NumCPU returns the number of CPUs on the host system
 func (r *HostSystemProvider) NumCPU() int {
 	return runtime.NumCPU()
 }
 
+// VirtualMemory returns the virtual memory information of the host system
 func (r *HostSystemProvider) VirtualMemory() (*mem.VirtualMemoryStat, error) {
 	return mem.VirtualMemory()
 }
 
+// DiskStat returns the disk statistics of the host system
 func (r *HostSystemProvider) DiskStat() (*unix.Statfs_t, error) {
 	var stat unix.Statfs_t
 	err := unix.Statfs("/", &stat)
 	return &stat, err
 }
 
+// GOARCH returns the architecture of the host system
 func (r *HostSystemProvider) GOARCH() string {
 	return runtime.GOARCH
 }
 
+// SystemCheckResponse is a struct to hold the response of the system check
 type SystemCheckResponse struct {
 	Checks []CheckResult
 }
 
+// SystemInfoProvider is an interface to provide system information
+// The interface design allows for mocking the system information
+// for unit testing and future extensibility
 type SystemInfoProvider interface {
 	NumCPU() int
 	VirtualMemory() (*mem.VirtualMemoryStat, error)
@@ -47,17 +60,21 @@ type SystemInfoProvider interface {
 	GOARCH() string
 }
 
+// CommandExecutor is an interface to execute commands
 type CommandExecutor interface {
 	RunCommand(name string, arg ...string) error
 }
 
+// HostCommandExecutor is a struct to execute commands on the host system
 type HostCommandExecutor struct{}
 
+// RunCommand executes the command on the host system
 func (h *HostCommandExecutor) RunCommand(name string, arg ...string) error {
 	cmd := exec.Command(name, arg...)
 	return cmd.Run()
 }
 
+// checkSystemSpecifications checks the system specifications and returns the result each check as a SystemCheckResponse
 func checkSystemSpecifications(infoProvider SystemInfoProvider) SystemCheckResponse {
 	var response SystemCheckResponse
 
@@ -159,6 +176,7 @@ func checkDockerInstallation(executor CommandExecutor) CheckResult {
 	}
 }
 
+// checkGitInstallation checks if Git is installed and returns a CheckResult containing the result of the check.
 func checkGitInstallation(executor CommandExecutor) CheckResult {
 	err := executor.RunCommand("git", "--version")
 	if err != nil {

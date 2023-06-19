@@ -38,6 +38,7 @@ func GetUserVaues(ctx context.Context, file string) (UserSelections, CliConfig, 
 			return userSelections, cliConfig, err
 		}
 
+		// Split the registry URL to get the registry and namespace/repository
 		if *configValues.Config.RegistryConfig.RegistryURL != "" {
 			registry = strings.Split(*configValues.Config.RegistryConfig.RegistryURL, "/")[0]
 			registryNamespace = strings.Split(*configValues.Config.RegistryConfig.RegistryURL, "/")[1:]
@@ -144,22 +145,24 @@ config:
   software:
     # Allowed values are: ubuntu, opensuse-leap 
     osDistro: ubuntu
-    osVersion: 16.04
+    osVersion: 22.04
     # Allowed values are: k3s, rke2, kubeadm
     # kubeadm is the equivalent of Palette eXtended Kubernetes - Edge (PXK -E)
     kubernetesDistro: kubeadm
+    # Choose a Container Network Interface (CNI) available in Palette.
     containerNetworkInterface: calico
-    containerNetworkInterfaceVersion: 0.12.5
+    # Choose a Container Network Interface (CNI) version available in Palette.
+    containerNetworkInterfaceVersion: 3.25.0
   # The registry configuration values to use when uploading the provider images
   registryConfig:
-	registryURL: myUsername/edge
-	registryUsername: myUsername
+    registryURL: myUsername/myrepository
+    registryUsername: myUsername
     registryPassword: superSecretPassword
   # Palette credentials and project ID. If the project ID is not provided, then the default scope is Tenant.
   palette:
     apiKey: 1234567890
     projectID: 1234567890
-	paletteHost: https://api.spectrocloud.com
+    paletteHost: https://api.spectrocloud.com
   # The Edge Installer configuration values to use when creating the Edge Installer ISO
   edgeInstaller:
     tenantRegistrationToken: 1234567890
@@ -168,7 +171,7 @@ config:
   # The Cluster Profile configuration values to use when creating the Cluster Profile
   clusterProfile:
     createClusterProfile: true
-	# The suffix is part of the cluster profile name. The name format is: edge-<suffix>-<YYYY-MM-DD>-<SHA-256>
+    # The suffix is part of the cluster profile name. The name format is: edge-<suffix>-<YYYY-MM-DD>-<SHA-256>
     suffix: learn
   # Allowed values: linux/amd64
   platform: linux/amd64

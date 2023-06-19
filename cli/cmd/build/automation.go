@@ -107,7 +107,6 @@ func Automation(ctx context.Context, userSelectedOptions *internal.UserSelection
 			log.InfoCLI("err %s: ", err)
 			log.FatalCLI("Error publishing the cluster profile in Palette. Exiting")
 		}
-		log.InfoCLI("Creating the cluster profile in Palette....")
 		finalMsg = fmt.Sprintf("Go ahead and prepare your Edge host using the ISO image created in the build/ folder and use the cluster profile %s created in Palette.", cp.Metadata.Name)
 	}
 

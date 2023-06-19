@@ -67,7 +67,6 @@ func CreateTemplateFile(packs Packs) error {
 		// Filter out by layer
 		switch p.Spec.Layer {
 		case "os":
-
 			filePath := DefaultCanvOsDir + pathSeparator + p.Spec.Layer + pathSeparator + p.Spec.Name + "-" + p.Spec.Version + ".yaml"
 			file, err := os.Create(filePath)
 			if err != nil {
@@ -93,7 +92,6 @@ func CreateTemplateFile(packs Packs) error {
 				return err
 			}
 		case "cni":
-
 			filePath := DefaultCanvOsDir + pathSeparator + p.Spec.Layer + pathSeparator + p.Spec.Name + "-" + p.Spec.Version + ".yaml"
 			file, err := os.Create(filePath)
 			if err != nil {

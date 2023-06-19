@@ -9,6 +9,7 @@ import (
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+	initCmd.PersistentFlags().BoolVarP(&GenerateExampleConfig, "generate", "g", false, "Enable to generate an example config file titled .config.yml in the current directory")
 
 }
 
@@ -18,6 +19,8 @@ var initCmd = &cobra.Command{
 	Long:  `Initialize the CanvOS project and download all the required pack templates`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
+
+		log.InfoCLI("Example Setting %v", GenerateExampleConfig)
 
 		// Initialize the logger
 		GlobalCliConfig.Verbose = &Verbose
@@ -36,6 +39,7 @@ var initCmd = &cobra.Command{
 			GlobalCliConfig.PaletteHost = cliConfig.PaletteHost
 			GlobalCliConfig.ProjectID = cliConfig.ProjectID
 		}
+		GlobalCliConfig.GenerateExampleConfig = internal.BoolPtr(GenerateExampleConfig)
 
 		if *GlobalCliConfig.PaletteApiKey == "" {
 			log.FatalCLI("Palette API Key is required. Please set the SPECTROCLOUD_APIKEY environment variable.")
@@ -160,6 +164,16 @@ var initCmd = &cobra.Command{
 			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error copying the template files to the root folder.")
 
+		}
+		log.InfoCLI("Example Setting2 %v", GlobalCliConfig.GenerateExampleConfig)
+		if *GlobalCliConfig.GenerateExampleConfig {
+			log.InfoCLI("Generating the example config file config.yml in the root folder...")
+			err = internal.GenerateExampleConfigFile(ctx)
+			if err != nil {
+				log.Debug(internal.LogError(err))
+				log.FatalCLI("Error generating the example config file.")
+
+			}
 		}
 
 		log.InfoCLI("")

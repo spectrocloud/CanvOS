@@ -14,6 +14,8 @@ var (
 	GlobalCliConfig internal.CliConfig
 	// ConfigFile is the path to the config file
 	ConfigFile string
+	// GenerateExampleConfig is to generate an example config file
+	GenerateExampleConfig bool
 )
 
 var rootCmd = &cobra.Command{
