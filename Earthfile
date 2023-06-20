@@ -9,8 +9,8 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
-ARG SPECTRO_LUET_VERSION=v1.0.4
-ARG KAIROS_VERSION=v2.0.3
+ARG SPECTRO_LUET_VERSION=v1.0.8
+ARG KAIROS_VERSION=v2.2.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -73,7 +73,7 @@ provider-image:
     ARG IMAGE_REPO
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -88,6 +88,9 @@ provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd
     END
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        RUN luet install -y container-runtime/containerd-fips
+    END
     RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
@@ -97,7 +100,11 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-    ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$PE_VERSION
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-amd64:$PE_VERSION
+    ELSE
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-amd64:$PE_VERSION
+    END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
@@ -106,6 +113,8 @@ stylus-image:
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
@@ -124,7 +133,7 @@ base-image:
     RUN mkdir -p /etc/luet/repos.conf.d && \
         SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
