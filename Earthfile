@@ -100,7 +100,11 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-    ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-amd64:$PE_VERSION
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-amd64:$PE_VERSION
+    ELSE
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-amd64:$PE_VERSION
+    END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
