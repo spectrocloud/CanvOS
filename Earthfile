@@ -41,13 +41,13 @@ IF [ "$ARCH" == "arm64" ]
 END
 
 build-all-images:
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +iso
+    BUILD --platform=linux/amd64  +build-provider-images
+    BUILD --platform=linux/amd64  +iso
 
 build-provider-images:
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
-    #BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
-    #BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
+    #BUILD --platform=linux/amd64  +provider-image --K8S_VERSION=1.24.6
+    BUILD --platform=linux/amd64  +provider-image --K8S_VERSION=1.25.2
+    #BUILD --platform=linux/amd64  +provider-image --K8S_VERSION=1.26.4
 
 iso-image-rootfs:
     FROM +iso-image
@@ -56,7 +56,7 @@ iso-image-rootfs:
 iso:
     ARG ISO_NAME=installer
     WORKDIR /build
-    COPY --platform=${TARGETOS}/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 build-iso:
@@ -70,7 +70,7 @@ build-iso:
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     WORKDIR /build
     COPY --keep-own +iso-image-rootfs/rootfs /build/image
-    RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
+    RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch x86_64
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
     SAVE ARTIFACT /iso/*
@@ -182,7 +182,7 @@ base-image:
     RUN luet repo add kairos -y --url quay.io/kairos/${KAIROS_REPO} --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
-        rm /etc/machine-id && \
+        rm -f /etc/machine-id && \
         rm -rf /var/lib/dbus/machine-id
     RUN touch /etc/machine-id && \ 
         chmod 444 /etc/machine-id
