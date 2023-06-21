@@ -33,11 +33,11 @@ var initCmd = &cobra.Command{
 				log.Debug(internal.LogError(err))
 				log.FatalCLI("Error reading the configuration file")
 			}
-
 			// Update the GlobalCliConfig
 			GlobalCliConfig.PaletteApiKey = cliConfig.PaletteApiKey
 			GlobalCliConfig.PaletteHost = cliConfig.PaletteHost
 			GlobalCliConfig.ProjectID = cliConfig.ProjectID
+			GlobalCliConfig.CanvosVersion = cliConfig.CanvosVersion
 		}
 		GlobalCliConfig.GenerateExampleConfig = internal.BoolPtr(GenerateExampleConfig)
 
@@ -153,7 +153,7 @@ var initCmd = &cobra.Command{
 		// The CanvOS repository is downloaded so that the user has the Eartly scripts and required assets.
 		// The plan is to host this logic in the Palette CLI and not in the CanvOS repository.
 		log.InfoCLI("Downloading CanvOS assets...")
-		err = internal.CloneCanvOS(cmd.Context())
+		err = internal.CloneCanvOS(cmd.Context(), GlobalCliConfig.CanvosVersion)
 		if err != nil {
 			log.Debug(internal.LogError(err))
 			log.FatalCLI("Error cloning the CanvOS repository.")
@@ -165,7 +165,6 @@ var initCmd = &cobra.Command{
 			log.FatalCLI("Error copying the template files to the root folder.")
 
 		}
-		log.InfoCLI("Example Setting2 %v", GlobalCliConfig.GenerateExampleConfig)
 		if *GlobalCliConfig.GenerateExampleConfig {
 			log.InfoCLI("Generating the example config file config.yml in the root folder...")
 			err = internal.GenerateExampleConfigFile(ctx)

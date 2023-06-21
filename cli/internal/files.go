@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/hashicorp/go-version"
 	log "specrocloud.com/canvos/logger"
 )
 
@@ -421,24 +423,6 @@ func getOSMajorRelease(osVersion string) string {
 	return majorRelease
 }
 
-// CloneCanvOS clones the CanvOS repo
-func CloneCanvOS(ctx context.Context) error {
-	// get the first characters before the first dot
-	// Example: 20.04.2
-	// Result: 20
-	path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS"
-
-	_, err := git.PlainCloneContext(ctx, path, false, &git.CloneOptions{
-		URL:   "https://github.com/spectrocloud/CanvOS.git",
-		Depth: 1,
-	})
-	if err != nil {
-		log.Info("error cloning CanvOS repo: %v", err)
-		return err
-	}
-	return nil
-}
-
 // StartBuildProcessScript starts the build process script
 // This is the CanvOS Earthly build script
 // All the required files are moved to the correct location before the script is started
@@ -675,4 +659,106 @@ func GetContentDir() (string, error) {
 
 	// Return an error if no directory was found.
 	return "", os.ErrNotExist
+}
+
+// CloneCanvOS clones the CanvOS repo
+func CloneCanvOS(ctx context.Context, inputVersion *string) error {
+	path := DefaultCanvOsDir + string(os.PathSeparator) + "canvOS"
+
+	r, err := git.PlainCloneContext(ctx, path, false, &git.CloneOptions{
+		URL: "https://github.com/spectrocloud/CanvOS.git",
+	})
+	if err != nil {
+		log.Debug("error cloning CanvOS repo: %v", err)
+		return err
+	}
+
+	tagrefs, err := r.Tags()
+	if err != nil {
+		log.Debug("error getting tags: %v", err)
+		return err
+	}
+
+	var targetTagRef *plumbing.Reference
+
+	if inputVersion != nil {
+		userVersion, err := version.NewVersion(*inputVersion)
+		if err != nil {
+			log.Debug("error parsing input version: %v", err)
+		} else {
+			err = tagrefs.ForEach(func(t *plumbing.Reference) error {
+				v, err := version.NewVersion(t.Name().Short())
+				if err != nil {
+					return nil
+				}
+				if v.Equal(userVersion) {
+					commit, err := r.ResolveRevision(plumbing.Revision(t.Name().String()))
+					if err != nil {
+						return nil
+					}
+					log.InfoCLI("Using CanvOS version %s", t.Name().Short())
+					targetTagRef = plumbing.NewHashReference(plumbing.ReferenceName("refs/heads/target"), *commit)
+				}
+				return nil
+			})
+			if err != nil {
+				log.Debug("error iterating over tags: %v", err)
+				return errors.New("error iterating over tags")
+			}
+		}
+	}
+
+	if targetTagRef == nil {
+		log.InfoCLI("User input version invalid or not provided, using the latest CanvOS tag")
+		var latestTagRef *plumbing.Reference
+		var latestTag *version.Version
+
+		err = tagrefs.ForEach(func(t *plumbing.Reference) error {
+			// Resolve tag to commit
+			commit, err := r.ResolveRevision(plumbing.Revision(t.Name().String()))
+			if err != nil {
+				return nil
+			}
+
+			v, err := version.NewVersion(t.Name().Short())
+			if err != nil {
+				return nil
+			}
+
+			if latestTag == nil || v.GreaterThan(latestTag) {
+				latestTagRef = plumbing.NewHashReference(plumbing.ReferenceName("refs/heads/latest"), *commit)
+				latestTag = v
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			log.Debug("error iterating over tags: %v", err)
+			return err
+		}
+
+		if latestTagRef == nil {
+			return errors.New("no valid version found")
+		}
+
+		targetTagRef = latestTagRef
+	}
+
+	w, err := r.Worktree()
+	if err != nil {
+		log.Debug("error getting worktree: %v", err)
+		return err
+	}
+	err = w.Checkout(&git.CheckoutOptions{
+		Hash:  targetTagRef.Hash(),
+		Force: true,
+	})
+
+	if err != nil {
+		log.Debug("error checking out to target tag: %v", err)
+		return err
+	}
+
+	return nil
 }

@@ -74,6 +74,7 @@ func GetUserVaues(ctx context.Context, file string) (UserSelections, CliConfig, 
 			PaletteApiKey: configValues.Config.Palette.ApiKey,
 			ProjectID:     configValues.Config.Palette.ProjectID,
 			PaletteHost:   configValues.Config.Palette.PaletteHost,
+			CanvosVersion: configValues.Config.CanvosVersion,
 		}
 
 	}
@@ -177,7 +178,10 @@ config:
   platform: linux/amd64
   # The custom tag to apply to the provider images. 
   # The provider images name follow the format: <kubernetesDistro>-<k8sVersion>-v<installerVersion>-<customTag>_<platform>
-  customTag: palette-learn`
+  customTag: palette-learn
+  # The Canvos version to use for the Edge Installer ISO
+  canvosVersion: 3.4.3
+  `
 
 	// Create a new file
 	file, err := os.Create("config.yml")

@@ -37,12 +37,14 @@ func init() {
 	apiKey := internal.Getenv("SPECTROCLOUD_APIKEY", "")
 	PaletteEndpoint := internal.Getenv("PALETTE_HOST", "https://api.spectrocloud.com")
 	ProjectID := internal.Getenv("PALETTE_PROJECT_ID", "")
+	canvosVersion := internal.Getenv("CANVOS_VERSION", *internal.StrPtr(""))
 
 	// Global CLI config
 	GlobalCliConfig.PaletteApiKey = &apiKey
 	GlobalCliConfig.PaletteHost = &PaletteEndpoint
 	GlobalCliConfig.ProjectID = &ProjectID
 	GlobalCliConfig.ConfigFile = &ConfigFile
+	GlobalCliConfig.CanvosVersion = &canvosVersion
 
 	rootCmd.PersistentFlags().StringVarP(&Verbose, "verbose", "v", "INFO", "Set the debugging mode (DEBUG, INFO, WARN, ERROR, FATAL)")
 	rootCmd.PersistentFlags().StringVarP(&ConfigFile, "config", "c", "", "Specify the path to a config file")

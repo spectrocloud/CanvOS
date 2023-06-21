@@ -23,6 +23,8 @@ type CliConfig struct {
 	ConfigFile *string
 	// GenerateExampleConfig is to generate an example config file
 	GenerateExampleConfig *bool
+	// CanvosVersion is the version of Canvos
+	CanvosVersion *string
 }
 
 // PaletteAuth is the authentication information for the Palette API
@@ -684,6 +686,8 @@ type ConfigDetails struct {
 	Platform *string `yaml:"platform" validate:"required,oneof=linux/amd64"`
 	// CustomTag is the custom tag to use for the provider images
 	CustomTag *string `yaml:"customTag" validate:"required"`
+	// CanvosVersion is the version of Canvos to use
+	CanvosVersion *string `yaml:"canvosVersion"`
 }
 
 type SoftwareDetails struct {
