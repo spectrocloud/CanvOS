@@ -10,22 +10,22 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG SPECTRO_LUET_VERSION=v1.0.8
-ARG KAIROS_VERSION=v2.2.0
+ARG KAIROS_VERSION=v2.2.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v2.0.3
-ARG KUBEADM_PROVIDER_VERSION=v2.0.5-beta1
-ARG RKE2_PROVIDER_VERSION=v2.0.3
+ARG K3S_PROVIDER_VERSION=v2.0.4-alpha1
+ARG KUBEADM_PROVIDER_VERSION=v2.0.6-alpha1
+ARG RKE2_PROVIDER_VERSION=v2.0.4-alpha1
 
 
-IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" == "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" == "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
@@ -100,7 +100,7 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "FIPS" = "true" ]
         ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-amd64:$PE_VERSION
     ELSE
         ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-amd64:$PE_VERSION
@@ -155,9 +155,23 @@ base-image:
             ln -sf "initrd-${kernel}" /boot/initrd
         RUN kernel=$(ls /lib/modules | head -n1) && \
             depmod -a "${kernel}"
+
+        IF [ "FIPS" = "true" ]
+           # RUN echo "token: $UBUNTU_ONE_PRO_TOKEN" \
+           #         "enable_services:" \
+           #          "- fips" > pro-attach-config.yaml
+            RUN --mount=type=secret,id=pro-attach-config \
+                apt-get update \
+                && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
+                && pro attach --attach-config /run/secrets/pro-attach-config \
+                && apt-get upgrade -y \
+                && apt-get install -y openssl libssl1.1 libssl1.1-hmac libgcrypt20 libgcrypt20-hmac strongswan strongswan-hmac openssh-client openssh-server \
+                && apt-get purge --auto-remove -y ubuntu-advantage-tools ca-certificates \
+                && rm -rf /var/lib/apt/lists/*
+        END
         RUN rm -rf /var/cache/* && \
             apt clean
-            
+
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
         RUN zypper refresh && \
@@ -166,6 +180,11 @@ base-image:
             # zypper up kernel-default && \
             # zypper purge-kernels && \
         RUN zypper install -y zstd vim
+             IF [ "FIPS" = "true" ]
+                RUN zypper install suse-module-tools-fips
+                RUN echo HWCLOCK="-u" >> /etc/sysconfig/clock
+                RUN echo 'sysctl -w crypto.fips_enabled=1' >> /etc/sysconfig/boot
+             END
         RUN zypper cc && \
             zypper clean
             
