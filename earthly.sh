@@ -15,6 +15,11 @@ if ! docker run --rm --privileged alpine sh -c 'echo "Privileged container test"
     echo "Privileged containers are not allowed for the current user."
     exit 1
 fi
+
+if [[ ! -z $UBUNTU_ONE_PRO_TOKEN ]]; then
+  echo -e "token: $UBUNTU_ONE_PRO_TOKEN\nenable_services:\n  - fips" >  pro-attach-config.yaml
+fi
+
 # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
 docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -v "$(pwd)":/workspace -v earthly-tmp:/tmp/earthly:rw gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 
@@ -23,6 +28,7 @@ if [ $? -ne 0 ]; then
     echo "An error occurred while running the command."
     exit 1
 fi
+rm -f pro-attach-config.yaml
 # Cleanup builder helper images.
 docker rmi gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION
 docker rmi alpine:latest

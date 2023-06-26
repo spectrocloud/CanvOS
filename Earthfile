@@ -19,6 +19,7 @@ ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v2.0.4-alpha1
 ARG KUBEADM_PROVIDER_VERSION=v2.0.6-alpha1
 ARG RKE2_PROVIDER_VERSION=v2.0.4-alpha1
+ARG FIPS
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" == "" ]
@@ -100,7 +101,7 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "FIPS" = "true" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$FIPS" = "true" ]
         ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-amd64:$PE_VERSION
     ELSE
         ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-amd64:$PE_VERSION
@@ -156,11 +157,8 @@ base-image:
         RUN kernel=$(ls /lib/modules | head -n1) && \
             depmod -a "${kernel}"
 
-        IF [ "FIPS" = "true" ]
-           # RUN echo "token: $UBUNTU_ONE_PRO_TOKEN" \
-           #         "enable_services:" \
-           #          "- fips" > pro-attach-config.yaml
-            RUN --mount=type=secret,id=pro-attach-config \
+        IF [ "$FIPS" = "true" ]
+            RUN --mount=type=secret,id=pro-attach-config  \
                 apt-get update \
                 && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
                 && pro attach --attach-config /run/secrets/pro-attach-config \
@@ -168,26 +166,14 @@ base-image:
                 && apt-get install -y openssl libssl1.1 libssl1.1-hmac libgcrypt20 libgcrypt20-hmac strongswan strongswan-hmac openssh-client openssh-server \
                 && apt-get purge --auto-remove -y ubuntu-advantage-tools ca-certificates \
                 && rm -rf /var/lib/apt/lists/*
+
+                RUN luet util unpack quay.io/kairos/framework:master_ubuntu-20-lts-fips /
+
+
+            RUN pro detach --assume-yes
         END
         RUN rm -rf /var/cache/* && \
             apt clean
-
-    # IF OS Type is Opensuse
-    ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-        RUN zypper refresh && \
-            zypper update -y && \
-            mkinitrd
-            # zypper up kernel-default && \
-            # zypper purge-kernels && \
-        RUN zypper install -y zstd vim
-             IF [ "FIPS" = "true" ]
-                RUN zypper install suse-module-tools-fips
-                RUN echo HWCLOCK="-u" >> /etc/sysconfig/clock
-                RUN echo 'sysctl -w crypto.fips_enabled=1' >> /etc/sysconfig/boot
-             END
-        RUN zypper cc && \
-            zypper clean
-            
     END
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
@@ -207,3 +193,4 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
+   # SAVE IMAGE ttl.sh/san:san1234
