@@ -10,15 +10,15 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG SPECTRO_LUET_VERSION=v1.0.8
-ARG KAIROS_VERSION=v2.2.0
+ARG KAIROS_VERSION=v2.2.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v2.0.3
-ARG KUBEADM_PROVIDER_VERSION=v2.0.5-beta1
-ARG RKE2_PROVIDER_VERSION=v2.0.3
+ARG K3S_PROVIDER_VERSION=v2.2.1-alpha1
+ARG KUBEADM_PROVIDER_VERSION=v2.2.1-alpha1
+ARG RKE2_PROVIDER_VERSION=v2.2.1-alpha1
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
@@ -29,6 +29,8 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
+ELSE IF [ "$OS_DISTRIBUTION" = "ubuntu-fips" ]
+    ARG BASE_IMAGE='gcr.io/spectro-dev-public/santhosh/ubuntu-focal-fips:latest1'
 END
 
 build-all-images:
@@ -38,7 +40,7 @@ build-all-images:
 build-provider-images:
     BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
     BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
-    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+    #BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
 
 iso-image-rootfs:
     FROM +iso-image
@@ -172,7 +174,7 @@ base-image:
     END
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
-        rm /etc/machine-id && \
+        rm -f /etc/machine-id && \
         rm -rf /var/lib/dbus/machine-id
     RUN touch /etc/machine-id && \ 
         chmod 444 /etc/machine-id
