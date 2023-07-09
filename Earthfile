@@ -148,12 +148,12 @@ base-image:
             apt install --no-install-recommends zstd vim -y
         RUN apt update && \
             apt upgrade -y
-        RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+        RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
-        RUN kernel=$(ls /lib/modules | head -n1) && \
+        RUN kernel=$(ls /lib/modules | tail -n1) && \
             dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
             ln -sf "initrd-${kernel}" /boot/initrd
-        RUN kernel=$(ls /lib/modules | head -n1) && \
+        RUN kernel=$(ls /lib/modules | tail -n1) && \
             depmod -a "${kernel}"
         RUN rm -rf /var/cache/* && \
             apt clean
