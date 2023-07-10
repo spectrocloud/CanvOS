@@ -170,6 +170,7 @@ base-image:
             zypper clean
             
     END
+    RUN luet repo add kairos -y --url quay.io/kairos/packages --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm /etc/machine-id && \
