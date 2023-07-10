@@ -19,6 +19,7 @@ ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v2.2.1-alpha1
 ARG KUBEADM_PROVIDER_VERSION=v2.2.1-alpha1
 ARG RKE2_PROVIDER_VERSION=v2.2.1-alpha1
+ARG FIPS_ENABLED=false
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
@@ -38,9 +39,15 @@ build-all-images:
     BUILD --platform=linux/amd64 +iso
 
 build-provider-images:
-    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
-    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
-    #BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+    IF $FIPS_ENABLED
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.13
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.9
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+    ELSE
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+    END
 
 iso-image-rootfs:
     FROM +iso-image
