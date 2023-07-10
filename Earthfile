@@ -12,30 +12,30 @@ ARG PE_VERSION
 ARG BASE_IMAGE
 ARG ARCH=amd64
 ARG SPECTRO_LUET_VERSION=v1.0.7
-ARG KAIROS_VERSION=v2.2.0
+ARG KAIROS_VERSION=v2.2.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v2.0.3
-ARG KUBEADM_PROVIDER_VERSION=v2.0.5-beta1
-ARG RKE2_PROVIDER_VERSION=v2.0.3
+ARG K3S_PROVIDER_VERSION=v2.2.1-alpha1
+ARG KUBEADM_PROVIDER_VERSION=v2.2.1-alpha1
+ARG RKE2_PROVIDER_VERSION=v2.2.1-alpha1
 ARG LUET_REPO=luet-repo
 ARG KAIROS_REPO=packages
 
 
-IF [ "$OS_DISTRIBUTION" = "ubuntu" && "$BASE_IMAGE" == "" ]
+IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" && "$BASE_IMAGE" == "" ]
+ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 END
 
-IF [ "$ARCH" == "arm64" ]
+IF [ "$ARCH" = "arm64" ]
     ARG LUET_REPO=luet-repo-arm
     ARG KAIROS_REPO=packages-arm64
 END
@@ -63,7 +63,7 @@ build-iso:
     ARG ISO_NAME
     ARG BUILDPLATFORM
     ARG TARGETARCH
-    FROM $OSBUILDER_IMAGE
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
@@ -134,8 +134,6 @@ kairos-provider-image:
 # base build image used to create the base image for all other image types
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
-    ARG ARCH=amd64
-    ENV ARCH=${ARCH}
     ARG TARGETOS
     ARG TARGETARCH
 
