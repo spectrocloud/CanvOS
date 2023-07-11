@@ -22,7 +22,6 @@ ARG K3S_PROVIDER_VERSION=v2.2.1-alpha1
 ARG KUBEADM_PROVIDER_VERSION=v2.2.1-alpha1
 ARG RKE2_PROVIDER_VERSION=v2.2.1-alpha1
 ARG LUET_REPO=luet-repo
-ARG KAIROS_REPO=packages
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
@@ -37,7 +36,6 @@ END
 
 IF [ "$ARCH" = "arm64" ]
     ARG LUET_REPO=luet-repo-arm
-    ARG KAIROS_REPO=packages-arm64
 END
 
 build-all-images:
@@ -135,7 +133,7 @@ base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/${LUET_REPO}  --priority 1 -y && \
+        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 -y && \
         luet repo update
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
