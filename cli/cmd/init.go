@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"sync"
+
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"specrocloud.com/canvos/internal"
@@ -76,9 +78,10 @@ var initCmd = &cobra.Command{
 		}
 
 		g, ctx := errgroup.WithContext(ctx)
-
+		var mu sync.Mutex
 		// Variable to store Pack request responses
 		var responses = make(map[string]internal.Packs)
+		log.InfoCLI("")
 		log.InfoCLI("Downloading Pack templates....")
 		// Make all Pack data requests concurrently
 		for key, filter := range packsRequestFilters {
@@ -90,7 +93,11 @@ var initCmd = &cobra.Command{
 				if err != nil {
 					log.Debug(internal.LogError(err))
 				} else {
+					// Set a lock to prevent race conditions otherwise the responses map will panic
+					// due to concurrent map writes
+					mu.Lock()
 					responses[k] = response
+					mu.Unlock()
 				}
 				return err
 			})
@@ -177,7 +184,6 @@ var initCmd = &cobra.Command{
 
 		log.InfoCLI("")
 		log.InfoCLI("✅ Init downloaded all required assets successfully.")
-		log.InfoCLI("")
 		log.InfoCLI("")
 		log.InfoCLI("--------------------------------------------------------------")
 		log.InfoCLI("Use the the canvos build command to build the Edge Artifacts 💾 💿")

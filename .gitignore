@@ -9,3 +9,6 @@ content-*/*
 .canvos
 *.arg
 .config.yml
+.netrc
+cli/canvos
+*DS_Store
