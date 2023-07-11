@@ -1,15 +1,15 @@
-name: Pr
+# name: Pr
 
-on: [pull_request]
+# on: [pull_request]
 
-concurrency:
-  group: ${{ github.pr_workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# concurrency:
+#   group: ${{ github.pr_workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
 
-permissions:
-  contents: read
+# permissions:
+#   contents: read
 
-jobs:
-  build: 
-    uses: ./.github/workflows/release.yaml
-    secrets: inherit
+# jobs:
+#   build: 
+#     uses: ./.github/workflows/release.yaml
+#     secrets: inherit

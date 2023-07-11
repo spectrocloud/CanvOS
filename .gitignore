@@ -6,4 +6,9 @@ variables.env.old
 *content-bundle.tar
 config.yaml
 content-*/*
-.arg
+.canvos
+*.arg
+.config.yml
+.netrc
+cli/canvos
+*DS_Store
