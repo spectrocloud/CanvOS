@@ -104,7 +104,7 @@ cp .arg.template .arg
 | K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm`.                                                       | String | `k3s`                  |
 | ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                             | String | `palette-edge-installer`|
 | PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.           | String | `GH tag`               | 
-| platform         | Type of platform to use for the build.  Used for Cross Platform Build (arm64 to amd64 as example).                                       | string |  `linux/amd64`          | 
+| platform         | The type of platform architecture to use for the Edge artifacts build. Allowed values are: `linux/adm64`, or `linux/arm64`.                                       | String |  `linux/amd64`          | 
 
 7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
   
@@ -173,7 +173,10 @@ docker push ttl.sh/ubuntu-demo:k3s-1.24.6-v3.4.3-demo
 
 13. Build a cluster in [Palette](https://console.spectrocloud.com). 
 
-### How-Tos
+### Learning Resources
 
-* [Building Edge Native Artifacts]([https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos](https://deploy-preview-1318--docs-spectrocloud.netlify.app/clusters/edge/edgeforge-workflow/palette-canvos))
+
+* [Building Edge Native Artifacts](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos) - A how-to guide for using CanvOS.
+
+* [Deploy Edge Cluster](https://docs.spectrocloud.com/clusters/edge/site-deployment/deploy-cluster) - An end-to-end tutorial for learning how to deploy an Edge cluster in VMware that simulates a bare metal environmet.
 
