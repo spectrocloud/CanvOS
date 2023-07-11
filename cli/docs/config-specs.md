@@ -33,6 +33,7 @@
 | apiKey | API key | No |
 | projectID | Project ID | No |
 | paletteHost | Palette Host URL | No |
+| canvosVersion | The CanvOS version to use. By default, the newest tag is used. | No |
 
 ### EdgeInstallerDetails
 | Parameter | Description | Required |
