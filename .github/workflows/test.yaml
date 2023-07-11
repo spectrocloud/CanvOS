@@ -2,8 +2,6 @@ name: Test & Validate
 
 on:
   push:
-    # paths:
-    # - 'cli'
     branches-ignore: [ main ]
 
 env:
@@ -35,6 +33,7 @@ jobs:
       name: "Get dependencies"
       id: dependencies
       run: |
+          cd cli
           go get -v -t -d ./...
           if [ -f Gopkg.toml ]; then
               curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
@@ -43,7 +42,7 @@ jobs:
   
     - name: Go Tests
       run: |
-        go test ./...
+        cd cli && go test ./...
 
   compile:
     name: Compile validation
@@ -63,6 +62,7 @@ jobs:
     - name: "Get dependencies"
       id: dependencies
       run: |
+          cd cli
           go get -v -t -d ./...
           if [ -f Gopkg.toml ]; then
               curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
@@ -90,5 +90,5 @@ jobs:
     - name: build & execute
       run: |
         echo "--------------------------------------------------"
-        go build -ldflags="-X 'specrocloud.com/internal.Version=1.0.0'" -o=canvos -v
+        cd cli && go build -ldflags="-X 'specrocloud.com/internal.Version=1.0.0'" -o=canvos -v
         ./canvos version
