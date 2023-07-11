@@ -122,18 +122,6 @@ base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
     ARG ARCH=amd64
     ENV ARCH=${ARCH}
-    # Add proxy certificate if present
-    IF [ ! -z $PROXY_CERT_PATH ]
-       COPY $PROXY_CERT_PATH /etc/ssl/certs
-       RUN  update-ca-certificates
-    END
-    RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add kairos -y --type docker --url quay.io/kairos/packages --priority 99 && \
-        luet repo update && \
-        luet install -y system/elemental-cli && \
-        rm /etc/luet/repos.conf.d/* && \
-        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
-        luet repo update
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
@@ -147,6 +135,11 @@ base-image:
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
         RUN apt update && \
             apt install --no-install-recommends zstd vim -y
+        # Add proxy certificate if present
+        IF [ ! -z $PROXY_CERT_PATH ]
+            COPY $PROXY_CERT_PATH /etc/ssl/certs
+            RUN  update-ca-certificates
+        END
         RUN apt update && \
             apt upgrade -y
         RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
@@ -169,7 +162,13 @@ base-image:
         RUN zypper install -y zstd vim
         RUN zypper cc && \
             zypper clean
-            
+    RUN mkdir -p /etc/luet/repos.conf.d && \
+        luet repo add kairos -y --type docker --url quay.io/kairos/packages --priority 99 && \
+        luet repo update && \
+        luet install -y system/elemental-cli && \
+        rm /etc/luet/repos.conf.d/* && \
+        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+        luet repo update
     END
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
