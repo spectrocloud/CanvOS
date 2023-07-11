@@ -97,6 +97,7 @@ cp .arg.template .arg
 | Parameter        | Description                                                                                                                             | Type   | Default Value          |
 |------------------|-----------------------------------------------------------------------------------------------------------------------------------------|--------|------------------------|
 | CUSTOM_TAG       | Environment name for provider image tagging. The default value is `demo`.                                                                | String | `demo`                 |
+| ARCH | The platform architecture to create Edge artifacts for. Allowed values are `amd64`, `arm64`| String |`amd64`|
 | IMAGE_REGISTRY   | Image registry name that will store the image artifacts. The default value points to the *ttl.sh* image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String | `ttl.sh`               |
 | OS_DISTRIBUTION  | OS distribution of your choice. For example, it can be `ubuntu` or `opensuse-leap`.                                                     | String | `ubuntu`               |
 | IMAGE_REPO       | Image repository name in your chosen registry.                                                                                          | String | `$OS_DISTRIBUTION`     |
@@ -173,7 +174,10 @@ docker push ttl.sh/ubuntu-demo:k3s-1.24.6-v3.4.3-demo
 
 13. Build a cluster in [Palette](https://console.spectrocloud.com). 
 
-### How-Tos
+### Learning Resources
 
-* [Building Edge Native Artifacts]([https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos](https://deploy-preview-1318--docs-spectrocloud.netlify.app/clusters/edge/edgeforge-workflow/palette-canvos))
+
+* [Building Edge Native Artifacts](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos) - A how-to guide for using CanvOS.
+
+* [Deploy Edge Cluster](https://docs.spectrocloud.com/clusters/edge/site-deployment/deploy-cluster) - An end-to-end tutorial for learning how to deploy an Edge cluster in VMware that simulates a bare metal environmet.
 
