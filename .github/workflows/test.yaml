@@ -2,8 +2,8 @@ name: Test & Validate
 
 on:
   push:
-    paths:
-    - 'cli'
+    # paths:
+    # - 'cli'
     branches-ignore: [ main ]
 
 env:
