@@ -42,7 +42,7 @@ END
 
 build-all-images:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +iso
+    BUILD +iso
 
 build-provider-images:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
@@ -61,8 +61,7 @@ iso:
 
 build-iso:
     ARG ISO_NAME
-    ARG BUILDPLATFORM
-    ARG TARGETARCH
+
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
@@ -134,8 +133,6 @@ kairos-provider-image:
 # base build image used to create the base image for all other image types
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
-    ARG TARGETOS
-    ARG TARGETARCH
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
         SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/${LUET_REPO}  --priority 1 -y && \
@@ -166,7 +163,7 @@ base-image:
             apt clean
             
     # IF OS Type is Opensuse
-    ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+    ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
         RUN zypper refresh && \
             zypper update -y && \
             mkinitrd
@@ -177,7 +174,7 @@ base-image:
             zypper clean
             
     END
-    RUN luet repo add kairos -y --url quay.io/kairos/${KAIROS_REPO} --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
+
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm /etc/machine-id && \
