@@ -94,24 +94,31 @@ cp .arg.template .arg
 
 6. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
 
-| Parameter        | Description                                                                                                                             | Type   | Default Value          |
-|------------------|-----------------------------------------------------------------------------------------------------------------------------------------|--------|------------------------|
-| CUSTOM_TAG       | Environment name for provider image tagging. The default value is `demo`.                                                                | String | `demo`                 |
+| Parameter        | Description                                                                                                                                                                                                                                                                                                                                    | Type   | Default Value          |
+|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|------------------------|
+| CUSTOM_TAG       | Environment name for provider image tagging. The default value is `demo`.                                                                                                                                                                                                                                                                      | String | `demo`                 |
 | IMAGE_REGISTRY   | Image registry name that will store the image artifacts. The default value points to the *ttl.sh* image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String | `ttl.sh`               |
-| OS_DISTRIBUTION  | OS distribution of your choice. For example, it can be `ubuntu` or `opensuse-leap`.                                                     | String | `ubuntu`               |
-| IMAGE_REPO       | Image repository name in your chosen registry.                                                                                          | String | `$OS_DISTRIBUTION`     |
-| OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. This example uses `22` for Ubuntu.                                         | String | `22`                   |
-| K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm`.                                                       | String | `k3s`                  |
-| ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                             | String | `palette-edge-installer`|
-| PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.           | String | `GH tag`               | 
-| platform         | Type of platform to use for the build.  Used for Cross Platform Build (arm64 to amd64 as example).                                       | string |  `linux/amd64`          | 
+| OS_DISTRIBUTION  | OS distribution of your choice. For example, it can be `ubuntu` or `opensuse-leap`.                                                                                                                                                                                                                                                            | String | `ubuntu`               |
+| IMAGE_REPO       | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                 | String | `$OS_DISTRIBUTION`     |
+| OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. This example uses `22` for Ubuntu.                                                                                                                                                                                    | String | `22`                   |
+| K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm`.                                                                                                                                                                                                                                                             | String | `k3s`                  |
+| ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                                                                                                                                                                                                                                   | String | `palette-edge-installer`|
+| PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.                                                                                                                                                                                                                 | String | `GH tag`               | 
+| platform         | Type of platform to use for the build.  Used for Cross Platform Build (linux/arm64 to amd64 as example).                                                                                                                                                                                                                                       | string |  `linux/amd64`          | 
 
 7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
   
 ```shell
 ./earthly.sh +build-all-images
 ```
-  
+
+To build ARM images use the following command 
+
+```shell
+./earthly.sh +build-all-images --PE_VERSION=v4.0.x --BASE_IMAGE=quay.io/kairos/core-opensuse-leap-arm-generic:v2.2.1 --ARCH=arm64
+```
+
+
 Output
 ```shell
 ###################################################################################################
