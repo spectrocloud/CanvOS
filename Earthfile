@@ -22,6 +22,7 @@ ARG K3S_PROVIDER_VERSION=v2.2.1-alpha1
 ARG KUBEADM_PROVIDER_VERSION=v2.2.1-alpha1
 ARG RKE2_PROVIDER_VERSION=v2.2.1-alpha1
 ARG LUET_REPO=luet-repo
+ARG FIPS_ENABLED=false
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
@@ -43,9 +44,15 @@ build-all-images:
     BUILD +iso
 
 build-provider-images:
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
+    IF $FIPS_ENABLED
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.13
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.9
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+    ELSE
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+    END
 
 iso-image-rootfs:
     FROM +iso-image
@@ -172,7 +179,7 @@ base-image:
 
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
-        rm /etc/machine-id && \
+        rm -f /etc/machine-id && \
         rm -rf /var/lib/dbus/machine-id
     RUN touch /etc/machine-id && \ 
         chmod 444 /etc/machine-id
