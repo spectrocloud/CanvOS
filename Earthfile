@@ -11,7 +11,7 @@ ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG BASE_IMAGE
 ARG ARCH
-ARG SPECTRO_LUET_VERSION=v1.0.7
+ARG SPECTRO_LUET_VERSION=v1.0.8
 ARG KAIROS_VERSION=v2.2.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -21,7 +21,6 @@ ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v2.2.1-alpha1
 ARG KUBEADM_PROVIDER_VERSION=v2.2.1-alpha1
 ARG RKE2_PROVIDER_VERSION=v2.2.1-alpha1
-ARG LUET_REPO=luet-repo
 ARG FIPS_ENABLED=false
 
 
@@ -136,9 +135,14 @@ kairos-provider-image:
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
 
-    RUN mkdir -p /etc/luet/repos.conf.d && \
-        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 -y && \
-        luet repo update
+    RUN mkdir -p /etc/luet/repos.conf.d
+    IF [ "$ARCH" = "arm64"]
+       SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 y
+    ELSE IF [ "$ARCH" = "arm64"]
+       SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y
+    END
+    RUN luet repo update
+
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
@@ -154,13 +158,15 @@ base-image:
             apt install --no-install-recommends zstd vim -y
         RUN apt update && \
             apt upgrade -y
-        RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+       IF [ "$ARCH" = "amd64" ]
+          RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
-        RUN kernel=$(ls /lib/modules | head -n1) && \
+          RUN kernel=$(ls /lib/modules | head -n1) && \
             dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
             ln -sf "initrd-${kernel}" /boot/initrd
-        RUN kernel=$(ls /lib/modules | head -n1) && \
+          RUN kernel=$(ls /lib/modules | head -n1) && \
             depmod -a "${kernel}"
+        END
         RUN rm -rf /var/cache/* && \
             apt clean
             
