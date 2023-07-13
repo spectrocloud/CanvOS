@@ -11,7 +11,7 @@ ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG BASE_IMAGE
 ARG ARCH
-ARG SPECTRO_LUET_VERSION=v1.0.9
+ARG SPECTRO_LUET_VERSION=v1.1.0-alpha1
 ARG KAIROS_VERSION=v2.2.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -137,7 +137,7 @@ base-image:
 
     RUN mkdir -p /etc/luet/repos.conf.d
     IF [ "$ARCH" = "arm64"]
-       SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 y
+       SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 -y
     ELSE IF [ "$ARCH" = "amd64"]
        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y
     END
