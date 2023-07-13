@@ -105,8 +105,9 @@ cp .arg.template .arg
 | ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                                                                                                                                                                                                                                   | String | `palette-edge-installer` |
 | PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.                                                                                                                                                                                                                 | String | `GH tag`                 |
 | BASE_IMAGE       | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                              | String |                          |
-| ARCH             | target architecture     `amd64`, `arm64`                                                                                                                                                                                                                                                                                                       | String | `amd64`                   |
+| ARCH             | target architecture     `amd64`, `arm64`                                                                                                                                                                                                                                                                                                       | String | `amd64`                  |
 | platform         | Type of platform to use for the build.  Used for Cross Platform Build (linux/arm64 to amd64 as example).                                                                                                                                                                                                                                       | string | `linux/amd64`            | 
+| FIPS_ENABLED     | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                         | string | `false`                  |
 
 7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
   
@@ -115,6 +116,7 @@ cp .arg.template .arg
 ```
 
 To build FIPS complaint images or ARM images, specify the BASE_IMAGE and ARCH in the .arg file
+`k3s` does not FIPS and rke2 is by default `FIPS` compliant.
 
 
 Output
