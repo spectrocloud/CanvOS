@@ -31,15 +31,6 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 END
 
-VERSION:
-    COMMAND
-    FROM gcr.io/spectro-images-public/alpine:3.16.2
-    RUN apk add git
-    COPY .git/ .git
-    RUN echo $(git describe --exact-match --tags || echo "v0.0.0-$(git log --oneline -n 1 | cut -d" " -f1)") > VERSION
-    RUN cat VERSION | cut -c2- > PACKAGE_VERSION
-    SAVE ARTIFACT VERSION PACKAGE_VERSION
-
 build-all-images:
     BUILD +build-provider-images
     BUILD +iso
@@ -53,7 +44,6 @@ iso-image-rootfs:
     SAVE ARTIFACT --keep-own /. rootfs
 
 iso:
-    DO +VERSION
     ARG VERSION=$(cat VERSION)
     ARG ISO_NAME=installer-${VERSION}
     WORKDIR /build
@@ -84,7 +74,7 @@ provider-image:
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG BASE_K8S_VERSION=$VERSION
+        ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
@@ -134,7 +124,7 @@ base-image:
         SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG BASE_K8S_VERSION=$VERSION
+        ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
@@ -148,12 +138,12 @@ base-image:
             apt install --no-install-recommends zstd vim -y
         RUN apt update && \
             apt upgrade -y
-        RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+        RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
-        RUN kernel=$(ls /lib/modules | head -n1) && \
+        RUN kernel=$(ls /lib/modules | tail -n1) && \
             dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
             ln -sf "initrd-${kernel}" /boot/initrd
-        RUN kernel=$(ls /lib/modules | head -n1) && \
+        RUN kernel=$(ls /lib/modules | tail -n1) && \
             depmod -a "${kernel}"
         RUN rm -rf /var/cache/* && \
             apt clean
