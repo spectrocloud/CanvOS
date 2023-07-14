@@ -86,7 +86,7 @@ provider-image:
     ARG IMAGE_REPO
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -101,6 +101,11 @@ provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd
     END
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+       RUN luet install -y container-runtime/containerd-fips
+    END
+
     RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
@@ -112,7 +117,11 @@ provider-image:
 stylus-image:
     ARG TARGETOS
     ARG TARGETARCH
-    ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-${TARGETOS}-${TARGETARCH}:$PE_VERSION
+     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-${TARGETOS}-${TARGETARCH}:$PE_VERSION
+     ELSE
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-${TARGETOS}-${TARGETARCH}:$PE_VERSION
+     END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
@@ -122,6 +131,8 @@ kairos-provider-image:
     ARG TARGETPLATFORM
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+            ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
@@ -145,7 +156,7 @@ base-image:
           luet repo update
     END
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
