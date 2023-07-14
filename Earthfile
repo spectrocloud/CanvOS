@@ -73,7 +73,11 @@ build-iso:
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     WORKDIR /build
     COPY --keep-own +iso-image-rootfs/rootfs /build/image
-    RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
+    IF [ "$ARCH" = "arm64" ]
+       RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
+    ELSE IF [ "$ARCH" = "amd64" ]
+       RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch x86_64
+    END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
     SAVE ARTIFACT /iso/*
