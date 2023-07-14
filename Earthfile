@@ -135,13 +135,15 @@ kairos-provider-image:
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
 
-    RUN mkdir -p /etc/luet/repos.conf.d
-    IF [ "$ARCH" = "arm64"]
-       SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 -y
-    ELSE IF [ "$ARCH" = "amd64"]
-       SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y
+    IF [ "$ARCH" = "arm64" ]
+       RUN  mkdir -p /etc/luet/repos.conf.d && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 -y && \
+          luet repo update
+    ELSE IF [ "$ARCH" = "amd64" ]
+        RUN  mkdir -p /etc/luet/repos.conf.d && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+          luet repo update
     END
-    RUN luet repo update
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG BASE_K8S_VERSION=$VERSION
@@ -167,6 +169,7 @@ base-image:
           RUN kernel=$(ls /lib/modules | head -n1) && \
             depmod -a "${kernel}"
         END
+
         RUN rm -rf /var/cache/* && \
             apt clean
             
