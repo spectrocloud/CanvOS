@@ -18,9 +18,9 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v2.2.1-alpha1
-ARG KUBEADM_PROVIDER_VERSION=v2.2.1-alpha1
-ARG RKE2_PROVIDER_VERSION=v2.2.1-alpha1
+ARG K3S_PROVIDER_VERSION=v2.2.1-alpha3
+ARG KUBEADM_PROVIDER_VERSION=v2.2.1-alpha3
+ARG RKE2_PROVIDER_VERSION=v2.2.1-alpha3
 ARG FIPS_ENABLED=false
 
 
@@ -51,6 +51,7 @@ build-provider-images:
        BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
        BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
        BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+       BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.27.2
     END
 
 iso-image-rootfs:
