@@ -216,3 +216,4 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
+    SAVE IMAGE palette-installer-image:latest
