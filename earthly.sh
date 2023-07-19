@@ -18,7 +18,7 @@ fi
 
 gitconfig=$(cat ~/.gitconfig | base64 | tr -d '\n')
 # start earthly buildkitd
-docker run -d --privileged --name earthly-buildkitd -t -e BUILDKIT_TCP_TRANSPORT_ENABLED=true -e http_proxy=$HTTP_PROXY -e https_proxy=$HTTPS_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e HTTP_PROXY=$HTTP_PROXY -e NO_PROXY=$NO_PROXY -e no_proxy=$no_proxy -e EARTHLY_GIT_CONFIG=$gitconfig -v "$PROXY_CERT_PATH:/usr/local/share/ca-certificates/sc.crt:ro" -v earthly-tmp:/tmp/earthly:rw -p 8372:8372 earthly/buildkitd:$EARTHLY_VERSION
+docker run -d --privileged --name earthly-buildkitd -v /var/run/docker.sock:/var/run/docker.sock --rm -t -e BUILDKIT_TCP_TRANSPORT_ENABLED=true -e http_proxy=$HTTP_PROXY -e https_proxy=$HTTPS_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e HTTP_PROXY=$HTTP_PROXY -e NO_PROXY=$NO_PROXY -e no_proxy=$no_proxy -e EARTHLY_GIT_CONFIG=$gitconfig -v "$PROXY_CERT_PATH:/usr/local/share/ca-certificates/sc.crt:ro" -v earthly-tmp:/tmp/earthly:rw -p 8372:8372 earthly/buildkitd:$EARTHLY_VERSION
 # Update the CA certificates in the container
 docker exec -it earthly-buildkitd update-ca-certificates
 
