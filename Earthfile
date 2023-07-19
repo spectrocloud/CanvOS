@@ -36,6 +36,7 @@ END
 
 build-all-images:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+    BUILD +iso-image
     BUILD +iso
 
 build-provider-images:
