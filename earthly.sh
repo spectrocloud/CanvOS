@@ -15,8 +15,15 @@ if ! docker run --rm --privileged alpine sh -c 'echo "Privileged container test"
     echo "Privileged containers are not allowed for the current user."
     exit 1
 fi
+
+gitconfig=$(cat ~/.gitconfig | base64 | tr -d '\n')
+# start earthly buildkitd
+docker run -d --privileged --name earthly-buildkitd -t -e BUILDKIT_TCP_TRANSPORT_ENABLED=true -e http_proxy=$HTTP_PROXY -e https_proxy=$HTTPS_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e HTTP_PROXY=$HTTP_PROXY -e NO_PROXY=$NO_PROXY -e no_proxy=$no_proxy -e EARTHLY_GIT_CONFIG=$gitconfig -v "$PROXY_CERT_PATH:/usr/local/share/ca-certificates/sc.crt:ro" -v earthly-tmp:/tmp/earthly:rw -p 8372:8372 earthly/buildkitd:$EARTHLY_VERSION
+# Update the CA certificates in the container
+docker exec -it earthly-buildkitd update-ca-certificates
+
 # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -v "$(pwd)":/workspace -v earthly-tmp:/tmp/earthly:rw gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 -e BUILDKIT_TLS_ENABLED=false -v "$(pwd)":/workspace gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 
 # Verify the command was successful
 if [ $? -ne 0 ]; then
@@ -25,6 +32,7 @@ if [ $? -ne 0 ]; then
 fi
 # Cleanup builder helper images.
 docker rmi gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION
+docker rmi earthly/buildkitd:$EARTHLY_VERSION
 docker rmi alpine:latest
 
 # Print the output for use in Palette Profile.
