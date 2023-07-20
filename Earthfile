@@ -40,7 +40,7 @@ build-all-images:
     BUILD +iso
 
 build-provider-images:
-    IF $FIPS_ENABLED
+    IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
        BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.13
        BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.9
        BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
