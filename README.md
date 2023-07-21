@@ -67,6 +67,7 @@ v3.4.1
 v3.4.3
 v3.4.7
 v3.4.8
+v3.4.9
 ```
 
 4. Checkout the desired tag
@@ -79,7 +80,7 @@ git checkout <tag version>
 
 ```shell
 git checkout v3.4.8
-Note: switching to 'v3.4.8'.
+Note: switching to 'v3.4.9'.
 
 You are in 'detached HEAD' state. You can look around, make experimental
 changes and commit them, and you can discard any commits you make in this
@@ -130,7 +131,7 @@ system.registry: ttl.sh
 system.repo: ubuntu
 system.k8sDistribution: k3s
 system.osName: ubuntu
-system.peVersion: v3.4.8
+system.peVersion: v3.4.9
 system.customTag: demo
 system.osVersion: 22
 ```

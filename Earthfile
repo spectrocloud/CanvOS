@@ -170,6 +170,8 @@ base-image:
             zypper clean
             
     END
+    RUN useradd -m spectro -p Spectro@123
+    RUN usermod -aG sudo spectro
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm /etc/machine-id && \
