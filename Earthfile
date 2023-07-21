@@ -36,8 +36,8 @@ END
 
 build-all-images:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
-    BUILD +iso-image
-    BUILD +iso
+    BUILD --platform=linux/${ARCH} +iso-image
+    BUILD --platform=linux/${ARCH} +iso
 
 build-provider-images:
     IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -82,7 +82,9 @@ build-iso:
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
-    FROM +base-image
+    ARG TARGETPLATFORM
+
+    FROM --platform=$TARGETPLATFORM +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
@@ -211,8 +213,8 @@ base-image:
 
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
-    FROM +base-image
-    COPY +stylus-image/ /
+    FROM --platform=linux/${ARCH} +base-image
+    COPY --platform=linux/${ARCH} +stylus-image/ /
     COPY overlay/files/ /
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
