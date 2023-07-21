@@ -36,8 +36,13 @@ END
 
 build-all-images:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
-    BUILD --platform=linux/${ARCH} +iso-image
-    BUILD --platform=linux/${ARCH} +iso
+    IF [ "$ARCH" = "arm64" ]
+       BUILD --platform=linux/arm64 +iso-image
+       BUILD --platform=linux/arm64 +iso
+    ELSE IF [ "$ARCH" = "arm64" ]
+       BUILD --platform=linux/amd64 +iso-image
+       BUILD --platform=linux/amd64 +iso
+    END
 
 build-provider-images:
     IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
