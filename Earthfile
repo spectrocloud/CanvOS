@@ -16,7 +16,7 @@ ARG KAIROS_VERSION=v2.3.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.7.6
+ARG OSBUILDER_VERSION=v0.7.7
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v2.3.0-alpha1
 ARG KUBEADM_PROVIDER_VERSION=v2.3.0-alpha1
@@ -57,7 +57,7 @@ build-provider-images:
     END
 
 iso-image-rootfs:
-    FROM +iso-image
+    FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-own /. rootfs
 
 iso:
@@ -75,7 +75,7 @@ build-iso:
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     WORKDIR /build
-    COPY --keep-own +iso-image-rootfs/rootfs /build/image
+    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
     IF [ "$ARCH" = "arm64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
     ELSE IF [ "$ARCH" = "amd64" ]
