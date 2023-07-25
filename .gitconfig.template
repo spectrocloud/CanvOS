@@ -1,4 +1,6 @@
 [http]
 	proxy = $HTTP_PROXY
+	sslCAinfo = /etc/ssl/certs/ca-certificates.crt
 [https]
 	proxy = $HTTPS_PROXY
+	sslCAinfo = /etc/ssl/certs/ca-certificates.crt
