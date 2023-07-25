@@ -3,6 +3,8 @@ function build_with_proxy() {
     export HTTP_PROXY=$HTTP_PROXY
     export HTTPS_PROXY=$HTTPS_PROXY
     gitconfig=$(envsubst <gitconfig | base64 | tr -d '\n')
+    # cleanup any previous earthly-buildkitd
+    docker stop earthly-buildkitd
     # start earthly buildkitd
     docker run -d --privileged --name earthly-buildkitd -v /var/run/docker.sock:/var/run/docker.sock --rm -t -e BUILDKIT_TCP_TRANSPORT_ENABLED=true -e http_proxy=$HTTP_PROXY -e https_proxy=$HTTPS_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e HTTP_PROXY=$HTTP_PROXY -e NO_PROXY=$NO_PROXY -e no_proxy=$no_proxy -e EARTHLY_GIT_CONFIG=$gitconfig -v "$PROXY_CERT_PATH:/usr/local/share/ca-certificates/sc.crt:ro" -v earthly-tmp:/tmp/earthly:rw -p 8372:8372 gcr.io/spectro-images-public/earthly/buildkitd:$EARTHLY_VERSION
     # Update the CA certificates in the container
