@@ -21,6 +21,12 @@ function build_without_proxy() {
     docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -v "$(pwd)":/workspace gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
 
+function delete_image() {
+    if [[ "$(docker images -q $1 2> /dev/null)" == "" ]]; then
+        docker rmi $1
+    fi
+}
+
 PE_VERSION=$(git describe --abbrev=0 --tags)
 EARTHLY_VERSION=v0.7.4
 source .arg
@@ -49,9 +55,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 # Cleanup builder helper images.
-docker rmi gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION
-docker rmi gcr.io/spectro-images-public/earthly/buildkitd:$EARTHLY_VERSION
-docker rmi alpine:latest
+delete_image gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION
+delete_image gcr.io/spectro-images-public/earthly/buildkitd:$EARTHLY_VERSION
+delete_image alpine:latest
 
 # Print the output for use in Palette Profile.
 echo -e '##########################################################################################################'
