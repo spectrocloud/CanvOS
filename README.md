@@ -109,8 +109,9 @@ cp .arg.template .arg
 | HTTPS_PROXY      | URL of the HTTPS Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string |                         |
 | NO_PROXY      | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                   | string |                         |
 | PROXY_CERT_PATH  | Absolute path of the SSL Proxy certificate in PEM format if needed (Optional)                                                                                                                                                                                                                                                                  | string |                         |
+7. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
-7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
+8. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
 
 ```shell
 ./earthly.sh +build-all-images
