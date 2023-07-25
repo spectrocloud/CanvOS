@@ -39,7 +39,7 @@ build-all-images:
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
-    ELSE IF [ "$ARCH" = "arm64" ]
+    ELSE IF [ "$ARCH" = "amd64" ]
        BUILD --platform=linux/amd64 +iso-image
        BUILD --platform=linux/amd64 +iso
     END
