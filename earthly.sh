@@ -49,9 +49,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 # Cleanup builder helper images.
-docker_rmi gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION
-docker_rmi gcr.io/spectro-images-public/earthly/buildkitd:$EARTHLY_VERSION
-docker_rmi alpine:latest
+docker rmi gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION
+docker rmi gcr.io/spectro-images-public/earthly/buildkitd:$EARTHLY_VERSION
+docker rmi alpine:latest
 
 # Print the output for use in Palette Profile.
 echo -e '##########################################################################################################'
