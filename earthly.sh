@@ -22,7 +22,7 @@ function build_without_proxy() {
 }
 
 function delete_image() {
-    if [[ "$(docker images -q $1 2> /dev/null)" == "" ]]; then
+    if docker image inspect $1 >/dev/null 2>&1; then
         echo "Removing $1"
         docker rmi $1
     fi
