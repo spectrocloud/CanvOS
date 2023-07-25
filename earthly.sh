@@ -34,9 +34,9 @@ if ! docker run --rm --privileged alpine sh -c 'echo "Privileged container test"
     exit 1
 fi
 if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY"]; then
-    build_without_proxy
+    build_without_proxy "$@"
 else
-    build_with_proxy
+    build_with_proxy "$@"
 fi
 
 # Verify the command was successful
