@@ -2,7 +2,7 @@
 function build_with_proxy() {
     export HTTP_PROXY=$HTTP_PROXY
     export HTTPS_PROXY=$HTTPS_PROXY
-    gitconfig=$(envsubst <gitconfig.template | base64 | tr -d '\n')
+    gitconfig=$(envsubst <.gitconfig.template | base64 | tr -d '\n')
     # cleanup any previous earthly-buildkitd
     if [ "$( docker container inspect -f '{{.State.Running}}' earthly-buildkitd )" = "true" ]; then 
         docker stop earthly-buildkitd
