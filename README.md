@@ -33,6 +33,15 @@ For advanced use cases, there may be a need to add additional packages not inclu
 ### Basic Usage
 
 1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
+Note:  If you are building the images behind a proxy server, you may need to configure your git to let it use your proxy server.
+```
+git config --global http.proxy <your-proxy-server>
+git config --global https.proxy <your-proxy-server>
+git config --global http.sslCAinfo <your-cert-path>
+git config --global https.sslCAinfo <your-cert-path>
+# git config --global http.sslVerify False
+# git config --global https.sslVerify False
+```
 
 ```shell
 git clone https://github.com/spectrocloud/CanvOS.git
