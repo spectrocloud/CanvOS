@@ -1,6 +1,4 @@
 [http]
 	proxy = $HTTP_PROXY
-	sslVerify = False
 [https]
 	proxy = $HTTPS_PROXY
-	sslVerify = False
