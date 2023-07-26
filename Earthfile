@@ -137,7 +137,7 @@ base-image:
             apt install --no-install-recommends zstd vim -y
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
-            COPY /usr/local/share/ca-certificates/sc.crt /etc/ssl/certs
+            COPY sc.crt /etc/ssl/certs
             RUN  update-ca-certificates
         END
         RUN apt update && \
