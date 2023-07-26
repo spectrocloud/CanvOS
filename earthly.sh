@@ -50,6 +50,9 @@ if [ $? -ne 0 ]; then
 fi
 # Cleanup builder helper images.
 docker rmi gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION
+if [ "$( docker container inspect -f '{{.State.Running}}' earthly-buildkitd )" = "true" ]; then 
+    docker stop earthly-buildkitd
+fi
 docker rmi gcr.io/spectro-images-public/earthly/buildkitd:$EARTHLY_VERSION
 docker rmi alpine:latest
 
