@@ -7,10 +7,10 @@ FROM $BASE
 
 ### To install the nginx package for Ubuntu  ###
 
-#RUN apt-get update && apt-get install nginx
+#RUN apt-get update && apt-get install nginx -y
 
 ### or
 
 ### To install the nginx package for opensuse ###
 
-#RUN zypper refresh && zypper install nginx
+#RUN zypper refresh && zypper install nginx -y

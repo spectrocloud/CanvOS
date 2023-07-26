@@ -9,16 +9,16 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
-ARG SPECTRO_LUET_VERSION=v1.0.4
-ARG KAIROS_VERSION=v2.1.3
+ARG SPECTRO_LUET_VERSION=v1.0.8
+ARG KAIROS_VERSION=v2.2.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.6.1
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v2.1.3
-ARG KUBEADM_PROVIDER_VERSION=v2.1.3
-ARG RKE2_PROVIDER_VERSION=v2.1.3
+ARG K3S_PROVIDER_VERSION=v2.0.3
+ARG KUBEADM_PROVIDER_VERSION=v2.0.5-beta1
+ARG RKE2_PROVIDER_VERSION=v2.0.3
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG http_proxy=${HTTP_PROXY}
@@ -36,12 +36,23 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
 END
 
 build-all-images:
-    BUILD +build-provider-images
-    BUILD +iso
+    BUILD --platform=linux/amd64 +build-provider-images
+    BUILD --platform=linux/amd64 +iso
 
 build-provider-images:
-    BUILD +provider-image --K8S_VERSION=1.24.6
-    BUILD +provider-image --K8S_VERSION=1.25.2
+    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.24.6
+    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.25.2
+    BUILD --platform=linux/amd64 +provider-image --K8S_VERSION=1.26.4
+
+iso-image-rootfs:
+    FROM +iso-image
+    SAVE ARTIFACT --keep-own /. rootfs
+
+iso:
+    ARG ISO_NAME=installer
+    WORKDIR /build
+    COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 iso-image-rootfs:
     FROM +iso-image
@@ -72,11 +83,11 @@ build-iso:
 provider-image:
     FROM +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
-    ARG K8S_VERSION=1.25.2
+    ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -91,6 +102,9 @@ provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd
     END
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        RUN luet install -y container-runtime/containerd-fips
+    END
     RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
@@ -100,7 +114,11 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-    ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework:$PE_VERSION
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-amd64:$PE_VERSION
+    ELSE
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-amd64:$PE_VERSION
+    END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
@@ -109,6 +127,8 @@ stylus-image:
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
@@ -117,12 +137,13 @@ kairos-provider-image:
     FROM $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
+
 # base build image used to create the base image for all other image types
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
     ARG ARCH=amd64
     ENV ARCH=${ARCH}
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
