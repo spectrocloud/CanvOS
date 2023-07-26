@@ -1,18 +1,28 @@
 # CanvOS
 
-CanvOS is designed to leverage the Spectro Cloud Edge Forge architecture to build edge artifacts.  These artifacts can then be used by Palette for building edge clusters with little to no touch by end users.
+CanvOS is designed to leverage the Spectro Cloud Edge Forge architecture to build Edge artifacts.  Edge artifacts are used by Palette when creating Edge clusters with little to no touch by end users.
 
-With CanvOS, we leverage Earthly to build all of the artifacts required for edge deployments.  From the installer iso to the Kubernetes Provider images, CanvOS makes it simple for you to build the images customized to your needs.  
+CanvOS, uses [Earthly](https://earthly.dev) to build all of the required artifacts for an Edge deployments.  The Edge artifacts include the installer ISO to the Kubernetes Provider images. 
+CanvOS enables you to customize images to fit your needs.  
 
-The base image definitions reside in the Earthfile located in this repo.  This defines all of the elements that are required for building the artifacts that can be used by Palette for edge deployments.  If customized packages need to be added, simply add the reference to the Dockerfile as you would for any Docker image.  When the build command is run, the Earthfile will merge those custom packages into the final image.  For a quickstart tutorial see the Knowledgebase section of the Spectro Cloud Docs.  There you will find a quickstart tutorial for building your first CanvOS artifacts.
+To learn more about building Edge artifacts, checkout the [Build Edge Artifacts](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos) guide.
+
+
+
+## Image Build Architecture
+
+
+The base image definitions reside in the Earthfile located in this repo.  The [Earthfile](./Earthfile) defines all of the elements that are required for building the artifacts that can be used by Palette for Edge deployments.  
+
+If customized packages need to be added, add the pagekage to the [Dockerfile](./Dockerfile) as you would for any Docker image.  When the build command is invoked, the Earthfile will merge the custom packages into the final image.  
+
+> Checkout the [Build Edge Artifacts](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos) guide for detailed instructions.
 
 <h1 align="center">
   <br>
-     <img alt="Edge Components" src="https://raw.githubusercontent.com/spectrocloud/CanvOS/main/images/edge_components.png">
+     <img alt="Edge Components" src="./images/edge_components.png">
     <br>
 <br>
-
-## Image Build Architecture
 
 ### Base Image
 
@@ -101,17 +111,23 @@ cp .arg.template .arg
 | OS_DISTRIBUTION  | OS distribution of your choice. For example, it can be `ubuntu` or `opensuse-leap`.                                                     | String | `ubuntu`               |
 | IMAGE_REPO       | Image repository name in your chosen registry.                                                                                          | String | `$OS_DISTRIBUTION`     |
 | OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. This example uses `22` for Ubuntu.                                         | String | `22`                   |
-| K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm`.                                                       | String | `k3s`                  |
+| K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, or `kubeadm-fips`. The value `kubeadm` refers to Palette eXtended Kubernetes - Edge (PXK-E). Check out the  [PXK-E reference](https://docs.spectrocloud.com/integrations/kubernetes-edge) resource to learn more.                                              | String | `k3s`                  |
 | ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                             | String | `palette-edge-installer`|
 | PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.           | String | `GH tag`               | 
-| platform         | The type of platform architecture to use for the Edge artifacts build. Allowed values are: `linux/adm64`, or `linux/arm64`.                                       | String |  `linux/amd64`          | 
+| FIPS_ENABLED     | Enable to generate FIPS compliant Edge artifacts.                                                                                        | String | `false`                |  
+| ARCH             | The type of platform architecture to use for the Edge artifacts build. Allowed values are: `adm64`, or `arm64`.                          | String |  `amd64`               | 
+                                                                                                                          
 
 7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
   
 ```shell
 ./earthly.sh +build-all-images
 ```
-  
+
+To build FIPS complaint images or ARM images, specify the BASE_IMAGE and ARCH in the .arg file
+`k3s` does not FIPS and rke2 is by default `FIPS` compliant.
+
+
 Output
 ```shell
 ###################################################################################################
