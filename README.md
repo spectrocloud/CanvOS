@@ -34,6 +34,16 @@ For advanced use cases, there may be a need to add additional packages not inclu
 
 1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
 
+Note:  If you are building the images behind a proxy server, you may need to configure your git to let it use your proxy server.
+```
+git config --global http.proxy <your-proxy-server>
+git config --global https.proxy <your-proxy-server>
+git config --global http.sslCAinfo <your-cert-path>
+git config --global https.sslCAinfo <your-cert-path>
+# git config --global http.sslVerify False
+# git config --global https.sslVerify False
+```
+
 ```shell
 git clone https://github.com/spectrocloud/CanvOS.git
 ```
@@ -105,11 +115,13 @@ cp .arg.template .arg
 | ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                                                                                                                                                                                                                                   | String | `palette-edge-installer`|
 | PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.                                                                                                                                                                                                                 | String | `GH tag`                | 
 | platform         | Type of platform to use for the build.  Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                             | string |  `linux/amd64`          | 
-| HTTP_PROXY       | URL of th HTTP Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                    | string |                         |
-| HTTPS_PROXY      | URL of th HTTPS Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string |                         |
+| HTTP_PROXY       | URL of the HTTP Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                    | string |                         |
+| HTTPS_PROXY      | URL of the HTTPS Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string |                         |
+| NO_PROXY      | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                   | string |                         |
 | PROXY_CERT_PATH  | Absolute path of the SSL Proxy certificate in PEM format if needed (Optional)                                                                                                                                                                                                                                                                  | string |                         |
+7. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
-7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
+8. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
 
 ```shell
 ./earthly.sh +build-all-images
