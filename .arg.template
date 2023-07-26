@@ -7,3 +7,6 @@ K8S_DISTRIBUTION=k3s
 ISO_NAME=palette-edge-installer
 PE_VERSION=v3.4.7
 platform=linux/amd64
+HTTPS_PROXY=
+HTTP_PROXY=
+PROXY_CERT_PATH=
