@@ -7,3 +7,4 @@ variables.env.old
 config.yaml
 content-*/*
 *.arg
+.idea
