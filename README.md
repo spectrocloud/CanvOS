@@ -45,7 +45,7 @@ git config --global https.sslCAinfo <your-cert-path>
 # git config --global http.sslVerify False
 # git config --global https.sslVerify False
 ```
-And if you have some custom CA certificate, you want to make sure that certificate is loaded into your system. To do that, you can copy your certificate to this path: `/usr/local/share/ca-certificates/` and then run this command in your terminal.
+And if you have some custom CA certificate, you want to make sure that certificate is loaded into your system. To do that, you can copy your certificate to this path: `/usr/local/share/ca-certificates/` for ubuntu or `/usr/share/pki/trust/anchors/` for opensuse and then run this command in your terminal.
 ```shell
 update-ca-certificates
 ```
