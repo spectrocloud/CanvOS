@@ -64,16 +64,6 @@ iso:
     COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
-iso-image-rootfs:
-    FROM +iso-image
-    SAVE ARTIFACT --keep-own /. rootfs
-
-iso:
-    ARG ISO_NAME=installer
-    WORKDIR /build
-    COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
-    SAVE ARTIFACT /build/* AS LOCAL ./build/
-
 build-iso:
     ARG ISO_NAME
     ARG BUILDPLATFORM
