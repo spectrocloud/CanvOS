@@ -22,6 +22,7 @@ function build_without_proxy() {
 }
 
 PE_VERSION=$(git describe --abbrev=0 --tags)
+EARTHLY_VERSION=v0.7.4
 source .arg
 
 ### Verify Depencies
