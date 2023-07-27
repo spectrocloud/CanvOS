@@ -179,7 +179,7 @@ base-image:
         luet repo update && \
         luet install -y system/elemental-cli && \
         rm /etc/luet/repos.conf.d/* && \
-        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+        SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
