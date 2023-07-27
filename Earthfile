@@ -165,6 +165,11 @@ base-image:
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+        # Add proxy certificate if present
+        IF [ ! -z $PROXY_CERT_PATH ]
+            COPY sc.crt /usr/share/pki/trust/anchors
+            RUN  update-ca-certificates
+        END
         RUN zypper refresh && \
             zypper update -y && \
             mkinitrd
