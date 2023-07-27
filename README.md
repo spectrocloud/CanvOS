@@ -43,6 +43,11 @@ git config --global https.sslCAinfo <your-cert-path>
 # git config --global http.sslVerify False
 # git config --global https.sslVerify False
 ```
+And if you have some custom CA certificate, you want to make sure that certificate is loaded into your system. To do that, you can copy your certificate to this path: `/usr/local/share/ca-certificates/` and then run this command in your terminal.
+```
+update-ca-certificates
+```
+
 
 ```shell
 git clone https://github.com/spectrocloud/CanvOS.git
