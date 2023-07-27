@@ -35,7 +35,8 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
 END
 
 build-all-images:
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+    #BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+    BUILD --platform=linux/amd64  +build-provider-images
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
