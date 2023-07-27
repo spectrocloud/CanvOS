@@ -23,7 +23,6 @@ function build_without_proxy() {
 
 PE_VERSION=$(git describe --abbrev=0 --tags)
 source .arg
-docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -v "$(pwd)":/workspace -v earthly-tmp:/tmp/earthly:rw gcr.io/spectro-images-public/earthly/earthly:v0.7.4 --allow-privileged "$@"
 
 ### Verify Depencies
 # Check if Docker is installed
