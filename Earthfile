@@ -64,16 +64,6 @@ iso:
     COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
-iso-image-rootfs:
-    FROM +iso-image
-    SAVE ARTIFACT --keep-own /. rootfs
-
-iso:
-    ARG ISO_NAME=installer
-    WORKDIR /build
-    COPY (+build-iso/  --ISO_NAME=$ISO_NAME) .
-    SAVE ARTIFACT /build/* AS LOCAL ./build/
-
 build-iso:
     ARG ISO_NAME
     ARG BUILDPLATFORM
@@ -98,7 +88,7 @@ provider-image:
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG BASE_K8S_VERSION=$VERSION
+        ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG

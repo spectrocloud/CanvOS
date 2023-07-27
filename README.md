@@ -80,6 +80,8 @@ v3.3.3
 v3.4.0
 v3.4.1
 v3.4.3
+..
+v3.4.9
 ```
 
 4. Checkout the desired tag
@@ -91,8 +93,8 @@ git checkout <tag version>
 **Sample Output**
 
 ```shell
-git checkout v3.4.3
-Note: switching to 'v3.4.3'.
+git checkout v3.4.9
+Note: switching to 'v3.4.9'.
 
 You are in 'detached HEAD' state. You can look around, make experimental
 changes and commit them, and you can discard any commits you make in this
@@ -163,10 +165,10 @@ palette-edge-installer.iso.sha256
 
 # Output
 REPOSITORY                                     TAG                                  IMAGE ID       CREATED        SIZE
-ttl.sh/ubuntu                                  k3s-1.24.6-v3.4.3-demo               cad8acdd2797   17 hours ago   4.62GB
-ttl.sh/ubuntu                                  k3s-1.24.6-v3.4.3-demo_linux_amd64   cad8acdd2797   17 hours ago   4.62GB
-ttl.sh/ubuntu                                  k3s-1.25.2-v3.4.3-demo               f6e490f53971   17 hours ago   4.62GB
-ttl.sh/ubuntu                                  k3s-1.25.2-v3.4.3-demo_linux_amd64   f6e490f53971   17 hours ago   4.62GB
+ttl.sh/ubuntu                                  k3s-1.24.6-v3.4.9-demo               cad8acdd2797   17 hours ago   4.62GB
+ttl.sh/ubuntu                                  k3s-1.24.6-v3.4.9-demo_linux_amd64   cad8acdd2797   17 hours ago   4.62GB
+ttl.sh/ubuntu                                  k3s-1.25.2-v3.4.9-demo               f6e490f53971   17 hours ago   4.62GB
+ttl.sh/ubuntu                                  k3s-1.25.2-v3.4.9-demo_linux_amd64   f6e490f53971   17 hours ago   4.62GB
 ```
 
 Earthly is a multi-architecture build tool.  In this example we are building images for AMD64 hardware which is reflected by the tags above.  In the future we will support ARM64 builds and those tags will be included.  We only need to push the image tag that DOES NOT have the architecture reference i.e `linux_amd64` in the above example.
