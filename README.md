@@ -33,9 +33,11 @@ For advanced use cases, there may be a need to add additional packages not inclu
 ### Basic Usage
 
 1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
-
-Note:  If you are building the images behind a proxy server, you may need to configure your git to let it use your proxy server.
+```shell
+git clone https://github.com/spectrocloud/CanvOS.git
 ```
+Note:  If you are building the images behind a proxy server, you may need to configure your git to let it use your proxy server.
+```shell
 git config --global http.proxy <your-proxy-server>
 git config --global https.proxy <your-proxy-server>
 git config --global http.sslCAinfo <your-cert-path>
@@ -44,14 +46,10 @@ git config --global https.sslCAinfo <your-cert-path>
 # git config --global https.sslVerify False
 ```
 And if you have some custom CA certificate, you want to make sure that certificate is loaded into your system. To do that, you can copy your certificate to this path: `/usr/local/share/ca-certificates/` and then run this command in your terminal.
-```
+```shell
 update-ca-certificates
 ```
 
-
-```shell
-git clone https://github.com/spectrocloud/CanvOS.git
-```
 
 **Sample Output**
 
