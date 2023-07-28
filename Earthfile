@@ -9,7 +9,6 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
-ARG BASE_IMAGE
 ARG ARCH
 ARG SPECTRO_LUET_VERSION=v1.1.0-alpha3
 ARG KAIROS_VERSION=v2.3.0
@@ -35,7 +34,8 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
 END
 
 build-all-images:
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+    #BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+    BUILD --platform=linux/amd64  +build-provider-images
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
