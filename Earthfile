@@ -26,6 +26,7 @@ ARG HTTPS_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG PROXY_CERT_PATH
+ARG BASE_IMAGE
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
@@ -160,7 +161,7 @@ base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
 
     IF [ "$ARCH" = "arm64" ]
-       RUN  mkdir -p /etc/luet/repos.conf.d && \
+        RUN  mkdir -p /etc/luet/repos.conf.d && \
           SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 -y && \
           luet repo update
     ELSE IF [ "$ARCH" = "amd64" ]
