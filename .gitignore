@@ -6,4 +6,5 @@ variables.env.old
 *content-bundle.tar
 config.yaml
 content-*/*
-.arg
+*.arg
+.idea

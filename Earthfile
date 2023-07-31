@@ -21,7 +21,11 @@ ARG K3S_PROVIDER_VERSION=v2.3.0-alpha1
 ARG KUBEADM_PROVIDER_VERSION=v2.3.0-alpha3
 ARG RKE2_PROVIDER_VERSION=v2.3.0-alpha1
 ARG FIPS_ENABLED=false
-
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG http_proxy=${HTTP_PROXY}
+ARG https_proxy=${HTTPS_PROXY}
+ARG PROXY_CERT_PATH
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
@@ -55,6 +59,16 @@ build-provider-images:
        BUILD  +provider-image --K8S_VERSION=1.26.4
        BUILD  +provider-image --K8S_VERSION=1.27.2
     END
+
+iso-image-rootfs:
+    FROM --platform=linux/${ARCH} +iso-image
+    SAVE ARTIFACT --keep-own /. rootfs
+
+iso:
+    ARG ISO_NAME=installer
+    WORKDIR /build
+    COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
@@ -141,7 +155,7 @@ kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-            ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
@@ -166,7 +180,7 @@ base-image:
     END
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG BASE_K8S_VERSION=$VERSION
+        ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
@@ -178,15 +192,20 @@ base-image:
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
         RUN apt update && \
             apt install --no-install-recommends zstd vim -y
+        # Add proxy certificate if present
+        IF [ ! -z $PROXY_CERT_PATH ]
+            COPY sc.crt /etc/ssl/certs
+            RUN  update-ca-certificates
+        END
         RUN apt update && \
             apt upgrade -y
        IF [ "$ARCH" = "amd64" ]
-          RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+          RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
-          RUN kernel=$(ls /lib/modules | head -n1) && \
+          RUN kernel=$(ls /lib/modules | tail -n1) && \
             dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
             ln -sf "initrd-${kernel}" /boot/initrd
-          RUN kernel=$(ls /lib/modules | head -n1) && \
+          RUN kernel=$(ls /lib/modules | tail -n1) && \
             depmod -a "${kernel}"
         END
 
@@ -203,18 +222,21 @@ base-image:
         RUN zypper install -y zstd vim
         RUN zypper cc && \
             zypper clean
-            
     END
-
+    RUN mkdir -p /etc/luet/repos.conf.d && \
+        luet repo add kairos -y --type docker --url quay.io/kairos/packages --priority 99 && \
+        luet repo update && \
+        luet install -y system/elemental-cli && \
+        rm /etc/luet/repos.conf.d/* && \
+        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+        luet repo update
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
-        rm -f /etc/machine-id && \
+        rm -rf /etc/machine-id && \
         rm -rf /var/lib/dbus/machine-id
     RUN touch /etc/machine-id && \ 
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
-
-    # SAVE ARTIFACT . 
 
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:

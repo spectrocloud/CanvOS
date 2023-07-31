@@ -2,7 +2,7 @@
 
 CanvOS is designed to leverage the Spectro Cloud Edge Forge architecture to build edge artifacts.  These artifacts can then be used by Palette for building edge clusters with little to no touch by end users.
 
-With CanvOS, we leverage Earthly to build all of the artifacts required for edge deployments.  From the installer iso to the Kubernetes Provider images, CanvOS makes it simple for you to build the images customized to your needs.  
+With CanvOS, we leverage Earthly to build all of the artifacts required for edge deployments.  From the installer iso to the Kubernetes Provider images, CanvOS makes it simple for you to build the images customized to your needs.
 
 The base image definitions reside in the Earthfile located in this repo.  This defines all of the elements that are required for building the artifacts that can be used by Palette for edge deployments.  If customized packages need to be added, simply add the reference to the Dockerfile as you would for any Docker image.  When the build command is run, the Earthfile will merge those custom packages into the final image.  For a quickstart tutorial see the Knowledgebase section of the Spectro Cloud Docs.  There you will find a quickstart tutorial for building your first CanvOS artifacts.
 
@@ -24,7 +24,7 @@ From the Base Image, the provider image is used to package in the Kubernetes dis
 
 ### Installer Image
 
-From the base image, this image is used to provide the initial flashing of a device (bare-metal or virtual machine).  This image contains the user-data configuration that has been provided in `user-data`.  It will also contain the contents of any content bundle for pre-staged builds.  Pre-staged builds can be used to embed all of the artifacts that are required to build a cluster.  These artifacts include Helm charts, manifests, and container images.  These images are loaded into containerd when the cluster is initialized elminating the need for the initial download.  For more information on how to build pre-loaded content checkout the Palette Docs at [Build your Own Content](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/build-content-bundle).  
+From the base image, this image is used to provide the initial flashing of a device (bare-metal or virtual machine).  This image contains the user-data configuration that has been provided in `user-data`.  It will also contain the contents of any content bundle for pre-staged builds.  Pre-staged builds can be used to embed all of the artifacts that are required to build a cluster.  These artifacts include Helm charts, manifests, and container images.  These images are loaded into containerd when the cluster is initialized elminating the need for the initial download.  For more information on how to build pre-loaded content checkout the Palette Docs at [Build your Own Content](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/build-content-bundle).
 
 ### Custom Configuration
 
@@ -33,6 +33,16 @@ For advanced use cases, there may be a need to add additional packages not inclu
 ### Basic Usage
 
 1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
+
+Note:  If you are building the images behind a proxy server, you may need to configure your git to let it use your proxy server.
+```
+git config --global http.proxy <your-proxy-server>
+git config --global https.proxy <your-proxy-server>
+git config --global http.sslCAinfo <your-cert-path>
+git config --global https.sslCAinfo <your-cert-path>
+# git config --global http.sslVerify False
+# git config --global https.sslVerify False
+```
 
 ```shell
 git clone https://github.com/spectrocloud/CanvOS.git
@@ -94,23 +104,28 @@ cp .arg.template .arg
 
 6. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
 
-| Parameter        | Description                                                                                                                                                                                                                                                                                                                                                                                                  | Type   | Default Value            |
-|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|--------------------------|
-| CUSTOM_TAG       | Environment name for provider image tagging. The default value is `demo`.                                                                                                                                                                                                                                                                                                                                    | String | `demo`                   |
-| IMAGE_REGISTRY   | Image registry name that will store the image artifacts. The default value points to the *ttl.sh* image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. Do not add a '/' character at the end if image registry name. | String | `ttl.sh`                 |
-| OS_DISTRIBUTION  | OS distribution of your choice. For example, it can be `ubuntu` or `opensuse-leap` or `ubuntu-fips'                                                                                                                                                                                                                                                                                                          | String | `ubuntu`                 |
-| IMAGE_REPO       | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                                                                               | String | `$OS_DISTRIBUTION`       |
-| OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. This example uses `22` for Ubuntu.                                                                                                                                                                                                                                                  | String | `22`                     |
-| K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, or `kubeadm` or `kubeadm-fips`                                                                                                                                                                                                                                                                                                          | String | `k3s`                    |
-| ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                                                                                                                                                                                                                                                                                                 | String | `palette-edge-installer` |
-| PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.                                                                                                                                                                                                                                                                               | String | `GH tag`                 |
-| BASE_IMAGE       | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                                                                                            | String |                          |
-| ARCH             | target architecture     `amd64`, `arm64`                                                                                                                                                                                                                                                                                                                                                                     | String | `amd64`                  |
-| platform         | Type of platform to use for the build.  Used for Cross Platform Build (linux/arm64 to amd64 as example).                                                                                                                                                                                                                                                                                                     | string | `linux/amd64`            | 
-| FIPS_ENABLED     | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                                                                                       | string | `false`                  |
+| Parameter        | Description                                                                                                                                                                                                                                                                                                                                    | Type   | Default Value           |
+|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|-------------------------|
+| CUSTOM_TAG       | Environment name for provider image tagging. The default value is `demo`.                                                                                                                                                                                                                                                                      | String | `demo`                  |
+| IMAGE_REGISTRY   | Image registry name that will store the image artifacts. The default value points to the *ttl.sh* image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String | `ttl.sh`                |
+| OS_DISTRIBUTION  | OS distribution of your choice. For example, it can be `ubuntu` or `opensuse-leap`.                                                                                                                                                                                                                                                            | String | `ubuntu`                |
+| IMAGE_REPO       | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                 | String | `$OS_DISTRIBUTION`      |
+| OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. This example uses `22` for Ubuntu.                                                                                                                                                                                    | String | `22`                    |
+| K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, or `kubeadm-fips`.                                                                                                                                                                                                                                             | String | `k3s`                   |
+| ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                                                                                                                                                                                                                                   | String | `palette-edge-installer`|
+| PE_VERSION       | Palette Edge Version.  This should match the tag checked out from Git.  Advanced setting.  Do not modify unless told to do so.                                                                                                                                                                                                                 | String | `GH tag`                | 
+| platform         | Type of platform to use for the build.  Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                             | string |  `linux/amd64`          | 
+| BASE_IMAGE       | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                              | String |                         |
+| ARCH             | target architecture     `amd64`, `arm64`                                                                                                                                                                                                                                                                                                       | String | `amd64`                 |
+| FIPS_ENABLED     | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                         | string | `false`                 |
+| HTTP_PROXY       | URL of the HTTP Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string |                         |
+| HTTPS_PROXY      | URL of the HTTPS Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                  | string |                         |
+| NO_PROXY         | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                          | string |                         |
+| PROXY_CERT_PATH  | Absolute path of the SSL Proxy certificate in PEM format if needed (Optional)                                                                                                                                                                                                                                                                  | string |                         |
+7. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
-7. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
-  
+8. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
+
 ```shell
 ./earthly.sh +build-all-images
 ```
@@ -141,7 +156,7 @@ system.osVersion: 22
 ```
 
 8. Validate the expected artifacts are created, the ISO image and the provider OS images.
-  
+
 ```shell
 ls build/ && docker images
 
@@ -158,19 +173,19 @@ ttl.sh/ubuntu                                  k3s-1.25.2-v3.4.3-demo_linux_amd6
 
 Earthly is a multi-architecture build tool.  In this example we are building images for AMD64 hardware which is reflected by the tags above.  In the future we will support ARM64 builds and those tags will be included.  We only need to push the image tag that DOES NOT have the architecture reference i.e `linux_amd64` in the above example.
 
-9. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages. 
+9. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages.
 
 ```shell
-docker push ttl.sh/ubuntu-demo:k3s-1.25.2-v3.4.3-demo && \
-docker push ttl.sh/ubuntu-demo:k3s-1.24.6-v3.4.3-demo
+docker push ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo && \
+docker push ttl.sh/ubuntu:k3s-1.24.6-v3.4.3-demo
 ```
 
 > ⚠️ The default registry, [ttl.sh](https://ttl.sh/) is a short-lived registry. Images in the ttl.sh registry have a default time to live of
 24 hours. Once the time limit is up, the images will automatically be removed. To use a permanent registry, set the `.arg` file's `IMAGE_REGISTRY` parameter with the URL of your image registry.
- 
-  
+
+
 10. Create a cluster profile using the command output. Use the [Model Edge Cluster Profile](https://docs.spectrocloud.com/clusters/edge/site-deployment/model-profile) to help you complete this step.
-  
+
 
 11. Flash VM or Baremetal device with the generated ISO. Refer to the [Prepare Edge Host for Installation](https://docs.spectrocloud.com/clusters/edge/site-deployment/stage) guide for additonal guidance.
 
@@ -178,9 +193,8 @@ docker push ttl.sh/ubuntu-demo:k3s-1.24.6-v3.4.3-demo
 12. Register the Edge host with Palette. Checkout the [Register Edge Host](https://docs.spectrocloud.com/clusters/edge/site-deployment/site-installation/edge-host-registration) guide.
 
 
-13. Build a cluster in [Palette](https://console.spectrocloud.com). 
+13. Build a cluster in [Palette](https://console.spectrocloud.com).
 
 ### How-Tos
 
 * [Building Edge Native Artifacts]([https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos](https://deploy-preview-1318--docs-spectrocloud.netlify.app/clusters/edge/edgeforge-workflow/palette-canvos))
-
