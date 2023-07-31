@@ -70,16 +70,6 @@ iso:
     COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
-iso-image-rootfs:
-    FROM --platform=linux/${ARCH} +iso-image
-    SAVE ARTIFACT --keep-own /. rootfs
-
-iso:
-    ARG ISO_NAME=installer
-    WORKDIR /build
-    COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
-    SAVE ARTIFACT /build/* AS LOCAL ./build/
-
 build-iso:
     ARG ISO_NAME
 
