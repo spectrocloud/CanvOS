@@ -214,13 +214,17 @@ base-image:
         RUN zypper cc && \
             zypper clean
     END
-    RUN mkdir -p /etc/luet/repos.conf.d && \
+    IF [ "$ARCH" = "arm64" ]
+        RUN mkdir -p /etc/luet/repos.conf.d && luet repo add kairos -y --type docker --url quay.io/kairos/packages-arm64 --priority 99 && luet repo update && luet install -y system/elemental-cli && rm /etc/luet/repos.conf.d/* && luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm --priority 1 -y && luet repo update
+    ELSE IF [ "$ARCH" = "amd64" ]
+        RUN mkdir -p /etc/luet/repos.conf.d && \
         luet repo add kairos -y --type docker --url quay.io/kairos/packages --priority 99 && \
         luet repo update && \
         luet install -y system/elemental-cli && \
         rm /etc/luet/repos.conf.d/* && \
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
+    END
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm -rf /etc/machine-id && \
