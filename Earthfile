@@ -11,7 +11,7 @@ ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG ARCH
 ARG SPECTRO_LUET_VERSION=v1.1.0-alpha3
-ARG KAIROS_VERSION=v2.3.0
+ARG KAIROS_VERSION=v2.3.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -124,12 +124,11 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-    ARG TARGETOS
-    ARG TARGETARCH
+
      IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-${TARGETOS}-${TARGETARCH}:$PE_VERSION
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
      ELSE
-        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-${TARGETOS}-${TARGETARCH}:$PE_VERSION
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-$ARCH:$PE_VERSION
      END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
@@ -137,7 +136,7 @@ stylus-image:
     SAVE ARTIFACT /etc/elemental/config.yaml
 
 kairos-provider-image:
-    ARG TARGETPLATFORM
+
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -147,7 +146,7 @@ kairos-provider-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
-    FROM --platform=$TARGETPLATFORM $PROVIDER_BASE
+    FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
 
