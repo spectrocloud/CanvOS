@@ -194,9 +194,9 @@ base-image:
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
-        RUN zypper refresh && \
-            zypper update -y && \
-            mkinitrd
+        #RUN zypper refresh && \
+        #    zypper update -y && \
+        #    mkinitrd
             # zypper up kernel-default && \
             # zypper purge-kernels && \
         RUN zypper install -y zstd vim
