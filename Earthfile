@@ -11,7 +11,7 @@ ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG ARCH
 ARG SPECTRO_LUET_VERSION=v1.1.0-alpha3
-ARG KAIROS_VERSION=v2.3.0
+ARG KAIROS_VERSION=v2.3.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -39,8 +39,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
 END
 
 build-all-images:
-    #BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
-    BUILD --platform=linux/amd64  +build-provider-images
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
@@ -92,9 +91,8 @@ build-iso:
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
-    ARG TARGETPLATFORM
 
-    FROM --platform=$TARGETPLATFORM +base-image
+    FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
@@ -109,7 +107,7 @@ provider-image:
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
-    COPY +kairos-provider-image/ /
+    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -140,7 +138,6 @@ stylus-image:
     SAVE ARTIFACT /etc/elemental/config.yaml
 
 kairos-provider-image:
-    ARG TARGETPLATFORM
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
