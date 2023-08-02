@@ -26,7 +26,6 @@ ARG HTTPS_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG PROXY_CERT_PATH
-ARG BASE_IMAGE
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
@@ -36,11 +35,13 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
+ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
+    # Check for default value for rhel
+    ARG BASE_IMAGE
 END
 
 build-all-images:
-    #BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
-    BUILD --platform=linux/amd64  +build-provider-images
+    BUILD +build-provider-images
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
@@ -92,9 +93,8 @@ build-iso:
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
-    ARG TARGETPLATFORM
 
-    FROM --platform=$TARGETPLATFORM +base-image
+    FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
@@ -109,7 +109,7 @@ provider-image:
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
-    COPY +kairos-provider-image/ /
+    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -140,7 +140,6 @@ stylus-image:
     SAVE ARTIFACT /etc/elemental/config.yaml
 
 kairos-provider-image:
-    ARG TARGETPLATFORM
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
