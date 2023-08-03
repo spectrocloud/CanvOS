@@ -82,7 +82,7 @@ build-iso:
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
     FROM +base-image
-    # added PROVIDER_K8S_VERSION to fix missing image in gcr.io/kairos-io/provider-*
+    # added PROVIDER_K8S_VERSION to fix missing image in gcr.io/spectro-dev-public/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
@@ -126,13 +126,13 @@ stylus-image:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_BASE=gcr.io/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=gcr.io/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_BASE=gcr.io/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG PROVIDER_BASE=gcr.io/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
     FROM $PROVIDER_BASE
     SAVE ARTIFACT ./*
