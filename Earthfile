@@ -38,6 +38,12 @@ END
 VERSION:
     COMMAND
     FROM gcr.io/spectro-images-public/alpine:3.16.2
+    ENV HTTP_PROXY=${HTTP_PROXY}
+    ENV HTTPS_PROXY=${HTTPS_PROXY}
+    IF [ ! -z $PROXY_CERT_PATH ]
+        COPY sc.crt sc.crt
+        RUN cat sc.crt >> /etc/ssl/certs/ca-certificates.crt
+    END
     RUN apk add git
     COPY .git/ .git
     RUN echo $(git describe --exact-match --tags || echo "v0.0.0-$(git log --oneline -n 1 | cut -d" " -f1)") > VERSION
@@ -149,7 +155,7 @@ base-image:
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /etc/ssl/certs
-            RUN  update-ca-certificates
+            RUN update-ca-certificates
         END
         RUN apt update && \
             apt upgrade -y
@@ -168,7 +174,7 @@ base-image:
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /usr/share/pki/trust/anchors
-            RUN  update-ca-certificates
+            RUN update-ca-certificates
         END
         RUN zypper refresh && \
             zypper update -y && \
