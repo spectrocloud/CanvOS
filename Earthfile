@@ -56,10 +56,10 @@ build-provider-images:
        BUILD  +provider-image --K8S_VERSION=1.25.9
        BUILD  +provider-image --K8S_VERSION=1.26.4
     ELSE
-       BUILD  +provider-image --K8S_VERSION=1.24.6
+    #   BUILD  +provider-image --K8S_VERSION=1.24.6
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.26.4
-       BUILD  +provider-image --K8S_VERSION=1.27.2
+    #   BUILD  +provider-image --K8S_VERSION=1.27.2
     END
 
 iso-image-rootfs:
