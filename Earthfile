@@ -203,8 +203,12 @@ base-image:
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
         RUN zypper refresh && \
-            zypper update -y && \
-            mkinitrd
+           zypper update -y
+
+           IF [ -e "/usr/bin/dracut" ]
+             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
+             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
+           END
             # zypper up kernel-default && \
             # zypper purge-kernels && \
         RUN zypper install -y zstd vim
