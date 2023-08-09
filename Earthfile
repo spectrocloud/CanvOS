@@ -185,8 +185,8 @@ base-image:
             COPY sc.crt /etc/ssl/certs
             RUN  update-ca-certificates
         END
-        RUN apt update && \
-            apt upgrade -y
+    #    RUN apt update && \
+    #        apt upgrade -y
        IF [ "$ARCH" = "amd64" ]
           RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
