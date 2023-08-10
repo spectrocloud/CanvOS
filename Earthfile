@@ -41,7 +41,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
 END
 
 build-all-images:
-    BUILD +build-provider-images
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
@@ -92,9 +92,8 @@ build-iso:
     SAVE ARTIFACT /iso/*
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
-provider-image:
-
-    FROM --platform=linux/${ARCH} +base-image
+provider-image:   
+    FROM +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
@@ -109,7 +108,7 @@ provider-image:
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
-    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
+    COPY  +kairos-provider-image/ /
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -149,7 +148,7 @@ kairos-provider-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
-    FROM --platform=linux/${ARCH} $PROVIDER_BASE
+    FROM $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
 
