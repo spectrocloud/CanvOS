@@ -225,6 +225,13 @@ base-image:
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
     END
+
+    IF $FIPS_ENABLED
+        DO +OSRELEASE --VARIANT=fips --OS_VERSION=$KAIROS_VERSION
+    ELSE
+        DO +OSRELEASE --VARIANT=no-fips --OS_VERSION=$KAIROS_VERSION
+    END
+
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm -rf /etc/machine-id && \
@@ -239,11 +246,6 @@ iso-image:
     COPY --platform=linux/${ARCH} +stylus-image/ /
     COPY overlay/files/ /
     
-    IF $FIPS_ENABLED
-        DO +OSRELEASE --VARIANT=fips --OS_VERSION=$KAIROS_VERSION
-    ELSE
-        DO +OSRELEASE --VARIANT=no-fips --OS_VERSION=$KAIROS_VERSION
-    END
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
