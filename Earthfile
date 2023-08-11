@@ -52,14 +52,16 @@ build-all-images:
 
 build-provider-images:
     IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       BUILD  +provider-image --K8S_VERSION=1.24.13
-       BUILD  +provider-image --K8S_VERSION=1.25.9
-       BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.13
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.9
+       BUILD  --platform=linux/amd64 --platform=linux/arm64  +provider-image --K8S_VERSION=1.26.4
     ELSE
-       BUILD  +provider-image --K8S_VERSION=1.24.6
-       BUILD  +provider-image --K8S_VERSION=1.25.2
-       BUILD  +provider-image --K8S_VERSION=1.26.4
-       BUILD  +provider-image --K8S_VERSION=1.27.2
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
+       IF [ "$K8S_DISTRIBUTION" != "rke2" ]
+            BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.27.2
+       END
     END
 
 iso-image-rootfs:
