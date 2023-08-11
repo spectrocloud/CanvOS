@@ -103,6 +103,7 @@ cp .arg.template .arg
 ```
 6. To build RHEL core, RHEL FIPS or Ubuntu fips base images switch to respective directories and build the base image.
 The base image built can be passed as argument to build the installer and provider images.
+Follow the instructions in the respective sub-folders (rhel-fips, ubuntu-fips) to create base images.
 Skip this step if your base image is ubuntu or opensuse-leap. If you are building ubuntu or opensuse-leap installer images, do not pass the BASE_IMAGE attribute as an arg to build command.
 
 7. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
