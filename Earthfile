@@ -238,7 +238,30 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     COPY --platform=linux/${ARCH} +stylus-image/ /
     COPY overlay/files/ /
+    
+    IF $FIPS_ENABLED
+        DO +OSRELEASE --VARIANT=fips --OS_VERSION=$KAIROS_VERSION
+    ELSE
+        DO +OSRELEASE --VARIANT=no-fips --OS_VERSION=$KAIROS_VERSION
+    END
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
     SAVE IMAGE palette-installer-image:latest
+
+
+OSRELEASE:
+    COMMAND
+    ARG OS_ID=${OS_DISTRIBUTION}
+    ARG OS_VERSION
+    ARG OS_LABEL=latest
+    ARG VARIANT
+    ARG FLAVOR=${OS_DISTRIBUTION}
+    ARG BUG_REPORT_URL=https://github.com/spectrocloud/CanvOS/issues
+    ARG HOME_URL=https://github.com/spectrocloud/CanvOS
+    ARG OS_REPO=spectrocloud/CanvOS
+    ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}-${VARIANT}
+
+    # update OS-release file
+    RUN sed -i -n '/KAIROS_/!p' /etc/os-release
+    RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
