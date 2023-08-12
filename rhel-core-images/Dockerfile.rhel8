@@ -1,0 +1,97 @@
+ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.7-10
+
+FROM $BASE_IMAGE 
+ARG USERNAME
+ARG PASSWORD
+
+RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm -y
+# Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
+RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
+  && yum repolist \
+  && subscription-manager attach --auto \
+  && subscription-manager repos --enable rhel-8-for-x86_64-appstream-rpms \
+  && yum repolist
+RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+# Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+RUN uuidgen > /etc/machine-id && dnf install -y \
+    squashfs-tools \ 
+    dracut-live \
+    livecd-tools \
+    dracut-squash \
+    dracut-network \
+    efibootmgr \
+    dhclient \
+    audit \
+    sudo \
+    systemd \
+    systemd-networkd \
+    systemd-timesyncd \
+    parted \
+    dracut \
+    e2fsprogs \
+    dosfstools \
+    coreutils-single \
+    device-mapper \
+    grub2 \
+    which \
+    curl \
+    nano \
+    gawk \
+    haveged \
+    polkit \
+    ncurses \
+    tar \
+    kbd \
+    lvm2 \
+    openssh-server \
+    openssh-clients \
+    shim-x64 \
+    grub2-pc \
+    grub2-efi-x64 \
+    grub2-efi-x64-modules \
+    open-vm-tools \
+    iscsi-initiator-utils \
+    iptables ethtool socat iproute-tc conntrack \
+    kernel kernel-modules kernel-modules-extra \
+    rsync jq && dnf clean all
+
+COPY --from=quay.io/kairos/framework:v2.3.2_fedora / /
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
+
+
+# Configure the box. The ubi image masks services for containers, we unmask them 
+RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
+RUN systemctl enable getty@tty1.service
+RUN systemctl enable getty@tty2.service
+RUN systemctl enable getty@tty3.service
+RUN systemctl enable systemd-networkd
+RUN systemctl enable systemd-resolved
+RUN systemctl enable sshd
+RUN systemctl disable selinux-autorelabel-mark.service 
+#RUN systemctl enable tmp.mount
+
+
+RUN systemctl enable cos-setup-reconcile.timer && \
+    	    systemctl enable cos-setup-fs.service && \
+	    systemctl enable cos-setup-boot.service && \
+	    systemctl enable cos-setup-network.service
+
+
+COPY overlay/rhel8/ /
+
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+            ln -sf "${kernel#/boot/}" /boot/vmlinuz
+RUN kernel=$(ls /lib/modules | head -n1) && \
+            dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
+            ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+RUN rm -rf /boot/initramfs-*
+
+RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
+RUN mkdir -p /etc/luet/repos.conf.d
+RUN luet repo add kairos -y --url quay.io/kairos/packages --type docker --priority 99 && luet repo update && luet install -y system/elemental-cli
+## Clear cache
+RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
+
+
+RUN subscription-manager unregister

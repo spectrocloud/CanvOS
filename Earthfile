@@ -41,7 +41,11 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
 END
 
 build-all-images:
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+    IF $FIPS_ENABLED
+        BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images-fips
+    ELSE
+        BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+    END
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
@@ -51,15 +55,31 @@ build-all-images:
     END
 
 build-provider-images:
-    IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       BUILD  +provider-image --K8S_VERSION=1.24.13
-       BUILD  +provider-image --K8S_VERSION=1.25.9
-       BUILD  +provider-image --K8S_VERSION=1.26.4
+    IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
     ELSE
-       BUILD  +provider-image --K8S_VERSION=1.24.6
-       BUILD  +provider-image --K8S_VERSION=1.25.2
-       BUILD  +provider-image --K8S_VERSION=1.26.4
-       BUILD  +provider-image --K8S_VERSION=1.27.2
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.27.2
+    END
+
+build-provider-images-fips:
+    IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.13
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.9
+       BUILD  --platform=linux/amd64 --platform=linux/arm64  +provider-image --K8S_VERSION=1.26.4
+    ELSE IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "rke2" ]
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.0
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
+    ELSE
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
+       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
     END
 
 iso-image-rootfs:
