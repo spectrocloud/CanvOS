@@ -245,6 +245,9 @@ base-image:
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
     END
+
+    DO +OSRELEASE --OS_VERSION=$KAIROS_VERSION
+
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm -rf /etc/machine-id && \
@@ -258,7 +261,25 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     COPY --platform=linux/${ARCH} +stylus-image/ /
     COPY overlay/files/ /
+    
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
     SAVE IMAGE palette-installer-image:latest
+
+
+OSRELEASE:
+    COMMAND
+    ARG OS_ID=${OS_DISTRIBUTION}
+    ARG OS_VERSION
+    ARG OS_LABEL=latest
+    ARG VARIANT=${OS_DISTRIBUTION}
+    ARG FLAVOR=${OS_DISTRIBUTION}
+    ARG BUG_REPORT_URL=https://github.com/spectrocloud/CanvOS/issues
+    ARG HOME_URL=https://github.com/spectrocloud/CanvOS
+    ARG OS_REPO=spectrocloud/CanvOS
+    ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}
+
+    # update OS-release file
+    RUN sed -i -n '/KAIROS_/!p' /etc/os-release
+    RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
