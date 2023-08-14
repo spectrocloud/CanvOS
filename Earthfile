@@ -42,9 +42,9 @@ END
 
 build-all-images:
     IF $FIPS_ENABLED
-        BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images-fips
+        BUILD +build-provider-images-fips
     ELSE
-        BUILD --platform=linux/amd64 --platform=linux/arm64 +build-provider-images
+        BUILD  +build-provider-images
     END
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
@@ -56,30 +56,30 @@ build-all-images:
 
 build-provider-images:
     IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.24.6
+       BUILD  +provider-image --K8S_VERSION=1.25.2
+       BUILD  +provider-image --K8S_VERSION=1.26.4
     ELSE
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.27.2
+       BUILD  +provider-image --K8S_VERSION=1.24.6
+       BUILD  +provider-image --K8S_VERSION=1.25.2
+       BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.27.2
     END
 
 build-provider-images-fips:
     IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.13
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.9
-       BUILD  --platform=linux/amd64 --platform=linux/arm64  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.24.13
+       BUILD  +provider-image --K8S_VERSION=1.25.9
+       BUILD  +provider-image --K8S_VERSION=1.26.4
     ELSE IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "rke2" ]
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.0
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.24.6
+       BUILD  +provider-image --K8S_VERSION=1.25.2
+       BUILD  +provider-image --K8S_VERSION=1.25.0
+       BUILD  +provider-image --K8S_VERSION=1.26.4
     ELSE
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.24.6
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.25.2
-       BUILD  --platform=linux/amd64 --platform=linux/arm64 +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.24.6
+       BUILD  +provider-image --K8S_VERSION=1.25.2
+       BUILD  +provider-image --K8S_VERSION=1.26.4
     END
 
 iso-image-rootfs:
@@ -113,7 +113,7 @@ build-iso:
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:   
-    FROM +base-image
+    FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
@@ -128,7 +128,7 @@ provider-image:
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
-    COPY  +kairos-provider-image/ /
+    COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -168,7 +168,7 @@ kairos-provider-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         ARG PROVIDER_BASE=ghcr.io/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
-    FROM $PROVIDER_BASE
+    FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
 
