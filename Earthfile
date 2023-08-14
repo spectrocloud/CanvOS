@@ -196,7 +196,7 @@ base-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
-    IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         RUN apt update && \
             apt install --no-install-recommends zstd vim -y
         # Add proxy certificate if present
@@ -206,15 +206,14 @@ base-image:
         END
         RUN apt update && \
             apt upgrade -y
-       IF [ "$ARCH" = "amd64" ]
-          RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
+        RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
-          RUN kernel=$(ls /lib/modules | tail -n1) && \
+        RUN kernel=$(ls /lib/modules | tail -n1) && \
             dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
             ln -sf "initrd-${kernel}" /boot/initrd
-          RUN kernel=$(ls /lib/modules | tail -n1) && \
+        RUN kernel=$(ls /lib/modules | tail -n1) && \
             depmod -a "${kernel}"
-        END
+
 
         RUN rm -rf /var/cache/* && \
             apt clean
