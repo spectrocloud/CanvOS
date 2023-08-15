@@ -10,7 +10,7 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG ARCH
-ARG SPECTRO_LUET_VERSION=v1.1.0-alpha3
+ARG SPECTRO_LUET_VERSION=v1.1.0-alpha4
 ARG KAIROS_VERSION=v2.3.2
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -234,13 +234,9 @@ base-image:
             zypper clean
     END
     IF [ "$ARCH" = "arm64" ]
-        RUN mkdir -p /etc/luet/repos.conf.d && luet repo add kairos -y --type docker --url quay.io/kairos/packages-arm64 --priority 99 && luet repo update && luet install -y system/elemental-cli && rm /etc/luet/repos.conf.d/* && luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm --priority 1 -y && luet repo update
+        RUN mkdir -p /etc/luet/repos.conf.d &&  && luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm --priority 1 -y && luet repo update
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add kairos -y --type docker --url quay.io/kairos/packages --priority 99 && \
-        luet repo update && \
-        luet install -y system/elemental-cli && \
-        rm /etc/luet/repos.conf.d/* && \
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
     END
