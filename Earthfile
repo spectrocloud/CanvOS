@@ -18,7 +18,7 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.7.11
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v2.3.0-alpha2
-ARG KUBEADM_PROVIDER_VERSION=v2.3.0-alpha5
+ARG KUBEADM_PROVIDER_VERSION=v2.3.0-alpha6
 ARG RKE2_PROVIDER_VERSION=v2.3.0-alpha2
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -260,7 +260,7 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
-    SAVE IMAGE palette-installer-image:latest
+    SAVE IMAGE palette-installer-image:$PE_VERSION-$CUSTOM_TAG
 
 
 OSRELEASE:
