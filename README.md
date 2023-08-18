@@ -104,6 +104,7 @@ cp .arg.template .arg
 6. To build RHEL core, RHEL FIPS or Ubuntu fips base images switch to respective directories and build the base image.
 The base image built can be passed as argument to build the installer and provider images.
 Follow the instructions in the respective sub-folders (rhel-fips, ubuntu-fips) to create base images.
+For ubuntu-fips, this image can be used as base image - `gcr.io/spectro-images-public/ubuntu-focal-fips:v4.0_20230817`
 Skip this step if your base image is ubuntu or opensuse-leap. If you are building ubuntu or opensuse-leap installer images, do not pass the BASE_IMAGE attribute as an arg to build command.
 
 7. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
@@ -132,12 +133,26 @@ Skip this step if your base image is ubuntu or opensuse-leap. If you are buildin
 9. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
 
 ```shell
-./earthly.sh +build-all-images
+./earthly.sh +build-all-images --ARCH=amd64
 ```
 
 To build FIPS complaint images or ARM images, specify the BASE_IMAGE and ARCH in the .arg file or as command line arguments.
 `k3s` does not FIPS and rke2 is by default `FIPS` compliant.
 
+To build just the installer image
+```shell
+./earthly.sh +iso --ARCH=amd64
+```
+
+To build the provider images
+```shell
+./earthly.sh +build-provider-images --ARCH=amd64
+```
+
+To build the fips enabled ubuntu installer image
+```shell
+./earthly.sh +iso --BASE_IMAGE=gcr.io/spectro-images-public/ubuntu-focal-fips:v4.0_20230817 --FIPS_ENABLED=true --ARCH=amd64 --PE_VERSION=v4.0.0
+```
 
 Output
 ```shell
