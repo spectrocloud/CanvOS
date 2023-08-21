@@ -27,16 +27,6 @@ ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG PROXY_CERT_PATH
 
-IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-    ARG BASE_K8S_VERSION=$K8S_VERSION
-ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-    ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
-    ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-    ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
-    ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-END
-
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
@@ -129,6 +119,16 @@ provider-image:
     ARG IMAGE_REPO
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG BASE_K8S_VERSION=$K8S_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    END
+
     COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
@@ -187,6 +187,16 @@ base-image:
         RUN  mkdir -p /etc/luet/repos.conf.d && \
           SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
           luet repo update
+    END
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG BASE_K8S_VERSION=$K8S_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
