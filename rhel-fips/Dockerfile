@@ -64,6 +64,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     tar \
     kbd \
     lvm2 \
+    zstd \
     openssh-server \
     openssh-clients \
     shim-x64 \
