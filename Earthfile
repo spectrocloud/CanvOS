@@ -184,7 +184,6 @@ base-image:
 
     IF $IS_JETSON
         COPY mount.yaml /system/oem/mount.yaml
-        RUN cat /system/oem/mount.yaml
     END
 
     IF [ "$ARCH" = "arm64" ]
