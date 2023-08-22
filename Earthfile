@@ -236,7 +236,7 @@ base-image:
             zypper clean
     END
     IF [ "$ARCH" = "arm64" ]
-        RUN mkdir -p /etc/luet/repos.conf.d &&  && luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm --priority 1 -y && luet repo update
+        RUN mkdir -p /etc/luet/repos.conf.d && luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm --priority 1 -y && luet repo update
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN mkdir -p /etc/luet/repos.conf.d && \
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
