@@ -10,16 +10,16 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG PE_VERSION
 ARG ARCH
-ARG SPECTRO_LUET_VERSION=v1.1.0-alpha4
+ARG SPECTRO_LUET_VERSION=v1.1.2
 ARG KAIROS_VERSION=v2.3.2
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.7.11
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v2.3.0-alpha2
-ARG KUBEADM_PROVIDER_VERSION=v2.3.0-alpha6
-ARG RKE2_PROVIDER_VERSION=v2.3.0-alpha3
+ARG K3S_PROVIDER_VERSION=v2.3.2
+ARG KUBEADM_PROVIDER_VERSION=v2.3.3
+ARG RKE2_PROVIDER_VERSION=v2.3.2
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -55,31 +55,29 @@ build-all-images:
     END
 
 build-provider-images:
-    IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-       BUILD  +provider-image --K8S_VERSION=1.24.6
-       BUILD  +provider-image --K8S_VERSION=1.25.2
-       BUILD  +provider-image --K8S_VERSION=1.26.4
-    ELSE
-       BUILD  +provider-image --K8S_VERSION=1.24.6
-       BUILD  +provider-image --K8S_VERSION=1.25.2
-       BUILD  +provider-image --K8S_VERSION=1.26.4
-       BUILD  +provider-image --K8S_VERSION=1.27.2
-    END
+   BUILD  +provider-image --K8S_VERSION=1.24.6
+   BUILD  +provider-image --K8S_VERSION=1.25.2
+   BUILD  +provider-image --K8S_VERSION=1.26.4
+   BUILD  +provider-image --K8S_VERSION=1.27.2
+
 
 build-provider-images-fips:
     IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
        BUILD  +provider-image --K8S_VERSION=1.24.13
        BUILD  +provider-image --K8S_VERSION=1.25.9
        BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.27.2
     ELSE IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "rke2" ]
        BUILD  +provider-image --K8S_VERSION=1.24.6
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.25.0
        BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.27.2
     ELSE
        BUILD  +provider-image --K8S_VERSION=1.24.6
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.27.2
     END
 
 iso-image-rootfs:
