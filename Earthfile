@@ -40,7 +40,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
     ARG BASE_IMAGE
 END
 
-IF [[ $BASE_IMAGE =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
+IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
@@ -180,9 +180,12 @@ kairos-provider-image:
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
 
-    IF $IS_JETSON
-        COPY mount.yaml /system/oem/mount.yaml
-    END
+#    IF $IS_JETSON
+#        COPY mount.yaml /system/oem/mount.yaml
+#    END
+   IF [ "$IS_JETSON" = "true" ]
+       COPY mount.yaml /system/oem/mount.yaml
+   END
 
     IF [ "$ARCH" = "arm64" ]
         RUN  mkdir -p /etc/luet/repos.conf.d && \
