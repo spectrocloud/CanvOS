@@ -27,6 +27,8 @@ ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG PROXY_CERT_PATH
 
+ARG ETCD_VERSION="v3.5.5"
+
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
@@ -83,6 +85,15 @@ build-provider-images-fips:
        BUILD  +provider-image --K8S_VERSION=1.26.4
        BUILD  +provider-image --K8S_VERSION=1.27.2
     END
+
+download-etcdctl:
+    FROM alpine
+    ARG TARGETOS
+    ARG TARGETARCH
+    RUN apk add curl
+    RUN curl  --retry 5 -Ls https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
+            chmod +x etcdctl
+    SAVE ARTIFACT etcdctl
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
@@ -144,6 +155,8 @@ provider-image:
 
     RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+
+    COPY (+download-etcdctl/etcdctl) /usr/local/bin/
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
