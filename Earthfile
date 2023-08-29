@@ -26,6 +26,7 @@ ARG HTTPS_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG PROXY_CERT_PATH
+ARG UPDATE_KERNEL=true
 
 ARG ETCD_VERSION="v3.5.5"
 
@@ -227,6 +228,10 @@ base-image:
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /etc/ssl/certs
             RUN  update-ca-certificates
+        END
+        IF [ "$UPDATE_KERNEL" = "false" ]
+            RUN if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
+                if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         END
         RUN apt update && \
             apt upgrade -y
