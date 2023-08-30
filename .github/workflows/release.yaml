@@ -1,48 +1,48 @@
-name: Release
+# name: Release
 
-on:
-  push:
-    tags:
-      - v*
+# on:
+#   push:
+#     tags:
+#       - v*
 
-permissions:
-  contents: write
+# permissions:
+#   contents: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
 
 
-jobs:
-  release-iso-image:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: actions/checkout@v3
-      - name: create .netrc file
-        env:
-          REPO_USER: ${{ secrets.REPO_USER }}
-          REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
-        shell: bash
-        run: |
-          echo "machine github.com" > .netrc
-          echo "    login $REPO_USER" >> .netrc
-          echo "    password $REPO_TOKEN" >> .netrc
-          echo "machine api.github.com" >> .netrc
-          echo "    login $REPO_USER" >> .netrc
-          echo "    password $REPO_TOKEN" >> .netrc
-      - uses: earthly/actions-setup@v1
-      - run: ./earthly --ci --push -P --output +build-all-images --PE_VERSION=${{ github.ref_name }}
-      - run: |
-          if [[ "${{ github.ref }}" =~ .*-.*$ ]]; then
-            echo "IS_PRERELEASE=true" > $GITHUB_ENV
-          fi
-      - uses: softprops/action-gh-release@v1
-        with:
-          files: build/*
-          prerelease: ${{ env.IS_PRERELEASE }}
-          generate_release_notes: true
+# jobs:
+#   release-iso-image:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Login to Docker Hub
+#         uses: docker/login-action@v2
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
+#       - uses: actions/checkout@v3
+#       - name: create .netrc file
+#         env:
+#           REPO_USER: ${{ secrets.REPO_USER }}
+#           REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
+#         shell: bash
+#         run: |
+#           echo "machine github.com" > .netrc
+#           echo "    login $REPO_USER" >> .netrc
+#           echo "    password $REPO_TOKEN" >> .netrc
+#           echo "machine api.github.com" >> .netrc
+#           echo "    login $REPO_USER" >> .netrc
+#           echo "    password $REPO_TOKEN" >> .netrc
+#       - uses: earthly/actions-setup@v1
+#       - run: ./earthly --ci --push -P --output +build-all-images --PE_VERSION=${{ github.ref_name }}
+#       - run: |
+#           if [[ "${{ github.ref }}" =~ .*-.*$ ]]; then
+#             echo "IS_PRERELEASE=true" > $GITHUB_ENV
+#           fi
+#       - uses: softprops/action-gh-release@v1
+#         with:
+#           files: build/*
+#           prerelease: ${{ env.IS_PRERELEASE }}
+#           generate_release_notes: true
