@@ -26,6 +26,7 @@ ARG HTTPS_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG PROXY_CERT_PATH
+ARG UPDATE_KERNEL=false
 
 ARG ETCD_VERSION="v3.5.5"
 
@@ -228,6 +229,11 @@ base-image:
             COPY sc.crt /etc/ssl/certs
             RUN  update-ca-certificates
         END
+        IF [ "$UPDATE_KERNEL" = "false" ]
+            RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
+                if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
+                if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
+        END
         RUN apt update && \
             apt upgrade -y
         RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
@@ -243,6 +249,10 @@ base-image:
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
+        IF [ "$UPDATE_KERNEL" = "false" ]
+            RUN zypper al kernel-de*
+        END
+
         RUN zypper refresh && \
            zypper update -y
 
