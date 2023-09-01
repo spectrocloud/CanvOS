@@ -284,6 +284,10 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
+    # Ensure SElinux gets disabled
+    RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+        if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
