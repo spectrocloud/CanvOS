@@ -249,6 +249,10 @@ base-image:
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
+        IF [ "$UPDATE_KERNEL" = "false" ]
+            RUN zypper al kernel-de*
+        END
+
         RUN zypper refresh && \
            zypper update -y
 
