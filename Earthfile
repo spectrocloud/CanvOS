@@ -167,6 +167,9 @@ base-image:
             zypper clean -a && \
             mkinitrd
     END
+
+    DO +OSRELEASE --OS_VERSION=$KAIROS_VERSION
+
     RUN rm /tmp/* -rf
 
     # SAVE ARTIFACT . 
@@ -177,3 +180,19 @@ installer-image:
     COPY +stylus/ /
     COPY overlay/files/ /
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+
+OSRELEASE:
+    COMMAND
+    ARG OS_ID=${OS_DISTRIBUTION}
+    ARG OS_VERSION
+    ARG OS_LABEL=latest
+    ARG VARIANT=${OS_DISTRIBUTION}
+    ARG FLAVOR=${OS_DISTRIBUTION}
+    ARG BUG_REPORT_URL=https://github.com/spectrocloud/CanvOS/issues
+    ARG HOME_URL=https://github.com/spectrocloud/CanvOS
+    ARG OS_REPO=spectrocloud/CanvOS
+    ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}
+
+    # update OS-release file
+    RUN sed -i -n '/KAIROS_/!p' /etc/os-release
+    RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
