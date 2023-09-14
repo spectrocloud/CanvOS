@@ -9,7 +9,7 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG ARCH
-ARG PE_VERSION=v4.0.2
+ARG PE_VERSION=v4.0.3
 ARG SPECTRO_LUET_VERSION=v1.1.4
 ARG KAIROS_VERSION=v2.3.2
 ARG K3S_FLAVOR_TAG=k3s1
@@ -26,6 +26,9 @@ ARG HTTPS_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG PROXY_CERT_PATH
+ARG UPDATE_KERNEL=false
+
+ARG ETCD_VERSION="v3.5.5"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
@@ -83,6 +86,15 @@ build-provider-images-fips:
        BUILD  +provider-image --K8S_VERSION=1.26.4
        BUILD  +provider-image --K8S_VERSION=1.27.2
     END
+
+download-etcdctl:
+    FROM alpine
+    ARG TARGETOS
+    ARG TARGETARCH
+    RUN apk add curl
+    RUN curl  --retry 5 -Ls https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
+            chmod +x etcdctl
+    SAVE ARTIFACT etcdctl
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
@@ -144,6 +156,8 @@ provider-image:
 
     RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+
+    COPY (+download-etcdctl/etcdctl) /usr/local/bin/
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
@@ -215,6 +229,11 @@ base-image:
             COPY sc.crt /etc/ssl/certs
             RUN  update-ca-certificates
         END
+        IF [ "$UPDATE_KERNEL" = "false" ]
+            RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
+                if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
+                if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
+        END
         RUN apt update && \
             apt upgrade -y
         RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
@@ -230,6 +249,10 @@ base-image:
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
+        IF [ "$UPDATE_KERNEL" = "false" ]
+            RUN zypper al kernel-de*
+        END
+
         RUN zypper refresh && \
            zypper update -y
 
@@ -243,6 +266,13 @@ base-image:
         RUN zypper cc && \
             zypper clean
     END
+
+    IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+        RUN zypper install -y apparmor-parser apparmor-profiles
+        RUN zypper cc && \
+            zypper clean
+    END
+
     IF [ "$ARCH" = "arm64" ]
         RUN mkdir -p /etc/luet/repos.conf.d && luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm --priority 1 -y && luet repo update
     ELSE IF [ "$ARCH" = "amd64" ]
@@ -260,6 +290,10 @@ base-image:
     RUN touch /etc/machine-id && \ 
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
+
+    # Ensure SElinux gets disabled
+    RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+        if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
 
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
