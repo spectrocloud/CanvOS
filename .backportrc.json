@@ -1,0 +1,14 @@
+{
+  "repoOwner": "spectrocloud",
+  "repoName": "CanvOS",
+  "editor": "code",
+
+  "targetBranchChoices": ["master", "rc-4.0", "release-3.4"],
+
+  "autoMerge": false,
+  "autoMergeMethod": "squash",
+  "commitConflicts": true,
+  "branchLabelMapping": {
+    "^backport-(.+)$": "$1"
+  }
+}
