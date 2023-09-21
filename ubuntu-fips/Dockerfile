@@ -155,6 +155,9 @@ RUN rm -rf /boot/initramfs-*
 # Fixup sudo perms
 RUN chown root:root /usr/bin/sudo && chmod 4755 /usr/bin/sudo
 
+# Symlink kernel HMAC
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
 RUN ln -s /usr/sbin/grub-install /usr/sbin/grub2-install
 RUN ln -s /usr/bin/grub-editenv /usr/bin/grub2-editenv
 
