@@ -157,7 +157,7 @@ provider-image:
     RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
-    COPY (+download-etcdctl/etcdctl) /usr/local/bin/
+    COPY (+download-etcdctl/etcdctl) /usr/bin/
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
