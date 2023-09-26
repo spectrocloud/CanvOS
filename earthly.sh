@@ -1,4 +1,7 @@
 #!/bin/bash
+
+set -e
+
 function build_with_proxy() {
     export HTTP_PROXY=$HTTP_PROXY
     export HTTPS_PROXY=$HTTPS_PROXY
@@ -37,7 +40,9 @@ if ! docker run --rm --privileged alpine sh -c 'echo "Privileged container test"
     echo "Privileged containers are not allowed for the current user."
     exit 1
 fi
-if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY"]; then
+if [ ! -z "${EARTHLY_BIN}" ]; then
+   "${EARTHLY_BIN}" --allow-privileged "$@"
+elif [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY"]; then
     build_without_proxy "$@"
 else
     build_with_proxy "$@"
