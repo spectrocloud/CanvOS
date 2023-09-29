@@ -54,7 +54,7 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-OPTIONS=$(getopt -o hn:u: --long help,name:,user-data: -- "$@" 2>/dev/null || usage)
+OPTIONS=$(getopt -o hn:u:i: --long help,name:,user-data:,iso: -- "$@" 2>/dev/null || usage)
 
 eval set -- "$OPTIONS"
 
