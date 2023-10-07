@@ -165,7 +165,7 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] ||  [ "$K8S_DISTRIBUTION" = "rke2" ] && [ "$FIPS_ENABLED" = "true" ]
         ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
      ELSE
         ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-$ARCH:$PE_VERSION
