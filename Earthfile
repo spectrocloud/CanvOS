@@ -257,7 +257,6 @@ base-image:
                 rm -f marmot
             RUN apt install -y sqlite3 less
         END
-    END
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
