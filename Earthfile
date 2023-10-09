@@ -40,7 +40,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
+ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     # Check for default value for rhel
     ARG BASE_IMAGE
 END
