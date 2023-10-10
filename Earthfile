@@ -9,7 +9,7 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG ARCH
-ARG PE_VERSION=v4.0.4
+ARG PE_VERSION=v4.0.6
 ARG SPECTRO_LUET_VERSION=v1.1.5
 ARG KAIROS_VERSION=v2.3.2
 ARG K3S_FLAVOR_TAG=k3s1
@@ -38,7 +38,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
+ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     # Check for default value for rhel
     ARG BASE_IMAGE
 END
@@ -270,7 +270,7 @@ base-image:
             zypper clean
     END
 
-    IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+    IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
         RUN zypper install -y apparmor-parser apparmor-profiles
         RUN zypper cc && \
             zypper clean
