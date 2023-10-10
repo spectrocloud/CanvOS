@@ -192,7 +192,7 @@ ttl.sh/ubuntu                                  k3s-1.25.2-v3.4.3-demo_linux_amd6
 
 Earthly is a multi-architecture build tool.  In this example we are building images for AMD64 hardware which is reflected by the tags above.  In the future we will support ARM64 builds and those tags will be included.  We only need to push the image tag that DOES NOT have the architecture reference i.e `linux_amd64` in the above example.
 
-11. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created imgages.
+11. The provider images are by default not pushed to a registry. You can push the images by using the `docker push` command and reference the created images.
 
 ```shell
 docker push ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo && \
