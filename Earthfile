@@ -255,7 +255,7 @@ base-image:
                 curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
                 install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
                 rm -f marmot
-            RUN apt install -y sqlite3 less
+            RUN apt install -y sqlite3
         END
             
     # IF OS Type is Opensuse
