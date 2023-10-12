@@ -28,6 +28,7 @@ ARG https_proxy=${HTTPS_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
+ARG MARMOT_VERSION=0.8.6
 
 ARG ETCD_VERSION="v3.5.5"
 
@@ -251,7 +252,7 @@ base-image:
         # TODO: handle installation for opensuse
         IF $TWO_NODE
             RUN mkdir -p /opt/spectrocloud/bin && \
-                curl -sL https://github.com/maxpert/marmot/releases/download/v0.8.6/marmot-v0.8.6-linux-amd64-static.tar.gz | tar -zxv marmot && \
+                curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
                 install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
                 rm -f marmot
             RUN apt install -y sqlite3 less
