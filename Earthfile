@@ -137,6 +137,7 @@ provider-image:
     ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        RUN swapoff -a
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -274,6 +275,7 @@ base-image:
         RUN zypper install -y apparmor-parser apparmor-profiles
         RUN zypper cc && \
             zypper clean
+        RUN cp /sbin/apparmor_parser /usr/local/bin/apparmor_parser
     END
 
     IF [ "$ARCH" = "arm64" ]
