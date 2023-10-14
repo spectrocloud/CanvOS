@@ -275,6 +275,7 @@ base-image:
         RUN zypper install -y apparmor-parser apparmor-profiles
         RUN zypper cc && \
             zypper clean
+        RUN cp /sbin/apparmor_parser /usr/local/bin/apparmor_parser
     END
 
     IF [ "$ARCH" = "arm64" ]
