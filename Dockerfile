@@ -14,7 +14,7 @@ RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ] && [ "${PROXY_CERT_PATH}" != "" ]; th
     cp /tmp/sc.crt /etc/ssl/certs && \
     update-ca-certificates; \
     fi 
-RUN if [ "${OS_DISTRIBUTION}" = "opensuse" ] && [ "${PROXY_CERT_PATH}" != "" ]; then \
+RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] && [ "${PROXY_CERT_PATH}" != "" ]; then \
     cp /tmp/sc.crt /usr/share/pki/trust/anchors && \
     update-ca-certificates; \
     fi
