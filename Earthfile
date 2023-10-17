@@ -90,11 +90,18 @@ build-provider-images-fips:
        BUILD  +provider-image --K8S_VERSION=1.27.2
     END
 
-download-etcdctl:
+base-alpine:
     FROM alpine
     ARG TARGETOS
     ARG TARGETARCH
+    IF [ ! -z $PROXY_CERT_PATH ]
+        COPY sc.crt /etc/ssl/certs
+        RUN  update-ca-certificates
+    END
     RUN apk add curl
+
+download-etcdctl:
+    FROM +base-alpine
     RUN curl  --retry 5 -Ls https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
             chmod +x etcdctl
     SAVE ARTIFACT etcdctl
@@ -225,13 +232,14 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-        RUN apt update && \
-            apt install --no-install-recommends zstd vim -y
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /etc/ssl/certs
             RUN  update-ca-certificates
         END
+
+        RUN apt update && \
+            apt install --no-install-recommends zstd vim -y
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                 if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
@@ -252,6 +260,12 @@ base-image:
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
+        # Add proxy certificate if present
+        IF [ ! -z $PROXY_CERT_PATH ]
+            COPY sc.crt /usr/share/pki/trust/anchors
+            RUN  update-ca-certificates
+        END
+
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN zypper al kernel-de*
         END
