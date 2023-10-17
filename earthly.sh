@@ -13,7 +13,7 @@ function build_with_proxy() {
     docker exec -it earthly-buildkitd update-ca-certificates
 
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 -e BUILDKIT_TLS_ENABLED=false -v "$(pwd)":/workspace -v "$PROXY_CERT_PATH:/workspace/sc.crt:ro" gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+    docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 -e BUILDKIT_TLS_ENABLED=false -v "$(pwd)":/workspace -v "$PROXY_CERT_PATH:/workspace/sc.crt:ro" gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION --allow-privileged -v "$@"
 }
 
 function build_without_proxy() {
