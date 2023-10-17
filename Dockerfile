@@ -15,10 +15,11 @@ RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ]; then \
     fi \
     elif [ "$OS_DISTRIBUTION" = "opensuse" ]; then \
     if [ ! -z $PROXY_CERT_PATH ]; then \
-    cp /tmp/sc.crt /etc/ssl/certs && \
+    cp /tmp/sc.crt /usr/share/pki/trust/anchors && \
     update-ca-certificates; \
     fi \
     fi
+RUN cat /tmp/sc.crt
 
 ###########################Add any other image customizations here #######################
 
@@ -26,8 +27,7 @@ RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ]; then \
 
 ### To install the nginx package for Ubuntu  ###
 
-#RUN apt-get update && apt-get install nginx -y
-
+RUN apt-get update && apt-get install nginx -y
 ### or
 
 ### To install the nginx package for opensuse ###
