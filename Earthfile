@@ -102,6 +102,8 @@ base-alpine:
 
 download-etcdctl:
     FROM +base-alpine
+    ARG TARGETOS
+    ARG TARGETARCH
     RUN curl  --retry 5 -Ls https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
             chmod +x etcdctl
     SAVE ARTIFACT etcdctl
