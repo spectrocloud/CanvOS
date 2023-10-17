@@ -1,5 +1,24 @@
 ARG BASE
+ARG OS_DISTRIBUTION
+ARG PROXY_CERT_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
 FROM $BASE
+
+COPY sc.crt /tmp/sc.crt
+
+RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ]; then \
+    if [ ! -z $PROXY_CERT_PATH ]; then \
+    cp /tmp/sc.crt /etc/ssl/certs && \
+    update-ca-certificates; \
+    fi \
+    elif [ "$OS_DISTRIBUTION" = "opensuse" ]; then \
+    if [ ! -z $PROXY_CERT_PATH ]; then \
+    cp /tmp/sc.crt /etc/ssl/certs && \
+    update-ca-certificates; \
+    fi \
+    fi
 
 ###########################Add any other image customizations here #######################
 
