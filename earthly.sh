@@ -18,7 +18,7 @@ function build_with_proxy() {
 
 function build_without_proxy() {
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config "-v "$(pwd)":/workspace gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+    docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace gcr.io/spectro-images-public/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
 
 global_config="{disable_analytics: true}"
