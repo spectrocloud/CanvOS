@@ -7,8 +7,8 @@ ARG NO_PROXY
 FROM $BASE
 
 COPY sc.crt /tmp/sc.crt
-RUN echo ${OS_DISTRIBUTION}
-RUN echo ${PROXY_CERT_PATH}
+RUN echo $OS_DISTRIBUTION
+RUN echo $PROXY_CERT_PATH
 RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ] && [ ! -z ${PROXY_CERT_PATH} ]; then \
     cp /tmp/sc.crt /etc/ssl/certs && \
     update-ca-certificates; \
