@@ -8,16 +8,13 @@ FROM $BASE
 
 COPY sc.crt /tmp/sc.crt
 
-RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ]; then \
-    if [ ! -z $PROXY_CERT_PATH ]; then \
+RUN if [[ "${OS_DISTRIBUTION}" = "ubuntu" ] && [ ! -z ${PROXY_CERT_PATH} ]]; then \
     cp /tmp/sc.crt /etc/ssl/certs && \
     update-ca-certificates; \
-    fi \
-    elif [ "$OS_DISTRIBUTION" = "opensuse" ]; then \
-    if [ ! -z $PROXY_CERT_PATH ]; then \
+    fi 
+RUN if [[ "${OS_DISTRIBUTION}" = "opensuse" ] && [ ! -z ${PROXY_CERT_PATH} ]]; then \
     cp /tmp/sc.crt /usr/share/pki/trust/anchors && \
     update-ca-certificates; \
-    fi \
     fi
 RUN cat /tmp/sc.crt
 RUN cat /usr/share/pki/trust/anchors/sc.crt
