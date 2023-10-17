@@ -8,8 +8,6 @@ ARG HTTPS_PROXY
 ARG NO_PROXY
 
 COPY sc.crt /tmp/sc.crt
-RUN echo $OS_DISTRIBUTION
-RUN echo $PROXY_CERT_PATH
 RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ] && [ "${PROXY_CERT_PATH}" != "" ]; then \
     cp /tmp/sc.crt /etc/ssl/certs && \
     update-ca-certificates; \
@@ -18,8 +16,6 @@ RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] && [ "${PROXY_CERT_PATH}" != "
     cp /tmp/sc.crt /usr/share/pki/trust/anchors && \
     update-ca-certificates; \
     fi
-RUN cat /tmp/sc.crt
-RUN cat /usr/share/pki/trust/anchors/sc.crt
 
 ###########################Add any other image customizations here #######################
 
