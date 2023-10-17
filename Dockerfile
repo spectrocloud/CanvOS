@@ -20,6 +20,7 @@ RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ]; then \
     fi \
     fi
 RUN cat /tmp/sc.crt
+RUN cat /usr/share/pki/trust/anchors/sc.crt
 
 ###########################Add any other image customizations here #######################
 
