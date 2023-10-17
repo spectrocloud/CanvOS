@@ -27,9 +27,9 @@ RUN cat /tmp/sc.crt
 
 ### To install the nginx package for Ubuntu  ###
 
-RUN apt-get update && apt-get install nginx -y
+# RUN apt-get update && apt-get install nginx -y
 ### or
 
 ### To install the nginx package for opensuse ###
 
-#RUN zypper refresh && zypper install nginx -y
+RUN zypper refresh && zypper install nginx -y
