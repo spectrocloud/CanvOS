@@ -28,4 +28,4 @@ RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] && [ "${PROXY_CERT_PATH}" != "
 
 ### To install the nginx package for opensuse ###
 
-RUN zypper refresh && zypper install nginx -y
+# RUN zypper refresh && zypper install nginx -y
