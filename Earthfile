@@ -23,8 +23,10 @@ ARG RKE2_PROVIDER_VERSION=v4.1.0-alpha2
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
+ARG NO_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
+ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 
@@ -204,7 +206,9 @@ kairos-provider-image:
 
 # base build image used to create the base image for all other image types
 base-image:
-    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
+    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE --build-arg PROXY_CERT_PATH=$PROXY_CERT_PATH \ 
+    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
+    --build-arg NO_PROXY=$NO_PROXY .
 
 #    IF $IS_JETSON
 #        COPY mount.yaml /system/oem/mount.yaml

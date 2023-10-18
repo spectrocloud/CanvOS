@@ -1,4 +1,7 @@
 #!/bin/bash
+# Uncomment the line below to enable debug mode
+# set -x
+
 function build_with_proxy() {
     export HTTP_PROXY=$HTTP_PROXY
     export HTTPS_PROXY=$HTTPS_PROXY
