@@ -14,3 +14,7 @@ FROM $BASE
 ### To install the nginx package for opensuse ###
 
 #RUN zypper refresh && zypper install nginx -y
+
+# Add custom health check for two-node liveness
+
+# ADD overlay/files/opt/spectrocloud/bin/check-disk-size.sh /opt/spectrocloud/bin/
