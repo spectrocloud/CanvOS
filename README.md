@@ -75,6 +75,8 @@ v3.3.3
 v3.4.0
 v3.4.1
 v3.4.3
+
+v4.1.0
 ```
 
 4. Checkout the desired tag
