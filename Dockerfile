@@ -7,7 +7,7 @@ ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
 
-COPY sc.crt /tmp/sc.crt
+COPY sc.cr[t] /tmp/sc.crt
 RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ] && [ "${PROXY_CERT_PATH}" != "" ]; then \
     cp /tmp/sc.crt /etc/ssl/certs && \
     update-ca-certificates; \
