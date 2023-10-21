@@ -180,9 +180,9 @@ provider-image:
 
 stylus-image:
      IF [ "$FIPS_ENABLED" = "true" ]
-        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+        ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
      ELSE
-        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-$ARCH:$PE_VERSION
+        ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
      END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
@@ -191,15 +191,15 @@ stylus-image:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
-        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-         ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+         ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
