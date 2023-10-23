@@ -13,6 +13,7 @@ CANVOS_VM_CDROM=${CANVOS_VM_CDROM:-build/palette-edge-installer.iso}
 
 EDGEHOST_REGISRATION_KEY=
 PALETTE_ENDPOINT=tylerdev-spectrocloud.console.spectrocloud.com
+CLUSTER_NAME=
 
 declare -a VM_ARRAY=("two-node-one" "two-node-two")
 
