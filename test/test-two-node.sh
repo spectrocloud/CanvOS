@@ -2,6 +2,8 @@
 
 set -e
 
+# edit these variables
+
 OCI_REGISTRY=ozspectro
 CANVOS_VM_VCPU=${CANVOS_VM_VCPU:-4}
 CANVOS_VM_DISK=${CANVOS_VM_DISK:-35}
@@ -9,20 +11,24 @@ CANVOS_VM_RAM=${CANVOS_VM_RAM:-8192}
 CANVOS_VM_OSINFO=${CANVOS_VM_OSINFO:-ubuntujammy}
 CANVOS_VM_CDROM=${CANVOS_VM_CDROM:-build/palette-edge-installer.iso}
 
+#####
+# don't edit anything below
+#####
 function prepare_user_data_iso(){
+    local userdata=$1
     test -f site-user-data.iso && rm -f site-user-data.iso
     touch meta-data
     mkisofs -output site-user-data.iso -volid cidata \
-        -joliet -rock $1 meta-data
+        -joliet -rock ${userdata} meta-data
 }
 
 function start_machine(){
     local NAME=$1
-    local DISK=$2
+    local INSTALLER_DISK=$2
     virt-install \
         --osinfo ${CANVOS_VM_OSINFO} \
         --name ${NAME} \
-        --cdrom ${DISK} \
+        --cdrom ${INSTALLER_DIS} \
         --memory ${CANVOS_VM_RAM} \
         --vcpu ${CANVOS_VM_VCPU} \
         --disk size=${CANVOS_VM_DISK} \
@@ -87,30 +93,10 @@ function create_cluster_profile(){
 }
 
 function create_user_data(){
-	MACHINE=$1
-	cat << EOF>user-data
-#cloud-config
-
-cluster:
-  env:
-    two-node: "true"
-
-stylus:
-  site:
-    edgeHostToken: ...
-    name: two-node-oz-${MACHINE}
-    paletteEndpoint: api.spectrocloud.com
-  debug: true
-  twoNode:
-    provider: k3s
-    
-install:
-  poweroff: true
-
-users:
-  - name: kairos
-    passwd: kairos
-EOF
+    export MACHINENAME=$1
+    export EDGEHOST_REGISRATION_KEY
+    export PALETTE_ENDPOINT
+    envsubst < test/templates/user-data.tmpl > user-data
 }
 
 

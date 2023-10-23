@@ -1,0 +1,21 @@
+#cloud-config
+
+cluster:
+  env:
+    two-node: "true"
+
+stylus:
+  site:
+    edgeHostToken: ${EDGEHOST_REGISRATION_KEY}
+    name: ${MACHINENAME}
+    paletteEndpoint: ${PALETTE_ENDPOINT}
+  debug: true
+  twoNode:
+    provider: k3s
+    
+install:
+  poweroff: true
+
+users:
+  - name: kairos
+    passwd: kairos
