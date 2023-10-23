@@ -11,9 +11,22 @@ CANVOS_VM_RAM=${CANVOS_VM_RAM:-8192}
 CANVOS_VM_OSINFO=${CANVOS_VM_OSINFO:-ubuntujammy}
 CANVOS_VM_CDROM=${CANVOS_VM_CDROM:-build/palette-edge-installer.iso}
 
+EDGEHOST_REGISRATION_KEY=
+PALETTE_ENDPOINT=tylerdev-spectrocloud.console.spectrocloud.com
+
+declare -a VM_ARRAY=("two-node-one" "two-node-two")
+
 #####
 # don't edit anything below
 #####
+
+function create_user_data(){
+    export MACHINENAME=$1
+    export EDGEHOST_REGISRATION_KEY
+    export PALETTE_ENDPOINT
+    envsubst < test/templates/user-data.tmpl > user-data
+}
+
 function prepare_user_data_iso(){
     local userdata=$1
     test -f site-user-data.iso && rm -f site-user-data.iso
@@ -84,7 +97,6 @@ function create_cluster_profile(){
     projectUid="650ab2782df5377f52bb7cc0"
     domain=tylerdev-spectrocloud.console.spectrocloud.com
     
-    https://api.spectrocloud.com/v1/clusterprofiles/import
     curl -X POST https://$domain/v1/clusterporfiles/import?publish=true \
         -H "ApiKey: $apiKey" \
         -H "Content-Type: application/json" \
@@ -92,12 +104,6 @@ function create_cluster_profile(){
         -d @two-node-cluster-profile.json
 }
 
-function create_user_data(){
-    export MACHINENAME=$1
-    export EDGEHOST_REGISRATION_KEY
-    export PALETTE_ENDPOINT
-    envsubst < test/templates/user-data.tmpl > user-data
-}
 
 
 function main(){
@@ -130,17 +136,12 @@ function main(){
     	  docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.0.4-twonode
         )
     
-    MACHINE1="1"
-    MACHINE2="2"
-    
-    create_user_data ${MACHINE1}
-    bash launch-canvos-vm.sh -i build/pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso \
-    	 -u user-data -n ${MACHINE1}
-    
-    create_user_data ${MACHINE2}
-    bash launch-canvos-vm.sh -i build/pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso \
-    	-u user-data -n ${MACHINE2}
-    
+    for vm in "${VM_ARRAY[@]}"; do
+        create_user_data $vm
+        prepare_user_data_iso user-data
+        start_machine $vm pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}
+    done
+
     echo "Machines launched, waiting for the machines to register ..."
     echo "In the mean while you should update your cluster profile ..."
     echo "Once the machine registers, press Enter to create  a cluster with these machines"
