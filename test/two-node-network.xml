@@ -1,0 +1,16 @@
+<network>
+  <name>two-node</name>
+  <uuid>f3ed49d5-83f5-4e3c-8ede-71615db4f15f</uuid>
+  <forward mode="nat">
+    <nat>
+      <port start="1024" end="65535"/>
+    </nat>
+  </forward>
+  <mac address="52:54:00:7d:6c:dc"/>
+  <domain name="two-node"/>
+    <ip address="10.0.60.1" netmask="255.255.255.240">
+    <dhcp>
+      <range start="10.0.60.2" end="10.0.60.14"/>
+    </dhcp>
+  </ip>
+</network>

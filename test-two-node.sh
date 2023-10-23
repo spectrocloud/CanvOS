@@ -3,6 +3,41 @@
 set -e
 
 OCI_REGISTRY=ozspectro
+CANVOS_VM_VCPU=${CANVOS_VM_VCPU:-4}
+CANVOS_VM_DISK=${CANVOS_VM_DISK:-35}
+CANVOS_VM_RAM=${CANVOS_VM_RAM:-8192}
+CANVOS_VM_OSINFO=${CANVOS_VM_OSINFO:-ubuntujammy}
+CANVOS_VM_CDROM=${CANVOS_VM_CDROM:-build/palette-edge-installer.iso}
+
+function prepare_user_data_iso(){
+    test -f site-user-data.iso && rm -f site-user-data.iso
+    touch meta-data
+    mkisofs -output site-user-data.iso -volid cidata \
+        -joliet -rock $1 meta-data
+}
+
+function start_machine(){
+    local NAME=$1
+    local DISK=$2
+    virt-install \
+        --osinfo ${CANVOS_VM_OSINFO} \
+        --name ${NAME} \
+        --cdrom ${DISK} \
+        --memory ${CANVOS_VM_RAM} \
+        --vcpu ${CANVOS_VM_VCPU} \
+        --disk size=${CANVOS_VM_DISK} \
+        --disk "site-user-data.iso",device=cdrom \
+        --virt-type kvm \
+        --network two-node
+        --noautoconsole \
+        --import 
+}
+
+function prepare_network(){
+    if [ $(virsh net-list | grep two-node | awk '{print $2}') != 'active' ]; then
+        virsh net-define test/two-node-network.xml
+    fi
+}
 
 function build_provider_k3s(){
 	echo "Build provider k3s"
@@ -10,11 +45,15 @@ function build_provider_k3s(){
 	docker push $OCI_REGISTRY/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH}
 }
 
-function build_stylus_package(){ 
-	echo "Build Stylus"
-	earthly --push +package --IMAGE_REPOSITORY=${OCI_REGISTRY}
+function build_stylus_package_and_framework(){ 
+	echo "Build Stylus image and framework"
+	earthly --push --allow-privileged +package --IMAGE_REPOSITORY=${OCI_REGISTRY} \
+    --platform=linux/amd64 \
+    --BASE_IMAGE=quay.io/kairos/core-opensuse-leap:v2.3.2 \
+    --IMAGE_REPOSITORY=tylergillson --VERSION=v0.0.0-twonode
+
 	docker push $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
-	docker push $OCI_REGISTRY/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH}
+	docker push $OCI_REGISTRY/stylus-framework-linux-amd64:v0.0.0-twonode
 }
 
 
@@ -89,23 +128,24 @@ function main(){
     
     STYLUS_HASH=$(git describe --always)
     
-    ( docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -q $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH} ) || ( build_stylus_package )
+    ( docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -q $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH} ) || ( build_stylus_package_and_framework )
     
     
     cd ../CanvOS
     
     test -f build/pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso || \
-    	earthly +build-all-images --ARCH=amd64 \
+	( echo "Build ISO" && \    
+    	  earthly +build-all-images --ARCH=amd64 \
     	        --PROVIDER_BASE=${OCI_REGISTRY}/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH} \
     	        --STYLUS_BASE=${OCI_REGISTRY}/stylus-framework-linux-amd64:twonode \
-    		--ISO_NAME=pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH} \
-    		--IMAGE_REGISTRY=${OCI_REGISTRY} \
+    		    --ISO_NAME=pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH} \
+    		    --IMAGE_REGISTRY=${OCI_REGISTRY} \
     	        --TWO_NODE=true --CUSTOM_TAG=twonode
-    
+    	  docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.0.4-twonode
+        )
     
     MACHINE1="1"
     MACHINE2="2"
-    
     
     create_user_data ${MACHINE1}
     bash launch-canvos-vm.sh -i build/pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso \
@@ -139,3 +179,5 @@ if [[ $sourced == 1 ]]; then
 else
     main
 fi
+
+# vim: ts=4 sw=4 sts=4 et 
