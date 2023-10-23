@@ -10,25 +10,16 @@ function build_provider_k3s(){
 	docker push $OCI_REGISTRY/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH}
 }
 
-function build_stylus_framework(){
-	echo "Build framework"
-	earthly --allow-privileged --output +framework-image --platform=linux/amd64 \
-	    --BASE_IMAGE=quay.io/kairos/core-opensuse-leap:v2.3.2 \
-	    --IMAGE_REPOSITORY=$OCI_REGISTRY \
-	    --VERSION=twonode
-	docker push $OCI_REGISTRY/stylus-framework-linux-amd64:twonode
-}
-
-
 function build_stylus_package(){ 
 	echo "Build Stylus"
 	earthly --push +package --IMAGE_REPOSITORY=${OCI_REGISTRY}
 	docker push $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
+	docker push $OCI_REGISTRY/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH}
 }
 
 
 function create_cluster(){
-    apiKey="ZWE0OTU2ODhiZTRmN2Y3NTgwMjJmOGUyZDFkNmQ5MzY="
+    apiKey=""
     projectUid="650ab2782df5377f52bb7cc0"
     domain=tylerdev-spectrocloud.console.spectrocloud.com
     
@@ -44,7 +35,7 @@ function prepare_cluster_profile(){
 }
 
 function create_cluster_profile(){
-    apiKey="ZWE0OTU2ODhiZTRmN2Y3NTgwMjJmOGUyZDFkNmQ5MzY="
+    apiKey=""
     projectUid="650ab2782df5377f52bb7cc0"
     domain=tylerdev-spectrocloud.console.spectrocloud.com
     
@@ -67,7 +58,7 @@ cluster:
 
 stylus:
   site:
-    edgeHostToken: MjNiY2QzZDkxYzVjMjgzMDBlYTE5ZDFlZjgyNzY5NjM=
+    edgeHostToken: ...
     name: two-node-oz-${MACHINE}
     paletteEndpoint: api.spectrocloud.com
   debug: true
@@ -98,7 +89,7 @@ function main(){
     
     STYLUS_HASH=$(git describe --always)
     
-    ( docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -q $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH} ) || ( build_stylus_package && build_stylus_framework )
+    ( docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -q $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH} ) || ( build_stylus_package )
     
     
     cd ../CanvOS
