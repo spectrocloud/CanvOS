@@ -69,7 +69,7 @@ function build_stylus_package_and_framework(){
 	earthly --push --allow-privileged +package --IMAGE_REPOSITORY=${OCI_REGISTRY} \
     --platform=linux/amd64 \
     --BASE_IMAGE=quay.io/kairos/core-opensuse-leap:v2.3.2 \
-    --IMAGE_REPOSITORY=tylergillson --VERSION=v0.0.0-twonode
+    --VERSION=v0.0.0-twonode
 
 	docker push $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
 	docker push $OCI_REGISTRY/stylus-framework-linux-amd64:v0.0.0-twonode
@@ -105,23 +105,20 @@ function create_cluster_profile(){
 }
 
 
+function build_all(){
 
-function main(){
-   
     cd ../provider-k3s
-   
     PROVIDER_K3S_HASH=$(git describe --always)
-   
-
-    ( docker image ls --format "{{.Repository}}:{{.Tag}}"  | grep -q ${OCI_REGISTRY}/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH} ) \
+    ( docker image ls --format "{{.Repository}}:{{.Tag}}"  | \
+        grep -q ${OCI_REGISTRY}/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH} ) \
     	|| ( build_provider_k3s )
     
     cd ../stylus
-    
     STYLUS_HASH=$(git describe --always)
     
-    ( docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -q $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH} ) || ( build_stylus_package_and_framework )
-    
+    ( docker image ls --format "{{.Repository}}:{{.Tag}}" | \
+         grep -q $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH} ) \
+         || ( build_stylus_package_and_framework )
     
     cd ../CanvOS
     
@@ -133,23 +130,30 @@ function main(){
     		    --ISO_NAME=pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH} \
     		    --IMAGE_REGISTRY=${OCI_REGISTRY} \
     	        --TWO_NODE=true --CUSTOM_TAG=twonode
-    	  docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.0.4-twonode
-        )
-    
+         docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.0.4-twonode )
+}
+
+function launch_all_vms(){
     for vm in "${VM_ARRAY[@]}"; do
         create_user_data $vm
         prepare_user_data_iso user-data
         start_machine $vm pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}
     done
+}
+
+function main(){
+
+    build_all
+    launch_all_vms
 
     echo "Machines launched, waiting for the machines to register ..."
     echo "In the mean while you should update your cluster profile ..."
     echo "Once the machine registers, press Enter to create  a cluster with these machines"
-    read -p "Feed the cluster Profile UID here:" CLUSTER_PROFILE
     
-    CLUSTER_PROFILE="652e868c07222573d23ea26a"
-    export CLUSTER_PROFILE
-    
+    prepare_cluster_profile
+    create_cluster_profile
+
+    read -p "When both machines are ready, press enter to launch the cluster"
     jq '.spec.profiles[0] = env.CLUSTER_PROFILE | .metadata.name = "test-two-node-oz"' two-node-create.json
     create_cluster
 }
