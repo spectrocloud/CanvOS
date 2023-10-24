@@ -4,100 +4,122 @@ set -e
 
 # edit these variables
 
-OCI_REGISTRY=ozspectro
-CANVOS_VM_VCPU=${CANVOS_VM_VCPU:-4}
-CANVOS_VM_DISK=${CANVOS_VM_DISK:-35}
-CANVOS_VM_RAM=${CANVOS_VM_RAM:-8192}
-CANVOS_VM_OSINFO=${CANVOS_VM_OSINFO:-ubuntujammy}
-CANVOS_VM_CDROM=${CANVOS_VM_CDROM:-build/palette-edge-installer.iso}
+# govc
+export GOVC_USERNAME=<YOUR_NAME>@vsphere.local
+export GOVC_PASSWORD=<YOUR_VSPHERE_PASSWORD>
+export GOVC_URL=10.10.128.10
+export GOVC_INSECURE=true
+export GOVC_DATACENTER=Datacenter
+export GOVC_DATASTORE=vsanDatastore2
+export GOVC_NETWORK=VM-NETWORK
+export GOVC_RESOURCE_POOL=<YOUR_RESOURCE_POOL>
+export GOVC_FOLDER=<YOUR_FOLDER>
 
-EDGEHOST_REGISRATION_KEY=
-PALETTE_ENDPOINT=tylerdev-spectrocloud.console.spectrocloud.com
-CLUSTER_NAME=
-
+# isos
+export HOST_SUFFIX=tyler # required to ensure unique edge host IDs
+export ISO_FOLDER=<YOUR_FOLDER> e.g. "ISO/01-tyler"
+export STYLUS_ISO="${ISO_FOLDER}/stylus-dev-amd64.iso"
 declare -a VM_ARRAY=("two-node-one" "two-node-two")
+export HOST_1="${VM_ARRAY[0]}-$HOST_SUFFIX"
+export HOST_2="${VM_ARRAY[1]}-$HOST_SUFFIX"
+
+# palette
+export API_KEY=<YOUR_PALETTE_API_KEY>
+export PROJECT_UID=<YOUR_PROJECT_ID>
+export EDGE_REGISTRATION_TOKEN=<YOUR_REGISTRATION_TOKEN>
+export DOMAIN=dev.spectrocloud.com
+export CLUSTER_NAME=two-node
+
+# images
+export OCI_REGISTRY=ttl.sh
 
 #####
 # don't edit anything below
 #####
 
-function create_user_data(){
-    export MACHINENAME=$1
-    export EDGEHOST_REGISRATION_KEY
-    export PALETTE_ENDPOINT
-    envsubst < test/templates/user-data.tmpl > user-data
+function create_canvos_args() {
+cat <<EOF > .arg
+CUSTOM_TAG=twonode
+IMAGE_REGISTRY=$OCI_REGISTRY
+OS_DISTRIBUTION=ubuntu
+IMAGE_REPO=ubuntu
+OS_VERSION=22
+K8S_DISTRIBUTION=k3s
+ISO_NAME=palette-edge-installer
+ARCH=amd64
+HTTPS_PROXY=
+HTTP_PROXY=
+PROXY_CERT_PATH=
+UPDATE_KERNEL=false
+EOF
 }
 
-function prepare_user_data_iso(){
-    local userdata=$1
-    test -f site-user-data.iso && rm -f site-user-data.iso
-    touch meta-data
-    mkisofs -output site-user-data.iso -volid cidata \
-        -joliet -rock ${userdata} meta-data
+function create_userdata() {
+cat <<EOF > build/user-data
+#cloud-config
+cluster:
+  env:
+    two-node: "true"
+stylus:
+  site:
+    edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
+    name: "$1-$HOST_SUFFIX"
+    paletteEndpoint: "$DOMAIN"
+  debug: true
+  twoNode:
+    enabled: true
+install:
+  poweroff: true
+users:
+  - name: kairos
+    passwd: kairos
+EOF
+echo "created build/user-data"
 }
 
-function start_machine(){
-    local NAME=$1
-    local INSTALLER_DISK=$2
-    virt-install \
-        --osinfo ${CANVOS_VM_OSINFO} \
-        --name ${NAME} \
-        --cdrom ${INSTALLER_DIS} \
-        --memory ${CANVOS_VM_RAM} \
-        --vcpu ${CANVOS_VM_VCPU} \
-        --disk size=${CANVOS_VM_DISK} \
-        --disk "site-user-data.iso",device=cdrom \
-        --virt-type kvm \
-        --network two-node
-        --noautoconsole \
-        --import 
+function create_vms() {
+    for vm in "${vm_array[@]}"; do
+        govc vm.create -m 8192 -c 4 -disk 100GB -net.adapter vmxnet3 -iso=$stylusiso -on=false -pool=$GOVC_RESOURCE_POOL $vm
+        dev=$(govc device.cdrom.add -vm $vm)
+        govc device.cdrom.insert -vm=$vm -device=$dev "${ISO_FOLDER}/user-data-${vm}.iso"
+        govc vm.power -on $vm
+    done
 }
 
-function prepare_network(){
-    if [ $(virsh net-list | grep two-node | awk '{print $2}') != 'active' ]; then
-        virsh net-define test/two-node-network.xml
-    fi
+function destroy_vms() {
+    for vm in "${vm_array[@]}"; do
+        govc vm.destroy $vm
+    done
 }
 
-function build_provider_k3s(){
-	echo "Build provider k3s"
-	earthly +build-provider-package --IMAGE_REPOSITORY=${OCI_REGISTRY} --VERSION=${PROVIDER_K3S_HASH}
-	docker push $OCI_REGISTRY/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH}
+function upload_userdata_isos() {
+    for vm in "${vm_array[@]}"; do
+        govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER "build/user-data-${vm}.iso" "${ISO_FOLDER}/user-data-${vm}.iso"
+    done
 }
 
-function build_stylus_package_and_framework(){ 
-	echo "Build Stylus image and framework"
-	earthly --push --allow-privileged +package --IMAGE_REPOSITORY=${OCI_REGISTRY} \
-    --platform=linux/amd64 \
-    --BASE_IMAGE=quay.io/kairos/core-opensuse-leap:v2.3.2 \
-    --VERSION=v0.0.0-twonode
-
-	docker push $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
-	docker push $OCI_REGISTRY/stylus-framework-linux-amd64:v0.0.0-twonode
+function upload_stylus_iso() {
+    govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER build/palette-edge-installer.iso $STYLUS_ISO
 }
 
-
-function create_cluster(){
-    apiKey=""
-    projectUid="650ab2782df5377f52bb7cc0"
-    domain=tylerdev-spectrocloud.console.spectrocloud.com
-    
-    curl -X POST https://$domain/v1/spectroclusters/edge-native?ProjectUid=$projectUid \
-        -H "ApiKey: $apiKey" \
-        -H "Content-Type: application/json" \
-        -H "ProjectUid: $projectUid" \
-        -d @two-node-create.json
+function reboot_vms() {
+    for vm in "${vm_array[@]}"; do
+        govc device.ls -vm=$vm
+        govc vm.power -off -force $vm
+        govc device.cdrom.eject -vm=$vm -device=cdrom-3000
+        govc vm.power -on $vm
+    done
 }
 
-function prepare_cluster_profile(){
-    jq '.metadata.name = env.CLUSTER_NAME | .spec.template.packs[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) ' two-node-cluster-profile.json.tmpl > two-node-cluster-profile
+function prepare_cluster_profile() {
+    jq '
+      .metadata.name = env.CLUSTER_NAME |
+      .spec.template.packs[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY)
+      .spec.template.packs[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
+    ' templates/two-node-cluster-profile.json.tmpl > two-node-cluster-profile.json
 }
 
-function create_cluster_profile(){
-    apiKey=""
-    projectUid="650ab2782df5377f52bb7cc0"
-    domain=tylerdev-spectrocloud.console.spectrocloud.com
-    
+function create_cluster_profile() {
     curl -X POST https://$domain/v1/clusterporfiles/import?publish=true \
         -H "ApiKey: $apiKey" \
         -H "Content-Type: application/json" \
@@ -105,57 +127,132 @@ function create_cluster_profile(){
         -d @two-node-cluster-profile.json
 }
 
+function prepare_cluster() {
+    jq '
+      .metadata.name = env.CLUSTER_NAME |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostUid = env.HOST_2 |
+      .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
+      .spec.profiles[0].packsValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY)
+      .spec.profiles[0].packsValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
+    ' templates/two-node-create.json.tmpl > two-node-create.json
+}
+
+function create_cluster() {
+    curl -X POST https://$DOMAIN/v1/spectroclusters/edge-native?ProjectUid=$PROJECT_UID \
+        -H "ApiKey: $API_KEY" \
+        -H "Content-Type: application/json" \
+        -H "ProjectUid: $PROJECT_UID" \
+        -d @two-node-create.json
+}
+
+function destroy_cluster() {
+    clusterUid=$1
+    curl -vvv -X PATCH https://$DOMAIN/v1/spectroclusters/$CLUSTER_UID/status/conditions \
+        -H "ApiKey: $API_KEY" \
+        -H "Content-Type: application/json" \
+        -H "ProjectUid: $PROJECT_UID" \
+        -d \
+    '
+        [
+            {
+                "message": "cleaned up",
+                "reason": "CloudInfrastructureCleanedUp",
+                "status": "True",
+                "type": "CloudInfrastructureCleanedUp"
+            }
+        ]
+    '
+}
+
+function create_iso() {
+    touch meta-data
+    mkisofs -output build/user-data-$2.iso -volid cidata -joliet -rock $1 meta-data
+    rm -f meta-data
+}
+
+function create_userdata_isos() {
+    for vm in "${vm_array[@]}"; do
+        create_userdata $vm
+        create_iso build/user-data $vm
+    done
+}
+
+function build_provider_k3s() {
+	echo "Build provider k3s"
+	earthly +build-provider-package \
+        --platform=linux/amd64 \
+        --IMAGE_REPOSITORY=${OCI_REGISTRY} \
+        --VERSION=${PROVIDER_K3S_HASH}
+	docker push ${OCI_REGISTRY}/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH}
+}
+
+function build_stylus_package_and_framework() {
+	echo "Build Stylus image and framework"
+	earthly --allow-privileged +package \
+        --platform=linux/amd64 \
+        --IMAGE_REPOSITORY=${OCI_REGISTRY} \
+        --BASE_IMAGE=quay.io/kairos/core-opensuse-leap:v2.3.2 \
+        --VERSION=v0.0.0-${STYLUS_HASH}
+	docker push ${OCI_REGISTRY}/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
+	docker push ${OCI_REGISTRY}/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH}
+}
+
+function build_canvos() {
+    echo "Build ISO" && \    
+    earthly +build-all-images \
+        --ARCH=amd64 \
+        --PROVIDER_BASE=${OCI_REGISTRY}/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH} \
+        --STYLUS_BASE=${OCI_REGISTRY}/stylus-framework-linux-amd64:twonode \
+        --ISO_NAME=palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH} \
+        --IMAGE_REGISTRY=${OCI_REGISTRY} \
+        --TWO_NODE=true \
+        --CUSTOM_TAG=twonode
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v4.0.4-twonode
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.0.4-twonode
+}
 
 function build_all(){
 
+    test -d ../provider-k3s || ( cd .. && git clone https://github.com/kairos-io/provider-k3s -b two-node )
     cd ../provider-k3s
-    PROVIDER_K3S_HASH=$(git describe --always)
-    ( docker image ls --format "{{.Repository}}:{{.Tag}}"  | \
-        grep -q ${OCI_REGISTRY}/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH} ) \
-    	|| ( build_provider_k3s )
-    
-    cd ../stylus
-    STYLUS_HASH=$(git describe --always)
-    
-    ( docker image ls --format "{{.Repository}}:{{.Tag}}" | \
-         grep -q $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH} ) \
-         || ( build_stylus_package_and_framework )
-    
-    cd ../CanvOS
-    
-    test -f build/pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso || \
-	( echo "Build ISO" && \    
-    	  earthly +build-all-images --ARCH=amd64 \
-    	        --PROVIDER_BASE=${OCI_REGISTRY}/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH} \
-    	        --STYLUS_BASE=${OCI_REGISTRY}/stylus-framework-linux-amd64:twonode \
-    		    --ISO_NAME=pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH} \
-    		    --IMAGE_REGISTRY=${OCI_REGISTRY} \
-    	        --TWO_NODE=true --CUSTOM_TAG=twonode
-         docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.0.4-twonode )
-}
+    export PROVIDER_K3S_HASH=$(git describe --always)
 
-function launch_all_vms(){
-    for vm in "${VM_ARRAY[@]}"; do
-        create_user_data $vm
-        prepare_user_data_iso user-data
-        start_machine $vm pallete-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}
-    done
+    (
+        docker image ls --format "{{.Repository}}:{{.Tag}}" | \
+        grep -q ${OCI_REGISTRY}/provider-k3s:v0.0.0-${PROVIDER_K3S_HASH}
+    ) || ( build_provider_k3s )
+
+    test -d ../stylus || ( cd .. && git clone https://github.com/spectrocloud/stylud -b 2-node-health-checks )
+    cd ../stylus
+    export STYLUS_HASH=$(git describe --always)
+
+    (
+        docker image ls --format "{{.Repository}}:{{.Tag}}" | \
+        grep -q $OCI_REGISTRY/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
+    ) || ( build_stylus_package_and_framework )
+
+    cd ../CanvOS
+    test -f build/palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso || ( build_canvos )
 }
 
 function main(){
 
     build_all
-    launch_all_vms
+    upload_stylus_iso
+    create_userdata_isos
+    upload_userdata_isos
 
-    echo "Machines launched, waiting for the machines to register ..."
-    echo "In the mean while you should update your cluster profile ..."
-    echo "Once the machine registers, press Enter to create  a cluster with these machines"
-    
+    create_vms
+    # TODO: wait until powered off
+    reboot_vms
+    # TODO: wait until edge hosts ready
+
     prepare_cluster_profile
     create_cluster_profile
+    # TODO: get cluster profile uid
 
-    read -p "When both machines are ready, press enter to launch the cluster"
-    jq '.spec.profiles[0] = env.CLUSTER_PROFILE | .metadata.name = "test-two-node-oz"' two-node-create.json
+    prepare_cluster
     create_cluster
 }
 
@@ -172,4 +269,4 @@ else
     main
 fi
 
-# vim: ts=4 sw=4 sts=4 et 
+# vim: ts=4 sw=4 sts=4 et
