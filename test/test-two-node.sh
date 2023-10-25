@@ -5,15 +5,23 @@ set -e
 # Usage
 # -----
 #
-# 1. Clone CanvOS and checkout this branch.
+# 1. Install prerequisites:
+#    - docker (https://docs.docker.com/engine/install/)
+#    - earthly (https://earthly.dev/get-earthly)
+#    - git (https://github.com/git-guides/install-git)
+#    - govc (https://github.com/vmware/govmomi/blob/main/govc/README.md#installation)
+#    - jq (https://jqlang.github.io/jq/download/)
+#    - mkisofs (https://command-not-found.com/mkisofs)
 #
-# 2. Create a .netrc file in the CanvOS repo root with GitHub
+# 2. Clone CanvOS and checkout this branch.
+#
+# 3. Create a .netrc file in the CanvOS repo root with GitHub
 #    credentials capable of cloning Spectro Cloud internal repos
 #    (required for building stylus).
 #
-# 3. Edit the global variables below as needed.
+# 4. Edit the global variables below as needed.
 #
-# 4. Source and execute this script:
+# 5. Source and execute this script:
 #
 #    source ./test/test-two-node.sh
 #    ./test/test-two-node.sh
@@ -32,7 +40,7 @@ export GOVC_RESOURCE_POOL=<YOUR_RESOURCE_POOL>
 export GOVC_FOLDER=<YOUR_FOLDER>
 
 # isos
-export HOST_SUFFIX=tyler # required to ensure unique edge host IDs
+export HOST_SUFFIX=<YOUR_NAME> # required to ensure unique edge host IDs
 export ISO_FOLDER=<YOUR_FOLDER> e.g. "ISO/01-tyler"
 export STYLUS_ISO="${ISO_FOLDER}/stylus-dev-amd64.iso"
 
@@ -50,7 +58,7 @@ export OCI_REGISTRY=ttl.sh
 
 # Do not edit anything below
 
-declare -a vm_array=("two-node-one" "two-node-two")
+declare -a vm_array=("two-node-one-$HOST_SUFFIX" "two-node-two-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}-$HOST_SUFFIX"
 export HOST_2="${vm_array[1]}-$HOST_SUFFIX"
 
@@ -386,7 +394,7 @@ function main() {
     create_cluster
 }
 
-# This line and the if condition bellow allow sourcing the script without executing
+# This line and the if condition below allow sourcing the script without executing
 # the main function
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 
