@@ -254,23 +254,23 @@ function create_userdata_isos() {
 }
 
 function build_provider_k3s() {
-	echo "Build provider-k3s image"
-	earthly +build-provider-package \
+    echo "Build provider-k3s image"
+    earthly +build-provider-package \
         --platform=linux/amd64 \
         --IMAGE_REPOSITORY=${OCI_REGISTRY} \
         --VERSION=${PROVIDER_K3S_HASH}
-	docker push ${OCI_REGISTRY}/provider-k3s:${PROVIDER_K3S_HASH}
+    docker push ${OCI_REGISTRY}/provider-k3s:${PROVIDER_K3S_HASH}
 }
 
 function build_stylus_package_and_framework() {
-	echo "Build stylus image and stylus framework image"
-	earthly --allow-privileged +package \
+    echo "Build stylus image and stylus framework image"
+    earthly --allow-privileged +package \
         --platform=linux/amd64 \
         --IMAGE_REPOSITORY=${OCI_REGISTRY} \
         --BASE_IMAGE=quay.io/kairos/core-opensuse-leap:v2.3.2 \
         --VERSION=v0.0.0-${STYLUS_HASH}
-	docker push ${OCI_REGISTRY}/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
-	docker push ${OCI_REGISTRY}/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH}
+    docker push ${OCI_REGISTRY}/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
+    docker push ${OCI_REGISTRY}/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH}
 }
 
 function build_canvos() {
