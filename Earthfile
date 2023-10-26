@@ -259,7 +259,7 @@ base-image:
             apt clean
 
         IF $TWO_NODE
-            RUN apt install -y sqlite3
+            RUN apt install -y sqlite3 iputils-ping
         END
             
     # IF OS Type is Opensuse
@@ -279,7 +279,7 @@ base-image:
             # zypper purge-kernels && \
 
         IF $TWO_NODE
-            RUN zypper install -y sqlite3
+            RUN zypper install -y sqlite3 iputils
         END
         RUN zypper install -y zstd vim
         RUN zypper cc && \
