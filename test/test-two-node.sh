@@ -225,6 +225,54 @@ function wait_until_edge_hosts_ready() {
     done
 }
 
+function destroy_edge_hosts() {
+    readarray -t edgeHosts < <(curl -s -X POST https://$DOMAIN/v1/dashboard/edgehosts/search \
+        -H "ApiKey: $API_KEY" \
+        -H "Content-Type: application/json" \
+        -H "ProjectUid: $PROJECT_UID" \
+        -d \
+    '
+        {
+            "filter": {
+                "conjuction": "and",
+                "filterGroups": [
+                    {
+                        "conjunction": "and",
+                        "filters": [
+                            {
+                                "property": "state",
+                                "type": "string",
+                                "condition": {
+                                    "string": {
+                                        "operator": "eq",
+                                        "negation": false,
+                                        "match": {
+                                            "conjunction": "or",
+                                            "values": [
+                                                "ready",
+                                                "unpaired"
+                                            ]
+                                        },
+                                        "ignoreCase": false
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "sort": []
+        }
+    ' | jq -r '.items[].metadata.uid')
+    for host in "${edgeHosts[@]}"; do
+        curl -s -X DELETE https://$DOMAIN/v1/edgehosts/$host \
+            -H "ApiKey: $API_KEY" \
+            -H "Content-Type: application/json" \
+            -H "ProjectUid: $PROJECT_UID"
+        echo Deleted Edge Host $host
+    done
+}
+
 function prepare_cluster_profile() {
     if [ -z "${STYLUS_HASH}" ]; then
         echo STYLUS_HASH is unset. Please execute build_all and retry.
