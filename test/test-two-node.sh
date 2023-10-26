@@ -52,6 +52,7 @@ export DOMAIN=dev.spectrocloud.com
 export PUBLIC_PACK_REPO_UID=<YOUR_PUBLIC_PACK_REPO_UID> # this varies per Palette tenant
 export CLUSTER_NAME=two-node
 export CLUSTER_PROFILE_UID= # if left blank, a cluster profile will be created
+export CLUSTER_VIP= # choose an unassigned VIP
 
 # images
 export OCI_REGISTRY=ttl.sh
@@ -93,6 +94,7 @@ stylus:
   debug: true
   twoNode:
     enabled: true
+    livenessSeconds: 15
 install:
   poweroff: true
 users:
@@ -257,8 +259,13 @@ function prepare_cluster() {
         echo STYLUS_HASH is unset. Please execute build_all and retry.
         exit 1
     fi
+    if nslookup $CLUSTER_VIP >/dev/null; then
+        echo CLUSTER_VIP: $CLUSTER_VIP is allocated. Please retry with an unallocated VIP.
+        exit 1
+    fi
     jq '
       .metadata.name = env.CLUSTER_NAME |
+      .spec.cloudConfig.controlPlaneEndpoint.host = env.CLUSTER_VIP |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
       .spec.machinePoolConfig[1].cloudConfig.edgeHosts[0].hostUid = env.HOST_2 |
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
@@ -401,7 +408,7 @@ function main() {
 if [[ $sourced == 1 ]]; then
     set +e
     echo "You can now use any of these functions:"
-    echo
+    echo ""
     grep ^function  ${BASH_SOURCE[0]} | grep -v main | awk '{gsub(/function /,""); gsub(/\(\) \{/,""); print;}'
     echo
 else
