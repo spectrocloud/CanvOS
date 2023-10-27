@@ -11,7 +11,7 @@ ARG CUSTOM_TAG
 ARG ARCH
 ARG PE_VERSION=v4.1.2
 ARG SPECTRO_LUET_VERSION=v1.1.9
-ARG KAIROS_VERSION=v2.3.2
+ARG KAIROS_VERSION=v2.4.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -53,7 +53,7 @@ build-all-images:
     IF $FIPS_ENABLED
         BUILD +build-provider-images-fips
     ELSE
-        BUILD  +build-provider-images
+        BUILD +build-provider-images
     END
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
@@ -64,22 +64,22 @@ build-all-images:
     END
 
 build-provider-images:
-   BUILD  +provider-image --K8S_VERSION=1.24.6
-   BUILD  +provider-image --K8S_VERSION=1.25.2
-   BUILD  +provider-image --K8S_VERSION=1.26.4
-   BUILD  +provider-image --K8S_VERSION=1.27.2
-   BUILD  +provider-image --K8S_VERSION=1.25.13
-   BUILD  +provider-image --K8S_VERSION=1.26.8
-   BUILD  +provider-image --K8S_VERSION=1.27.5
+    BUILD  +provider-image --K8S_VERSION=1.24.6
+    BUILD  +provider-image --K8S_VERSION=1.25.2
+    BUILD  +provider-image --K8S_VERSION=1.26.4
+    BUILD  +provider-image --K8S_VERSION=1.27.2
+    BUILD  +provider-image --K8S_VERSION=1.25.13
+    BUILD  +provider-image --K8S_VERSION=1.26.8
+    BUILD  +provider-image --K8S_VERSION=1.27.5
 
 
 build-provider-images-fips:
-    IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
        BUILD  +provider-image --K8S_VERSION=1.24.13
        BUILD  +provider-image --K8S_VERSION=1.25.9
        BUILD  +provider-image --K8S_VERSION=1.26.4
        BUILD  +provider-image --K8S_VERSION=1.27.2
-    ELSE IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "rke2" ]
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
        BUILD  +provider-image --K8S_VERSION=1.24.6
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.25.0
@@ -158,8 +158,8 @@ provider-image:
     END
 
     COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
-    COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
+    COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd
     END
@@ -179,15 +179,15 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-     IF [ "$FIPS_ENABLED" = "true" ]
+    IF [ "$FIPS_ENABLED" = "true" ]
         ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
-     ELSE
+    ELSE
         ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
-     END
+    END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
-    SAVE ARTIFACT /etc/elemental/config.yaml
+    SAVE ARTIFACT /oem/stylus_config.yaml
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -210,9 +210,6 @@ base-image:
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
     --build-arg NO_PROXY=$NO_PROXY .
 
-#    IF $IS_JETSON
-#        COPY mount.yaml /system/oem/mount.yaml
-#    END
    IF [ "$IS_JETSON" = "true" ]
        COPY mount.yaml /system/oem/mount.yaml
    END
@@ -305,7 +302,7 @@ base-image:
         luet repo update
     END
 
-    DO +OSRELEASE --OS_VERSION=$KAIROS_VERSION
+    DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
 
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
@@ -330,8 +327,7 @@ iso-image:
         && chmod 444 /etc/machine-id
     SAVE IMAGE palette-installer-image:$PE_VERSION-$CUSTOM_TAG
 
-
-OSRELEASE:
+OS_RELEASE:
     COMMAND
     ARG OS_ID=${OS_DISTRIBUTION}
     ARG OS_VERSION
