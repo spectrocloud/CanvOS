@@ -28,7 +28,7 @@ set -e
 
 # Edit these variables
 
-# govc
+# govc vars
 export GOVC_USERNAME=<YOUR_NAME>@vsphere.local
 export GOVC_PASSWORD=<YOUR_VSPHERE_PASSWORD>
 export GOVC_URL=10.10.128.10
@@ -39,12 +39,13 @@ export GOVC_NETWORK=VM-NETWORK
 export GOVC_RESOURCE_POOL=<YOUR_RESOURCE_POOL>
 export GOVC_FOLDER=<YOUR_FOLDER>
 
-# isos
+# vSphere vars
 export HOST_SUFFIX=<YOUR_NAME> # required to ensure unique edge host IDs
 export ISO_FOLDER=<YOUR_FOLDER> e.g. "ISO/01-tyler"
 export STYLUS_ISO="${ISO_FOLDER}/stylus-dev-amd64.iso"
+export NIC_NAME=ens160
 
-# palette
+# palette vars
 export API_KEY=<YOUR_PALETTE_API_KEY>
 export PROJECT_UID=<YOUR_PROJECT_ID>
 export EDGE_REGISTRATION_TOKEN=<YOUR_REGISTRATION_TOKEN>
@@ -54,7 +55,7 @@ export CLUSTER_NAME=two-node
 export CLUSTER_PROFILE_UID= # if left blank, a cluster profile will be created
 export CLUSTER_VIP= # choose an unassigned VIP
 
-# images
+# image vars
 export OCI_REGISTRY=ttl.sh
 
 # Do not edit anything below
@@ -315,7 +316,9 @@ function prepare_cluster() {
       .metadata.name = env.CLUSTER_NAME |
       .spec.cloudConfig.controlPlaneEndpoint.host = env.CLUSTER_VIP |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
-      .spec.machinePoolConfig[1].cloudConfig.edgeHosts[0].hostUid = env.HOST_2 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
+      .spec.machinePoolConfig[1].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
+      .spec.machinePoolConfig[1].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
       .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
       .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
