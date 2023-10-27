@@ -317,7 +317,7 @@ function prepare_cluster() {
       .spec.cloudConfig.controlPlaneEndpoint.host = env.CLUSTER_VIP |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
-      .spec.machinePoolConfig[1].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
+      .spec.machinePoolConfig[1].cloudConfig.edgeHosts[0].hostUid = env.HOST_2 |
       .spec.machinePoolConfig[1].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
       .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
