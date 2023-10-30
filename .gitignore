@@ -8,3 +8,5 @@ config.yaml
 content-*/*
 *.arg
 .idea
+
+.DS_Store
