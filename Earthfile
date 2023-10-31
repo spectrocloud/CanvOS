@@ -1,5 +1,7 @@
 VERSION 0.6
-FROM gcr.io/spectro-images-public/alpine:3.16.2
+ARG TARGETOS
+ARG TARGETARCH
+FROM gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0
 
 # Variables used in the builds.  Update for ADVANCED use cases only
 ARG OS_DISTRIBUTION
@@ -92,10 +94,8 @@ build-provider-images-fips:
        BUILD  +provider-image --K8S_VERSION=1.27.2
     END
 
-base-alpine:
-    FROM gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0
-    ARG TARGETOS
-    ARG TARGETARCH
+BASE_ALPINE:
+    COMMAND
     IF [ ! -z $PROXY_CERT_PATH ]
         COPY sc.crt /etc/ssl/certs
         RUN  update-ca-certificates
@@ -103,9 +103,7 @@ base-alpine:
     RUN apk add curl
 
 download-etcdctl:
-    FROM +base-alpine
-    ARG TARGETOS
-    ARG TARGETARCH
+    DO +BASE_ALPINE
     RUN curl  --retry 5 -Ls https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
             chmod +x etcdctl
     SAVE ARTIFACT etcdctl
