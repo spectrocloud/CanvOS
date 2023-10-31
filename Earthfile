@@ -93,7 +93,7 @@ build-provider-images-fips:
     END
 
 base-alpine:
-    FROM alpine
+    FROM gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0
     ARG TARGETOS
     ARG TARGETARCH
     IF [ ! -z $PROXY_CERT_PATH ]
