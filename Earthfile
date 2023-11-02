@@ -12,7 +12,7 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG ARCH
 ARG PE_VERSION=v4.1.2
-ARG SPECTRO_LUET_VERSION=v1.1.9
+ARG SPECTRO_LUET_VERSION=v1.2.0
 ARG KAIROS_VERSION=v2.4.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -73,6 +73,11 @@ build-provider-images:
     BUILD  +provider-image --K8S_VERSION=1.25.13
     BUILD  +provider-image --K8S_VERSION=1.26.8
     BUILD  +provider-image --K8S_VERSION=1.27.5
+    BUILD  +provider-image --K8S_VERSION=1.27.7
+    BUILD  +provider-image --K8S_VERSION=1.26.10
+    BUILD  +provider-image --K8S_VERSION=1.25.15
+    BUILD  +provider-image --K8S_VERSION=1.28.2
+
 
 
 build-provider-images-fips:
