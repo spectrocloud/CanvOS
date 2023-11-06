@@ -9,3 +9,4 @@ content-*/*
 *.arg
 .idea
 hack/*.img
+.DS_Store

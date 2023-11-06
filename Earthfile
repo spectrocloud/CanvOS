@@ -9,22 +9,24 @@ ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG ARCH
-ARG PE_VERSION=v4.0.4
-ARG SPECTRO_LUET_VERSION=v1.1.4
-ARG KAIROS_VERSION=v2.3.2
+ARG PE_VERSION=v4.1.2
+ARG SPECTRO_LUET_VERSION=v1.1.9
+ARG KAIROS_VERSION=v2.4.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.7.11
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v2.3.2
-ARG KUBEADM_PROVIDER_VERSION=v2.3.3
-ARG RKE2_PROVIDER_VERSION=v2.3.3
+ARG K3S_PROVIDER_VERSION=v4.1.2
+ARG KUBEADM_PROVIDER_VERSION=v4.1.0
+ARG RKE2_PROVIDER_VERSION=v4.1.1
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
+ARG NO_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
+ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
@@ -40,7 +42,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
     ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
+ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     # Check for default value for rhel
     ARG BASE_IMAGE
 END
@@ -53,7 +55,7 @@ build-all-images:
     IF $FIPS_ENABLED
         BUILD +build-provider-images-fips
     ELSE
-        BUILD  +build-provider-images
+        BUILD +build-provider-images
     END
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
@@ -64,19 +66,22 @@ build-all-images:
     END
 
 build-provider-images:
-   BUILD  +provider-image --K8S_VERSION=1.24.6
-   BUILD  +provider-image --K8S_VERSION=1.25.2
-   BUILD  +provider-image --K8S_VERSION=1.26.4
-   BUILD  +provider-image --K8S_VERSION=1.27.2
+    BUILD  +provider-image --K8S_VERSION=1.24.6
+    BUILD  +provider-image --K8S_VERSION=1.25.2
+    BUILD  +provider-image --K8S_VERSION=1.26.4
+    BUILD  +provider-image --K8S_VERSION=1.27.2
+    BUILD  +provider-image --K8S_VERSION=1.25.13
+    BUILD  +provider-image --K8S_VERSION=1.26.8
+    BUILD  +provider-image --K8S_VERSION=1.27.5
 
 
 build-provider-images-fips:
-    IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
        BUILD  +provider-image --K8S_VERSION=1.24.13
        BUILD  +provider-image --K8S_VERSION=1.25.9
        BUILD  +provider-image --K8S_VERSION=1.26.4
        BUILD  +provider-image --K8S_VERSION=1.27.2
-    ELSE IF $FIPS_ENABLED  && [ "$K8S_DISTRIBUTION" = "rke2" ]
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
        BUILD  +provider-image --K8S_VERSION=1.24.6
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.25.0
@@ -89,11 +94,20 @@ build-provider-images-fips:
        BUILD  +provider-image --K8S_VERSION=1.27.2
     END
 
-download-etcdctl:
+base-alpine:
     FROM alpine
     ARG TARGETOS
     ARG TARGETARCH
+    IF [ ! -z $PROXY_CERT_PATH ]
+        COPY sc.crt /etc/ssl/certs
+        RUN  update-ca-certificates
+    END
     RUN apk add curl
+
+download-etcdctl:
+    FROM +base-alpine
+    ARG TARGETOS
+    ARG TARGETARCH
     RUN curl  --retry 5 -Ls https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
             chmod +x etcdctl
     SAVE ARTIFACT etcdctl
@@ -146,8 +160,8 @@ provider-image:
     END
 
     COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
-    COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
+    COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd
     END
@@ -167,15 +181,15 @@ provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 stylus-image:
-     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
-     ELSE
-        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-$ARCH:$PE_VERSION
-     END
+    IF [ "$FIPS_ENABLED" = "true" ]
+        ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+    ELSE
+        ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
+    END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
-    SAVE ARTIFACT /etc/elemental/config.yaml
+    SAVE ARTIFACT /oem/stylus_config.yaml
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -194,11 +208,10 @@ kairos-provider-image:
 
 # base build image used to create the base image for all other image types
 base-image:
-    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE .
+    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE --build-arg PROXY_CERT_PATH=$PROXY_CERT_PATH \ 
+    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
+    --build-arg NO_PROXY=$NO_PROXY .
 
-#    IF $IS_JETSON
-#        COPY mount.yaml /system/oem/mount.yaml
-#    END
    IF [ "$IS_JETSON" = "true" ]
        COPY mount.yaml /system/oem/mount.yaml
    END
@@ -233,13 +246,14 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-        RUN apt update && \
-            apt install --no-install-recommends zstd vim -y
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /etc/ssl/certs
             RUN  update-ca-certificates
         END
+
+        RUN apt update && \
+            apt install --no-install-recommends zstd vim -y
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                 if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
@@ -264,6 +278,12 @@ base-image:
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
+        # Add proxy certificate if present
+        IF [ ! -z $PROXY_CERT_PATH ]
+            COPY sc.crt /usr/share/pki/trust/anchors
+            RUN  update-ca-certificates
+        END
+
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN zypper al kernel-de*
         END
@@ -290,6 +310,7 @@ base-image:
         RUN zypper install -y apparmor-parser apparmor-profiles
         RUN zypper cc && \
             zypper clean
+        RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
     END
 
     IF [ "$ARCH" = "arm64" ]
@@ -300,7 +321,7 @@ base-image:
         luet repo update
     END
 
-    DO +OSRELEASE --OS_VERSION=$KAIROS_VERSION
+    DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
 
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
@@ -325,8 +346,7 @@ iso-image:
         && chmod 444 /etc/machine-id
     SAVE IMAGE palette-installer-image:$PE_VERSION-$CUSTOM_TAG
 
-
-OSRELEASE:
+OS_RELEASE:
     COMMAND
     ARG OS_ID=${OS_DISTRIBUTION}
     ARG OS_VERSION
