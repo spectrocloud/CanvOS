@@ -85,8 +85,8 @@ function create_userdata() {
 cat <<EOF > build/user-data
 #cloud-config
 cluster:
-  env:
-    two-node: "true"
+  providerConfig:
+    cluster-init: "no"
 stylus:
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
@@ -127,8 +127,9 @@ function upload_userdata_isos() {
 }
 
 function upload_stylus_iso() {
-    echo Uploading installer ISO...
-    govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER build/palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso $STYLUS_ISO
+    iso=palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso
+    echo Uploading installer ISO $iso...
+    govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER build/$iso $STYLUS_ISO
 }
 
 function create_vms() {
@@ -303,6 +304,14 @@ function create_cluster_profile() {
     echo "Cluster Profile $CLUSTER_PROFILE_UID created"
 }
 
+function destroy_cluster_profile() {
+    curl -s -X DELETE https://$DOMAIN/v1/clusterprofiles/$CLUSTER_PROFILE_UID \
+        -H "ApiKey: $API_KEY" \
+        -H "Content-Type: application/json" \
+        -H "ProjectUid: $PROJECT_UID"
+    echo "Cluster Profile $CLUSTER_PROFILE_UID deleted"
+}
+
 function prepare_cluster() {
     if [ -z "${STYLUS_HASH}" ]; then
         echo STYLUS_HASH is unset. Please execute build_all and retry.
@@ -416,6 +425,16 @@ function build_all() {
         docker image ls --format "{{.Repository}}:{{.Tag}}" | \
         grep -q ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v4.0.4-${STYLUS_HASH}
     ) || ( build_canvos )
+}
+
+function clean_all() {
+    docker images | grep $OCI_REGISTRY | awk '{print $3;}' | xargs docker rmi --force
+    docker images | grep palette-installer | awk '{print $3;}' | xargs docker rmi --force
+    docker kill earthly-buildkitd
+    docker container prune --force
+    docker volume rm earthly-cache
+    docker volume prune --force
+    docker system prune --force
 }
 
 function main() {
