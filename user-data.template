@@ -1,12 +1,4 @@
 #cloud-config
-
-# This is currently required to enable a two node cluster
-# should be removed in the future and only the twoNode section
-# in stylus should control this.
-cluster:
-  env:
-    two-node: "true"
-
 stylus:
   site:
     # host for hubble api to register device.
@@ -22,11 +14,6 @@ stylus:
       key1: value1
       key2: value2
       key3: value3
-    # enable two node cluster and add a custom health check script
-    # see also Dockerfile on how to add this script to the image
-    twoNode:
-       enabled: true
-       health-check-script: /opt/spectrocloud/bin/custom-health-check.sh
     
     # name of the device, this may also be referred to as the edge id or edge host id.  If no edge host name is specified
     # one will be generated from the device serial number.  If stylus cannot the device serial number a random id will
