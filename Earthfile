@@ -240,7 +240,8 @@ base-image:
         END
 
         RUN apt update && \
-            apt install --no-install-recommends zstd vim -y
+            apt install --no-install-recommends zstd vim -y && \
+            apt install network-manager
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                 if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
@@ -281,6 +282,7 @@ base-image:
             # zypper up kernel-default && \
             # zypper purge-kernels && \
         RUN zypper install -y zstd vim
+        RUN zypper install NetworkManager
         RUN zypper cc && \
             zypper clean
     END
