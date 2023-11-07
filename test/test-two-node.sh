@@ -56,11 +56,12 @@ export CLUSTER_PROFILE_UID= # if left blank, a cluster profile will be created
 export CLUSTER_VIP= # choose an unassigned VIP
 
 # image vars
+export EARTHLY_BUILDKIT_CACHE_SIZE_MB=20000
 export OCI_REGISTRY=ttl.sh
 
 # Do not edit anything below
 
-declare -a vm_array=("two-node-one-$HOST_SUFFIX" "two-node-two-$HOST_SUFFIX")
+declare -a vm_array=("2n1-$HOST_SUFFIX" "2n2-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}-$HOST_SUFFIX"
 export HOST_2="${vm_array[1]}-$HOST_SUFFIX"
 
@@ -394,8 +395,8 @@ function build_canvos() {
         --IMAGE_REGISTRY=${OCI_REGISTRY} \
         --TWO_NODE=true \
         --CUSTOM_TAG=${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v4.0.4-${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.0.4-${STYLUS_HASH}
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v4.1.2-${STYLUS_HASH}
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.1.2-${STYLUS_HASH}
 }
 
 function build_all() {
@@ -423,18 +424,15 @@ function build_all() {
     (
         test -f build/palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso && \
         docker image ls --format "{{.Repository}}:{{.Tag}}" | \
-        grep -q ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v4.0.4-${STYLUS_HASH}
+        grep -q ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v4.1.2-${STYLUS_HASH}
     ) || ( build_canvos )
 }
 
 function clean_all() {
     docker images | grep $OCI_REGISTRY | awk '{print $3;}' | xargs docker rmi --force
     docker images | grep palette-installer | awk '{print $3;}' | xargs docker rmi --force
-    docker kill earthly-buildkitd
-    docker container prune --force
-    docker volume rm earthly-cache
-    docker volume prune --force
-    docker system prune --force
+    earthly prune --reset
+    docker system prune --all --volumes --force
 }
 
 function main() {
