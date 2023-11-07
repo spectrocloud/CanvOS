@@ -30,7 +30,7 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
-ARG MARMOT_VERSION=0.8.6
+ARG MARMOT_VERSION=0.8.7-beta.1
 
 ARG ETCD_VERSION="v3.5.5"
 
@@ -238,9 +238,7 @@ base-image:
 
     IF $TWO_NODE
         RUN mkdir -p /opt/spectrocloud/bin && \
-        # curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
-        # TODO: remove this hack once https://github.com/maxpert/marmot/pull/86 is merged
-        curl -sL https://github.com/TylerGillson/marmot/raw/master/marmot -o marmot && \
+        curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
         install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
         rm -f marmot
     END
