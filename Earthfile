@@ -280,7 +280,7 @@ base-image:
            END
             # zypper up kernel-default && \
             # zypper purge-kernels && \
-        RUN zypper install -y zstd vim NetworkManager
+        RUN zypper install -y zstd vim NetworkManager NetworkManager-tui
         RUN zypper cc && \
             zypper clean
     END
