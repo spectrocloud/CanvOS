@@ -16,4 +16,4 @@ If you're facing hard-to-diagnose issues with your custom provider image, you ca
 
 3. Boot the VM in `Kairos (manual)` mode. Once booted, create `userdata.yaml` with your desired Kairos config and execute a manual Kairos installation: `kairos-agent --debug manual-install --device auto userdata.yaml`.
 
-4. The VM should eventually reboot itself once the installation completes. Rather than waiting, execute `reboot` to return to the GRUB menu, select `Palette eXtended Kubernetes Edge` and hit `x` to edit it. Add `rd.debug rd.immucore.debug` to the end of the `linux` line, then hit `CTRL+x` to boot with your edits. You should see verbose Kairos debug logs and they will be persisted to `out.log`.
+4. The VM should eventually reboot itself once the installation completes. Rather than waiting, execute `reboot` to return to the GRUB menu, select `Palette eXtended Kubernetes Edge` and hit `e` to edit it. Add `rd.debug rd.immucore.debug` to the end of the `linux` line, then hit `CTRL+x` to boot with your edits. You should see verbose Kairos debug logs and they will be persisted to `out.log`.
