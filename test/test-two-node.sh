@@ -56,7 +56,7 @@ export CLUSTER_PROFILE_UID= # if left blank, a cluster profile will be created
 export CLUSTER_VIP= # choose an unassigned VIP
 
 # image vars
-export EARTHLY_BUILDKIT_CACHE_SIZE_MB=20000
+export EARTHLY_BUILDKIT_CACHE_SIZE_MB=100000
 export OCI_REGISTRY=ttl.sh
 
 # Do not edit anything below
@@ -96,7 +96,8 @@ stylus:
   debug: true
   twoNode:
     enabled: true
-    livenessSeconds: 15
+    backend: sqlite
+    livenessSeconds: 30
 install:
   poweroff: true
 users:
@@ -169,6 +170,7 @@ function reboot_vms() {
         govc device.ls -vm=$vm
         govc vm.power -off -force $vm
         govc device.cdrom.eject -vm=$vm -device=cdrom-3000
+        govc device.cdrom.eject -vm=$vm -device=cdrom-3001
         govc vm.power -on $vm
     done
 }
