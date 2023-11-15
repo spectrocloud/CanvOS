@@ -241,6 +241,9 @@ base-image:
 
         RUN apt update && \
             apt install --no-install-recommends zstd vim network-manager -y
+        
+        COPY networkmanager/manage-all.conf /etc/NetworkManager/conf.d/manage-all.conf
+
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                 if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
@@ -281,6 +284,13 @@ base-image:
             # zypper up kernel-default && \
             # zypper purge-kernels && \
         RUN zypper install -y zstd vim NetworkManager NetworkManager-tui
+
+        COPY networkmanager/manage-all.conf /etc/NetworkManager/conf.d/manage-all.conf
+
+        # removing default wicked manager since NetworkManager is used instead
+        RUN zypper rm wicked wicked-service
+        RUN systemctl enable NetworkManager
+
         RUN zypper cc && \
             zypper clean
     END
