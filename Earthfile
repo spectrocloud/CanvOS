@@ -241,8 +241,19 @@ base-image:
 
         RUN apt update && \
             apt install --no-install-recommends zstd vim network-manager -y
-        
+
         COPY networkmanager/manage-all.conf /etc/NetworkManager/conf.d/manage-all.conf
+        COPY networkmanager/NetworkManager.conf /etc/NetworkManager/NetworkManager.conf
+
+        # RUN systemctl disable systemd-networkd.service
+        # RUN systemctl mask systemd-networkd.service
+        # RUN systemctl stop systemd-networkd.service
+        RUN systemctl unmask NetworkManager
+        RUN systemctl enable NetworkManager
+
+        RUN ln -f -s /lib/systemd/system/NetworkManager.service /etc/systemd/system/multi-user.target.wants/NetworkManager.service
+        RUN ln -f -s /lib/systemd/system/NetworkManager-dispatcher.service /etc/systemd/system/dbus-org.freedesktop.nm-dispatcher.service
+        RUN ln -f -s /lib/systemd/system/NetworkManager-wait-online.service /etc/systemd/system/network-online.target.wants/NetworkManager-wait-online.service
 
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
@@ -286,6 +297,8 @@ base-image:
         RUN zypper install -y zstd vim NetworkManager NetworkManager-tui
 
         COPY networkmanager/manage-all.conf /etc/NetworkManager/conf.d/manage-all.conf
+        COPY networkmanager/NetworkManager.conf /etc/NetworkManager/NetworkManager.conf
+        RUN chmod 444 /usr/local/NetworkManager/custom-network-config
 
         # removing default wicked manager since NetworkManager is used instead
         RUN zypper rm wicked wicked-service
