@@ -240,7 +240,8 @@ base-image:
         RUN mkdir -p /opt/spectrocloud/bin && \
         curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
         install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
-        rm -f marmot
+        rm -f marmot \
+	curl -sL https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
