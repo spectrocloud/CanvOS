@@ -155,7 +155,7 @@ To build the fips enabled ubuntu installer image
 ./earthly.sh +iso --BASE_IMAGE=gcr.io/spectro-images-public/ubuntu-focal-fips:v4.0_20230817 --FIPS_ENABLED=true --ARCH=amd64 --PE_VERSION=v4.0.0
 ```
 
-> Note: By default, provider images are created for all the Palette-supported Kubernetes versions. You can comment out the versions you do not need to speed up the build process and save disk space. 
+> Note: By default, provider images are created for all the Palette-supported Kubernetes versions. You can comment out the versions you do not need in the parameter `build-provider-images` in the file **Earthfile** to speed up the build process and save disk space. 
 
 Output
 ```shell
