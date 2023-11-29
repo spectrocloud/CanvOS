@@ -60,7 +60,7 @@ build-all-images:
        BUILD --platform=linux/arm64 +iso
     ELSE IF [ "$ARCH" = "amd64" ]
        BUILD --platform=linux/amd64 +iso-image
-       BUILD --platform=linux/amd64 +iso
+    BUILD --platform=linux/amd64 +iso
     END
 
 build-provider-images:
@@ -339,6 +339,7 @@ OS_RELEASE:
     ARG HOME_URL=https://github.com/spectrocloud/CanvOS
     ARG OS_REPO=spectrocloud/CanvOS
     ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}
+    ARG ARTIFACT=kairos-core-${OS_DISTRIBUTION}-$OS_VERSION
 
     # update OS-release file
     RUN sed -i -n '/KAIROS_/!p' /etc/os-release
