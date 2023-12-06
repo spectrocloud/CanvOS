@@ -259,8 +259,6 @@ base-image:
         RUN kernel=$(ls /lib/modules | tail -n1) && \
             depmod -a "${kernel}"
 
-        RUN ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv
-
         RUN rm -rf /var/cache/* && \
             apt clean
             
