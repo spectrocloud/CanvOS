@@ -13,7 +13,7 @@ ARG CUSTOM_TAG
 ARG ARCH
 ARG PE_VERSION=v4.1.2
 ARG SPECTRO_LUET_VERSION=v1.2.0
-ARG KAIROS_VERSION=v2.4.2
+ARG KAIROS_VERSION=v2.4.3-rc3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -258,6 +258,8 @@ base-image:
             ln -sf "initrd-${kernel}" /boot/initrd
         RUN kernel=$(ls /lib/modules | tail -n1) && \
             depmod -a "${kernel}"
+
+        RUN ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv
 
         RUN rm -rf /var/cache/* && \
             apt clean
