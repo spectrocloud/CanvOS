@@ -297,6 +297,10 @@ base-image:
         RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
     END
 
+    IF [ "$OS_DISTRIBUTION" = "sles" ]
+         RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
+    END
+
     IF [ "$ARCH" = "arm64" ]
         RUN mkdir -p /etc/luet/repos.conf.d && luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm --priority 1 -y && luet repo update
     ELSE IF [ "$ARCH" = "amd64" ]
