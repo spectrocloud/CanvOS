@@ -20,7 +20,7 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.7.11
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.1.2
-ARG KUBEADM_PROVIDER_VERSION=v4.1.0
+ARG KUBEADM_PROVIDER_VERSION=v4.2.0
 ARG RKE2_PROVIDER_VERSION=v4.1.1
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -192,9 +192,9 @@ stylus-image:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
