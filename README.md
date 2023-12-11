@@ -30,7 +30,7 @@ From the base image, this image is used to provide the initial flashing of a dev
 
 For advanced use cases, there may be a need to add additional packages not included in the [Base Images](https://github.com/kairos-io/kairos/tree/master/images).  If those packages or configuration elements need to be added, they can be included in the empty `Dockerfile` located in this repo and they will be included in the build process and output artifacts.
 
-### Basic Usage
+## Usage
 
 1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
 
@@ -66,7 +66,7 @@ remote: Total 133 (delta 60), reused 101 (delta 32), pack-reused 0
 cd CanvOS
 ```
 
-3. View Available tags
+3. View available tags.
 
 ```shell
 git tag
@@ -103,7 +103,7 @@ do so (now or later) by using -c with the switch command. Example:
 ```shell
 cp .arg.template .arg
 ```
-6. To build RHEL core, RHEL FIPS or Ubuntu fips base images switch to respective directories and build the base image.
+6. To build RHEL core, RHEL FIPS or Ubuntu FIPS base images switch to respective directories and build the base image.
 The base image built can be passed as argument to build the installer and provider images.
 Follow the instructions in the respective sub-folders (rhel-fips, ubuntu-fips) to create base images.
 For ubuntu-fips, this image can be used as base image - `gcr.io/spectro-images-public/ubuntu-focal-fips:v4.0_20230817`
@@ -137,8 +137,8 @@ Skip this step if your base image is ubuntu or opensuse-leap. If you are buildin
 ./earthly.sh +build-all-images --ARCH=amd64
 ```
 
-To build FIPS complaint images or ARM images, specify the BASE_IMAGE and ARCH in the .arg file or as command line arguments.
-`k3s` does not FIPS and rke2 is by default `FIPS` compliant.
+To build FIPS-complaint images or ARM images, specify the BASE_IMAGE and ARCH in the .arg file or as command line arguments.
+`k3s` does not support FIPS and rke2 is by default FIPS-compliant.
 
 To build just the installer image
 ```shell
@@ -154,6 +154,8 @@ To build the fips enabled ubuntu installer image
 ```shell
 ./earthly.sh +iso --BASE_IMAGE=gcr.io/spectro-images-public/ubuntu-focal-fips:v4.0_20230817 --FIPS_ENABLED=true --ARCH=amd64 --PE_VERSION=v4.0.0
 ```
+
+> Note: By default, provider images are created for all the Palette-supported Kubernetes versions. You can comment out the versions you do not need in the parameter `build-provider-images` in the file **Earthfile** to speed up the build process and save disk space. 
 
 Output
 ```shell
