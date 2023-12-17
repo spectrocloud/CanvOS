@@ -103,7 +103,7 @@ do so (now or later) by using -c with the switch command. Example:
 ```shell
 cp .arg.template .arg
 ```
-6. To build RHEL core, RHEL FIPS or Ubuntu fips base images switch to respective directories and build the base image.
+6. To build RHEL core, RHEL FIPS or Ubuntu fips, sles base images switch to respective directories and build the base image.
 The base image built can be passed as argument to build the installer and provider images.
 Follow the instructions in the respective sub-folders (rhel-fips, ubuntu-fips) to create base images.
 For ubuntu-fips, this image can be used as base image - `gcr.io/spectro-images-public/ubuntu-focal-fips:v4.0_20230817`
