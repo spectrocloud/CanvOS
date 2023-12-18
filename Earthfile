@@ -16,6 +16,7 @@ ARG SPECTRO_LUET_VERSION=v1.2.0
 ARG KAIROS_VERSION=v2.4.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
+ARG K8S_VERSION=v1.27.5
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.7.11
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
@@ -77,6 +78,9 @@ build-provider-images:
     BUILD  +provider-image --K8S_VERSION=1.28.2
 
 
+build-provider-image:
+    ARG K8S_VERSION
+    BUILD  +provider-image --K8S_VERSION=$K8S_VERSION
 
 build-provider-images-fips:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]

@@ -80,12 +80,6 @@ echo -e '    #force: true # Continue even if there are pods that do not declare 
 echo -e '    #disableEviction: false # Force drain to use delete, even if eviction is supported. This will bypass checking PodDisruptionBudgets, use with caution'
 echo -e '    #skipWaitForDeleteTimeout: 60 # If pod DeletionTimestamp older than N seconds, skip waiting for the pod. Seconds must be greater than 0 to skip.'
 echo -e 'options:'
-echo -e '  system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"'
+echo -e '  system.uri: "$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG"'
 echo -e '\n'
-echo -e "  system.registry: $IMAGE_REGISTRY"
-echo -e "  system.repo: $IMAGE_REPO"
-echo -e "  system.k8sDistribution: $K8S_DISTRIBUTION"
-echo -e "  system.osName: $OS_DISTRIBUTION"
-echo -e "  system.peVersion: $PE_VERSION"
-echo -e "  system.customTag: $CUSTOM_TAG"
-echo -e "  system.osVersion: $OS_VERSION"
+
