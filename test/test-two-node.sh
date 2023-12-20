@@ -19,51 +19,20 @@ set -e
 #    credentials capable of cloning Spectro Cloud internal repos
 #    (required for building stylus).
 #
-# 4. Edit the global variables below as needed.
+# 4. Copy the test/en.example file to test/.env and edit test/.env
+#    as required.
 #
 # 5. Source and execute this script:
 #
 #    source ./test/test-two-node.sh
 #    ./test/test-two-node.sh
 
-# Edit these variables
-
-# govc vars
-export GOVC_USERNAME=<YOUR_NAME>@vsphere.local
-export GOVC_PASSWORD=<YOUR_VSPHERE_PASSWORD>
-export GOVC_URL=10.10.128.10
-export GOVC_INSECURE=true
-export GOVC_DATACENTER=Datacenter
-export GOVC_DATASTORE=vsanDatastore2
-export GOVC_NETWORK=VM-NETWORK
-export GOVC_RESOURCE_POOL=<YOUR_RESOURCE_POOL>
-export GOVC_FOLDER=<YOUR_FOLDER>
-
-# vSphere vars
-export HOST_SUFFIX=<YOUR_NAME> # required to ensure unique edge host IDs
-export ISO_FOLDER=<YOUR_FOLDER> e.g. "ISO/01-tyler"
-export STYLUS_ISO="${ISO_FOLDER}/stylus-dev-amd64.iso"
-export NIC_NAME=ens160
-
-# palette vars
-export API_KEY=<YOUR_PALETTE_API_KEY>
-export PROJECT_UID=<YOUR_PROJECT_ID>
-export EDGE_REGISTRATION_TOKEN=<YOUR_REGISTRATION_TOKEN>
-export DOMAIN=dev.spectrocloud.com
-export PUBLIC_PACK_REPO_UID=<YOUR_PUBLIC_PACK_REPO_UID> # this varies per Palette tenant
-export CLUSTER_NAME=two-node
-export CLUSTER_PROFILE_UID= # if left blank, a cluster profile will be created
-export CLUSTER_VIP= # choose an unassigned VIP
-
-# image vars
-export EARTHLY_BUILDKIT_CACHE_SIZE_MB=100000
-export OCI_REGISTRY=${OCI_REGISTRY:-ttl.sh}
-export STYLUS_BRANCH=${STYLUS_BRANCH:-two-node}
-export PROVIDER_K3S_BRANCH=${PROVIDER_K3S_BRANCH:-2-node-health-checks}
-
-# cluster vars
-export BACKEND=postgres # postgres or sqlite
-
+if [ -f ./test/.env ]; then
+    source ./test/.env
+else
+    echo "Please create a .env file in the test directory and populate it with the required variables."
+    exit 1
+fi
 
 # Do not edit anything below
 
