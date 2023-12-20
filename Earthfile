@@ -322,7 +322,10 @@ base-image:
                     RUN zypper --non-interactive --quiet addrepo --refresh -p 90  http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
                         zypper --gpg-auto-import-keys ref && \
                         zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils && \
-			# TODO: find out how to prepare postgresql for replication in suse
+			sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/'  /var/lib/pgsql/data/postgresql.conf
+			sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' /var/lib/pgsql/data/postgresql.conf 
+			sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" /var/lib/pgsql/data/postgresql.conf
+			echo "host all all 0.0.0.0/0 md5" | sudo tee -a /var/lib/pgsql/data/pg_hba.conf
                         systemctl enable postresql
                 END
         END
