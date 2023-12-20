@@ -30,6 +30,8 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
+# You can use either sqlite or postgres as backend
+ARG TWO_NODE_BACKEND=sqlite 
 ARG MARMOT_VERSION=0.8.7-beta.1
 
 ARG ETCD_VERSION="v3.5.5"
@@ -241,7 +243,7 @@ base-image:
         curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
         install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
         rm -f marmot \
-	curl -sL https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
+        curl -sL https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
@@ -272,7 +274,23 @@ base-image:
             apt clean
 
         IF $TWO_NODE
-            RUN apt install -y sqlite3 iputils-ping
+            IF [ $TWO_NODE_BACKEND = "sqlite" ]
+                RUN apt install -y sqlite3 iputils-ping
+            ELSE
+                RUN apt install -y apt-transport-https ca-certificates curl && \
+                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' && \
+                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+                gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
+                rm postgresql.asc && \
+                apt update && \
+                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping && \
+		# prepare postgresql for replication
+		sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' /etc/postgresql/16/main/postgresql.conf
+		sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' /etc/postgresql/16/main/postgresql.conf
+		sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" /etc/postgresql/16/main/postgresql.conf
+		echo "host all all 0.0.0.0/0 md5" | sudo tee -a /etc/postgresql/16/main/pg_hba.conf
+                systemctl enable postgresql
+            END
         END
             
     # IF OS Type is Opensuse
@@ -298,7 +316,18 @@ base-image:
             # zypper purge-kernels && \
 
         IF $TWO_NODE
-            RUN zypper install -y sqlite3 iputils
+                IF [ $TWO_NODE_BACKEND = "sqlite" ]
+                    RUN zypper install -y sqlite3 iputils
+                ELSE
+                    RUN zypper --non-interactive --quiet addrepo --refresh -p 90  http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
+                        zypper --gpg-auto-import-keys ref && \
+                        zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils && \
+			sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/'  /var/lib/pgsql/data/postgresql.conf
+			sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' /var/lib/pgsql/data/postgresql.conf 
+			sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" /var/lib/pgsql/data/postgresql.conf
+			echo "host all all 0.0.0.0/0 md5" | sudo tee -a /var/lib/pgsql/data/pg_hba.conf
+                        systemctl enable postresql
+                END
         END
         RUN zypper install -y zstd vim
         RUN zypper cc && \
