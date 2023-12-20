@@ -57,7 +57,9 @@ export CLUSTER_VIP= # choose an unassigned VIP
 
 # image vars
 export EARTHLY_BUILDKIT_CACHE_SIZE_MB=100000
-export OCI_REGISTRY=ttl.sh
+export OCI_REGISTRY=${OCI_REGISTRY:-ttl.sh}
+export STYLUS_BRANCH=${STYLUS_BRANCH:-two-node}
+export PROVIDER_K3S_BRANCH=${PROVIDER_K3S_BRANCH:-2-node-health-checks}
 
 # cluster vars
 export BACKEND=postgres # postgres or sqlite
@@ -408,7 +410,7 @@ function build_canvos() {
 function build_all() {
 
     # optionally build/rebuild provider-k3s
-    test -d ../provider-k3s || ( cd .. && git clone https://github.com/kairos-io/provider-k3s -b two-node )
+    test -d ../provider-k3s || ( cd .. && git clone https://github.com/kairos-io/provider-k3s -b ${PROVIDER_K3S_BRANCH}})
     cd ../provider-k3s
     export PROVIDER_K3S_HASH=$(git describe --always)
     (
@@ -417,7 +419,7 @@ function build_all() {
     ) || ( build_provider_k3s )
 
     # optionally build/rebuild stylus images
-    test -d ../stylus || ( cd .. && git clone https://github.com/spectrocloud/stylus -b 2-node-health-checks )
+    test -d ../stylus || ( cd .. && git clone https://github.com/spectrocloud/stylus -b ${STYLUS_BRANCH} )
     cd ../stylus
     export STYLUS_HASH=$(git describe --always)
     (
