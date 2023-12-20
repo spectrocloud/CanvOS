@@ -59,6 +59,10 @@ export CLUSTER_VIP= # choose an unassigned VIP
 export EARTHLY_BUILDKIT_CACHE_SIZE_MB=100000
 export OCI_REGISTRY=ttl.sh
 
+# cluster vars
+export BACKEND=postgres # postgres or sqlite
+
+
 # Do not edit anything below
 
 declare -a vm_array=("2n1-$HOST_SUFFIX" "2n2-$HOST_SUFFIX")
@@ -96,7 +100,7 @@ stylus:
   debug: true
   twoNode:
     enabled: true
-    backend: sqlite
+    backend: "$BACKEND"
     livenessSeconds: 30
 install:
   poweroff: true
