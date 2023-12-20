@@ -244,13 +244,13 @@ base-image:
         install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
         rm -f marmot \
         curl -sL https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
-		IF [ TWO_NODE_BACKEND = "postgres" ]
-			IF [ $OS_DISTRIBUTION = "ubuntu" ]
-				ARG PG_CONF_DIR=/etc/postgresql/16/main/
-			ELSE IF [ $OS_DISTRIBUTION =  "opensuse-leap" ]
-			    ARG PG_CONF_DIR=/var/lib/pgsql/data/
-			END
-		END
+        IF [ TWO_NODE_BACKEND = "postgres" ]
+            IF [ $OS_DISTRIBUTION = "ubuntu" ]
+                ARG PG_CONF_DIR=/etc/postgresql/16/main/
+            ELSE IF [ $OS_DISTRIBUTION =  "opensuse-leap" ]
+                ARG PG_CONF_DIR=/var/lib/pgsql/data/
+            END
+       END
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
@@ -285,8 +285,8 @@ base-image:
                 RUN apt install -y sqlite3 iputils-ping
             ELSE
                 RUN apt install -y apt-transport-https ca-certificates curl && \
-                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' && \
-                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
                 gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
                 rm postgresql.asc && \
                 apt update && \
@@ -322,7 +322,7 @@ base-image:
                 ELSE
                     RUN zypper --non-interactive --quiet addrepo --refresh -p 90  http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
                         zypper --gpg-auto-import-keys ref && \
-                        zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils && \
+                        zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
                 END
         END
         RUN zypper install -y zstd vim
@@ -359,13 +359,13 @@ base-image:
     RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
         if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
 
-	IF $TWO_NODE	
-		sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' $PG_CONF_DIR/postgresql.conf
-		sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' $PG_CONF_DIR/postgresql.conf 
-		sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" $PG_CONF_DIR/postgresql.conf
-		echo "host all all 0.0.0.0/0 md5" | sudo tee -a PG_CONF_DIR/pg_hba.conf
-		systemctl enable postresql
-	END
+    IF $TWO_NODE
+        RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' $PG_CONF_DIR/postgresql.conf && \
+        sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' $PG_CONF_DIR/postgresql.conf && \
+        sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" $PG_CONF_DIR/postgresql.conf && \
+        echo "host all all 0.0.0.0/0 md5" | sudo tee -a PG_CONF_DIR/pg_hba.conf && \
+        systemctl enable postresql
+    END
 
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
