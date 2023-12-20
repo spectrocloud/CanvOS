@@ -313,6 +313,9 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
+    RUN luet repo add kairos -y --url quay.io/kairos/packages --type docker
+    RUN luet install -y elemental-cli
+
     # Ensure SElinux gets disabled
     RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
         if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
