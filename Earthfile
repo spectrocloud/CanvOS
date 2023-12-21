@@ -49,7 +49,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
-IF [ "$OS_DISTRIBUTION" = "ubuntu" ] 
+IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
     IF [ "$TWO_NODE_BACKEND" = "postgres" ]
         ARG PG_CONF_DIR=/etc/postgresql/16/main
     END
