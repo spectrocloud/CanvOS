@@ -19,13 +19,16 @@ set -e
 #    credentials capable of cloning Spectro Cloud internal repos
 #    (required for building stylus).
 #
-# 4. Copy the test/en.example file to test/.env and edit test/.env
+# 4. Copy the test/env.example file to test/.env and edit test/.env
 #    as required.
 #
 # 5. Source and execute this script:
 #
 #    source ./test/test-two-node.sh
 #    ./test/test-two-node.sh
+
+# Do not edit anything below
+
 envfile=$(dirname $0)/.env
 if [ -f ${envfile} ]; then
     source ${envfile}
@@ -33,8 +36,6 @@ else
     echo "Please create a .env file in the test directory and populate it with the required variables."
     exit 1
 fi
-
-# Do not edit anything below
 
 declare -a vm_array=("2n1-$HOST_SUFFIX" "2n2-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}-$HOST_SUFFIX"
