@@ -379,7 +379,7 @@ function build_canvos() {
 function build_all() {
 
     # optionally build/rebuild provider-k3s
-    test -d ../provider-k3s || ( cd .. && git clone https://github.com/kairos-io/provider-k3s -b ${PROVIDER_K3S_BRANCH}})
+    test -d ../provider-k3s || ( cd .. && git clone https://github.com/kairos-io/provider-k3s -b ${PROVIDER_K3S_BRANCH})
     cd ../provider-k3s
     export PROVIDER_K3S_HASH=$(git describe --always)
     (
