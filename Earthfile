@@ -360,11 +360,11 @@ base-image:
         if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
 
     IF $TWO_NODE
-        RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' $PG_CONF_DIR/postgresql.conf && \
-        sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' $PG_CONF_DIR/postgresql.conf && \
-        sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" $PG_CONF_DIR/postgresql.conf && \
-        echo "host all all 0.0.0.0/0 md5" | sudo tee -a PG_CONF_DIR/pg_hba.conf && \
-        systemctl enable postresql
+        RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' ${PG_CONF_DIR}/postgresql.conf
+        RUN sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' ${PG_CONF_DIR}/postgresql.conf
+        RUN sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf
+        RUN echo "host all all 0.0.0.0/0 md5" | tee -a ${PG_CONF_DIR}/pg_hba.conf
+        RUN systemctl enable postresql
     END
 
 # Used to build the installer image.  The installer ISO will be created from this.
