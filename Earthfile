@@ -129,7 +129,7 @@ build-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
-    COPY --if-exists $CLUSTERCONFIG /overlay//opt/spectrocloud/clusterconfig/spc.tgz
+    COPY --if-exists $CLUSTERCONFIG /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
     IF [ "$ARCH" = "arm64" ]
