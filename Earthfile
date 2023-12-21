@@ -49,6 +49,17 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
+IF [ "$OS_DISTRIBUTION" = "ubuntu" ] 
+    IF [ "$TWO_NODE_BACKEND" = "postgres" ]
+        ARG PG_CONF_DIR=/etc/postgresql/16/main
+    END
+ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+    IF [ "$TWO_NODE_BACKEND" = "postgres" ]
+        ARG PG_CONF_DIR=/var/lib/pgsql/data
+    END
+END
+
+
 IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
@@ -242,15 +253,8 @@ base-image:
         RUN mkdir -p /opt/spectrocloud/bin && \
         curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
         install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
-        rm -f marmot \
+        rm -f marmot && \
         curl -sL https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
-        IF [ TWO_NODE_BACKEND = "postgres" ]
-            IF [ $OS_DISTRIBUTION = "ubuntu" ]
-                ARG PG_CONF_DIR=/etc/postgresql/16/main/
-            ELSE IF [ $OS_DISTRIBUTION =  "opensuse-leap" ]
-                ARG PG_CONF_DIR=/var/lib/pgsql/data/
-            END
-       END
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
@@ -281,7 +285,7 @@ base-image:
             apt clean
 
         IF $TWO_NODE
-            IF [ $TWO_NODE_BACKEND = "sqlite" ]
+            IF [ "$TWO_NODE_BACKEND" = "sqlite" ]
                 RUN apt install -y sqlite3 iputils-ping
             ELSE
                 RUN apt install -y apt-transport-https ca-certificates curl && \
@@ -360,11 +364,11 @@ base-image:
         if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
 
     IF $TWO_NODE
-        RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' $PG_CONF_DIR/postgresql.conf && \
-        sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' $PG_CONF_DIR/postgresql.conf && \
-        sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" $PG_CONF_DIR/postgresql.conf && \
-        echo "host all all 0.0.0.0/0 md5" | sudo tee -a PG_CONF_DIR/pg_hba.conf && \
-        systemctl enable postresql
+        RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' "${PG_CONF_DIR}"/postgresql.conf && \
+        sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' ${PG_CONF_DIR}/postgresql.conf && \
+        sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf && \
+        echo "host all all 0.0.0.0/0 md5" | tee -a ${PG_CONF_DIR}/pg_hba.conf && \
+        systemctl enable postgresql
     END
 
 # Used to build the installer image.  The installer ISO will be created from this.
