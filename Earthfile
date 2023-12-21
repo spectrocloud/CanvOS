@@ -30,7 +30,7 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
-# You can use either sqlite or postgres as backend
+# You can use either sqlite or postgres
 ARG TWO_NODE_BACKEND=sqlite 
 ARG MARMOT_VERSION=0.8.7-beta.1
 
@@ -49,6 +49,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
+# Determine PG config dir (only relevant if TWO_NODE=true)
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
     IF [ "$TWO_NODE_BACKEND" = "postgres" ]
         ARG PG_CONF_DIR=/etc/postgresql/16/main
@@ -58,7 +59,6 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
         ARG PG_CONF_DIR=/var/lib/pgsql/data
     END
 END
-
 
 IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
