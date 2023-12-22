@@ -10,3 +10,4 @@ content-*/*
 .idea
 hack/*.img
 .DS_Store
+test/.env
