@@ -32,9 +32,9 @@ set -e
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 
 if [[ $sourced == 0 ]]; then
-    envfile=$(dirname $0)/.env
-    if [ -f ${envfile} ]; then
-        source ${envfile}
+    envfile=$(dirname "${0}")/.env
+    if [ -f "${envfile}" ]; then
+        source "${envfile}"
     else
         echo "Please create a .env file in the test directory and populate it with the required variables."
         exit 1
@@ -261,7 +261,7 @@ function destroy_edge_hosts() {
 function prepare_cluster_profile() {
     if [ -z "${STYLUS_HASH}" ]; then
         echo STYLUS_HASH is unset. Please execute build_all and retry.
-        exit 1
+        return 1
     fi
     jq '
       .metadata.name = env.CLUSTER_NAME |
@@ -282,7 +282,7 @@ function create_cluster_profile() {
     rm -f two-node-cluster-profile.json
     if [ "$CLUSTER_PROFILE_UID" = "null" ]; then
         echo Cluster Profile creation failed as it already exists. Please delete it and retry.
-        exit 1
+        return 1
     fi
     echo "Cluster Profile $CLUSTER_PROFILE_UID created"
 }
@@ -298,11 +298,11 @@ function destroy_cluster_profile() {
 function prepare_cluster() {
     if [ -z "${STYLUS_HASH}" ]; then
         echo STYLUS_HASH is unset. Please execute build_all and retry.
-        exit 1
+        return 1
     fi
     if nslookup $CLUSTER_VIP >/dev/null; then
         echo CLUSTER_VIP: $CLUSTER_VIP is allocated. Please retry with an unallocated VIP.
-        exit 1
+        return 1
     fi
     jq '
       .metadata.name = env.CLUSTER_NAME |
