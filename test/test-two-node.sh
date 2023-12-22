@@ -29,12 +29,16 @@ set -e
 
 # Do not edit anything below
 
-envfile=$(dirname $0)/.env
-if [ -f ${envfile} ]; then
-    source ${envfile}
-else
-    echo "Please create a .env file in the test directory and populate it with the required variables."
-    exit 1
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+
+if [[ $sourced == 0 ]]; then
+    envfile=$(dirname $0)/.env
+    if [ -f ${envfile} ]; then
+        source ${envfile}
+    else
+        echo "Please create a .env file in the test directory and populate it with the required variables."
+        exit 1
+    fi
 fi
 
 declare -a vm_array=("2n1-$HOST_SUFFIX" "2n2-$HOST_SUFFIX")
