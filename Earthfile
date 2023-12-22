@@ -10,6 +10,7 @@ ARG IMAGE_REGISTRY
 ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
+ARG CLUSTERCONFIG
 ARG ARCH
 ARG PE_VERSION=v4.1.2
 ARG SPECTRO_LUET_VERSION=v1.2.0
@@ -129,6 +130,7 @@ build-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    COPY --if-exists $CLUSTERCONFIG /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
     IF [ "$ARCH" = "arm64" ]
