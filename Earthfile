@@ -36,7 +36,11 @@ ARG UPDATE_KERNEL=false
 ARG ETCD_VERSION="v3.5.5"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
-    ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+    IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
+        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
+    ELSE
+        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+    END
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_TAG=opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
@@ -60,7 +64,7 @@ build-all-images:
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
     ELSE IF [ "$ARCH" = "amd64" ]
-       BUILD --platform=linux/amd64 +iso-image
+    BUILD --platform=linux/amd64 +iso-image
        BUILD --platform=linux/amd64 +iso
     END
 
