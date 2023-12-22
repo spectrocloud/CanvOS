@@ -72,7 +72,7 @@ stylus:
   debug: true
   twoNode:
     enabled: true
-    backend: "$BACKEND"
+    backend: "${TWO_NODE_BACKEND}"
     livenessSeconds: 30
 install:
   poweroff: true
