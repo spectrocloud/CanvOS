@@ -368,6 +368,7 @@ base-image:
         sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' ${PG_CONF_DIR}/postgresql.conf && \
         sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf && \
         echo "host all all 0.0.0.0/0 md5" | tee -a ${PG_CONF_DIR}/pg_hba.conf && \
+        su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile' && \
         systemctl enable postgresql
     END
 
