@@ -33,7 +33,7 @@ ARG TWO_NODE=false
 # You can use either sqlite or postgres
 ARG TWO_NODE_BACKEND=sqlite 
 ARG MARMOT_VERSION=0.8.7-beta.1
-
+ARG KINE_VERSION=0.10.3
 ARG ETCD_VERSION="v3.5.5"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
@@ -254,7 +254,7 @@ base-image:
         curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
         install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
         rm -f marmot && \
-        curl -sL https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
+        curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
