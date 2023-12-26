@@ -25,13 +25,63 @@ RUN mkdir -p /run/lock
 RUN mkdir -p /usr/libexec
 RUN touch /usr/libexec/.keep
 COPY --from=quay.io/kairos/framework:v2.4.3_opensuse-leap / /
-# Activate Kairos services
-RUN systemctl enable cos-setup-reconcile.timer && \
-          systemctl enable cos-setup-fs.service && \
-          systemctl enable cos-setup-boot.service && \
-          systemctl enable cos-setup-network.service
-# Remove /etc/dracut.conf.d/90-kairos-network-legacy.conf to allow dracut to build initrd without dhcp-client
-RUN rm -f /etc/dracut.conf.d/90-kairos-network-legacy.conf
+
+RUN mkdir -p /etc/dnf
+RUN echo "install_weak_deps=False" > /etc/dnf/dnf.conf
+
+RUN zypper in --force-resolution -y \
+    bash-completion \
+    conntrack-tools \
+    coreutils \
+    curl \
+    device-mapper \
+    dhcp-client \
+    dosfstools \
+    dracut \
+    e2fsprogs \
+    fail2ban \
+    findutils \
+    gawk \
+    growpart \
+    gptfdisk \
+    haveged \
+    htop \
+    iproute2 \
+    iptables \
+    iputils \
+    issue-generator \
+    jq \
+    less \
+    logrotate \
+    lsscsi \
+    lvm2 \
+    mdadm \
+    multipath-tools \
+    nano \
+#    nohang \
+    open-iscsi \
+    openssh \
+    open-vm-tools \
+    parted \
+    pigz \
+    policycoreutils \
+    polkit \
+    procps \
+    rng-tools \
+    rsync \
+    squashfs \
+    strace \
+    sudo \
+    systemd \
+    systemd-network \
+    tar \
+    timezone \
+    tmux \
+    vim \
+    which \
+    tpm2* \
+    && zypper cc \
+
 ## Generate initrd
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
