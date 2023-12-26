@@ -1,6 +1,6 @@
 
 # Kairos framework packages for ubuntu fips
-FROM quay.io/kairos/framework:v2.3.2_fips-systemd as kairos-fips
+FROM quay.io/kairos/framework:v2.4.3_fips as kairos-fips
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base
@@ -121,12 +121,6 @@ RUN apt-get install -y --no-install-recommends \
 COPY --from=kairos-fips / /
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
-
-# Activate Kairos services
-RUN systemctl enable cos-setup-reconcile.timer && \
-          systemctl enable cos-setup-fs.service && \
-          systemctl enable cos-setup-boot.service && \
-          systemctl enable cos-setup-network.service
 
 ## Configuration
 ## Took from: https://github.com/kairos-io/kairos/blob/master/images/Dockerfile.ubuntu-20-lts
