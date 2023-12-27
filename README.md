@@ -132,7 +132,7 @@ Skip this step if your base image is ubuntu or opensuse-leap. If you are buildin
 | NO_PROXY         | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                          | string |                         |
 | PROXY_CERT_PATH  | Absolute path of the SSL Proxy certificate in PEM format if needed (Optional)                                                                                                                                                                                                                                                                  | string |                         |
 | UPDATE_KERNEL    | Determines whether to upgrade the Kernel version to the latest from the upstream OS provider                                                                                                                                                                                                                                                   | boolean| `false`                 |
-| CLUSTERCONFIG    | Path of the cluster config | string | `spc.tgz` |
+| CLUSTERCONFIG    | Path of the cluster config | string |  |
 
 8. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
