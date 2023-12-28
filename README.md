@@ -35,6 +35,7 @@ For advanced use cases, there may be a need to add additional packages not inclu
 1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
 
 Note:  If you are building the images behind a proxy server, you may need to configure your git to let it use your proxy server.
+
 ```
 git config --global http.proxy <your-proxy-server>
 git config --global https.proxy <your-proxy-server>
@@ -99,11 +100,13 @@ state without impacting any branches by switching back to a branch.
 If you want to create a new branch to retain commits you create, you may
 do so (now or later) by using -c with the switch command. Example:
 ```
+
 5. Copy the .arg.template file to .arg
 
 ```shell
 cp .arg.template .arg
 ```
+
 6. To build RHEL core, RHEL FIPS or Ubuntu fips, sles base images switch to respective directories and build the base image.
 The base image built can be passed as argument to build the installer and provider images.
 Follow the instructions in the respective sub-folders (rhel-fips, ubuntu-fips) to create base images.
@@ -111,7 +114,6 @@ For ubuntu-fips, this image can be used as base image - `gcr.io/spectro-dev-publ
 Skip this step if your base image is ubuntu or opensuse-leap. If you are building ubuntu or opensuse-leap installer images, do not pass the BASE_IMAGE attribute as an arg to build command.
 
 7. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
-
 
 | Parameter        | Description                                                                                                                                                                                                                                                                                                                                    | Type   | Default Value           |
 |------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|-------------------------|
@@ -122,7 +124,7 @@ Skip this step if your base image is ubuntu or opensuse-leap. If you are buildin
 | OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`.  For sles, possible values are `5.4`. This example uses `22` for Ubuntu.                                                                                                                                              | String | `22`                    |
 | K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, or `kubeadm-fips`.                                                                                                                                                                                                                                             | String | `k3s`                   |
 | ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is *palette-edge-installer*.                                                                                                                                                                                                                                                   | String | `palette-edge-installer`|
-| ARCH             | Type of platform to use for the build.  Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                             | string |  `amd64`                | 
+| ARCH             | Type of platform to use for the build.  Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                             | string |  `amd64`                |
 | BASE_IMAGE       | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                              | String |                         |
 | FIPS_ENABLED     | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                         | string | `false`                 |
 | HTTP_PROXY       | URL of the HTTP Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string |                         |
@@ -130,6 +132,8 @@ Skip this step if your base image is ubuntu or opensuse-leap. If you are buildin
 | NO_PROXY         | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                          | string |                         |
 | PROXY_CERT_PATH  | Absolute path of the SSL Proxy certificate in PEM format if needed (Optional)                                                                                                                                                                                                                                                                  | string |                         |
 | UPDATE_KERNEL    | Determines whether to upgrade the Kernel version to the latest from the upstream OS provider                                                                                                                                                                                                                                                   | boolean| `false`                 |
+| CLUSTERCONFIG    | Path of the cluster config | string |  |
+
 8. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
 9. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
@@ -142,21 +146,25 @@ To build FIPS complaint images or ARM images, specify the BASE_IMAGE and ARCH in
 `k3s` does not FIPS and rke2 is by default `FIPS` compliant.
 
 To build just the installer image
+
 ```shell
 ./earthly.sh +iso --ARCH=amd64
 ```
 
 To build the provider images
+
 ```shell
 ./earthly.sh +build-provider-images --ARCH=amd64
 ```
 
 To build the fips enabled ubuntu installer image
+
 ```shell
 ./earthly.sh +iso --BASE_IMAGE=gcr.io/spectro-dev-public/ubuntu-focal-fips:v4.2_20231226 --FIPS_ENABLED=true --ARCH=amd64 --PE_VERSION=v4.2.1
 ```
 
 Output
+
 ```shell
 ###################################################################################################
 
@@ -205,15 +213,11 @@ docker push ttl.sh/ubuntu:k3s-1.24.6-v4.2.1-demodocker push ttl.sh/ubuntu:k3s-1.
 > ⚠️ The default registry, [ttl.sh](https://ttl.sh/) is a short-lived registry. Images in the ttl.sh registry have a default time to live of
 24 hours. Once the time limit is up, the images will automatically be removed. To use a permanent registry, set the `.arg` file's `IMAGE_REGISTRY` parameter with the URL of your image registry.
 
-
 12. Create a cluster profile using the command output. Use the [Model Edge Cluster Profile](https://docs.spectrocloud.com/clusters/edge/site-deployment/model-profile) to help you complete this step.
-
 
 13. Flash VM or Baremetal device with the generated ISO. Refer to the [Prepare Edge Host for Installation](https://docs.spectrocloud.com/clusters/edge/site-deployment/stage) guide for additonal guidance.
 
-
 14. Register the Edge host with Palette. Checkout the [Register Edge Host](https://docs.spectrocloud.com/clusters/edge/site-deployment/site-installation/edge-host-registration) guide.
-
 
 15. Build a cluster in [Palette](https://console.spectrocloud.com).
 
