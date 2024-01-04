@@ -1,5 +1,7 @@
 VERSION 0.6
-FROM gcr.io/spectro-images-public/alpine:3.16.2
+ARG TARGETOS
+ARG TARGETARCH
+FROM gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0
 
 # Variables used in the builds.  Update for ADVANCED use cases only
 ARG OS_DISTRIBUTION
@@ -8,17 +10,18 @@ ARG IMAGE_REGISTRY
 ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
+ARG CLUSTERCONFIG
 ARG ARCH
-ARG PE_VERSION=v4.1.2
-ARG SPECTRO_LUET_VERSION=v1.1.9
-ARG KAIROS_VERSION=v2.4.1
+ARG PE_VERSION=v4.2.1
+ARG SPECTRO_LUET_VERSION=v1.2.0
+ARG KAIROS_VERSION=v2.4.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.7.11
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v4.1.2
-ARG KUBEADM_PROVIDER_VERSION=v4.1.0
+ARG K3S_PROVIDER_VERSION=v4.2.1
+ARG KUBEADM_PROVIDER_VERSION=v4.2.1
 ARG RKE2_PROVIDER_VERSION=v4.1.1
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -37,12 +40,14 @@ ARG KINE_VERSION=0.10.3
 ARG ETCD_VERSION="v3.5.5"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
-    ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION-$OS_VERSION-lts
-    ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION-$OS_VERSION-lts:$KAIROS_VERSION
+    IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
+        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
+    ELSE
+        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+    END
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
-    ARG BASE_IMAGE_NAME=core-$OS_DISTRIBUTION  
-    ARG BASE_IMAGE_TAG=core-$OS_DISTRIBUTION:$KAIROS_VERSION
+    ARG BASE_IMAGE_TAG=opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     # Check for default value for rhel
@@ -64,6 +69,10 @@ IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
+elemental:
+    FROM quay.io/kairos/packages:elemental-cli-system-0.3.1
+    SAVE ARTIFACT /usr/bin/elemental /elemental
+
 build-all-images:
     IF $FIPS_ENABLED
         BUILD +build-provider-images-fips
@@ -74,7 +83,7 @@ build-all-images:
        BUILD --platform=linux/arm64 +iso-image
        BUILD --platform=linux/arm64 +iso
     ELSE IF [ "$ARCH" = "amd64" ]
-       BUILD --platform=linux/amd64 +iso-image
+    BUILD --platform=linux/amd64 +iso-image
        BUILD --platform=linux/amd64 +iso
     END
 
@@ -86,6 +95,11 @@ build-provider-images:
     BUILD  +provider-image --K8S_VERSION=1.25.13
     BUILD  +provider-image --K8S_VERSION=1.26.8
     BUILD  +provider-image --K8S_VERSION=1.27.5
+    BUILD  +provider-image --K8S_VERSION=1.27.7
+    BUILD  +provider-image --K8S_VERSION=1.26.10
+    BUILD  +provider-image --K8S_VERSION=1.25.15
+    BUILD  +provider-image --K8S_VERSION=1.28.2
+
 
 
 build-provider-images-fips:
@@ -107,10 +121,8 @@ build-provider-images-fips:
        BUILD  +provider-image --K8S_VERSION=1.27.2
     END
 
-base-alpine:
-    FROM alpine
-    ARG TARGETOS
-    ARG TARGETARCH
+BASE_ALPINE:
+    COMMAND
     IF [ ! -z $PROXY_CERT_PATH ]
         COPY sc.crt /etc/ssl/certs
         RUN  update-ca-certificates
@@ -118,9 +130,7 @@ base-alpine:
     RUN apk add curl
 
 download-etcdctl:
-    FROM +base-alpine
-    ARG TARGETOS
-    ARG TARGETARCH
+    DO +BASE_ALPINE
     RUN curl  --retry 5 -Ls https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
             chmod +x etcdctl
     SAVE ARTIFACT etcdctl
@@ -143,6 +153,9 @@ build-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    IF [ "$CLUSTERCONFIG" != ""]
+        COPY --if-exists $CLUSTERCONFIG /overlay/opt/spectrocloud/clusterconfig/spc.tgz
+    END
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
     IF [ "$ARCH" = "arm64" ]
@@ -206,9 +219,9 @@ stylus-image:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
@@ -265,7 +278,7 @@ base-image:
         END
 
         RUN apt update && \
-            apt install --no-install-recommends zstd vim -y
+            apt install --no-install-recommends zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                 if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
@@ -280,6 +293,8 @@ base-image:
             ln -sf "initrd-${kernel}" /boot/initrd
         RUN kernel=$(ls /lib/modules | tail -n1) && \
             depmod -a "${kernel}"
+
+        RUN ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv
 
         RUN rm -rf /var/cache/* && \
             apt clean
@@ -329,7 +344,7 @@ base-image:
                         zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
                 END
         END
-        RUN zypper install -y zstd vim
+        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump
         RUN zypper cc && \
             zypper clean
     END
@@ -339,6 +354,10 @@ base-image:
         RUN zypper cc && \
             zypper clean
         RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
+    END
+
+    IF [ "$OS_DISTRIBUTION" = "sles" ]
+         RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
     END
 
     IF [ "$ARCH" = "arm64" ]
@@ -358,6 +377,8 @@ base-image:
     RUN touch /etc/machine-id && \ 
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
+
+    COPY +elemental/elemental /usr/bin/elemental
 
     # Ensure SElinux gets disabled
     RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
@@ -394,6 +415,7 @@ OS_RELEASE:
     ARG HOME_URL=https://github.com/spectrocloud/CanvOS
     ARG OS_REPO=spectrocloud/CanvOS
     ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}
+    ARG ARTIFACT=kairos-core-${OS_DISTRIBUTION}-$OS_VERSION
 
     # update OS-release file
     RUN sed -i -n '/KAIROS_/!p' /etc/os-release

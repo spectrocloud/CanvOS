@@ -83,7 +83,7 @@ RUN mkdir -p /run/lock && \
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 
-COPY --from=quay.io/kairos/framework:v2.3.2_fips-systemd / /
+COPY --from=quay.io/kairos/framework:v2.4.3_fips / /
 
 COPY overlay/rhel8 /
 
@@ -97,11 +97,6 @@ RUN systemctl enable systemd-resolved
 RUN systemctl enable sshd
 RUN systemctl disable selinux-autorelabel-mark.service 
 #RUN systemctl enable tmp.mount
-
-RUN systemctl enable cos-setup-reconcile.timer && \
-    	    systemctl enable cos-setup-fs.service && \
-	    systemctl enable cos-setup-boot.service && \
-	    systemctl enable cos-setup-network.service
 
 # Copy the custom dracut config file
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
