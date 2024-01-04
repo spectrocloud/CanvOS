@@ -33,8 +33,7 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
-# You can use either sqlite or postgres
-ARG TWO_NODE_BACKEND=sqlite 
+ARG TWO_NODE_BACKEND=sqlite # one of: [ sqlite | postgres ]
 ARG MARMOT_VERSION=0.8.7-beta.1
 ARG KINE_VERSION=0.10.3
 ARG ETCD_VERSION="v3.5.5"
@@ -99,8 +98,6 @@ build-provider-images:
     BUILD  +provider-image --K8S_VERSION=1.26.10
     BUILD  +provider-image --K8S_VERSION=1.25.15
     BUILD  +provider-image --K8S_VERSION=1.28.2
-
-
 
 build-provider-images-fips:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -262,14 +259,7 @@ base-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
-    IF $TWO_NODE
-        RUN mkdir -p /opt/spectrocloud/bin && \
-        curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
-        install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
-        rm -f marmot && \
-        curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
-    END
-
+    # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
@@ -304,21 +294,21 @@ base-image:
                 RUN apt install -y sqlite3 iputils-ping
             ELSE
                 RUN apt install -y apt-transport-https ca-certificates curl && \
-                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
-                gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
-                rm postgresql.asc && \
-                apt update && \
-                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
+                    echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+                    curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                    gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
+                    rm postgresql.asc && \
+                    apt update && \
+                    apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
             END
         END
             
-    # IF OS Type is Opensuse
+    # OS == Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /usr/share/pki/trust/anchors
-            RUN  update-ca-certificates
+            RUN update-ca-certificates
         END
 
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -326,26 +316,26 @@ base-image:
         END
 
         RUN zypper refresh && \
-           zypper update -y
+            zypper update -y
 
-           IF [ -e "/usr/bin/dracut" ]
-             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
-             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
-           END
-            # zypper up kernel-default && \
-            # zypper purge-kernels && \
+            IF [ -e "/usr/bin/dracut" ]
+                RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
+                RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
+            END
+                # zypper up kernel-default && \
+                # zypper purge-kernels && \
 
         IF $TWO_NODE
-                IF [ $TWO_NODE_BACKEND = "sqlite" ]
-                    RUN zypper install -y sqlite3 iputils
-                ELSE
-                    RUN zypper --non-interactive --quiet addrepo --refresh -p 90  http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
-                        zypper --gpg-auto-import-keys ref && \
-                        zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
-                END
+            IF [ $TWO_NODE_BACKEND = "sqlite" ]
+                RUN zypper install -y sqlite3 iputils
+            ELSE
+                RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
+                    zypper --gpg-auto-import-keys ref && \
+                    zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
+            END
         END
-        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump
-        RUN zypper cc && \
+        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
+            zypper cc && \
             zypper clean
     END
 
@@ -385,12 +375,21 @@ base-image:
         if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
 
     IF $TWO_NODE
-        RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' "${PG_CONF_DIR}"/postgresql.conf && \
-        sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' ${PG_CONF_DIR}/postgresql.conf && \
-        sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf && \
-        echo "host all all 0.0.0.0/0 md5" | tee -a ${PG_CONF_DIR}/pg_hba.conf && \
-        su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile' && \
-        systemctl enable postgresql
+        RUN mkdir -p /opt/spectrocloud/bin && \
+            curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
+
+        IF [ $TWO_NODE_BACKEND = "sqlite" ]
+            RUN curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
+                install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
+                rm -f marmot
+        ELSE
+            RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' "${PG_CONF_DIR}"/postgresql.conf && \
+                sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' ${PG_CONF_DIR}/postgresql.conf && \
+                sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf && \
+                echo "host all all 0.0.0.0/0 md5" | tee -a ${PG_CONF_DIR}/pg_hba.conf && \
+                su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile' && \
+                systemctl enable postgresql
+        END
     END
 
 # Used to build the installer image.  The installer ISO will be created from this.
