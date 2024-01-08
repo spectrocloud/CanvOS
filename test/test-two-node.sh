@@ -68,6 +68,7 @@ cat <<EOF > build/user-data
 cluster:
   providerConfig:
     cluster-init: "no"
+    datastore-endpoint: "http://localhost:2379"
 stylus:
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
