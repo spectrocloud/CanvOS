@@ -9,7 +9,7 @@ ARG OS_VERSION
 ARG IMAGE_REGISTRY
 ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG K8S_DISTRIBUTION
-ARG CUSTOM_TAG=edge
+ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG ARCH
 ARG PE_VERSION=v4.2.3
@@ -159,7 +159,11 @@ provider-image:
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
-    ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
+    IF [ "$$CUSTOM_TAG" != "" ]
+        ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
+    ELSE
+        ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION
+    END
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
@@ -347,7 +351,11 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
-    SAVE IMAGE palette-installer-image:$PE_VERSION-$CUSTOM_TAG
+    IF [ "$$CUSTOM_TAG" != "" ]
+        SAVE IMAGE palette-installer-image:$PE_VERSION-$CUSTOM_TAG
+    ELSE
+        SAVE IMAGE palette-installer-image:$PE_VERSION
+    END
 
 OS_RELEASE:
     COMMAND
