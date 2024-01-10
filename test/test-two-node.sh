@@ -270,6 +270,8 @@ function prepare_cluster_profile() {
       .spec.template.packs[1].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[2].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
+      .spec.template.packs[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
+      .spec.template.packs[0].values |= gsub("K3S_VERSION"; "1.26.4") |
       .spec.template.packs[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
     ' test/templates/two-node-cluster-profile.json.tmpl > two-node-cluster-profile.json
 }
@@ -314,6 +316,8 @@ function prepare_cluster() {
       .spec.machinePoolConfig[1].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
       .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
+      .spec.profiles[0].packValues[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
+      .spec.profiles[0].packValues[0].values |= gsub("K3S_VERSION"; "1.26.4") |
       .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
     ' test/templates/two-node-create.json.tmpl > two-node-create.json
 }
