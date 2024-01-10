@@ -378,9 +378,10 @@ function build_canvos() {
         --IMAGE_REGISTRY=${OCI_REGISTRY} \
         --TWO_NODE=true \
         --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
-        --CUSTOM_TAG=${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v4.1.2-${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v4.1.2-${STYLUS_HASH}
+        --CUSTOM_TAG=${STYLUS_HASH} \
+	--PE_VERSION=v${PE_VERSION}
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v${PE_VERSION}-${STYLUS_HASH}
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v${PE_VERSION}-${STYLUS_HASH}
 }
 
 function build_all() {
@@ -408,7 +409,7 @@ function build_all() {
     (
         test -f build/palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso && \
         docker image ls --format "{{.Repository}}:{{.Tag}}" | \
-        grep -q ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v4.1.2-${STYLUS_HASH}
+        grep -q ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v${PE_VERSION}-${STYLUS_HASH}
     ) || ( build_canvos )
 }
 
