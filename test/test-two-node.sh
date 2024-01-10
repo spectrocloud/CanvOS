@@ -67,6 +67,7 @@ cat <<EOF > build/user-data
 #cloud-config
 cluster:
   providerConfig:
+    two-node: "true"
     cluster-init: "no"
     datastore-endpoint: "http://localhost:2379"
 stylus:
@@ -385,7 +386,6 @@ function build_canvos() {
         --CUSTOM_TAG=${STYLUS_HASH} \
 	--PE_VERSION=v${PE_VERSION}
     docker push ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v${PE_VERSION}-${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.27.2-v${PE_VERSION}-${STYLUS_HASH}
 }
 
 function build_all() {
