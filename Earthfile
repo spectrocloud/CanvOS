@@ -159,7 +159,7 @@ provider-image:
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
-    IF [ "$$CUSTOM_TAG" != "" ]
+    IF [ "$CUSTOM_TAG" != "" ]
         ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
     ELSE
         ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION
@@ -351,7 +351,7 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
-    IF [ "$$CUSTOM_TAG" != "" ]
+    IF [ "$CUSTOM_TAG" != "" ]
         SAVE IMAGE palette-installer-image:$PE_VERSION-$CUSTOM_TAG
     ELSE
         SAVE IMAGE palette-installer-image:$PE_VERSION
