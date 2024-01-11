@@ -299,7 +299,31 @@ function destroy_cluster_profile() {
     echo "Cluster Profile $CLUSTER_PROFILE_UID deleted"
 }
 
-function prepare_cluster() {
+function prepare_master_master_cluster() {
+    if [ -z "${STYLUS_HASH}" ]; then
+        echo STYLUS_HASH is unset. Please execute build_all and retry.
+        return 1
+    fi
+    if nslookup $CLUSTER_VIP >/dev/null; then
+        echo CLUSTER_VIP: $CLUSTER_VIP is allocated. Please retry with an unallocated VIP.
+        return 1
+    fi
+    jq '
+      .metadata.name = env.CLUSTER_NAME |
+      .spec.cloudConfig.controlPlaneEndpoint.host = env.CLUSTER_VIP |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostUid = env.HOST_2 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].nicName = env.NIC_NAME |
+      .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
+      .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
+      .spec.profiles[0].packValues[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
+      .spec.profiles[0].packValues[0].values |= gsub("K3S_VERSION"; "1.26.4") |
+      .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
+    ' test/templates/two-node-master-master.json.tmpl > two-node-create.json
+}
+
+function prepare_master_worker_cluster() {
     if [ -z "${STYLUS_HASH}" ]; then
         echo STYLUS_HASH is unset. Please execute build_all and retry.
         return 1
@@ -320,7 +344,7 @@ function prepare_cluster() {
       .spec.profiles[0].packValues[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
       .spec.profiles[0].packValues[0].values |= gsub("K3S_VERSION"; "1.26.4") |
       .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
-    ' test/templates/two-node-create.json.tmpl > two-node-create.json
+    ' test/templates/two-node-master-worker.json.tmpl > two-node-create.json
 }
 
 function create_cluster() {
@@ -454,7 +478,8 @@ function main() {
 
     # create a new Edge Native cluster in Palette using the Edge Hosts
     # provisioned above, plus the two node Cluster Profile
-    prepare_cluster
+    prepare_master_worker_cluster
+    # prepare_master_master_cluster
     create_cluster
 }
 
