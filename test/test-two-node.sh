@@ -42,8 +42,11 @@ if [[ $sourced == 0 ]]; then
 fi
 
 declare -a vm_array=("2n1-$HOST_SUFFIX" "2n2-$HOST_SUFFIX")
-export HOST_1="${vm_array[0]}-$HOST_SUFFIX"
-export HOST_2="${vm_array[1]}-$HOST_SUFFIX"
+export HOST_1="${vm_array[0]}"
+export HOST_2="${vm_array[1]}"
+
+
+echo ${vm_array[@]}
 
 function create_canvos_args() {
 cat <<EOF > .arg
