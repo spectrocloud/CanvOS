@@ -76,7 +76,7 @@ cluster:
 stylus:
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
-    name: "$1-$HOST_SUFFIX"
+    name: "$1"
     paletteEndpoint: "$DOMAIN"
   debug: true
   twoNode:
