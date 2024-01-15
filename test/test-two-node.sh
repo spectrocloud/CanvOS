@@ -70,7 +70,7 @@ cat <<EOF > build/user-data
 #cloud-config
 cluster:
   providerConfig:
-    two-node: "true"
+    node-role: "init"
     cluster-init: "no"
     datastore-endpoint: "http://localhost:2379"
 stylus:
