@@ -33,8 +33,7 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
-ARG TWO_NODE_BACKEND=sqlite # one of: [ sqlite | postgres ]
-ARG MARMOT_VERSION=0.8.7-beta.1
+ARG TWO_NODE_BACKEND=postgres
 ARG KINE_VERSION=0.10.3
 ARG ETCD_VERSION="v3.5.5"
 
@@ -290,9 +289,7 @@ base-image:
             apt clean
 
         IF $TWO_NODE
-            IF [ "$TWO_NODE_BACKEND" = "sqlite" ]
-                RUN apt install -y sqlite3 iputils-ping
-            ELSE
+            IF [ "$TWO_NODE_BACKEND" = "postgres" ]
                 RUN apt install -y apt-transport-https ca-certificates curl && \
                     echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
                     curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
@@ -326,9 +323,7 @@ base-image:
                 # zypper purge-kernels && \
 
         IF $TWO_NODE
-            IF [ $TWO_NODE_BACKEND = "sqlite" ]
-                RUN zypper install -y sqlite3 iputils
-            ELSE
+            IF [ $TWO_NODE_BACKEND = "postgres" ]
                 RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
                     zypper --gpg-auto-import-keys ref && \
                     zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
@@ -378,11 +373,7 @@ base-image:
         RUN mkdir -p /opt/spectrocloud/bin && \
             curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
 
-        IF [ $TWO_NODE_BACKEND = "sqlite" ]
-            RUN curl -sL https://github.com/maxpert/marmot/releases/download/v"${MARMOT_VERSION}"/marmot-v"${MARMOT_VERSION}"-linux-amd64-static.tar.gz | tar -zxv marmot && \
-                install marmot -o root -g root -m 755 /opt/spectrocloud/bin/ && \
-                rm -f marmot
-        ELSE
+        IF [ $TWO_NODE_BACKEND = "postgres" ]
             RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' "${PG_CONF_DIR}"/postgresql.conf && \
                 sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' ${PG_CONF_DIR}/postgresql.conf && \
                 sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf && \
