@@ -309,7 +309,7 @@ function prepare_master_master_cluster() {
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostName = env.HOST_1 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
-      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostName = env.HOST_1 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostName = env.HOST_2 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostUid = env.HOST_2 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].nicName = env.NIC_NAME |
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
