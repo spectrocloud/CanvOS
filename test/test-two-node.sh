@@ -41,7 +41,8 @@ if [[ $sourced == 0 ]]; then
     fi
 fi
 
-declare -a vm_array=("2n1-$HOST_SUFFIX" "2n2-$HOST_SUFFIX")
+# note: host names must start with an alphabetic character as they're DNS names
+declare -a vm_array=("tn1-$HOST_SUFFIX" "tn2-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}"
 export HOST_2="${vm_array[1]}"
 
@@ -305,8 +306,10 @@ function prepare_master_master_cluster() {
     jq '
       .metadata.name = env.CLUSTER_NAME |
       .spec.cloudConfig.controlPlaneEndpoint.host = env.CLUSTER_VIP |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostName = env.HOST_1 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostName = env.HOST_1 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostUid = env.HOST_2 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].nicName = env.NIC_NAME |
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
