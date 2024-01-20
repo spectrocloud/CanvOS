@@ -29,25 +29,10 @@ set -e
 
 # Do not edit anything below
 
-(return 0 2>/dev/null) && sourced=1 || sourced=0
-
-if [[ $sourced == 0 ]]; then
-    envfile=$(dirname "${0}")/.env
-    if [ -f "${envfile}" ]; then
-        source "${envfile}"
-    else
-        echo "Please create a .env file in the test directory and populate it with the required variables."
-        exit 1
-    fi
-fi
-
 # note: host names must start with an alphabetic character as they're DNS names
 declare -a vm_array=("tn1-$HOST_SUFFIX" "tn2-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}"
 export HOST_2="${vm_array[1]}"
-
-
-echo ${vm_array[@]}
 
 function create_canvos_args() {
 cat <<EOF > .arg
@@ -326,8 +311,13 @@ function create_cluster() {
         -H "Content-Type: application/json" \
         -H "ProjectUid: $PROJECT_UID" \
         -d @two-node-create.json | jq -r .uid)
-    rm -f two-node-create.json
-    echo Cluster $uid created
+    if [ "$uid" = "null" ]; then
+        echo "Cluster creation failed. Please check two-node-create.json and retry creation manually to see Hubble's response."
+        return 1
+    else
+        rm -f two-node-create.json
+        echo Cluster $uid created
+    fi
 }
 
 function destroy_cluster() {
@@ -466,5 +456,12 @@ if [[ $sourced == 1 ]]; then
     grep ^function  ${BASH_SOURCE[0]} | grep -v main | awk '{gsub(/function /,""); gsub(/\(\) \{/,""); print;}'
     echo
 else
+    envfile=$(dirname "${0}")/.env
+    if [ -f "${envfile}" ]; then
+        source "${envfile}"
+    else
+        echo "Please create a .env file in the test directory and populate it with the required variables."
+        exit 1
+    fi
     main
 fi
