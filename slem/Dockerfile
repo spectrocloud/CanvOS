@@ -64,7 +64,7 @@ RUN zypper in --force-resolution -y \
     open-vm-tools \
     parted \
     pigz \
-    policycoreutils \
+#    policycoreutils \
     polkit \
     procps \
     rng-tools \
@@ -80,7 +80,7 @@ RUN zypper in --force-resolution -y \
     vim \
     which \
     tpm2* \
-    && zypper cc \
+    && zypper cc
 
 ## Generate initrd
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
