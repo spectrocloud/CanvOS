@@ -33,7 +33,6 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
-ARG TWO_NODE_BACKEND=postgres
 ARG KINE_VERSION=0.10.3
 ARG ETCD_VERSION="v3.5.5"
 
@@ -54,13 +53,9 @@ END
 
 # Determine PG config dir (only relevant if TWO_NODE=true)
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
-    IF [ "$TWO_NODE_BACKEND" = "postgres" ]
-        ARG PG_CONF_DIR=/etc/postgresql/16/main
-    END
+    ARG PG_CONF_DIR=/etc/postgresql/16/main
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-    IF [ "$TWO_NODE_BACKEND" = "postgres" ]
-        ARG PG_CONF_DIR=/var/lib/pgsql/data
-    END
+    ARG PG_CONF_DIR=/var/lib/pgsql/data
 END
 
 IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
@@ -289,15 +284,13 @@ base-image:
             apt clean
 
         IF $TWO_NODE
-            IF [ "$TWO_NODE_BACKEND" = "postgres" ]
-                RUN apt install -y apt-transport-https ca-certificates curl && \
-                    echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-                    curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
-                    gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
-                    rm postgresql.asc && \
-                    apt update && \
-                    apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
-            END
+            RUN apt install -y apt-transport-https ca-certificates curl && \
+                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
+                rm postgresql.asc && \
+                apt update && \
+                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
         END
             
     # OS == Opensuse
@@ -323,11 +316,9 @@ base-image:
                 # zypper purge-kernels && \
 
         IF $TWO_NODE
-            IF [ $TWO_NODE_BACKEND = "postgres" ]
-                RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
-                    zypper --gpg-auto-import-keys ref && \
-                    zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
-            END
+            RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
+                zypper --gpg-auto-import-keys ref && \
+                zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
         END
         RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
             zypper cc && \
@@ -373,14 +364,27 @@ base-image:
         RUN mkdir -p /opt/spectrocloud/bin && \
             curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
 
-        IF [ $TWO_NODE_BACKEND = "postgres" ]
-            RUN sed -i '/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/' "${PG_CONF_DIR}"/postgresql.conf && \
-                sed -i '/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/' ${PG_CONF_DIR}/postgresql.conf && \
-                sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf && \
-                echo "host all all 0.0.0.0/0 md5" | tee -a ${PG_CONF_DIR}/pg_hba.conf && \
-                su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile' && \
-                systemctl enable postgresql
-        END
+        RUN \
+            # Resource usage config
+            sed -i "/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/" ${PG_CONF_DIR}/postgresql.conf && \
+            # WAL config
+            sed -i "/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/" "${PG_CONF_DIR}"/postgresql.conf && \
+            # Auth config
+            sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf && \
+            echo "host all all 0.0.0.0/0 md5" | tee -a ${PG_CONF_DIR}/pg_hba.conf && \
+            # Logging config. Keep 7 days of logs, one log file per day, and automatically overwriting last week's logs with this week's logs.
+            # Never trigger log rotation based on log file size. Reference: https://www.postgresql.org/docs/current/runtime-config-logging.html#RUNTIME-CONFIG-LOGGING-WHERE
+            sed -i "/^#log_destination = 'stderr'/ s/#log_destination = 'stderr'/log_destination = 'stderr'/" ${PG_CONF_DIR}/postgresql.conf && \
+            sed -i "/^#logging_collector = off/ s/#logging_collector = off/logging_collector = on/" ${PG_CONF_DIR}/postgresql.conf && \
+            sed -i "/^#log_directory = 'log'/ s/#log_directory = 'log'/log_directory = 'log'/" ${PG_CONF_DIR}/postgresql.conf && \
+            sed -i "/^#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'/ s/#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'/log_filename = 'postgresql-%a.log'/" ${PG_CONF_DIR}/postgresql.conf && \
+            sed -i "/^#log_file_mode = 0600/ s/#log_file_mode = 0600/log_file_mode = 0600/" ${PG_CONF_DIR}/postgresql.conf && \
+            sed -i "/^#log_rotation_age = 1d/ s/#log_rotation_age = 1d/log_rotation_age = 1440/" ${PG_CONF_DIR}/postgresql.conf && \
+            sed -i "/^#log_rotation_size = 10MB/ s/#log_rotation_size = 10MB/log_rotation_size = 0/" ${PG_CONF_DIR}/postgresql.conf && \
+            sed -i "/^#log_truncate_on_rotation = off/ s/#log_truncate_on_rotation = off/log_truncate_on_rotation = on/" ${PG_CONF_DIR}/postgresql.conf && \
+            # Env config
+            su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile' && \
+            systemctl enable postgresql
     END
 
 # Used to build the installer image.  The installer ISO will be created from this.
