@@ -252,6 +252,8 @@ function prepare_cluster_profile() {
     jq '
       .metadata.name = env.CLUSTER_NAME |
       .spec.template.packs[0].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
+      .spec.template.packs[1].version = env.K3S_VERSION |
+      .spec.template.packs[1].tag = env.K3S_VERSION |
       .spec.template.packs[1].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[2].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
@@ -306,7 +308,8 @@ function prepare_master_master_cluster() {
       .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
       .spec.profiles[0].packValues[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
       .spec.profiles[0].packValues[0].values |= gsub("K3S_VERSION"; env.K3S_VERSION) |
-      .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
+      .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH) |
+      .spec.profiles[0].packValues[1].tag = env.K3S_VERSION
     ' test/templates/two-node-master-master.json.tmpl > two-node-create.json
 }
 
