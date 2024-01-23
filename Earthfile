@@ -33,7 +33,7 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
-ARG KINE_VERSION=0.11.0
+ARG KINE_VERSION=0.11.1
 ARG ETCD_VERSION="v3.5.5"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
@@ -91,8 +91,8 @@ build-provider-images:
     # BUILD  +provider-image --K8S_VERSION=1.27.7
     # BUILD  +provider-image --K8S_VERSION=1.26.10
     # BUILD  +provider-image --K8S_VERSION=1.25.15
-    # BUILD  +provider-image --K8S_VERSION=1.28.2
-    BUILD  +provider-image --K8S_VERSION=1.28.4
+    BUILD  +provider-image --K8S_VERSION=1.28.2
+    # BUILD  +provider-image --K8S_VERSION=1.28.4
 
 build-provider-images-fips:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
