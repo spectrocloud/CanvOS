@@ -1,0 +1,41 @@
+{
+    "cloudConfig": {
+        "edgeHosts": [
+            {
+                "IsCandidateCaption": false,
+                "hostAddress": "10.10.143.107",
+                "hostName": "tn2-tyler-6bddb6f4",
+                "hostUid": "tn2-tyler-6bddb6f4",
+                "twoNodeCandidatePriority": "primary",
+                "nic": {
+                    "nicName": "ens160"
+                }
+            },
+            {
+                "hostUid": "tn3-tyler-6bddb6f4",
+                "nic": {
+                    "nicName": "ens160"
+                },
+                "twoNodeCandidatePriority": "secondary"
+            }
+        ]
+    },
+    "poolConfig": {
+        "name": "master-pool",
+        "labels": [
+            "master"
+        ],
+        "isControlPlane": true,
+        "useControlPlaneAsWorker": true,
+        "taints": [],
+        "additionalLabels": {},
+        "nodeRepaveInterval": 0,
+        "updateStrategy": {
+            "type": "RollingUpdateScaleIn"
+        },
+        "machinePoolProperties": {
+            "archType": "amd64"
+        },
+        "size": 2
+    }
+}

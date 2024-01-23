@@ -34,6 +34,10 @@ declare -a vm_array=("tn1-$HOST_SUFFIX" "tn2-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}"
 export HOST_2="${vm_array[1]}"
 
+if [ -n $REPLACEMENT_HOST ]; then
+    vm_array+=("tn3-$HOST_SUFFIX")
+fi
+
 function create_canvos_args() {
 cat <<EOF > .arg
 CUSTOM_TAG=twonode
@@ -236,7 +240,7 @@ function destroy_edge_hosts() {
             -H "ApiKey: $API_KEY" \
             -H "Content-Type: application/json" \
             -H "ProjectUid: $PROJECT_UID"
-        echo Deleted Edge Host $host
+        echo "Deleted Edge Host $host"
     done
 }
 
@@ -272,11 +276,12 @@ function create_cluster_profile() {
 }
 
 function destroy_cluster_profile() {
-    curl -s -X DELETE https://$DOMAIN/v1/clusterprofiles/$CLUSTER_PROFILE_UID \
+    clusterProfileUid=$1
+    curl -s -X DELETE https://$DOMAIN/v1/clusterprofiles/$clusterProfileUid \
         -H "ApiKey: $API_KEY" \
         -H "Content-Type: application/json" \
         -H "ProjectUid: $PROJECT_UID"
-    echo "Cluster Profile $CLUSTER_PROFILE_UID deleted"
+    echo "Cluster Profile $clusterProfileUid deleted"
 }
 
 function prepare_master_master_cluster() {
@@ -316,7 +321,7 @@ function create_cluster() {
         return 1
     else
         rm -f two-node-create.json
-        echo Cluster $uid created
+        echo "Cluster $uid created"
     fi
 }
 
@@ -338,6 +343,16 @@ function destroy_cluster() {
         ]
     '
     echo "Cluster $clusterUid deleted"
+}
+
+function update_cluster() {
+    cloudConfigUid=$1
+    curl -X PUT https://$DOMAIN/v1/cloudconfigs/edge-native/$cloudConfigUid/machinePools/master-pool \
+        -H "ApiKey: $API_KEY" \
+        -H "Content-Type: application/json" \
+        -H "ProjectUid: $PROJECT_UID" \
+        -d @test/templates/two-node-update.json
+    echo "Cloud config $cloudConfigUid updated"
 }
 
 function build_provider_k3s() {
