@@ -256,7 +256,7 @@ function prepare_cluster_profile() {
       .spec.template.packs[2].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
       .spec.template.packs[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
-      .spec.template.packs[0].values |= gsub("K3S_VERSION"; "1.26.4") |
+      .spec.template.packs[0].values |= gsub("K3S_VERSION"; env.K3S_VERSION) |
       .spec.template.packs[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
     ' test/templates/two-node-cluster-profile.json.tmpl > two-node-cluster-profile.json
 }
@@ -305,7 +305,7 @@ function prepare_master_master_cluster() {
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
       .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
       .spec.profiles[0].packValues[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
-      .spec.profiles[0].packValues[0].values |= gsub("K3S_VERSION"; "1.26.4") |
+      .spec.profiles[0].packValues[0].values |= gsub("K3S_VERSION"; env.K3S_VERSION) |
       .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
     ' test/templates/two-node-master-master.json.tmpl > two-node-create.json
 }
@@ -387,7 +387,7 @@ function build_canvos() {
         --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
         --CUSTOM_TAG=${STYLUS_HASH} \
 	--PE_VERSION=v${PE_VERSION}
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v${PE_VERSION}-${STYLUS_HASH}
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-${K3S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
 }
 
 function build_all() {
@@ -415,7 +415,7 @@ function build_all() {
     (
         test -f build/palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso && \
         docker image ls --format "{{.Repository}}:{{.Tag}}" | \
-        grep -q ${OCI_REGISTRY}/ubuntu:k3s-1.26.4-v${PE_VERSION}-${STYLUS_HASH}
+        grep -q ${OCI_REGISTRY}/ubuntu:k3s-${K3S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
     ) || ( build_canvos )
 }
 
