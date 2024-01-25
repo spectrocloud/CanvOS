@@ -365,6 +365,8 @@ base-image:
             curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
 
         RUN \
+            # File locations
+            sed -i "/^data_directory = '\/var\/lib\/postgresql\/16\/main'/ s/data_directory = '\/var\/lib\/postgresql\/16\/main'/data_directory = '\/usr\/local\/postgresql\/16\/main'/" ${PG_CONF_DIR}/postgresql.conf && \
             # Resource usage config
             sed -i "/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/" ${PG_CONF_DIR}/postgresql.conf && \
             # WAL config
@@ -384,7 +386,7 @@ base-image:
             sed -i "/^#log_truncate_on_rotation = off/ s/#log_truncate_on_rotation = off/log_truncate_on_rotation = on/" ${PG_CONF_DIR}/postgresql.conf && \
             # Env config
             su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile' && \
-            systemctl enable postgresql
+            rsync -av /var/lib/postgresql/ /usr/local/postgresql
     END
 
 # Used to build the installer image.  The installer ISO will be created from this.
