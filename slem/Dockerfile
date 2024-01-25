@@ -1,5 +1,9 @@
 ARG BASE_IMAGE=registry.suse.com/suse/sle-micro-rancher/5.4:latest
 FROM $BASE_IMAGE
+
+RUN zypper ar -G https://download.opensuse.org/repositories/utilities/openSUSE_Factory/utilities.repo || true && \
+    zypper ref
+
 ADD repos/SUSE* /etc/zypp/repos.d/
 ADD services/* /etc/zypp/services.d/
 RUN zypper --gpg-auto-import-keys ref
@@ -24,7 +28,7 @@ RUN zypper in --force-resolution -y --no-allow-vendor-change \
 RUN mkdir -p /run/lock
 RUN mkdir -p /usr/libexec
 RUN touch /usr/libexec/.keep
-COPY --from=quay.io/kairos/framework:v2.4.3_opensuse-leap / /
+COPY --from=quay.io/kairos/framework:v2.4.3_generic / /
 
 RUN mkdir -p /etc/dnf
 RUN echo "install_weak_deps=False" > /etc/dnf/dnf.conf
@@ -58,13 +62,13 @@ RUN zypper in --force-resolution -y \
     mdadm \
     multipath-tools \
     nano \
-#    nohang \
+    nohang \
     open-iscsi \
     openssh \
     open-vm-tools \
     parted \
     pigz \
-#    policycoreutils \
+    policycoreutils \
     polkit \
     procps \
     rng-tools \
