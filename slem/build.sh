@@ -37,4 +37,4 @@ transactional-update register -r $REGISTRATION_CODE
 transactional-update -n pkg install docker
 #transactional-update -n register -p PackageHub/15.4/x86_64
 
-docker build -t gcr.io/spectro-dev-public/boobalan/slem-base-image:v243 .
+docker build -t slem-base-image:kairos-v2.4.3_generic .
