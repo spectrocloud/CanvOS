@@ -385,8 +385,7 @@ base-image:
             sed -i "/^#log_rotation_size = 10MB/ s/#log_rotation_size = 10MB/log_rotation_size = 0/" ${PG_CONF_DIR}/postgresql.conf && \
             sed -i "/^#log_truncate_on_rotation = off/ s/#log_truncate_on_rotation = off/log_truncate_on_rotation = on/" ${PG_CONF_DIR}/postgresql.conf && \
             # Env config
-            su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile' && \
-            rsync -av /var/lib/postgresql/ /usr/local/postgresql
+            su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
     END
 
 # Used to build the installer image.  The installer ISO will be created from this.
