@@ -34,8 +34,10 @@ declare -a vm_array=("tn1-$HOST_SUFFIX" "tn2-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}"
 export HOST_2="${vm_array[1]}"
 
-if [ -n $REPLACEMENT_HOST ]; then
-    vm_array+=("tn3-$HOST_SUFFIX")
+if [ -n "$REPLACEMENT_HOST" ]; then
+    replacement_host="tn3-$HOST_SUFFIX"
+    vm_array+=(replacement_host)
+    echo "Added replacement host: $replacement_host"
 fi
 
 function create_canvos_args() {
