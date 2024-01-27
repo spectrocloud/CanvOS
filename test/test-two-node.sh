@@ -35,9 +35,9 @@ export HOST_1="${vm_array[0]}"
 export HOST_2="${vm_array[1]}"
 
 if [ -n "$REPLACEMENT_HOST" ]; then
-    replacement_host="tn3-$HOST_SUFFIX"
-    vm_array+=(replacement_host)
-    echo "Added replacement host: $replacement_host"
+    export HOST_3="tn3-$HOST_SUFFIX"
+    vm_array+=(HOST_3)
+    echo "Added replacement host: $HOST_3"
 fi
 
 function create_canvos_args() {
@@ -350,13 +350,27 @@ function destroy_cluster() {
     echo "Cluster $clusterUid deleted"
 }
 
+function prepare_cluster_update() {
+    export leaderIp=$1
+    export replacementHostIp=$2
+    jq '
+      .cloudConfig.edgeHosts[0].hostAddress = env.leaderIp |
+      .cloudConfig.edgeHosts[0].hostName = env.HOST_1 |
+      .cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
+      .cloudConfig.edgeHosts[1].hostAddress = env.replacementHostIp |
+      .cloudConfig.edgeHosts[1].hostName = env.HOST_3 |
+      .cloudConfig.edgeHosts[1].hostUid = env.HOST_3
+    ' test/templates/two-node-update.json.tmpl > two-node-update.json
+}
+
 function update_cluster() {
     cloudConfigUid=$1
     curl -X PUT https://$DOMAIN/v1/cloudconfigs/edge-native/$cloudConfigUid/machinePools/master-pool \
         -H "ApiKey: $API_KEY" \
         -H "Content-Type: application/json" \
         -H "ProjectUid: $PROJECT_UID" \
-        -d @test/templates/two-node-update.json
+        -d @two-node-update.json
+    rm -f two-node-update.json
     echo "Cloud config $cloudConfigUid updated"
 }
 
