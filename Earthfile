@@ -51,13 +51,6 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
-# Determine PG config dir (only relevant if TWO_NODE=true)
-IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
-    ARG PG_CONF_DIR=/etc/postgresql/16/main
-ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-    ARG PG_CONF_DIR=/var/lib/pgsql/data
-END
-
 IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
@@ -364,28 +357,8 @@ base-image:
         RUN mkdir -p /opt/spectrocloud/bin && \
             curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
 
-        RUN \
-            # File locations
-            sed -i "/^data_directory = '\/var\/lib\/postgresql\/16\/main'/ s/data_directory = '\/var\/lib\/postgresql\/16\/main'/data_directory = '\/usr\/local\/postgresql\/16\/main'/" ${PG_CONF_DIR}/postgresql.conf && \
-            # Resource usage config
-            sed -i "/^#max_worker_processes = 8/ s/#max_worker_processes = 8/max_worker_processes = 16/" ${PG_CONF_DIR}/postgresql.conf && \
-            # WAL config
-            sed -i "/^#wal_level = replica/ s/#wal_level = replica/wal_level = logical/" "${PG_CONF_DIR}"/postgresql.conf && \
-            # Auth config
-            sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${PG_CONF_DIR}/postgresql.conf && \
-            echo "host all all 0.0.0.0/0 md5" | tee -a ${PG_CONF_DIR}/pg_hba.conf && \
-            # Logging config. Keep 7 days of logs, one log file per day, and automatically overwriting last week's logs with this week's logs.
-            # Never trigger log rotation based on log file size. Reference: https://www.postgresql.org/docs/current/runtime-config-logging.html#RUNTIME-CONFIG-LOGGING-WHERE
-            sed -i "/^#log_destination = 'stderr'/ s/#log_destination = 'stderr'/log_destination = 'stderr'/" ${PG_CONF_DIR}/postgresql.conf && \
-            sed -i "/^#logging_collector = off/ s/#logging_collector = off/logging_collector = on/" ${PG_CONF_DIR}/postgresql.conf && \
-            sed -i "/^#log_directory = 'log'/ s/#log_directory = 'log'/log_directory = 'log'/" ${PG_CONF_DIR}/postgresql.conf && \
-            sed -i "/^#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'/ s/#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'/log_filename = 'postgresql-%a.log'/" ${PG_CONF_DIR}/postgresql.conf && \
-            sed -i "/^#log_file_mode = 0600/ s/#log_file_mode = 0600/log_file_mode = 0600/" ${PG_CONF_DIR}/postgresql.conf && \
-            sed -i "/^#log_rotation_age = 1d/ s/#log_rotation_age = 1d/log_rotation_age = 1440/" ${PG_CONF_DIR}/postgresql.conf && \
-            sed -i "/^#log_rotation_size = 10MB/ s/#log_rotation_size = 10MB/log_rotation_size = 0/" ${PG_CONF_DIR}/postgresql.conf && \
-            sed -i "/^#log_truncate_on_rotation = off/ s/#log_truncate_on_rotation = off/log_truncate_on_rotation = on/" ${PG_CONF_DIR}/postgresql.conf && \
-            # Env config
-            su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
+        # ensure psql works ootb for the postgres user
+        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
     END
 
 # Used to build the installer image.  The installer ISO will be created from this.
