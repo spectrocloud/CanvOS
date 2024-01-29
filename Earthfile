@@ -54,10 +54,6 @@ IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
-elemental:
-    FROM quay.io/kairos/packages:elemental-cli-system-0.3.1
-    SAVE ARTIFACT /usr/bin/elemental /elemental
-
 build-all-images:
     IF $FIPS_ENABLED
         BUILD +build-provider-images-fips
@@ -335,8 +331,6 @@ base-image:
     RUN touch /etc/machine-id && \ 
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
-
-    COPY +elemental/elemental /usr/bin/elemental
 
     # Ensure SElinux gets disabled
     RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
