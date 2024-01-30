@@ -29,6 +29,11 @@ set -e
 
 # Do not edit anything below
 
+if [ -n "$SUFFIX_OVERRIDE" ]; then
+    export HOST_SUFFIX=$HOST_SUFFIX-$SUFFIX_OVERRIDE
+    export CLUSTER_NAME=$CLUSTER_NAME-$SUFFIX_OVERRIDE
+fi
+
 # note: host names must start with an alphabetic character as they're DNS names
 declare -a vm_array=("tn1-$HOST_SUFFIX" "tn2-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}"
@@ -36,7 +41,7 @@ export HOST_2="${vm_array[1]}"
 
 if [ -n "$REPLACEMENT_HOST" ]; then
     export HOST_3="tn3-$HOST_SUFFIX"
-    vm_array+=(HOST_3)
+    vm_array+=($HOST_3)
     echo "Added replacement host: $HOST_3"
 fi
 
