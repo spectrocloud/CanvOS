@@ -15,14 +15,16 @@ set -e
 #
 # 2. Clone CanvOS and checkout this branch.
 #
-# 3. Create a .netrc file in the CanvOS repo root with GitHub
-#    credentials capable of cloning Spectro Cloud internal repos
-#    (required for building stylus).
+# 3. Configure your Earthly argument file by running: cp .arg.template .arg
+#    No modifications to the template are required.
 #
-# 4. Copy the test/env.example file to test/.env and edit test/.env
+# 4. Create a .netrc file in the stylus repo root with GitHub
+#    credentials capable of cloning Spectro Cloud internal repos.
+#
+# 5. Copy the test/env.example file to test/.env and edit test/.env
 #    as required.
 #
-# 5. Source and execute this script:
+# 6. Source and execute this script:
 #
 #    source ./test/test-two-node.sh
 #    ./test/test-two-node.sh
@@ -489,10 +491,14 @@ function main() {
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 
 if [[ $sourced == 1 ]]; then
+    script=${BASH_SOURCE[0]}
+    if [ -z "$script" ]; then
+        script=$0
+    fi
     set +e
     echo "You can now use any of these functions:"
     echo ""
-    grep ^function  ${BASH_SOURCE[0]} | grep -v main | awk '{gsub(/function /,""); gsub(/\(\) \{/,""); print;}'
+    grep ^function $script | grep -v main | awk '{gsub(/function /,""); gsub(/\(\) \{/,""); print;}'
     echo
 else
     envfile=$(dirname "${0}")/.env
