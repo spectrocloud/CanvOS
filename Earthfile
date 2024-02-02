@@ -14,7 +14,7 @@ ARG CLUSTERCONFIG
 ARG ARCH
 ARG PE_VERSION=v4.2.3
 ARG SPECTRO_LUET_VERSION=v1.2.0
-ARG KAIROS_VERSION=v2.4.3
+ARG KAIROS_VERSION=v2.5.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -47,7 +47,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     # Check for default value for rhel
-    ARG BASE_IMAGE
+    ARG BASE_IMAGE==quay.io/kairos/fedora:38-core-amd64-generic-v3.0.0-alpha1
 END
 
 IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
@@ -359,6 +359,97 @@ iso-image:
     ELSE
         SAVE IMAGE palette-installer-image:$PE_VERSION
     END
+
+### Dependencies
+luet:
+    FROM quay.io/luet/base:latest
+    SAVE ARTIFACT /usr/bin/luet
+
+enki:
+    ARG GO_VERSION=1.21-alpine3.18
+    FROM golang:$GO_VERSION
+    RUN apk update && apk add git
+
+    WORKDIR /build
+    RUN git clone https://github.com/kairos-io/enki
+    WORKDIR /build/enki
+
+    ENV CGO_ENABLED=0
+    RUN go mod download
+    # Set arg/env after go mod download, otherwise we invalidate the cached layers due to the commit changing easily
+    ARG ENKI_VERSION
+    ARG ENKI_COMMIT
+    ENV ENKI_VERSION=${ENKI_VERSION}
+    ENV ENKI_COMMIT=${ENKI_COMMIT}
+    RUN go build \
+        -ldflags "-w -s \
+        -X github.com/kairos-io/enki/internal/version.VERSION=$ENKI_VERSION \
+        -X github.com/kairos-io/enki/internal/version.gitCommit=$ENKI_COMMIT" \
+        -o /enki
+    SAVE ARTIFACT /enki
+
+enki-tools:
+    FROM fedora
+
+    RUN dnf install -y binutils rsync systemd-boot mtools efitools sbsigntools shim openssl systemd-ukify dosfstools xorriso
+
+    COPY (+enki/enki) /usr/bin/
+
+### UKI targets
+## Generate UKI keys
+## earthly +uki-gen --MY_ORG="ACME Corp"
+uki-genkey:
+    ARG MY_ORG="ACME Corp"
+    FROM +enki-tools
+    RUN enki genkey "$MY_ORG" -o /keys
+    SAVE ARTIFACT /keys AS LOCAL ./
+
+uki-artifacts:
+    ARG ISO_NAME
+
+    FROM +enki-tools
+    ENV ISO_NAME=${ISO_NAME}
+
+    COPY keys /keys
+    RUN ls -liah /keys
+    COPY overlay/files-iso/ /overlay/
+    COPY --if-exists user-data /overlay/files-iso/config.yaml
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    #check if clusterconfig is passed in
+    IF [ "$CLUSTERCONFIG" != "" ]
+        COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
+    END
+    WORKDIR /build
+    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    WORKDIR /iso
+    RUN enki build-uki dir:/build/image -t iso -d /iso -k /keys
+    RUN enki build-uki dir:/build/image -t uki -d /iso -k /keys
+
+    # Generate upgrade image (without Docker)
+    RUN mkdir /upgrade-image
+    RUN mkdir -p /upgrade-image/loader/entries
+    RUN mkdir -p /upgrade-image/EFI/kairos/
+
+    RUN cp -rfv /iso/EFI/kairos/*.efi /upgrade-image/EFI/kairos/${UKI}
+
+    # default @saved
+    RUN echo "default kairos-$VERSION.conf" >> /upgrade-image/loader/loader.conf
+    RUN echo "timeout 5" >> /upgrade-image/loader/loader.conf
+    RUN echo "console-mode max" >> /upgrade-image/loader/loader.conf
+    RUN echo "editor no" >> /upgrade-image/loader/loader.conf
+
+    RUN echo "title Kairos $VERSION" >> /upgrade-image/loader/entries/kairos-$VERSION.conf
+    RUN echo "efi /EFI/kairos/$UKI" >> /upgrade-image/loader/entries/kairos-$VERSION.conf
+    RUN echo "version $VERSION" >> /upgrade-image/loader/entries/kairos-$VERSION.conf
+
+    COPY (+luet/luet) /usr/bin/
+    RUN tar -cf src.tar /upgrade-image
+    RUN luet util pack image:tag src.tar /iso/upgrade_image.tar
+    ## End image generation
+
+    RUN mv *.iso ${ISO_NAME}.iso
+    RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
+   	SAVE ARTIFACT /iso/* AS LOCAL ./build/
 
 OS_RELEASE:
     COMMAND
