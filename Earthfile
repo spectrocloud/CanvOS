@@ -141,8 +141,7 @@ build-iso:
 
     COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
     RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
-        mkdir -p /overlay/opt/spectrocloud/emc/ui && \
-        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc/ui && \
+        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
         rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
     fi
 
