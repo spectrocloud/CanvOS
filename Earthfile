@@ -139,15 +139,18 @@ build-iso:
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-    COPY --if-exists CanvOS/ui.tar /overlay/opt/spectrocloud/emc/
+    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
 
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
 
-    RUN mkdir -p /build/image/opt/spectrocloud/emc/ui
-    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /build/image/opt/spectrocloud/emc/ui; fi
+    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
+            mkdir -p /build/image/opt/spectrocloud/emc/ui && \
+            tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /build/image/opt/spectrocloud/emc/ui; \
+        fi
 
+    
 
     IF [ "$ARCH" = "arm64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
