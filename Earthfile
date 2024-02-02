@@ -138,6 +138,13 @@ build-iso:
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
+
+    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
+    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
+        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
+        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
+    fi
+
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
     IF [ "$ARCH" = "arm64" ]
