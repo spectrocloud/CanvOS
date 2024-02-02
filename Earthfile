@@ -181,6 +181,7 @@ provider-image:
     COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
+    COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd
     END
@@ -208,6 +209,7 @@ stylus-image:
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
+    SAVE ARTIFACT /etc/elemental/config.yaml
     SAVE ARTIFACT /oem/stylus_config.yaml
 
 kairos-provider-image:
