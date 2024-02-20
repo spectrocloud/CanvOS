@@ -69,6 +69,17 @@ build-all-images:
     END
 
 build-provider-images:
+    BUILD  +provider-image --K8S_VERSION=1.24.6
+    BUILD  +provider-image --K8S_VERSION=1.25.2
+    BUILD  +provider-image --K8S_VERSION=1.26.4
+    BUILD  +provider-image --K8S_VERSION=1.27.2
+    BUILD  +provider-image --K8S_VERSION=1.25.13
+    BUILD  +provider-image --K8S_VERSION=1.26.8
+    BUILD  +provider-image --K8S_VERSION=1.27.5
+    BUILD  +provider-image --K8S_VERSION=1.27.7
+    BUILD  +provider-image --K8S_VERSION=1.26.10
+    BUILD  +provider-image --K8S_VERSION=1.25.15
+    BUILD  +provider-image --K8S_VERSION=1.28.2
     BUILD  +provider-image --K8S_VERSION=1.29.0
     BUILD  +provider-image --K8S_VERSION=1.27.9
     BUILD  +provider-image --K8S_VERSION=1.26.12
@@ -78,16 +89,29 @@ build-provider-images:
 
 build-provider-images-fips:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+       BUILD  +provider-image --K8S_VERSION=1.24.13
+       BUILD  +provider-image --K8S_VERSION=1.25.9
+       BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.27.2
        BUILD  +provider-image --K8S_VERSION=1.29.0
        BUILD  +provider-image --K8S_VERSION=1.27.9
        BUILD  +provider-image --K8S_VERSION=1.26.12
        BUILD  +provider-image --K8S_VERSION=1.28.5
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+       BUILD  +provider-image --K8S_VERSION=1.24.6
+       BUILD  +provider-image --K8S_VERSION=1.25.2
+       BUILD  +provider-image --K8S_VERSION=1.25.0
+       BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.27.2
        BUILD  +provider-image --K8S_VERSION=1.26.12
        BUILD  +provider-image --K8S_VERSION=1.27.9
        BUILD  +provider-image --K8S_VERSION=1.28.5
        BUILD  +provider-image --K8S_VERSION=1.29.0
     ELSE
+       BUILD  +provider-image --K8S_VERSION=1.24.6
+       BUILD  +provider-image --K8S_VERSION=1.25.2
+       BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.27.2
        BUILD  +provider-image --K8S_VERSION=1.26.12
        BUILD  +provider-image --K8S_VERSION=1.27.9
        BUILD  +provider-image --K8S_VERSION=1.28.5
