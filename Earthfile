@@ -147,7 +147,6 @@ build-iso:
 
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
-    COPY --if-exists ui.tar overlay/files-iso/opt/spectrocloud/emc/
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
@@ -156,14 +155,17 @@ build-iso:
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-    #COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
-    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
-        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
-    fi
+
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+
+    COPY --if-exists ui.tar /build/image/opt/spectrocloud/emc/
+    RUN if [ -f /build/image/opt/spectrocloud/emc/ui.tar ]; then \
+        tar -xf /build/image/opt/spectrocloud/emc/ui.tar -C /build/image/opt/spectrocloud/emc && \
+        rm -f /build/image/opt/spectrocloud/emc/ui.tar; \
+    fi
+    
     IF [ "$ARCH" = "arm64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
     ELSE IF [ "$ARCH" = "amd64" ]
@@ -367,14 +369,6 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     COPY --platform=linux/${ARCH} +stylus-image/ /
     COPY overlay/files/ /
-
-    # COPY --if-exists ui.tar /opt/spectrocloud/emc/
-    # RUN if [ -f /opt/spectrocloud/emc/ui.tar ]; then \
-    #     tar -xf /opt/spectrocloud/emc/ui.tar -C /opt/spectrocloud/emc && \
-    #     rm -f /opt/spectrocloud/emc/ui.tar; \
-    # fi
-
-
     
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
