@@ -155,11 +155,11 @@ build-iso:
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
-    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
-        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
-    fi
+    # COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
+    # RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
+    #     tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
+    #     rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
+    # fi
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
@@ -366,6 +366,14 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     COPY --platform=linux/${ARCH} +stylus-image/ /
     COPY overlay/files/ /
+
+    COPY --if-exists ui.tar /opt/spectrocloud/emc/
+    RUN if [ -f /opt/spectrocloud/emc/ui.tar ]; then \
+        tar -xf /opt/spectrocloud/emc/ui.tar -C /opt/spectrocloud/emc && \
+        rm -f /opt/spectrocloud/emc/ui.tar; \
+    fi
+
+
     
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
