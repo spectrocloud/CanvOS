@@ -335,6 +335,10 @@ base-image:
         RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
     END
 
+     IF [ "$OS_DISTRIBUTION" = "rhel" ]
+        RUN yum install -y openssl
+    END
+
     IF [ "$OS_DISTRIBUTION" = "sles" ]
          RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
     END
