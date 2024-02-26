@@ -284,7 +284,7 @@ base-image:
         END
 
         RUN apt update && \
-            apt install --no-install-recommends zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
+            apt install --no-install-recommends zstd vim iputils-ping bridge-utils curl tcpdump ethtool traceroute -y
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                 if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
@@ -326,20 +326,20 @@ base-image:
            END
             # zypper up kernel-default && \
             # zypper purge-kernels && \
-        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump
+        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump traceroute
         RUN zypper cc && \
             zypper clean
     END
 
     IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-        RUN zypper install -y apparmor-parser apparmor-profiles
+        RUN zypper install -y apparmor-parser apparmor-profiles traceroute
         RUN zypper cc && \
             zypper clean
         RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
     END
 
      IF [ "$OS_DISTRIBUTION" = "rhel" ]
-        RUN yum install -y openssl
+        RUN yum install -y openssl traceroute
     END
 
     IF [ "$OS_DISTRIBUTION" = "sles" ]
