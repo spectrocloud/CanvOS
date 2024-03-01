@@ -300,7 +300,9 @@ base-image:
         RUN kernel=$(ls /lib/modules | tail -n1) && \
             depmod -a "${kernel}"
 
-        RUN ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv
+        RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
+            ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
+        fi
 
         RUN rm -rf /var/cache/* && \
             apt clean
