@@ -18,7 +18,7 @@ ARG KAIROS_VERSION=v2.4.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.7.11
+ARG OSBUILDER_VERSION=v0.200.4
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
 ARG KUBEADM_PROVIDER_VERSION=v4.2.1
@@ -136,6 +136,47 @@ iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-own /. rootfs
 
+uki-iso:
+    ARG ISO_NAME=installer
+    WORKDIR /build
+    COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
+    SAVE ARTIFACT /build/* AS LOCAL ./build/
+
+
+build-uki-iso:
+    ARG ISO_NAME
+
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    ENV ISO_NAME=${ISO_NAME}
+    COPY overlay/files-iso/ /overlay/
+    COPY --if-exists user-data /overlay/config.yaml
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    #check if clusterconfig is passed in
+    IF [ "$CLUSTERCONFIG" != "" ]
+        COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
+    END
+
+    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
+    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
+        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
+        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
+    fi
+
+    WORKDIR /build
+    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    IF [ "$ARCH" = "arm64" ]
+       RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
+    ELSE IF [ "$ARCH" = "amd64" ]
+       COPY keys /keys
+       RUN ls -liah /keys
+       RUN mkdir /iso
+       RUN enki --config-dir /config build-uki dir:/build/image --cmdline "stylus.registration install-mode" --overlay-iso /overlay -t iso -d /iso -k /keys
+       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --cmdline "stylus.registration install-mode"
+       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --cmdline "stylus.registration install-mode"
+    END
+    WORKDIR /iso
+    SAVE ARTIFACT /iso/*
+
 iso:
     ARG ISO_NAME=installer
     WORKDIR /build
@@ -170,10 +211,24 @@ build-iso:
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
     ELSE IF [ "$ARCH" = "amd64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch x86_64
+       COPY keys /keys
+       RUN ls -liah /keys
+       RUN enki --config-dir /config build-uki dir:/build/image --cmdline "stylus.registration install-mode" --overlay-iso /overlay -t iso -d /iso -k /keys
+       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --cmdline "stylus.registration install-mode"
+       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --cmdline "stylus.registration install-mode"
     END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
     SAVE ARTIFACT /iso/*
+
+### UKI targets
+## Generate UKI keys
+## earthly +uki-gen --MY_ORG="ACME Corp"
+uki-genkey:
+    ARG MY_ORG="ACME Corp"
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    RUN /entrypoint.sh genkey "$MY_ORG" -o /keys
+    SAVE ARTIFACT /keys AS LOCAL ./
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:   
@@ -218,6 +273,18 @@ provider-image:
         && chmod 444 /etc/machine-id
 
     SAVE IMAGE --push $IMAGE_PATH
+
+
+provider-image-rootfs:
+    FROM --platform=linux/${ARCH} +provider-image
+    SAVE ARTIFACT --keep-own /. rootfs
+
+build-provider-trustedboot-image:
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
+    COPY keys /keys
+    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys
+    SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
     IF [ "$FIPS_ENABLED" = "true" ]
@@ -284,28 +351,30 @@ base-image:
         END
 
         RUN apt update && \
-            apt install --no-install-recommends zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
-        IF [ "$UPDATE_KERNEL" = "false" ]
-            RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
-                if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
-                if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
-        END
-        RUN apt update && \
-            apt upgrade -y
-        RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz
-        RUN kernel=$(ls /lib/modules | tail -n1) && \
-            dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-            ln -sf "initrd-${kernel}" /boot/initrd
-        RUN kernel=$(ls /lib/modules | tail -n1) && \
-            depmod -a "${kernel}"
+            apt install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
+        IF [[ ! $BASE_IMG =~ "uki" ]]
+            IF [ "$UPDATE_KERNEL" = "false" ]
+                RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
+                    if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
+                    if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
+            END
+            RUN apt update && \
+                apt upgrade -y
+            RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
+           	ln -sf "${kernel#/boot/}" /boot/vmlinuz
+            RUN kernel=$(ls /lib/modules | tail -n1) && \
+            	dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+            	ln -sf "initrd-${kernel}" /boot/initrd
+            RUN kernel=$(ls /lib/modules | tail -n1) && \
+           	depmod -a "${kernel}"
 
-        RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
-            ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
-        fi
+            RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
+                ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
+            fi
 
-        RUN rm -rf /var/cache/* && \
-            apt clean
+            RUN rm -rf /var/cache/* && \
+                apt clean
+        END 
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
@@ -385,6 +454,17 @@ iso-image:
         SAVE IMAGE palette-installer-image:$PE_VERSION
     END
 
+uki:
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    COPY (+provider-image/) /provider-image
+    DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
+    COPY keys /keys
+    RUN ls -liah /keys
+    RUN /entrypoint.sh build-uki dir:/provider-image -t container -d /iso -k /keys
+    WORKDIR /iso
+    SAVE ARTIFACT /iso/*
+    SAVE IMAGE --push $IMAGE_PATH 
+
 OS_RELEASE:
     COMMAND
     ARG OS_ID=${OS_DISTRIBUTION}
@@ -397,7 +477,8 @@ OS_RELEASE:
     ARG OS_REPO=spectrocloud/CanvOS
     ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}
     ARG ARTIFACT=kairos-core-${OS_DISTRIBUTION}-$OS_VERSION
+    ARG KAIROS_RELEASE=${OS_VERSION}
 
     # update OS-release file
-    RUN sed -i -n '/KAIROS_/!p' /etc/os-release
+    # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
     RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
