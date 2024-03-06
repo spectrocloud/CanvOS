@@ -221,7 +221,9 @@ build-uki-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/config.yaml
-    COPY --platform=linux/${ARCH} +stylus-image-pack/ /overlay/data/stylus
+    IF [ "$IS_UKI" = "true" ]
+        COPY --platform=linux/${ARCH} +stylus-image-pack/ /overlay/data/stylus
+    END
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
@@ -511,7 +513,9 @@ base-image:
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
-    # COPY --platform=linux/${ARCH} +stylus-image/ /
+    IF [ "$IS_UKI" = "false" ]
+        COPY --platform=linux/${ARCH} +stylus-image/ /
+    END
     COPY overlay/files/ /
     
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
