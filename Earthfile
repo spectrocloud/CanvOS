@@ -32,6 +32,7 @@ ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
+ARG IS_UKI=false
 
 ARG ETCD_VERSION="v3.5.5"
 
@@ -53,6 +54,15 @@ END
 IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
+
+IF [ "$FIPS_ENABLED" = "true" ]
+    ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+ELSE
+    ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
+END
+
+ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION
+
 
 build-all-images:
     IF $FIPS_ENABLED
@@ -142,6 +152,60 @@ uki-iso:
     COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
+uki-provider-image:
+    FROM scratch
+    WORKDIR /
+
+    COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
+    COPY --platform=linux/${ARCH} +install-k8s/ /k8s
+    SAVE IMAGE --push $IMAGE_PATH
+
+trust-boot-unpack:
+    COPY +luet/luet /usr/bin/luet
+    COPY --platform=linux/${ARCH} +build-provider-trustedboot-image/ /image
+    RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
+        luet util unpack $FILE /trusted-boot
+    SAVE ARTIFACT /trusted-boot/*
+
+luet:
+    FROM quay.io/luet/base:latest
+    SAVE ARTIFACT /usr/bin/luet /luet
+
+install-k8s:
+    FROM alpine
+    COPY +luet/luet /usr/bin/luet
+    ARG K8S_VERSION=1.26.4
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG BASE_K8S_VERSION=$K8S_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    END
+
+    WORKDIR /output
+    RUN mkdir -p /etc/luet/repos.conf.d && \
+        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+        luet repo update
+    RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
+    RUN rm -rf /output/var/cache/*
+    SAVE ARTIFACT /output/*
+
+internal-slink:
+    FROM alpine
+    COPY internal/slink/slink /slink
+    RUN chmod +x /slink
+    SAVE ARTIFACT /slink
+
+stylus-image-pack:  
+    COPY +luet/luet /usr/bin/luet
+    COPY --platform=linux/${ARCH} +stylus-image/ /stylus
+    RUN tar -czf /stylus.tar.gz /stylus
+    RUN luet util pack $STYLUS_BASE /stylus.tar.gz /stylus-image.tar
+    SAVE ARTIFACT stylus-image.tar
 
 build-uki-iso:
     ARG ISO_NAME
@@ -150,6 +214,7 @@ build-uki-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/config.yaml
+    COPY --platform=linux/${ARCH} +stylus-image-pack/ /overlay/data/stylus
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
@@ -256,15 +321,13 @@ provider-image:
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        RUN luet install -y container-runtime/containerd
-    END
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       RUN luet install -y container-runtime/containerd-fips
-    END
+    COPY +internal-slink/slink /usr/bin/slink
+    COPY +install-k8s/ /k8s
+    RUN slink --source /k8s/ --target /opt/k8s
+    RUN rm -f /usr/bin/slink
+    RUN rm -rf /k8s
 
-    RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
     COPY (+download-etcdctl/etcdctl) /usr/bin/
@@ -287,11 +350,6 @@ build-provider-trustedboot-image:
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
-    IF [ "$FIPS_ENABLED" = "true" ]
-        ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
-    ELSE
-        ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
-    END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
     SAVE ARTIFACT /etc/kairos/branding
@@ -352,7 +410,7 @@ base-image:
 
         RUN apt update && \
             apt install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
-        IF [[ ! $BASE_IMG =~ "uki" ]]
+        IF [ "$IS_UKI" = "false" ]
             IF [ "$UPDATE_KERNEL" = "false" ]
                 RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                     if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
@@ -442,7 +500,7 @@ base-image:
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
-    COPY --platform=linux/${ARCH} +stylus-image/ /
+    # COPY --platform=linux/${ARCH} +stylus-image/ /
     COPY overlay/files/ /
     
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
