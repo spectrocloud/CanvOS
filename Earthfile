@@ -190,6 +190,13 @@ install-k8s:
     RUN mkdir -p /etc/luet/repos.conf.d && \
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+        RUN luet install -y container-runtime/containerd
+    END
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+       RUN luet install -y container-runtime/containerd-fips
+    END
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
@@ -322,11 +329,15 @@ provider-image:
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
 
-    COPY +internal-slink/slink /usr/bin/slink
-    COPY +install-k8s/ /k8s
-    RUN slink --source /k8s/ --target /opt/k8s
-    RUN rm -f /usr/bin/slink
-    RUN rm -rf /k8s
+    IF [ "$IS_UKI" = "true" ]
+        COPY +internal-slink/slink /usr/bin/slink
+        COPY +install-k8s/ /k8s
+        RUN slink --source /k8s/ --target /opt/k8s
+        RUN rm -f /usr/bin/slink
+        RUN rm -rf /k8s
+    ELSE
+        COPY +install-k8s/ /
+    END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
