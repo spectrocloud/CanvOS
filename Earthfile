@@ -33,7 +33,7 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
-ARG KINE_VERSION=0.10.3
+ARG KINE_VERSION=0.11.4
 ARG ETCD_VERSION="v3.5.5"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
@@ -66,11 +66,11 @@ build-all-images:
         BUILD +build-provider-images
     END
     IF [ "$ARCH" = "arm64" ]
-       BUILD --platform=linux/arm64 +iso-image
-       BUILD --platform=linux/arm64 +iso
+        BUILD --platform=linux/arm64 +iso-image
+        BUILD --platform=linux/arm64 +iso
     ELSE IF [ "$ARCH" = "amd64" ]
-    BUILD --platform=linux/amd64 +iso-image
-       BUILD --platform=linux/amd64 +iso
+        BUILD --platform=linux/amd64 +iso-image
+        BUILD --platform=linux/amd64 +iso
     END
 
 build-provider-images:
@@ -84,7 +84,9 @@ build-provider-images:
     # BUILD  +provider-image --K8S_VERSION=1.27.7
     # BUILD  +provider-image --K8S_VERSION=1.26.10
     # BUILD  +provider-image --K8S_VERSION=1.25.15
-    BUILD  +provider-image --K8S_VERSION=1.28.2
+    # BUILD  +provider-image --K8S_VERSION=1.28.2
+    BUILD  +provider-image --K8S_VERSION=1.28.4
+    BUILD  +provider-image --K8S_VERSION=1.29.0
 
 build-provider-images-fips:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
