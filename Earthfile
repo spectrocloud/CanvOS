@@ -12,7 +12,7 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG ARCH
-ARG PE_VERSION=v4.2.3
+ARG PE_VERSION=v0.0.0-e8fb726c
 ARG SPECTRO_LUET_VERSION=v1.2.3
 ARG KAIROS_VERSION=v2.4.3
 ARG K3S_FLAVOR_TAG=k3s1
@@ -58,7 +58,7 @@ build-all-images:
     IF $FIPS_ENABLED
         BUILD +build-provider-images-fips
     ELSE
-        BUILD +build-provider-images
+        # BUILD +build-provider-images
     END
     IF [ "$ARCH" = "arm64" ]
        BUILD --platform=linux/arm64 +iso-image
@@ -161,10 +161,10 @@ build-iso:
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
 
     COPY --if-exists ui.tar /build/image/opt/spectrocloud/emc/
-    RUN if [ -f /build/image/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /build/image/opt/spectrocloud/emc/ui.tar -C /build/image/opt/spectrocloud/emc && \
-        rm -f /build/image/opt/spectrocloud/emc/ui.tar; \
-    fi
+    # RUN if [ -f /build/image/opt/spectrocloud/emc/ui.tar ]; then \
+    #     tar -xf /build/image/opt/spectrocloud/emc/ui.tar -C /build/image/opt/spectrocloud/emc && \
+    #     rm -f /build/image/opt/spectrocloud/emc/ui.tar; \
+    # fi
     
     IF [ "$ARCH" = "arm64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
@@ -223,7 +223,7 @@ stylus-image:
     IF [ "$FIPS_ENABLED" = "true" ]
         ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
     ELSE
-        ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
+        ARG STYLUS_BASE=gcr.io/spectro-dev-public/stylus-framework-linux-$ARCH:$PE_VERSION
     END
     FROM $STYLUS_BASE
     SAVE ARTIFACT ./*
@@ -343,7 +343,8 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "sles" ]
-         RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
+        RUN zypper install -y traceroute
+        RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
     END
 
     IF [ "$ARCH" = "arm64" ]
