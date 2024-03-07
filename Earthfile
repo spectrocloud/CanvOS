@@ -207,13 +207,6 @@ internal-slink:
     RUN chmod +x /slink
     SAVE ARTIFACT /slink
 
-stylus-image-pack:  
-    COPY +luet/luet /usr/bin/luet
-    COPY --platform=linux/${ARCH} +stylus-image/ /stylus
-    RUN tar -czf /stylus.tar.gz /stylus
-    RUN luet util pack $STYLUS_BASE /stylus.tar.gz /stylus-image.tar
-    SAVE ARTIFACT stylus-image.tar
-
 build-uki-iso:
     ARG ISO_NAME
 
@@ -222,7 +215,7 @@ build-uki-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/config.yaml
     IF [ "$IS_UKI" = "true" ]
-        COPY --platform=linux/${ARCH} +stylus-image-pack/ /overlay/data/stylus
+        COPY --platform=linux/${ARCH} +stylus-image/ /overlay/data/stylus/
     END
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     #check if clusterconfig is passed in
@@ -244,7 +237,7 @@ build-uki-iso:
        COPY keys /keys
        RUN ls -liah /keys
        RUN mkdir /iso
-       RUN enki --config-dir /config build-uki dir:/build/image --cmdline "stylus.registration install-mode" --overlay-iso /overlay -t iso -d /iso -k /keys
+       RUN enki --config-dir /config build-uki dir:/build/image --cmdline "stylus.registration install-mode" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys
        RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --cmdline "stylus.registration install-mode"
        RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --cmdline "stylus.registration install-mode"
     END
@@ -390,9 +383,13 @@ base-image:
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
     --build-arg NO_PROXY=$NO_PROXY .
 
-   IF [ "$IS_JETSON" = "true" ]
-       COPY mount.yaml /system/oem/mount.yaml
-   END
+    IF [ "$IS_JETSON" = "true" ]
+        COPY mount.yaml /system/oem/mount.yaml
+    END
+
+    IF [ "$IS_UKI" = "true" ]
+        COPY stylus_uki.yaml /system/oem/stylus_uki.yaml
+    END
 
     IF [ "$ARCH" = "arm64" ]
         RUN  mkdir -p /etc/luet/repos.conf.d && \
@@ -515,6 +512,9 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     IF [ "$IS_UKI" = "false" ]
         COPY --platform=linux/${ARCH} +stylus-image/ /
+    ELSE
+        COPY +luet/luet /usr/bin/luet
+        COPY --platform=linux/${ARCH} +stylus-image/system /system
     END
     COPY overlay/files/ /
     

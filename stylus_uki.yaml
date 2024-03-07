@@ -1,0 +1,11 @@
+#cloud-config
+stages:
+  after-install:
+      - commands:
+        - echo "Copying files to persistent path"
+        - /usr/lib/systemd/systemd-cryptsetup attach persistent $(findfs PARTLABEL=persistent) - tpm2-device=auto
+        - mount /dev/mapper/persistent /usr/local
+        - mountpoint="/usr/local" && ! findmnt -rno TARGET "$mountpoint" > /dev/null && mount /dev/mapper/persistent "$mountpoint" || echo "Already mounted."
+        - mkdir -p /usr/local/.state/opt.bind/stylus
+        - cp -rfv /run/initramfs/live/stylus/* /usr/local/.state/opt.bind/stylus/
+        - rsync --partial --human-readable --archive --xattrs --acls --progress /usr/local/.state/opt.bind/stylus/ /
