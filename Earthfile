@@ -172,6 +172,10 @@ build-iso:
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
 
     COPY --if-exists ui.tar /build/image/opt/spectrocloud/emc/
+    RUN if [ -f /build/image/opt/spectrocloud/emc/ui.tar ]; then \
+        tar -xf /build/image/opt/spectrocloud/emc/ui.tar -C /build/image/opt/spectrocloud/emc && \
+        rm -f /build/image/opt/spectrocloud/emc/ui.tar; \
+    fi
     
     IF [ "$ARCH" = "arm64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
