@@ -221,6 +221,7 @@ build-uki-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/config.yaml
+    COPY --if-exists user-data /overlay/data/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/data/stylus-image.tar
     COPY --platform=linux/${ARCH} +luet/luet /overlay/data/luet
  
@@ -364,10 +365,10 @@ build-provider-trustedboot-image:
 
 stylus-image:
     FROM $STYLUS_BASE
-    SAVE ARTIFACT ./*
-    SAVE ARTIFACT /etc/kairos/branding
-    SAVE ARTIFACT /etc/elemental/config.yaml
-    SAVE ARTIFACT /oem/stylus_config.yaml
+    SAVE ARTIFACT --keep-own  ./*
+    # SAVE ARTIFACT /etc/kairos/branding
+    # SAVE ARTIFACT /etc/elemental/config.yaml
+    # SAVE ARTIFACT /oem/stylus_config.yaml
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -520,7 +521,6 @@ iso-image:
     IF [ "$IS_UKI" = "false" ]
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
-        COPY +luet/luet /usr/bin/luet
         COPY --platform=linux/${ARCH} +stylus-image/ /
         RUN rm -rf /opt/spectrocloud/bin
         RUN rm -f /usr/bin/luet

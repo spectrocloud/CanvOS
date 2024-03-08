@@ -5,7 +5,8 @@ users:
 
 stages:
   after-install:
-    - commands:
+    - name: uki stylus unpack
+      commands:
         - echo "Copying files to persistent path"
         - /usr/lib/systemd/systemd-cryptsetup attach persistent $(findfs PARTLABEL=persistent) - tpm2-device=auto
         - mountpoint="/usr/local" && ! findmnt -rno TARGET "$mountpoint" > /dev/null && mount /dev/mapper/persistent "$mountpoint" || echo "Already mounted."
