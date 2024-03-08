@@ -18,7 +18,7 @@ ARG KAIROS_VERSION=v2.4.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.200.4
+ARG OSBUILDER_VERSION=v0.200.5
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
 ARG KUBEADM_PROVIDER_VERSION=v4.2.1
@@ -62,7 +62,7 @@ ELSE
 END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION
-
+ARG CMDLINE="stylus.registration install-mode"
 
 build-all-images:
     IF $FIPS_ENABLED
@@ -167,6 +167,13 @@ trust-boot-unpack:
         luet util unpack $FILE /trusted-boot
     SAVE ARTIFACT /trusted-boot/*
 
+stylus-image-pack:  
+    COPY +luet/luet /usr/bin/luet
+    COPY --platform=linux/${ARCH} +stylus-image/ /stylus
+    RUN cd stylus && tar -czf ../stylus.tar *
+    RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
+    SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
+
 luet:
     FROM quay.io/luet/base:latest
     SAVE ARTIFACT /usr/bin/luet /luet
@@ -214,9 +221,9 @@ build-uki-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/config.yaml
-    IF [ "$IS_UKI" = "true" ]
-        COPY --platform=linux/${ARCH} +stylus-image/ /overlay/data/stylus/
-    END
+    COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/data/stylus-image.tar
+    COPY --platform=linux/${ARCH} +luet/luet /overlay/data/luet
+ 
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
@@ -280,9 +287,9 @@ build-iso:
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch x86_64
        COPY keys /keys
        RUN ls -liah /keys
-       RUN enki --config-dir /config build-uki dir:/build/image --cmdline "stylus.registration install-mode" --overlay-iso /overlay -t iso -d /iso -k /keys
-       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --cmdline "stylus.registration install-mode"
-       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --cmdline "stylus.registration install-mode"
+       RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys
+       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --extend-cmdline "$CMDLINE"
+       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --extend-cmdline "$CMDLINE"
     END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
@@ -514,7 +521,9 @@ iso-image:
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
         COPY +luet/luet /usr/bin/luet
-        COPY --platform=linux/${ARCH} +stylus-image/system /system
+        COPY --platform=linux/${ARCH} +stylus-image/ /
+        RUN rm -rf /opt/spectrocloud/bin
+        RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
     
