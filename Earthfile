@@ -244,9 +244,9 @@ build-uki-iso:
        COPY keys /keys
        RUN ls -liah /keys
        RUN mkdir /iso
-       RUN enki --config-dir /config build-uki dir:/build/image --cmdline "stylus.registration install-mode" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys
-       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --cmdline "stylus.registration install-mode"
-       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --cmdline "stylus.registration install-mode"
+       RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys
+       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --extend-cmdline "$CMDLINE"
+       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --extend-cmdline "$CMDLINE"
     END
     WORKDIR /iso
     SAVE ARTIFACT /iso/*
