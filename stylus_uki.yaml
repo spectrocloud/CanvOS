@@ -10,6 +10,9 @@ stages:
         - echo "Copying files to persistent path"
         - /usr/lib/systemd/systemd-cryptsetup attach persistent $(findfs PARTLABEL=persistent) - tpm2-device=auto
         - mountpoint="/usr/local" && ! findmnt -rno TARGET "$mountpoint" > /dev/null && mount /dev/mapper/persistent "$mountpoint" || echo "Already mounted."
+        - mkdir -p /usr/local/.state/opt.bind/spectrocloud/bin
         - mkdir -p /usr/local/bin/
         - cp -rfv /run/initramfs/live/luet /usr/local/bin/
+        - cp -rfv /run/initramfs/live/stylus-image.tar /usr/local/
         - luet util unpack file://run/initramfs/live/stylus-image.tar /
+        - cp -rfv /opt/spectrocloud/ /usr/local/.state/opt.bind/
