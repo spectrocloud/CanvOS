@@ -1,19 +1,17 @@
 VERSION 0.6
 ARG TARGETOS
 ARG TARGETARCH
-FROM gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0
 
-# Variables used in the builds.  Update for ADVANCED use cases only
-ARG OS_DISTRIBUTION
-ARG OS_VERSION
-ARG IMAGE_REGISTRY
-ARG IMAGE_REPO=$OS_DISTRIBUTION
-ARG K8S_DISTRIBUTION
-ARG CUSTOM_TAG
-ARG CLUSTERCONFIG
-ARG ARCH
+## Default Image Repos Used in the Builds. 
+ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
+ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
+ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
+ARG ETCD_REPO=https://github.com/etcd-io
+FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
+
+## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.2.3
-ARG SPECTRO_LUET_VERSION=v1.2.3
+ARG SPECTRO_LUET_VERSION=v1.2.0
 ARG KAIROS_VERSION=v2.4.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -23,6 +21,17 @@ ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
 ARG KUBEADM_PROVIDER_VERSION=v4.2.1
 ARG RKE2_PROVIDER_VERSION=v4.1.1
+
+# Variables used in the builds.  Update for ADVANCED use cases only Modify in .arg file or via CLI arguements
+ARG OS_DISTRIBUTION
+ARG OS_VERSION
+ARG IMAGE_REGISTRY
+ARG IMAGE_REPO=$OS_DISTRIBUTION
+ARG K8S_DISTRIBUTION
+ARG CUSTOM_TAG
+ARG CLUSTERCONFIG
+ARG ARCH
+
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -31,6 +40,9 @@ ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
+
+
+
 ARG UPDATE_KERNEL=false
 ARG IS_UKI=false
 
@@ -42,10 +54,10 @@ IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ELSE
         ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
     END
-    ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
+    ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_TAG=opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
-    ARG BASE_IMAGE=$BASE_IMAGE_URL/$BASE_IMAGE_TAG
+    ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     # Check for default value for rhel
     ARG BASE_IMAGE
@@ -138,7 +150,7 @@ BASE_ALPINE:
 
 download-etcdctl:
     DO +BASE_ALPINE
-    RUN curl  --retry 5 -Ls https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
+    RUN curl  --retry 5 -Ls $ETCD_REPO/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
             chmod +x etcdctl
     SAVE ARTIFACT etcdctl
 
@@ -372,15 +384,15 @@ stylus-image:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
-        ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-         ARG PROVIDER_BASE=gcr.io/spectro-images-public/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
@@ -459,20 +471,18 @@ base-image:
             COPY sc.crt /usr/share/pki/trust/anchors
             RUN  update-ca-certificates
         END
-
+        # Enable or Disable Kernel Updates
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN zypper al kernel-de*
         END
 
         RUN zypper refresh && \
-           zypper update -y
+            zypper update -y
 
            IF [ -e "/usr/bin/dracut" ]
              RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
              RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
            END
-            # zypper up kernel-default && \
-            # zypper purge-kernels && \
         RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump
         RUN zypper cc && \
             zypper clean
@@ -482,23 +492,23 @@ base-image:
         RUN zypper install -y apparmor-parser apparmor-profiles
         RUN zypper cc && \
             zypper clean
-        RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
+        RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
+    IF [ "$ARCH" = "arm64" ]
+        ARG LUET_REPO=luet-repo-arm
+    ELSE IF [ "$ARCH" = "amd64" ]
+        ARG LUET_REPO=luet-repo
+    END
+    RUN  mkdir -p /etc/luet/repos.conf.d && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y && \
+          luet repo update
 
      IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl
     END
 
     IF [ "$OS_DISTRIBUTION" = "sles" ]
-         RUN cp /sbin/apparmor_parser /usr/bin/apparmor_parser
-    END
-
-    IF [ "$ARCH" = "arm64" ]
-        RUN mkdir -p /etc/luet/repos.conf.d && luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm --priority 1 -y && luet repo update
-    ELSE IF [ "$ARCH" = "amd64" ]
-        RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
-        luet repo update
+        RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
