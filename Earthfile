@@ -350,6 +350,7 @@ provider-image:
         RUN slink --source /k8s/ --target /opt/k8s
         RUN rm -f /usr/bin/slink
         RUN rm -rf /k8s
+        RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
     ELSE
         COPY +install-k8s/ /
     END
