@@ -193,7 +193,7 @@ luet:
 install-k8s:
     FROM alpine
     COPY +luet/luet /usr/bin/luet
-    ARG K8S_VERSION=1.26.4
+    ARG K8S_VERSION=1.27.9
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
@@ -350,7 +350,6 @@ provider-image:
         RUN slink --source /k8s/ --target /opt/k8s
         RUN rm -f /usr/bin/slink
         RUN rm -rf /k8s
-        RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
     ELSE
         COPY +install-k8s/ /
     END

@@ -4,6 +4,12 @@ users:
     passwd: kairos
 
 stages:
+  initramfs:
+    - name: link agent provider stylus
+      commands:
+        - echo "Linking agent provider"
+        - mkdir -p /usr/local/bin/
+        - ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
   after-install:
     - name: uki stylus unpack
       commands:
