@@ -26,7 +26,7 @@ function build_without_proxy() {
 
 global_config="{disable_analytics: true}"
 PE_VERSION=$(git describe --abbrev=0 --tags)
-EARTHLY_VERSION=v0.7.4
+EARTHLY_VERSION=v0.8.5
 source .arg
 
 ### Verify Depencies
