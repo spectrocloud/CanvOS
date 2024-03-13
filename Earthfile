@@ -10,7 +10,7 @@ ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
 ## Spectro Cloud and Kairos Tags ##
-ARG PE_VERSION=v4.2.3
+ARG PE_VERSION=v4.3.0
 ARG SPECTRO_LUET_VERSION=v1.2.0
 ARG KAIROS_VERSION=v2.4.3
 ARG K3S_FLAVOR_TAG=k3s1
