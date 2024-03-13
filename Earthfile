@@ -74,7 +74,7 @@ ELSE
 END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION
-ARG CMDLINE="stylus.registration install-mode"
+ARG CMDLINE="stylus.registration"
 
 build-all-images:
     IF $FIPS_ENABLED
@@ -257,9 +257,9 @@ build-uki-iso:
        COPY keys /keys
        RUN ls -liah /keys
        RUN mkdir /iso
-       RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys
-       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --extend-cmdline "$CMDLINE"
-       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --extend-cmdline "$CMDLINE"
+       RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
+       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --extend-cmdline "$CMDLINE" --boot-branding "Palette eXtended Kubernetes Edge"
+       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --extend-cmdline "$CMDLINE" --boot-branding "Palette eXtended Kubernetes Edge"
     END
     WORKDIR /iso
     SAVE ARTIFACT /iso/*
@@ -350,6 +350,7 @@ provider-image:
         RUN slink --source /k8s/ --target /opt/k8s
         RUN rm -f /usr/bin/slink
         RUN rm -rf /k8s
+        RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
     ELSE
         COPY +install-k8s/ /
     END
