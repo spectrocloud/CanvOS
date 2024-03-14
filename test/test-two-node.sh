@@ -31,22 +31,26 @@ set -e
 
 # Do not edit anything below
 
-if [ -n "$SUFFIX_OVERRIDE" ]; then
-    export HOST_SUFFIX=$HOST_SUFFIX-$SUFFIX_OVERRIDE
-    export CLUSTER_NAME=$CLUSTER_NAME-$SUFFIX_OVERRIDE
-fi
-
-# note: host names must start with an alphabetic character as they're DNS names
 declare -a edge_host_names
-declare -a vm_array=("tn1-$HOST_SUFFIX" "tn2-$HOST_SUFFIX")
-export HOST_1="${vm_array[0]}"
-export HOST_2="${vm_array[1]}"
+declare -a vm_array
 
-if [ -n "$REPLACEMENT_HOST" ]; then
-    export HOST_3="tn3-$HOST_SUFFIX"
-    vm_array+=($HOST_3)
-    echo "Added replacement host: $HOST_3"
-fi
+function init_globals() {
+    if [ -n "$SUFFIX_OVERRIDE" ]; then
+        export HOST_SUFFIX=$HOST_SUFFIX-$SUFFIX_OVERRIDE
+        export CLUSTER_NAME=$CLUSTER_NAME-$SUFFIX_OVERRIDE
+    fi
+
+    vm_array+=("tn1-$HOST_SUFFIX" "tn2-$HOST_SUFFIX")
+    export HOST_1="${vm_array[0]}"
+    export HOST_2="${vm_array[1]}"
+    echo "VM names: $HOST_1, $HOST_2"
+
+    if [ -n "$REPLACEMENT_HOST" ]; then
+        export HOST_3="tn3-$HOST_SUFFIX"
+        vm_array+=($HOST_3)
+        echo "Added replacement VM: $HOST_3"
+    fi
+}
 
 function create_canvos_args() {
 cat <<EOF > .arg
@@ -460,6 +464,7 @@ function clean_all() {
 }
 
 function main() {
+    init_globals
 
     # build all required edge artifacts
     build_all
