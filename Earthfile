@@ -83,18 +83,17 @@ build-all-images:
 build-provider-images:
     BUILD  +provider-image --K8S_VERSION=1.24.6
     BUILD  +provider-image --K8S_VERSION=1.25.2
-    BUILD  +provider-image --K8S_VERSION=1.26.4
-    BUILD  +provider-image --K8S_VERSION=1.27.2
     BUILD  +provider-image --K8S_VERSION=1.25.13
+    BUILD  +provider-image --K8S_VERSION=1.25.15
+    BUILD  +provider-image --K8S_VERSION=1.26.4
     BUILD  +provider-image --K8S_VERSION=1.26.8
+    BUILD  +provider-image --K8S_VERSION=1.26.10
+    BUILD  +provider-image --K8S_VERSION=1.26.12
+    BUILD  +provider-image --K8S_VERSION=1.27.2
     BUILD  +provider-image --K8S_VERSION=1.27.5
     BUILD  +provider-image --K8S_VERSION=1.27.7
-    BUILD  +provider-image --K8S_VERSION=1.26.10
-    BUILD  +provider-image --K8S_VERSION=1.25.15
-    BUILD  +provider-image --K8S_VERSION=1.28.2
-    BUILD  +provider-image --K8S_VERSION=1.29.0
     BUILD  +provider-image --K8S_VERSION=1.27.9
-    BUILD  +provider-image --K8S_VERSION=1.26.12
+    BUILD  +provider-image --K8S_VERSION=1.28.2
     BUILD  +provider-image --K8S_VERSION=1.28.5
     BUILD  +provider-image --K8S_VERSION=1.29.0
 
