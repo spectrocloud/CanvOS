@@ -37,6 +37,7 @@ if [ -n "$SUFFIX_OVERRIDE" ]; then
 fi
 
 # note: host names must start with an alphabetic character as they're DNS names
+declare -a edge_host_names
 declare -a vm_array=("tn1-$HOST_SUFFIX" "tn2-$HOST_SUFFIX")
 export HOST_1="${vm_array[0]}"
 export HOST_2="${vm_array[1]}"
@@ -70,7 +71,6 @@ cat <<EOF > build/user-data
 stylus:
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
-    name: "$1"
     paletteEndpoint: "$DOMAIN"
   debug: true
 install:
@@ -84,23 +84,19 @@ echo "created build/user-data"
 
 function create_iso() {
     touch meta-data
-    mkisofs -output build/user-data-$2.iso -volid cidata -joliet -rock $1 meta-data
+    mkisofs -output build/user-data.iso -volid cidata -joliet -rock $1 meta-data
     rm -f meta-data
 }
 
-function create_userdata_isos() {
-    echo Creating user-data ISOs...
-    for vm in "${vm_array[@]}"; do
-        create_userdata $vm
-        create_iso build/user-data $vm
-    done
+function create_userdata_iso() {
+    echo Creating user-data ISO...
+    create_userdata
+    create_iso build/user-data
 }
 
-function upload_userdata_isos() {
-    echo Uploading user-data ISOs...
-    for vm in "${vm_array[@]}"; do
-        govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER "build/user-data-${vm}.iso" "${ISO_FOLDER}/user-data-${vm}.iso"
-    done
+function upload_userdata_iso() {
+    echo Uploading user-data ISO...
+    govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER "build/user-data.iso" "${ISO_FOLDER}/user-data.iso"
 }
 
 function upload_stylus_iso() {
@@ -114,7 +110,7 @@ function create_vms() {
     for vm in "${vm_array[@]}"; do
         govc vm.create -m 8192 -c 4 -disk 100GB -net.adapter vmxnet3 -iso=$STYLUS_ISO -on=false -pool=$GOVC_RESOURCE_POOL $vm
         dev=$(govc device.cdrom.add -vm $vm)
-        govc device.cdrom.insert -vm=$vm -device=$dev "${ISO_FOLDER}/user-data-${vm}.iso"
+        govc device.cdrom.insert -vm=$vm -device=$dev "${ISO_FOLDER}/user-data.iso"
         govc vm.power -on $vm
     done
 }
@@ -150,15 +146,12 @@ function reboot_vms() {
     done
 }
 
-function wait_until_edge_hosts_ready() {
-    echo Waiting for both Edge Hosts to register and become healthy...
-    while true; do
-        set +e
-        ready=$(curl -s -X POST https://$DOMAIN/v1/dashboard/edgehosts/search \
-            -H "ApiKey: $API_KEY" \
-            -H "Content-Type: application/json" \
-            -H "ProjectUid: $PROJECT_UID" \
-            -d \
+function get_ready_edge_hosts() {
+    curl -s -X POST https://$DOMAIN/v1/dashboard/edgehosts/search \
+        -H "ApiKey: $API_KEY" \
+        -H "Content-Type: application/json" \
+        -H "ProjectUid: $PROJECT_UID" \
+        -d \
         '
             {
                 "filter": {
@@ -191,18 +184,32 @@ function wait_until_edge_hosts_ready() {
                 },
                 "sort": []
             }
-        ' | jq -e 'select(.items != []).items | map(. | select(.status.health.state == "healthy")) | length')
+        '
+}
+
+function wait_until_edge_hosts_ready() {
+    echo Waiting for both Edge Hosts to register and become healthy...
+    while true; do
+        set +e
+        ready=$(get_ready_edge_hosts | jq -e 'select(.items != []).items | map(. | select(.status.health.state == "healthy")) | length')
         set -e
         if [ -z ${ready} ]; then
             ready=0
         fi
-        if [ $ready = 2 ]; then
+        if [ $ready -ge 2 ]; then
             echo Both Edge Hosts are healthy!
             break
         fi
         echo "Only $ready/2 Edge Hosts are healthy, sleeping for 5s..."
         sleep 5
     done
+}
+
+function ready_edge_host_names() {
+    readarray -t edge_host_names < <(get_ready_edge_hosts | jq -r 'select(.items != []).items | map(.metadata.name) | flatten[]')
+    export EDGE_HOST_1=${edge_host_names[0]}
+    export EDGE_HOST_2=${edge_host_names[1]}
+    echo "Ready Edge Host names: ${edge_host_names[@]}"
 }
 
 function destroy_edge_hosts() {
@@ -307,11 +314,11 @@ function prepare_master_master_cluster() {
     jq '
       .metadata.name = env.CLUSTER_NAME |
       .spec.cloudConfig.controlPlaneEndpoint.host = env.CLUSTER_VIP |
-      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostName = env.HOST_1 |
-      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.HOST_1 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostName = env.EDGE_HOST_1 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].hostUid = env.EDGE_HOST_1 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[0].nicName = env.NIC_NAME |
-      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostName = env.HOST_2 |
-      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostUid = env.HOST_2 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostName = env.EDGE_HOST_2 |
+      .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].hostUid = env.EDGE_HOST_2 |
       .spec.machinePoolConfig[0].cloudConfig.edgeHosts[1].nicName = env.NIC_NAME |
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
       .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
@@ -461,8 +468,8 @@ function main() {
     upload_stylus_iso
 
     # create & upload user-data ISOs, configured to enable two node mode
-    create_userdata_isos
-    upload_userdata_isos
+    create_userdata_iso
+    upload_userdata_iso
 
     # create VMs in vSphere, wait for the installation phase to complete,
     # then power them off, remove the installer ISO, and reboot them
@@ -472,6 +479,7 @@ function main() {
 
     # wait for the VMs to register with Palette and appear as Edge Hosts
     wait_until_edge_hosts_ready
+    ready_edge_host_names
 
     # optionally create a two node Cluster Profile using the latest artifact
     # versions - can be skipped by specifying the UID
