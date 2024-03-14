@@ -512,6 +512,7 @@ else
     envfile=$(dirname "${0}")/.env
     if [ -f "${envfile}" ]; then
         source "${envfile}"
+        echo "Sourced $envfile"
     else
         echo "Please create a .env file in the test directory and populate it with the required variables."
         exit 1
