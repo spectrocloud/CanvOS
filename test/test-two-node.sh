@@ -130,6 +130,8 @@ function wait_for_vms_to_power_off() {
     while true; do
         powerState1=$(govc vm.info -json=true "${vm_array[0]}" | jq -r .[][0].runtime.powerState)
         powerState2=$(govc vm.info -json=true "${vm_array[1]}" | jq -r .[][0].runtime.powerState)
+        echo "Power state for ${vm_array[0]}: $powerState1"
+        echo "Power state for ${vm_array[1]}: $powerState2"
         if [ "$powerState1" = "poweredOff" ] && [ "$powerState2" = "poweredOff" ]; then
             echo VMs powered off!
             break
