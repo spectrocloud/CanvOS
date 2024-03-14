@@ -10,6 +10,7 @@ set -e
 #    - earthly (https://earthly.dev/get-earthly)
 #    - git (https://github.com/git-guides/install-git)
 #    - govc (https://github.com/vmware/govmomi/blob/main/govc/README.md#installation)
+#      WARNING: govc must be v0.32.0 or greater!
 #    - jq (https://jqlang.github.io/jq/download/)
 #    - mkisofs (https://command-not-found.com/mkisofs)
 #
