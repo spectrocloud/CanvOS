@@ -528,7 +528,7 @@ iso-image:
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
         COPY --platform=linux/${ARCH} +stylus-image/ /
-        RUN rm -rf /opt/spectrocloud/bin
+        RUN find /opt/spectrocloud/bin/. ! -name 'agent-provider-stylus' -type f -exec rm -f {} +
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /

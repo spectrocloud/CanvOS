@@ -5,7 +5,8 @@ users:
 
 stages:
   initramfs:
-    - name: link agent provider stylus
+    - if: '[ ! -f "/run/cos/live_mode" ]'
+      name: link agent provider stylus
       commands:
         - echo "Linking agent provider"
         - mkdir -p /usr/local/bin/
