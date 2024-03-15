@@ -11,3 +11,6 @@ content-*/*
 hack/*.img
 .DS_Store
 test/.env
+
+two-node-create.json
+two-node-update.json
