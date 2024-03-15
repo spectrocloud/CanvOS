@@ -275,7 +275,7 @@ base-image:
         END
 
         RUN apt update && \
-            apt install --no-install-recommends zstd vim iputils-ping bridge-utils curl tcpdump ethtool build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev libgd-dev libxml2 libxml2-dev uuid-dev nginx -y
+            apt install --no-install-recommends zstd vim iputils-ping bridge-utils curl tcpdump ethtool build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev libgd-dev libxml2 libxml2-dev uuid-dev -y
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                 if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
