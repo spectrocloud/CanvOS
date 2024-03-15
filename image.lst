@@ -1,0 +1,7 @@
+quay.io/kairos/ubuntu:22.04-core-amd64-generic-v2.4.3
+quay.io/kairos/ubuntu:22.10-core-amd64-generic-v2.4.3
+quay.io/kairos/ubuntu:23.04-core-amd64-generic-v2.4.3
+quay.io/kairos/opensuse:leap-15.5-core-amd64-generic-v2.4.3
+gcr.io/spectro-dev-public/boobalan/slem-base-image:kairos-v2.4.3
+gcr.io/spectro-dev-public/ubuntu-focal-fips:v4.2_20231226
+gcr.io/spectro-dev-public/piyush/rhel-kairos:4.3.0
