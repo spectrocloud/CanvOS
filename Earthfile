@@ -12,11 +12,11 @@ FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.0
 ARG SPECTRO_LUET_VERSION=v1.2.0
-ARG KAIROS_VERSION=v2.4.3
+ARG KAIROS_VERSION=v3.0.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.200.5
+ARG OSBUILDER_VERSION=v0.200.7
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
 ARG KUBEADM_PROVIDER_VERSION=v4.2.1
@@ -316,7 +316,7 @@ uki-genkey:
 provider-image:   
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
-    ARG K8S_VERSION=1.26.4
+    ARG K8S_VERSION=1.27.9
     ARG IMAGE_REPO
     IF [ "$CUSTOM_TAG" != "" ]
         ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
@@ -368,7 +368,7 @@ build-provider-trustedboot-image:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
     COPY keys /keys
-    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys
+    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
