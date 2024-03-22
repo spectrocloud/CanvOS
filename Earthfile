@@ -3,6 +3,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 ## Default Image Repos Used in the Builds. 
+ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
@@ -165,9 +166,9 @@ uki-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
-    FROM scratch
+    FROM $ALPINE_IMG
     WORKDIR /
-
+    COPY +luet/luet /usr/bin/luet
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --platform=linux/${ARCH} +install-k8s/ /k8s
     SAVE IMAGE --push $IMAGE_PATH
