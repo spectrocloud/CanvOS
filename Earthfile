@@ -166,9 +166,10 @@ uki-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
-    FROM $ALPINE_IMG
+    FROM gcr.io/spectro-images-public/ubuntu-systemd:22.04
     WORKDIR /
     COPY +luet/luet /usr/bin/luet
+    COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --platform=linux/${ARCH} +install-k8s/ /k8s
     SAVE IMAGE --push $IMAGE_PATH
@@ -190,6 +191,10 @@ stylus-image-pack:
 luet:
     FROM quay.io/luet/base:latest
     SAVE ARTIFACT /usr/bin/luet /luet
+
+kairos-agent:
+    FROM $BASE_IMAGE
+    SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
 
 install-k8s:
     FROM alpine
