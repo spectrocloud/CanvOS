@@ -30,6 +30,7 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG ARCH
+ARG DISABLE_SELINUX=true
 
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -355,9 +356,11 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
+    IF [ "$DISABLE_SELINUX" = "true" ]
     # Ensure SElinux gets disabled
-    RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
-        if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+        RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+            if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+    END
 
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
