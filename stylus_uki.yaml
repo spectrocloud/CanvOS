@@ -20,6 +20,28 @@ stages:
         - mkdir -p /usr/local/.state/opt.bind/spectrocloud/bin
         - mkdir -p /usr/local/bin/
         - cp -rfv /run/initramfs/live/luet /usr/local/bin/
-        - cp -rfv /run/initramfs/live/stylus-image.tar /usr/local/
+        - cp -rfv /run/initramfs/live/stylus-image.tar /oem/.opt/
         - luet util unpack file://run/initramfs/live/stylus-image.tar /
         - cp -rfv /opt/spectrocloud/ /usr/local/.state/opt.bind/
+  after-reset:
+    - name: "Copy files from oem to persistent"
+      commands:
+        - |
+          /bin/bash <<'EOF'
+          #!/bin/bash
+          set -e
+          echo "Copying files from oem to persistent"
+          # /oem was mounted in my tests. Let's umount it to be sure.
+          umount /oem || true
+          # Close all encrypted partitions
+          for p in $(ls /dev/mapper/vda*); do cryptsetup close $p; done
+          /usr/lib/systemd/systemd-cryptsetup attach persistent $(findfs PARTLABEL=persistent) - tpm2-device=auto
+          /usr/lib/systemd/systemd-cryptsetup attach oem $(findfs PARTLABEL=oem) - tpm2-device=auto
+          mount /dev/mapper/persistent /usr/local
+          mount /dev/mapper/oem /oem
+          mkdir -p /usr/local/.state/opt.bind
+          luet util unpack file://oem/.opt/stylus-image.tar /
+          umount /dev/mapper/persistent
+          umount /dev/mapper/oem
+          cryptsetup close /dev/mapper/persistent
+          cryptsetup close /dev/mapper/oem
