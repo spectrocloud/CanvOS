@@ -68,7 +68,7 @@ echo -e '\n'
 echo -e 'pack:'
 echo -e '  content:'
 echo -e '    images:'
-echo -e '      - image: "{{.spectro.pack.edge-native-byoi.options.system.uri}}"'
+echo -e '      - image: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"'
 echo -e '  # Below config is default value, please uncomment if you want to modify default values'
 echo -e '  #drain:'
 echo -e '    #cordon: true'
@@ -80,7 +80,6 @@ echo -e '    #force: true # Continue even if there are pods that do not declare 
 echo -e '    #disableEviction: false # Force drain to use delete, even if eviction is supported. This will bypass checking PodDisruptionBudgets, use with caution'
 echo -e '    #skipWaitForDeleteTimeout: 60 # If pod DeletionTimestamp older than N seconds, skip waiting for the pod. Seconds must be greater than 0 to skip.'
 echo -e 'options:'
-echo -e '  system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"'
 echo -e '\n'
 echo -e "  system.registry: $IMAGE_REGISTRY"
 echo -e "  system.repo: $IMAGE_REPO"
