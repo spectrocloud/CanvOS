@@ -8,5 +8,9 @@ config.yaml
 content-*/*
 *.arg
 .idea
-
+hack/*.img
 .DS_Store
+test/.env
+
+two-node-create.json
+two-node-update.json

@@ -1,0 +1,16 @@
+VERSION 0.6
+
+ARG OSBUILDER_VERSION=v0.7.11
+ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
+ARG ISO_NAME=debug
+
+# replace with your CanvOS provider image
+ARG PROVIDER_IMAGE=oci:tylergillson/ubuntu:k3s-1.26.4-v4.0.4-071c2c23
+
+build:
+    FROM $OSBUILDER_IMAGE
+    WORKDIR /build
+    COPY . ./
+
+    RUN /entrypoint.sh --name $ISO_NAME --debug build-iso --squash-no-compression --date=false $PROVIDER_IMAGE --output /build/
+    SAVE ARTIFACT /build/$ISO_NAME.iso kairos.iso AS LOCAL build/$ISO_NAME.iso

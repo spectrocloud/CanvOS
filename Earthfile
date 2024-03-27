@@ -44,7 +44,8 @@ ARG PROXY_CERT_PATH
 
 
 ARG UPDATE_KERNEL=false
-
+ARG TWO_NODE=false
+ARG KINE_VERSION=0.11.4
 ARG ETCD_VERSION="v3.5.5"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
@@ -73,31 +74,29 @@ build-all-images:
         BUILD +build-provider-images
     END
     IF [ "$ARCH" = "arm64" ]
-       BUILD --platform=linux/arm64 +iso-image
-       BUILD --platform=linux/arm64 +iso
+        BUILD --platform=linux/arm64 +iso-image
+        BUILD --platform=linux/arm64 +iso
     ELSE IF [ "$ARCH" = "amd64" ]
-    BUILD --platform=linux/amd64 +iso-image
-       BUILD --platform=linux/amd64 +iso
+        BUILD --platform=linux/amd64 +iso-image
+        BUILD --platform=linux/amd64 +iso
     END
 
 build-provider-images:
     BUILD  +provider-image --K8S_VERSION=1.24.6
     BUILD  +provider-image --K8S_VERSION=1.25.2
-    BUILD  +provider-image --K8S_VERSION=1.26.4
-    BUILD  +provider-image --K8S_VERSION=1.27.2
     BUILD  +provider-image --K8S_VERSION=1.25.13
+    BUILD  +provider-image --K8S_VERSION=1.25.15
+    BUILD  +provider-image --K8S_VERSION=1.26.4
     BUILD  +provider-image --K8S_VERSION=1.26.8
+    BUILD  +provider-image --K8S_VERSION=1.26.10
+    BUILD  +provider-image --K8S_VERSION=1.26.12
+    BUILD  +provider-image --K8S_VERSION=1.27.2
     BUILD  +provider-image --K8S_VERSION=1.27.5
     BUILD  +provider-image --K8S_VERSION=1.27.7
-    BUILD  +provider-image --K8S_VERSION=1.26.10
-    BUILD  +provider-image --K8S_VERSION=1.25.15
-    BUILD  +provider-image --K8S_VERSION=1.28.2
-    BUILD  +provider-image --K8S_VERSION=1.29.0
     BUILD  +provider-image --K8S_VERSION=1.27.9
-    BUILD  +provider-image --K8S_VERSION=1.26.12
+    BUILD  +provider-image --K8S_VERSION=1.28.2
     BUILD  +provider-image --K8S_VERSION=1.28.5
-
-
+    BUILD  +provider-image --K8S_VERSION=1.29.0
 
 build-provider-images-fips:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -268,6 +267,7 @@ base-image:
        COPY mount.yaml /system/oem/mount.yaml
     END
 
+    # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
@@ -298,28 +298,44 @@ base-image:
 
         RUN rm -rf /var/cache/* && \
             apt clean
+
+        IF $TWO_NODE
+            RUN apt install -y apt-transport-https ca-certificates curl && \
+                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
+                rm postgresql.asc && \
+                apt update && \
+                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
+        END
             
-    # IF OS Type is Opensuse
+    # OS == Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /usr/share/pki/trust/anchors
-            RUN  update-ca-certificates
+            RUN update-ca-certificates
         END
         # Enable or Disable Kernel Updates
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN zypper al kernel-de*
         END
 
-        RUN zypper refresh && \
-            zypper update -y
+        RUN zypper refresh && zypper update -y
 
-           IF [ -e "/usr/bin/dracut" ]
-             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
-             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
-           END
-        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump
-        RUN zypper cc && \
+        IF [ -e "/usr/bin/dracut" ]
+            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
+            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
+        END
+
+        IF $TWO_NODE
+            RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
+                zypper --gpg-auto-import-keys ref && \
+                zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
+        END
+
+        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
+            zypper cc && \
             zypper clean
     END
 
@@ -360,6 +376,14 @@ base-image:
     # Ensure SElinux gets disabled
         RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
             if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+    END
+
+    IF $TWO_NODE
+        RUN mkdir -p /opt/spectrocloud/bin && \
+            curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
+
+        # ensure psql works ootb for the postgres user
+        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
     END
 
 # Used to build the installer image.  The installer ISO will be created from this.
