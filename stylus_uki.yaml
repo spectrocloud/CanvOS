@@ -20,7 +20,6 @@ stages:
         - mkdir -p /usr/local/.state/opt.bind/spectrocloud/bin
         - mkdir -p /usr/local/bin/
         - cp -rfv /run/initramfs/live/luet /usr/local/bin/
-        - cp -rfv /run/initramfs/live/stylus-image.tar /oem/.opt/
         - luet util unpack file://run/initramfs/live/stylus-image.tar /
         - cp -rfv /opt/spectrocloud/ /usr/local/.state/opt.bind/
   after-reset:
