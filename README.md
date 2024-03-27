@@ -224,3 +224,14 @@ docker push ttl.sh/ubuntu:k3s-1.25.2-v4.2.3-demo
 ### How-Tos
 
 * [Building Edge Native Artifacts]([https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos](https://deploy-preview-1318--docs-spectrocloud.netlify.app/clusters/edge/edgeforge-workflow/palette-canvos))
+
+
+### Building ARM64 Artifacts for Nvidia Jetson devices
+1. Your .arg file should contain these values
+```
+BASE_IMAGE=quay.io/kairos/ubuntu:20.04-core-arm64-nvidia-jetson-agx-orin-v2.4.3
+ARCH=arm64
+platform=linux/arm64
+```
+
+2. ./earthly.sh +build-all-images
