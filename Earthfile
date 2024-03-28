@@ -3,6 +3,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 ## Default Image Repos Used in the Builds. 
+ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
@@ -12,11 +13,12 @@ FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.0
 ARG SPECTRO_LUET_VERSION=v1.2.0
-ARG KAIROS_VERSION=v2.4.3
+ARG KAIROS_VERSION=v3.0.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
-ARG OSBUILDER_VERSION=v0.7.11
-ARG OSBUILDER_IMAGE=$KAIROS_BASE_IMAGE_URL/osbuilder-tools:$OSBUILDER_VERSION
+ARG BASE_IMAGE_URL=quay.io/kairos
+ARG OSBUILDER_VERSION=v0.200.9
+ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
 ARG KUBEADM_PROVIDER_VERSION=v4.2.1
 ARG RKE2_PROVIDER_VERSION=v4.1.1
@@ -44,6 +46,7 @@ ARG PROXY_CERT_PATH
 
 
 ARG UPDATE_KERNEL=false
+ARG IS_UKI=false
 
 ARG ETCD_VERSION="v3.5.5"
 
@@ -65,6 +68,15 @@ END
 IF [[ "$BASE_IMAGE" =~ "20.04-arm64-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
+
+IF [ "$FIPS_ENABLED" = "true" ]
+    ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+ELSE
+    ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
+END
+
+ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION
+ARG CMDLINE="stylus.registration"
 
 build-all-images:
     IF $FIPS_ENABLED
@@ -148,6 +160,117 @@ iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-own /. rootfs
 
+uki-iso:
+    ARG ISO_NAME=installer
+    WORKDIR /build
+    COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
+    SAVE ARTIFACT /build/* AS LOCAL ./build/
+
+uki-provider-image:
+    FROM gcr.io/spectro-images-public/ubuntu-systemd:22.04
+    WORKDIR /
+    COPY +luet/luet /usr/bin/luet
+    COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
+    COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
+    COPY --platform=linux/${ARCH} +install-k8s/ /k8s
+    SAVE IMAGE --push $IMAGE_PATH
+
+trust-boot-unpack:
+    COPY +luet/luet /usr/bin/luet
+    COPY --platform=linux/${ARCH} +build-provider-trustedboot-image/ /image
+    RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
+        luet util unpack $FILE /trusted-boot
+    SAVE ARTIFACT /trusted-boot/*
+
+stylus-image-pack:  
+    COPY +luet/luet /usr/bin/luet
+    COPY --platform=linux/${ARCH} +stylus-image/ /stylus
+    RUN cd stylus && tar -czf ../stylus.tar *
+    RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
+    SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
+
+luet:
+    FROM quay.io/luet/base:latest
+    SAVE ARTIFACT /usr/bin/luet /luet
+
+kairos-agent:
+    FROM $BASE_IMAGE
+    SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
+
+install-k8s:
+    FROM alpine
+    COPY +luet/luet /usr/bin/luet
+    ARG K8S_VERSION=1.27.9
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG BASE_K8S_VERSION=$K8S_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    END
+
+    WORKDIR /output
+    RUN mkdir -p /etc/luet/repos.conf.d && \
+        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+        luet repo update
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+        RUN luet install -y container-runtime/containerd
+    END
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+       RUN luet install -y container-runtime/containerd-fips
+    END
+    RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
+    RUN rm -rf /output/var/cache/*
+    SAVE ARTIFACT /output/*
+
+internal-slink:
+    FROM alpine
+    COPY internal/slink/slink /slink
+    RUN chmod +x /slink
+    SAVE ARTIFACT /slink
+
+build-uki-iso:
+    ARG ISO_NAME
+
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    ENV ISO_NAME=${ISO_NAME}
+    COPY overlay/files-iso/ /overlay/
+    COPY --if-exists user-data /overlay/config.yaml
+    COPY --if-exists user-data /overlay/data/config.yaml
+    COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/data/stylus-image.tar
+    COPY --platform=linux/${ARCH} +luet/luet /overlay/data/luet
+ 
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    #check if clusterconfig is passed in
+    IF [ "$CLUSTERCONFIG" != "" ]
+        COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
+    END
+
+    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
+    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
+        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
+        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
+    fi
+
+    WORKDIR /build
+    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    IF [ "$ARCH" = "arm64" ]
+       RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
+    ELSE IF [ "$ARCH" = "amd64" ]
+       COPY keys /keys
+       RUN ls -liah /keys
+       RUN mkdir /iso
+       RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
+       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --extend-cmdline "$CMDLINE" --boot-branding "Palette eXtended Kubernetes Edge"
+       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --extend-cmdline "$CMDLINE" --boot-branding "Palette eXtended Kubernetes Edge"
+    END
+    WORKDIR /iso
+    SAVE ARTIFACT /iso/*
+
 iso:
     ARG ISO_NAME=installer
     WORKDIR /build
@@ -187,11 +310,21 @@ build-iso:
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
     SAVE ARTIFACT /iso/*
 
+### UKI targets
+## Generate UKI keys
+## earthly +uki-gen --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=365
+uki-genkey:
+    ARG MY_ORG="ACME Corp"
+    ARG EXPIRATION_IN_DAYS=365
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    RUN /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+    SAVE ARTIFACT /keys AS LOCAL ./
+
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:   
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
-    ARG K8S_VERSION=1.26.4
+    ARG K8S_VERSION=1.27.9
     ARG IMAGE_REPO
     IF [ "$CUSTOM_TAG" != "" ]
         ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
@@ -213,15 +346,18 @@ provider-image:
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        RUN luet install -y container-runtime/containerd
+
+    IF [ "$IS_UKI" = "true" ]
+        COPY +internal-slink/slink /usr/bin/slink
+        COPY +install-k8s/ /k8s
+        RUN slink --source /k8s/ --target /opt/k8s
+        RUN rm -f /usr/bin/slink
+        RUN rm -rf /k8s
+        RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+    ELSE
+        COPY +install-k8s/ /
     END
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       RUN luet install -y container-runtime/containerd-fips
-    END
-
-    RUN luet install -y  k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION && luet cleanup
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
     COPY (+download-etcdctl/etcdctl) /usr/bin/
@@ -231,17 +367,24 @@ provider-image:
 
     SAVE IMAGE --push $IMAGE_PATH
 
+
+provider-image-rootfs:
+    FROM --platform=linux/${ARCH} +provider-image
+    SAVE ARTIFACT --keep-own /. rootfs
+
+build-provider-trustedboot-image:
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
+    COPY keys /keys
+    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
+    SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
+
 stylus-image:
-    IF [ "$FIPS_ENABLED" = "true" ]
-        ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
-    ELSE
-        ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
-    END
     FROM $STYLUS_BASE
-    SAVE ARTIFACT ./*
-    SAVE ARTIFACT /etc/kairos/branding
-    SAVE ARTIFACT /etc/elemental/config.yaml
-    SAVE ARTIFACT /oem/stylus_config.yaml
+    SAVE ARTIFACT --keep-own  ./*
+    # SAVE ARTIFACT /etc/kairos/branding
+    # SAVE ARTIFACT /etc/elemental/config.yaml
+    # SAVE ARTIFACT /oem/stylus_config.yaml
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -265,7 +408,31 @@ base-image:
     --build-arg NO_PROXY=$NO_PROXY .
 
     IF [ "$IS_JETSON" = "true" ]
-       COPY mount.yaml /system/oem/mount.yaml
+        COPY mount.yaml /system/oem/mount.yaml
+    END
+
+    IF [ "$IS_UKI" = "true" ]
+        COPY stylus_uki.yaml /system/oem/stylus_uki.yaml
+    END
+
+    IF [ "$ARCH" = "arm64" ]
+        RUN  mkdir -p /etc/luet/repos.conf.d && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm  --priority 1 -y && \
+          luet repo update
+    ELSE IF [ "$ARCH" = "amd64" ]
+        RUN  mkdir -p /etc/luet/repos.conf.d && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
+          luet repo update
+    END
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        ARG BASE_K8S_VERSION=$K8S_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
@@ -276,28 +443,30 @@ base-image:
         END
 
         RUN apt update && \
-            apt install --no-install-recommends zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
-        IF [ "$UPDATE_KERNEL" = "false" ]
-            RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
-                if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
-                if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
-        END
-        RUN apt update && \
-            apt upgrade -y
-        RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz
-        RUN kernel=$(ls /lib/modules | tail -n1) && \
-            dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-            ln -sf "initrd-${kernel}" /boot/initrd
-        RUN kernel=$(ls /lib/modules | tail -n1) && \
-            depmod -a "${kernel}"
+            apt install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
+        IF [ "$IS_UKI" = "false" ]
+            IF [ "$UPDATE_KERNEL" = "false" ]
+                RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
+                    if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
+                    if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
+            END
+            RUN apt update && \
+                apt upgrade -y
+            RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
+           	ln -sf "${kernel#/boot/}" /boot/vmlinuz
+            RUN kernel=$(ls /lib/modules | tail -n1) && \
+            	dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+            	ln -sf "initrd-${kernel}" /boot/initrd
+            RUN kernel=$(ls /lib/modules | tail -n1) && \
+           	depmod -a "${kernel}"
 
-        RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
-            ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
-        fi
+            RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
+                ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
+            fi
 
-        RUN rm -rf /var/cache/* && \
-            apt clean
+            RUN rm -rf /var/cache/* && \
+                apt clean
+        END 
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
@@ -365,7 +534,13 @@ base-image:
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
-    COPY --platform=linux/${ARCH} +stylus-image/ /
+    IF [ "$IS_UKI" = "false" ]
+        COPY --platform=linux/${ARCH} +stylus-image/ /
+    ELSE
+        COPY --platform=linux/${ARCH} +stylus-image/ /
+        RUN find /opt/spectrocloud/bin/. ! -name 'agent-provider-stylus' -type f -exec rm -f {} +
+        RUN rm -f /usr/bin/luet
+    END
     COPY overlay/files/ /
     
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
@@ -376,6 +551,17 @@ iso-image:
     ELSE
         SAVE IMAGE palette-installer-image:$PE_VERSION
     END
+
+uki:
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    COPY (+provider-image/) /provider-image
+    DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
+    COPY keys /keys
+    RUN ls -liah /keys
+    RUN /entrypoint.sh build-uki dir:/provider-image -t container -d /iso -k /keys
+    WORKDIR /iso
+    SAVE ARTIFACT /iso/*
+    SAVE IMAGE --push $IMAGE_PATH 
 
 OS_RELEASE:
     COMMAND
@@ -389,7 +575,8 @@ OS_RELEASE:
     ARG OS_REPO=spectrocloud/CanvOS
     ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}
     ARG ARTIFACT=kairos-core-${OS_DISTRIBUTION}-$OS_VERSION
+    ARG KAIROS_RELEASE=${OS_VERSION}
 
     # update OS-release file
-    RUN sed -i -n '/KAIROS_/!p' /etc/os-release
+    # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
     RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
