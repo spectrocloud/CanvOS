@@ -17,7 +17,7 @@ ARG KAIROS_VERSION=v3.0.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.200.8
+ARG OSBUILDER_VERSION=v0.200.9
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
 ARG KUBEADM_PROVIDER_VERSION=v4.2.1
@@ -311,11 +311,12 @@ build-iso:
 
 ### UKI targets
 ## Generate UKI keys
-## earthly +uki-gen --MY_ORG="ACME Corp"
+## earthly +uki-gen --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=365
 uki-genkey:
     ARG MY_ORG="ACME Corp"
+    ARG EXPIRATION_IN_DAYS=365
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
-    RUN /entrypoint.sh genkey "$MY_ORG" -o /keys
+    RUN /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
     SAVE ARTIFACT /keys AS LOCAL ./
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
