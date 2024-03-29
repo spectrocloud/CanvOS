@@ -54,7 +54,7 @@ function init_globals() {
 }
 
 function create_canvos_args() {
-cat <<EOF > .arg
+    cat <<EOF > .arg
 CUSTOM_TAG=twonode
 IMAGE_REGISTRY=$OCI_REGISTRY
 OS_DISTRIBUTION=ubuntu
@@ -71,12 +71,22 @@ EOF
 }
 
 function create_userdata() {
-cat <<EOF > build/user-data
+    cat <<EOF > build/user-data
 #cloud-config
 stylus:
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
     paletteEndpoint: "$DOMAIN"
+EOF
+    if [ -n "$PROXY" ]; then
+        cat <<EOF >> build/user-data
+    network:
+      httpProxy: http://10.10.180.0:3128
+      httpsProxy: http://10.10.180.0:3128
+      noProxy: 10.10.128.10,.spectrocloud.dev,10.0.0.0/8
+EOF
+    fi
+    cat <<EOF >> build/user-data
   debug: true
 install:
   poweroff: true
@@ -84,7 +94,7 @@ users:
   - name: kairos
     passwd: kairos
 EOF
-echo "created build/user-data"
+    echo "created build/user-data"
 }
 
 function create_iso() {
