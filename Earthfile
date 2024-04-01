@@ -2,14 +2,14 @@ VERSION 0.6
 ARG TARGETOS
 ARG TARGETARCH
 
-## Default Image Repos Used in the Builds. 
+# Default image repositories used in the builds.
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
-## Spectro Cloud and Kairos Tags ##
+# Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.2.3
 ARG SPECTRO_LUET_VERSION=v1.2.0
 ARG KAIROS_VERSION=v2.4.3
@@ -21,7 +21,7 @@ ARG K3S_PROVIDER_VERSION=v4.2.1
 ARG KUBEADM_PROVIDER_VERSION=v4.2.1
 ARG RKE2_PROVIDER_VERSION=v4.1.1
 
-# Variables used in the builds.  Update for ADVANCED use cases only Modify in .arg file or via CLI arguements
+# Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguements.
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
 ARG IMAGE_REGISTRY
@@ -39,8 +39,6 @@ ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
-
-
 
 ARG UPDATE_KERNEL=false
 ARG TWO_NODE=false
@@ -165,8 +163,6 @@ build-iso:
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-
-
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
 
@@ -185,7 +181,7 @@ build-iso:
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
     SAVE ARTIFACT /iso/*
 
-# Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
+# Used to create the provider images. The --K8S_VERSION will be passed in the earthly build.
 provider-image:   
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
@@ -226,6 +222,30 @@ provider-image:
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
+
+    IF $TWO_NODE
+        # Install postgresql 16
+        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+            RUN apt install -y apt-transport-https ca-certificates curl && \
+                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
+                rm postgresql.asc && \
+                apt update && \
+                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
+        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
+            RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
+                zypper --gpg-auto-import-keys ref && \
+                zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
+        END
+
+        # Install kine
+        RUN mkdir -p /opt/spectrocloud/bin && \
+            curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
+
+        # Ensure psql works ootb for the postgres user
+        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
+    END
 
     SAVE IMAGE --push $IMAGE_PATH
 
@@ -297,16 +317,6 @@ base-image:
 
         RUN rm -rf /var/cache/* && \
             apt clean
-
-        IF $TWO_NODE
-            RUN apt install -y apt-transport-https ca-certificates curl && \
-                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
-                gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
-                rm postgresql.asc && \
-                apt update && \
-                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
-        END
             
     # OS == Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
@@ -327,12 +337,6 @@ base-image:
             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
         END
 
-        IF $TWO_NODE
-            RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
-                zypper --gpg-auto-import-keys ref && \
-                zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
-        END
-
         RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
             zypper cc && \
             zypper clean
@@ -344,6 +348,7 @@ base-image:
             zypper clean
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
+
     IF [ "$ARCH" = "arm64" ]
         ARG LUET_REPO=luet-repo-arm
     ELSE IF [ "$ARCH" = "amd64" ]
@@ -353,7 +358,7 @@ base-image:
           SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y && \
           luet repo update
 
-     IF [ "$OS_DISTRIBUTION" = "rhel" ]
+    IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl
     END
 
@@ -375,15 +380,7 @@ base-image:
     RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
         if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
 
-    IF $TWO_NODE
-        RUN mkdir -p /opt/spectrocloud/bin && \
-            curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
-
-        # ensure psql works ootb for the postgres user
-        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
-    END
-
-# Used to build the installer image.  The installer ISO will be created from this.
+# Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
     COPY --platform=linux/${ARCH} +stylus-image/ /
