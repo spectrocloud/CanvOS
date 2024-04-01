@@ -1,6 +1,6 @@
 
 # Kairos framework packages for ubuntu fips
-FROM quay.io/kairos/framework:v2.4.3_fips as kairos-fips
+FROM quay.io/kairos/framework:v2.4.5-fips as kairos-fips
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base
