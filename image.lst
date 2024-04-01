@@ -6,3 +6,5 @@ gcr.io/spectro-images-public/rhel8:core-amd64-generic-v2.4.5
 gcr.io/spectro-images-public/slem:2.4.5
 gcr.io/spectro-images-public/ubuntu-focal-fips:v2.4.5
 gcr.io/spectro-images-public/rhel-fips:v2.4.5
+
+gcr.io/spectro-images-public/kairos-io/provider-kubeadm:v4.3.0
