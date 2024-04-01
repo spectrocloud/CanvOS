@@ -20,8 +20,12 @@ stages:
         - mkdir -p /usr/local/.state/opt.bind/spectrocloud/bin
         - mkdir -p /usr/local/bin/
         - cp -rfv /run/initramfs/live/luet /usr/local/bin/
-        - luet util unpack file://run/initramfs/live/stylus-image.tar /
+        - cp -rfv /run/initramfs/live/stylus-image.tar /usr/local/
         - cp -rfv /opt/spectrocloud/ /usr/local/.state/opt.bind/
+  boot:
+    - name: uki stylus unpack boot
+      commands:
+        - luet util unpack file://usr/local/stylus-image.tar /
   after-reset:
     - name: "Copy files from oem to persistent"
       commands:
