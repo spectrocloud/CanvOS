@@ -82,7 +82,6 @@ RUN apt-get update \
     openssh-server \
     parted \
     rsync \
-    snapd \
     snmpd \
     squashfs-tools \
     sudo \
