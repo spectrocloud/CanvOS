@@ -5,7 +5,7 @@ ARG TARGETARCH
 ## Default Image Repos Used in the Builds. 
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
-ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
+ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
@@ -49,9 +49,9 @@ ARG ETCD_VERSION="v3.5.13"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
-        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
+        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
     ELSE
-        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
     END
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
