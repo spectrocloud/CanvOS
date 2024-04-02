@@ -7,7 +7,9 @@ gcr.io/spectro-images-public/ubuntu-focal-fips:v2.4.5
 gcr.io/spectro-images-public/rhel-fips:v2.4.5
 
 gcr.io/spectro-images-public/kairos-io/provider-kubeadm:v4.3.0
-gcr.io/spectro-images-public/stylus-linux-amd64:v4.3.1-rc6
-gcr.io/spectro-dev-public/stylus/init-upgrade:5.5
+gcr.io/spectro-images-public/stylus-linux-amd64:v4.3.1-rc7
+gcr.io/spectro-images-public/stylus-framework-linux-amd64:v4.3.1-rc7
+gcr.io/spectro-images-public/release/spectro-kubectl-no-error:1.28.4
+gcr.io/spectro-images-public/stylus/init-upgrade:5.5 
 
 
