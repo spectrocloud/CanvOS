@@ -100,12 +100,12 @@ build-provider-images:
         BUILD  +provider-image --K8S_VERSION=1.26.14
         BUILD  +provider-image --K8S_VERSION=1.27.11
         BUILD  +provider-image --K8S_VERSION=1.28.7
-        BUILD  +provider-image --K8S_VERSION=1.29.2
+        BUILD  +provider-image --K8S_VERSION=1.29.3
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         BUILD  +provider-image --K8S_VERSION=1.26.14
         BUILD  +provider-image --K8S_VERSION=1.27.11
         BUILD  +provider-image --K8S_VERSION=1.28.7
-        BUILD  +provider-image --K8S_VERSION=1.29.3
+        BUILD  +provider-image --K8S_VERSION=1.29.2
     END
 
 build-provider-images-fips:
