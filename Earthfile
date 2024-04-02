@@ -283,7 +283,7 @@ base-image:
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         END
         RUN apt update && \
-            apt upgrade -y
+            apt upgrade --no-install-recommends -y
         RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
         RUN kernel=$(ls /lib/modules | tail -n1) && \
