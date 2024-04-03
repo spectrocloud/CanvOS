@@ -3,7 +3,7 @@ gcr.io/spectro-images-public/kairos-ubuntu:22.04-core-amd64-generic-v2.4.5
 gcr.io/spectro-images-public/opensuse:leap-15.5-core-amd64-generic-v2.4.5
 gcr.io/spectro-images-public/rhel8:core-amd64-generic-v2.4.5
 gcr.io/spectro-images-public/slem:2.4.5
-gcr.io/spectro-dev-public/santhosh/ubuntu-focal-fips:v2.4.5_20240402
+gcr.io/spectro-images-public/ubuntu-focal-fips:v2.4.5_20240402
 gcr.io/spectro-images-public/rhel-fips:v2.4.5
 gcr.io/spectro-images-public/release/spectro-kubectl-no-error:1.28.4
 gcr.io/spectro-images-public/stylus/init-upgrade:5.5
