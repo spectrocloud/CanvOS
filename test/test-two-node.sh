@@ -74,6 +74,10 @@ function create_userdata() {
     cat <<EOF > build/user-data
 #cloud-config
 stylus:
+  debug: true
+  users:
+  - name: kairos
+    passwd: kairos
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
     paletteEndpoint: "$DOMAIN"
@@ -87,13 +91,45 @@ EOF
 EOF
     fi
     cat <<EOF >> build/user-data
-  debug: true
 install:
   poweroff: true
-users:
-  - name: kairos
-    passwd: kairos
 EOF
+    if [ -n "$WIFI_NETWORK" ]; then
+        cat <<'EOF' >> build/user-data
+  bind_mounts:
+  - /var/lib/wpa
+stages:
+  initramfs:
+  - users:
+      kairos:
+        groups:
+        - sudo
+        passwd: kairos
+  network.before:
+  - name: "Connect to Wi-Fi"
+    commands:
+    - |
+      # Find the first wireless network interface
+      wireless_interface=""
+      for interface in $(ip link | grep -oP '^\d+: \K[^:]+(?=:)')
+      do
+        if [ -d "/sys/class/net/$interface/wireless" ]; then
+          wireless_interface=$interface
+          break
+        fi
+      done
+      # Check if a wireless interface was found and connect it to WiFi
+      if [ -n "$wireless_interface" ]; then
+        wpa_passphrase <WIFI_NETWORK> <WIFI_PASSWORD> | tee /var/lib/wpa/wpa_supplicant.conf
+        wpa_supplicant -B -c /var/lib/wpa/wpa_supplicant.conf -i $wireless_interface
+        dhclient $wireless_interface
+      else
+        echo "No wireless network interface found."
+      fi
+EOF
+    sed -i "s|<WIFI_NETWORK>|$WIFI_NETWORK|g" build/user-data
+    sed -i "s|<WIFI_PASSWORD>|$WIFI_PASSWORD|g" build/user-data
+    fi
     echo "created build/user-data"
 }
 

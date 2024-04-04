@@ -32,3 +32,10 @@ RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] && [ "${PROXY_CERT_PATH}" != "
 ### To add a custom health script for two-node liveness checks ###
 
 # ADD overlay/files/opt/spectrocloud/bin/check-disk-size.sh /opt/spectrocloud/bin/
+
+### To install wifi prerequisites for Ubuntu ###
+
+# RUN apt-get update && apt-get install wpasupplicant -y && \
+#    apt-get update && apt-get install network-manager -y && \
+#    apt-get install iputils-ping -y && \
+#    mkdir /var/lib/wpa
