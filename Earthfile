@@ -74,7 +74,8 @@ ELSE
     ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
 END
 
-ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION
+ARG K8S_VERSION=1.27.9
+ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION-$K8S_VERSION
 ARG CMDLINE="stylus.registration"
 
 build-all-images:
@@ -199,7 +200,6 @@ kairos-agent:
 install-k8s:
     FROM alpine
     COPY +luet/luet /usr/bin/luet
-    ARG K8S_VERSION=1.27.9
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
@@ -225,6 +225,14 @@ install-k8s:
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
+
+install-sbctl:
+    FROM alpine
+    WORKDIR /output
+    RUN apk add curl
+    RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && \
+        mv sbctl/sbctl /output/sbctl
+    SAVE ARTIFACT /output/sbctl/sbctl
 
 internal-slink:
     FROM alpine
@@ -412,6 +420,7 @@ base-image:
 
     IF [ "$IS_UKI" = "true" ]
         COPY stylus_uki.yaml /system/oem/stylus_uki.yaml
+        COPY +install-sbctl/sbctl /usr/bin/sbctl
     END
 
     IF [ "$ARCH" = "arm64" ]
