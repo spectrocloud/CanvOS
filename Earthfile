@@ -13,7 +13,7 @@ FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.0
 ARG SPECTRO_LUET_VERSION=v1.2.0
-ARG KAIROS_VERSION=v3.0.3
+ARG KAIROS_VERSION=v3.0.4
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -53,7 +53,11 @@ IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
         ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
     ELSE
-        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+        IF [ "$IS_UKI" = "true" ]
+            ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki
+        ELSE
+            ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+        END
     END
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
@@ -281,7 +285,11 @@ build-uki-iso:
 iso:
     ARG ISO_NAME=installer
     WORKDIR /build
-    COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    IF [ "$IS_UKI" = "true" ]
+        COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
+    ELSE
+        COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 build-iso:
@@ -328,7 +336,7 @@ uki-genkey:
     SAVE ARTIFACT /keys AS LOCAL ./
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
-provider-image:   
+provider-image:
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG K8S_VERSION=1.27.9
