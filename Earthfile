@@ -46,6 +46,7 @@ ARG PROXY_CERT_PATH
 
 ARG UPDATE_KERNEL=false
 ARG IS_UKI=false
+ARG K8S_VERSION
 
 ARG ETCD_VERSION="v3.5.5"
 
@@ -78,7 +79,6 @@ ELSE
     ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
 END
 
-ARG K8S_VERSION=1.27.9
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION-$K8S_VERSION
 ARG CMDLINE="stylus.registration"
 
@@ -97,21 +97,30 @@ build-all-images:
     END
 
 build-provider-images:
-    BUILD  +provider-image --K8S_VERSION=1.24.6
-    BUILD  +provider-image --K8S_VERSION=1.25.2
-    BUILD  +provider-image --K8S_VERSION=1.26.4
-    BUILD  +provider-image --K8S_VERSION=1.27.2
-    BUILD  +provider-image --K8S_VERSION=1.25.13
-    BUILD  +provider-image --K8S_VERSION=1.26.8
-    BUILD  +provider-image --K8S_VERSION=1.27.5
-    BUILD  +provider-image --K8S_VERSION=1.27.7
-    BUILD  +provider-image --K8S_VERSION=1.26.10
-    BUILD  +provider-image --K8S_VERSION=1.25.15
-    BUILD  +provider-image --K8S_VERSION=1.28.2
-    BUILD  +provider-image --K8S_VERSION=1.29.0
-    BUILD  +provider-image --K8S_VERSION=1.27.9
-    BUILD  +provider-image --K8S_VERSION=1.26.12
-    BUILD  +provider-image --K8S_VERSION=1.28.5
+    IF [ "$IS_UKI" = "true" ]
+        ARG TARGET=uki-provider-image
+    ELSE
+        ARG TARGET=provider-image
+    END
+    IF [ "$K8S_VERSION" = "" ]
+        BUILD  +$TARGET --K8S_VERSION=1.24.6
+        BUILD  +$TARGET --K8S_VERSION=1.25.2
+        BUILD  +$TARGET --K8S_VERSION=1.26.4
+        BUILD  +$TARGET --K8S_VERSION=1.27.2
+        BUILD  +$TARGET --K8S_VERSION=1.25.13
+        BUILD  +$TARGET --K8S_VERSION=1.26.8
+        BUILD  +$TARGET --K8S_VERSION=1.27.5
+        BUILD  +$TARGET --K8S_VERSION=1.27.7
+        BUILD  +$TARGET --K8S_VERSION=1.26.10
+        BUILD  +$TARGET --K8S_VERSION=1.25.15
+        BUILD  +$TARGET --K8S_VERSION=1.28.2
+        BUILD  +$TARGET --K8S_VERSION=1.29.0
+        BUILD  +$TARGET --K8S_VERSION=1.27.9
+        BUILD  +$TARGET --K8S_VERSION=1.26.12
+        BUILD  +$TARGET --K8S_VERSION=1.28.5
+    ELSE
+        BUILD  +$TARGET --K8S_VERSION="$K8S_VERSION"
+    END
 
 
 
@@ -339,7 +348,6 @@ uki-genkey:
 provider-image:
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
-    ARG K8S_VERSION=1.27.9
     ARG IMAGE_REPO
     IF [ "$CUSTOM_TAG" != "" ]
         ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
