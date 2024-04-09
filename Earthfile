@@ -226,7 +226,8 @@ provider-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
-    COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
+    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
+    COPY +immucore-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
