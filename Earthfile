@@ -275,11 +275,17 @@ kairos-provider-image:
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
+immucore-image:
+    FROM quay.io/kairos/packages:immucore-system-0.1.17-3
+    SAVE ARTIFACT /*
+
 # base build image used to create the base image for all other image types
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE --build-arg PROXY_CERT_PATH=$PROXY_CERT_PATH \ 
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
     --build-arg NO_PROXY=$NO_PROXY .
+
+    COPY +immucore-image/ /
 
     IF [ "$IS_JETSON" = "true" ]
        COPY mount.yaml /system/oem/mount.yaml
