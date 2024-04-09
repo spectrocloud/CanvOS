@@ -12,11 +12,11 @@ FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.0
 ARG SPECTRO_LUET_VERSION=v1.2.0
-ARG KAIROS_VERSION=v3.0.0
+ARG KAIROS_VERSION=v3.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.200.5
+ARG OSBUILDER_VERSION=v0.200.9
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
 ARG KUBEADM_PROVIDER_VERSION=v4.2.1
@@ -83,11 +83,11 @@ build-all-images:
         BUILD +build-provider-images
     END
     IF [ "$ARCH" = "arm64" ]
-       BUILD --platform=linux/arm64 +iso-image
-       BUILD --platform=linux/arm64 +iso
+        BUILD --platform=linux/arm64 +iso-image
+        BUILD --platform=linux/arm64 +iso
     ELSE IF [ "$ARCH" = "amd64" ]
-    BUILD --platform=linux/amd64 +iso-image
-       BUILD --platform=linux/amd64 +iso
+        BUILD --platform=linux/amd64 +iso-image
+        BUILD --platform=linux/amd64 +iso
     END
 
 build-provider-images:
