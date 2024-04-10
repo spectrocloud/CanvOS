@@ -75,8 +75,10 @@ END
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=gcr.io/spectro-images-public/stylus-fips-linux-$ARCH:$PE_VERSION
 ELSE
     ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=gcr.io/spectro-images-public/stylus-linux-$ARCH:$PE_VERSION
 END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION-$K8S_VERSION
@@ -197,7 +199,7 @@ trust-boot-unpack:
 
 stylus-image-pack:  
     COPY +luet/luet /usr/bin/luet
-    COPY --platform=linux/${ARCH} +stylus-image/ /stylus
+    COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
     RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
     SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
@@ -408,6 +410,10 @@ stylus-image:
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
+
+stylus-package-image:
+    FROM $STYLUS_PACKAGE_BASE
+    SAVE ARTIFACT --keep-own  ./*
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
