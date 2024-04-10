@@ -22,7 +22,7 @@ stages:
       commands:
         - echo "Unpacking stylus package"
         - ln -sf /oem/opt.bind/luet /usr/local/bin/luet
-        - luet util unpack file://oem/opt.bind/stylus-image.tar /
+        - /oem/opt.bind/luet util unpack file://oem/opt.bind/stylus-image.tar /
   after-install:
     - name: uki stylus package persist
       commands:
