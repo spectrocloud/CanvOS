@@ -344,7 +344,10 @@ uki-genkey:
     ARG EXPIRATION_IN_DAYS=365
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     RUN /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+    RUN  mkdir -p /private-keys
+    RUN cd /keys; mv PK.{key,pem,esl} db.{pem,esl} KEK.{key,pem,esl} /private-keys
     SAVE ARTIFACT /keys AS LOCAL ./
+    SAVE ARTIFACT /private-keys AS LOCAL ./
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
