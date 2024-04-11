@@ -484,16 +484,16 @@ base-image:
             RUN  update-ca-certificates
         END
 
-        RUN apt update && \
-            apt install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
+        RUN apt-get update && \
+            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
         IF [ "$IS_UKI" = "false" ]
             IF [ "$UPDATE_KERNEL" = "false" ]
                 RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                     if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
                     if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
             END
-            RUN apt update && \
-                apt upgrade -y
+            RUN apt-get update && \
+                apt-get upgrade -y
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
             RUN kernel=$(ls /lib/modules | tail -n1) && \
@@ -507,7 +507,7 @@ base-image:
             fi
 
             RUN rm -rf /var/cache/* && \
-                apt clean
+                apt-get clean
         END 
             
     # IF OS Type is Opensuse
