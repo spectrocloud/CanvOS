@@ -15,7 +15,7 @@ stages:
         - /oem/opt.bind/luet util unpack file://oem/opt.bind/stylus-image.tar /
   after-install:
     - name: uki stylus package persist
-      if: '[ -e "/run/cos/uki_boot_mode" ]'
+      if: '[ -e "/run/cos/uki_install_mode" ]'
       commands:
         - echo "Copying files to persistent path"
         - umount /oem || true
