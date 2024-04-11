@@ -259,14 +259,6 @@ install-k8s:
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
 
-install-sbctl:
-    FROM alpine
-    WORKDIR /output
-    RUN apk add curl
-    RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && \
-        mv sbctl/sbctl /output/sbctl
-    SAVE ARTIFACT /output/sbctl/sbctl
-
 internal-slink:
     FROM alpine
     COPY internal/slink/slink /slink
@@ -463,7 +455,6 @@ base-image:
 
     IF [ "$IS_UKI" = "true" ]
         COPY stylus_uki.yaml /system/oem/stylus_uki.yaml
-        COPY +install-sbctl/sbctl /usr/bin/sbctl
     END
 
     IF [ "$ARCH" = "arm64" ]
