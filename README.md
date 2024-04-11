@@ -229,7 +229,7 @@ docker push ttl.sh/ubuntu:k3s-1.25.2-v4.2.3-demo
 ### Building ARM64 Artifacts for Nvidia Jetson devices
 1. Your .arg file should contain these values
 ```
-BASE_IMAGE=quay.io/kairos/ubuntu:20.04-core-arm64-nvidia-jetson-agx-orin-v2.4.3
+BASE_IMAGE=gcr.io/spectro-dev-public/stylus/ubuntu-jetson-orin:20.04-v2.4.5
 ARCH=arm64
 platform=linux/arm64
 ```
