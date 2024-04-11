@@ -6,13 +6,13 @@ ARG TARGETARCH
 ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
-ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
+ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.0
-ARG SPECTRO_LUET_VERSION=v1.2.0
+ARG SPECTRO_LUET_VERSION=v1.2.6
 ARG KAIROS_VERSION=v3.0.4
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -20,7 +20,7 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.200.9
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
-ARG KUBEADM_PROVIDER_VERSION=v4.2.1
+ARG KUBEADM_PROVIDER_VERSION=v4.3.1
 ARG RKE2_PROVIDER_VERSION=v4.1.1
 
 # Variables used in the builds.  Update for ADVANCED use cases only Modify in .arg file or via CLI arguements
@@ -32,6 +32,7 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG ARCH
+ARG DISABLE_SELINUX=true
 
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -48,11 +49,11 @@ ARG UPDATE_KERNEL=false
 ARG IS_UKI=false
 ARG K8S_VERSION
 
-ARG ETCD_VERSION="v3.5.5"
+ARG ETCD_VERSION="v3.5.13"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
-        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
+        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
     ELSE
         IF [ "$IS_UKI" = "true" ]
             ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki
@@ -69,7 +70,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
-IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
+IF [[ "$BASE_IMAGE" =~ "20.04-arm64-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
@@ -120,11 +121,20 @@ build-provider-images:
         BUILD  +$TARGET --K8S_VERSION=1.27.9
         BUILD  +$TARGET --K8S_VERSION=1.26.12
         BUILD  +$TARGET --K8S_VERSION=1.28.5
+        IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+            BUILD  +$TARGET --K8S_VERSION=1.26.14
+            BUILD  +$TARGET --K8S_VERSION=1.27.11
+            BUILD  +$TARGET --K8S_VERSION=1.28.7
+            BUILD  +$TARGET --K8S_VERSION=1.29.3
+        ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+            BUILD  +$TARGET --K8S_VERSION=1.26.14
+            BUILD  +$TARGET --K8S_VERSION=1.27.11
+            BUILD  +$TARGET --K8S_VERSION=1.28.7
+            BUILD  +$TARGET --K8S_VERSION=1.29.2
+        END
     ELSE
         BUILD  +$TARGET --K8S_VERSION="$K8S_VERSION"
     END
-
-
 
 build-provider-images-fips:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -141,20 +151,28 @@ build-provider-images-fips:
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.25.0
        BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.26.14
        BUILD  +provider-image --K8S_VERSION=1.27.2
        BUILD  +provider-image --K8S_VERSION=1.26.12
        BUILD  +provider-image --K8S_VERSION=1.27.9
+       BUILD  +provider-image --K8S_VERSION=1.27.11
        BUILD  +provider-image --K8S_VERSION=1.28.5
+       BUILD  +provider-image --K8S_VERSION=1.28.7
        BUILD  +provider-image --K8S_VERSION=1.29.0
+       BUILD  +provider-image --K8S_VERSION=1.29.3
     ELSE
        BUILD  +provider-image --K8S_VERSION=1.24.6
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.26.4
        BUILD  +provider-image --K8S_VERSION=1.27.2
        BUILD  +provider-image --K8S_VERSION=1.26.12
+       BUILD  +provider-image --K8S_VERSION=1.26.14
        BUILD  +provider-image --K8S_VERSION=1.27.9
+       BUILD  +provider-image --K8S_VERSION=1.27.11
        BUILD  +provider-image --K8S_VERSION=1.28.5
+       BUILD  +provider-image --K8S_VERSION=1.28.7
        BUILD  +provider-image --K8S_VERSION=1.29.0
+       BUILD  +provider-image --K8S_VERSION=1.29.2
     END
 
 BASE_ALPINE:
@@ -558,9 +576,11 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
+    IF [ "$DISABLE_SELINUX" = "true" ]
     # Ensure SElinux gets disabled
-    RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
-        if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+        RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+            if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+    END
 
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
