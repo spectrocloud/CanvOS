@@ -1,23 +1,13 @@
 #cloud-config
-users:
-  - name: kairos
-    passwd: kairos
-
-install:
-  partitions:
-    oem:
-      size: 5120
-      fs: ext4
-
 stages:
   initramfs:
-    - if: '[ ! -f "/run/cos/live_mode" ]'
+    - if: '[ -e "/run/cos/uki_boot_mode" ] && [ ! -f "/run/cos/live_mode" ]'
       name: link agent provider stylus
       commands:
         - echo "Linking agent provider"
         - mkdir -p /usr/local/bin/
         - ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
-    - if: '[ ! -f "/run/cos/live_mode" ] && [ ! -f "/opt/spectrocloud/bin/stylus-agent" ]'
+    - if: '[ -e "/run/cos/uki_boot_mode" ] && [ ! -f "/run/cos/live_mode" ] && [ ! -f "/opt/spectrocloud/bin/stylus-agent" ]'
       name: unpack stylus package
       commands:
         - echo "Unpacking stylus package"
@@ -25,6 +15,7 @@ stages:
         - /oem/opt.bind/luet util unpack file://oem/opt.bind/stylus-image.tar /
   after-install:
     - name: uki stylus package persist
+      if: '[ -e "/run/cos/uki_boot_mode" ]'
       commands:
         - echo "Copying files to persistent path"
         - umount /oem || true
