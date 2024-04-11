@@ -335,6 +335,7 @@ build-uki-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/config.yaml
+    COPY --if-exists public-key /overlay/oem/.signing-public-key
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
  
