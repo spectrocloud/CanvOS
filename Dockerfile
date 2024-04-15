@@ -23,6 +23,11 @@ RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] && [ "${PROXY_CERT_PATH}" != "
 
 ### To install the nginx package for Ubuntu  ###
 
+#TODO: Remove the following line. This is only for dev purpose.
+RUN useradd -m kairos && echo "kairos:kairos" | chpasswd
+RUN adduser kairos sudo
+RUN echo '%sudo ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
 # RUN apt-get update && apt-get install nginx -y
 ### or
 
