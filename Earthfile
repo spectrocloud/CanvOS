@@ -278,8 +278,8 @@ kairos-provider-image:
 # base build image used to create the base image for all other image types
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE --build-arg PROXY_CERT_PATH=$PROXY_CERT_PATH \ 
-    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
-    --build-arg NO_PROXY=$NO_PROXY .
+    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION  --build-arg OS_VERSION=$OS_VERSION \
+    --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY --build-arg NO_PROXY=$NO_PROXY .
 
     IF [ "$IS_JETSON" = "true" ]
        COPY mount.yaml /system/oem/mount.yaml
@@ -295,8 +295,7 @@ base-image:
         RUN apt update && \
             apt install --no-install-recommends zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
         IF [ "$UPDATE_KERNEL" = "false" ]
-            RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
-                if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
+            RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION"; fi && \
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         END
         RUN apt update && \
