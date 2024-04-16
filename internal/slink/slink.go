@@ -1,20 +1,22 @@
 package main
 
 import (
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/twpayne/go-vfs/v4"
+	"github.com/twpayne/go-vfs/v5"
 )
 
 func slink(cmd *cobra.Command, args []string) {
 	source := cmd.Flag("source").Value.String()
 	target := cmd.Flag("target").Value.String()
-	logrus.Infof("Source: %s, Target: %s", source, target)
+	slog.Info(fmt.Sprintf("Source: %s, Target: %s", source, target))
 	if source == "" || target == "" {
-		logrus.Fatal("Source and target are required")
+		slog.Error("Source and target must be provided")
+		os.Exit(1)
 	}
 
 	sourceFS := vfs.NewPathFS(vfs.OSFS, source)
@@ -30,21 +32,22 @@ func slink(cmd *cobra.Command, args []string) {
 		// Create symlink
 		linkname := path
 		targetname := filepath.Join(target, path)
-		logrus.Infof("Creating link %s to %s", linkname, targetname)
+		slog.Info(fmt.Sprintf("Creating link %s to %s", linkname, targetname))
 
 		if err := copyDir(filepath.Dir(linkname), sourceFS, vfs.OSFS); err != nil {
-			logrus.Error(err)
+			slog.Error("Error copying directory: %s", err)
 			return err
 		}
 
 		if err := os.Symlink(targetname, linkname); err != nil {
-			logrus.Error(err)
+			slog.Error("Error creating symlink: %s", err)
 			return err
 		}
 
 		return nil
 	}); err != nil {
-		logrus.Fatal(err)
+		slog.Error("Error walking source directory: %s", err)
+		os.Exit(1)
 	}
 }
 

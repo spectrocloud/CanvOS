@@ -1,24 +1,29 @@
 #cloud-config
-users:
-  - name: kairos
-    passwd: kairos
-
 stages:
   initramfs:
-    - name: link agent provider stylus
+    - if: '[ -e "/run/cos/uki_boot_mode" ] && [ ! -f "/run/cos/live_mode" ]'
+      name: link agent provider stylus
       commands:
         - echo "Linking agent provider"
         - mkdir -p /usr/local/bin/
         - ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+    - if: '[ -e "/run/cos/uki_boot_mode" ] && [ ! -f "/run/cos/live_mode" ] && [ ! -f "/opt/spectrocloud/bin/stylus-agent" ]'
+      name: unpack stylus package
+      commands:
+        - echo "Unpacking stylus package"
+        - ln -sf /oem/opt.bind/luet /usr/local/bin/luet
+        - /oem/opt.bind/luet util unpack file://oem/opt.bind/stylus-image.tar /
   after-install:
-    - name: uki stylus unpack
+    - name: uki stylus package persist
+      if: '[ -e "/run/cos/uki_install_mode" ]'
       commands:
         - echo "Copying files to persistent path"
-        - /usr/lib/systemd/systemd-cryptsetup attach persistent $(findfs PARTLABEL=persistent) - tpm2-device=auto
-        - mountpoint="/usr/local" && ! findmnt -rno TARGET "$mountpoint" > /dev/null && mount /dev/mapper/persistent "$mountpoint" || echo "Already mounted."
-        - mkdir -p /usr/local/.state/opt.bind/spectrocloud/bin
-        - mkdir -p /usr/local/bin/
-        - cp -rfv /run/initramfs/live/luet /usr/local/bin/
-        - cp -rfv /run/initramfs/live/stylus-image.tar /usr/local/
-        - luet util unpack file://run/initramfs/live/stylus-image.tar /
-        - cp -rfv /opt/spectrocloud/ /usr/local/.state/opt.bind/
+        - umount /oem || true
+        - for p in $(ls /dev/mapper/vda*); do cryptsetup close $p; done
+        - /usr/lib/systemd/systemd-cryptsetup attach oem $(findfs PARTLABEL=oem) - tpm2-device=auto
+        - mount /dev/mapper/oem /oem
+        - mkdir -p /oem/opt.bind
+        - cp -rfv /run/initramfs/live/luet /oem/opt.bind/
+        - cp -rfv /run/initramfs/live/stylus-image.tar /oem/opt.bind/
+        - umount /dev/mapper/oem
+        - cryptsetup close /dev/mapper/oem

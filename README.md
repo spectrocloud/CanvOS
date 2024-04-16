@@ -132,6 +132,7 @@ Skip this step if your base image is ubuntu or opensuse-leap. If you are buildin
 | NO_PROXY         | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                          | string |                         |
 | PROXY_CERT_PATH  | Absolute path of the SSL Proxy certificate in PEM format if needed (Optional)                                                                                                                                                                                                                                                                  | string |                         |
 | UPDATE_KERNEL    | Determines whether to upgrade the Kernel version to the latest from the upstream OS provider                                                                                                                                                                                                                                                   | boolean| `false`                 |
+| DISABLE_SELINUX  | Disable selinux in the operating system.  Some applications (like Kubevirt) do not like selinux                                                                                                                                                                                                                                                | boolean| `true`                  |
 | CLUSTERCONFIG    | Path of the cluster config | string |  |
 
 8. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
@@ -223,3 +224,14 @@ docker push ttl.sh/ubuntu:k3s-1.25.2-v4.2.3-demo
 ### How-Tos
 
 * [Building Edge Native Artifacts]([https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/palette-canvos](https://deploy-preview-1318--docs-spectrocloud.netlify.app/clusters/edge/edgeforge-workflow/palette-canvos))
+
+
+### Building ARM64 Artifacts for Nvidia Jetson devices
+1. Your .arg file should contain these values
+```
+BASE_IMAGE=quay.io/kairos/ubuntu:20.04-core-arm64-nvidia-jetson-agx-orin-v2.4.3
+ARCH=arm64
+platform=linux/arm64
+```
+
+2. ./earthly.sh +build-all-images

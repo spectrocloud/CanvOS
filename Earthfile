@@ -3,23 +3,24 @@ ARG TARGETOS
 ARG TARGETARCH
 
 ## Default Image Repos Used in the Builds. 
+ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
-ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
+ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.0
-ARG SPECTRO_LUET_VERSION=v1.2.0
-ARG KAIROS_VERSION=v3.0.3
+ARG SPECTRO_LUET_VERSION=v1.2.7
+ARG KAIROS_VERSION=v3.0.5
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.200.9
+ARG OSBUILDER_VERSION=v0.200.11
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.2.1
-ARG KUBEADM_PROVIDER_VERSION=v4.2.1
+ARG KUBEADM_PROVIDER_VERSION=v4.3.1
 ARG RKE2_PROVIDER_VERSION=v4.1.1
 
 # Variables used in the builds.  Update for ADVANCED use cases only Modify in .arg file or via CLI arguements
@@ -31,6 +32,7 @@ ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG ARCH
+ARG DISABLE_SELINUX=true
 
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -45,14 +47,19 @@ ARG PROXY_CERT_PATH
 
 ARG UPDATE_KERNEL=false
 ARG IS_UKI=false
+ARG K8S_VERSION
 
-ARG ETCD_VERSION="v3.5.5"
+ARG ETCD_VERSION="v3.5.13"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
-        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
+        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
     ELSE
-        ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+        IF [ "$IS_UKI" = "true" ]
+            ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki
+        ELSE
+            ARG BASE_IMAGE_TAG=$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+        END
     END
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
@@ -63,17 +70,19 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
-IF [[ "$BASE_IMAGE" =~ "ubuntu-20-lts-arm-nvidia-jetson-agx-orin" ]]
+IF [[ "$BASE_IMAGE" =~ "20.04-arm64-nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=gcr.io/spectro-images-public/stylus-fips-linux-$ARCH:$PE_VERSION
 ELSE
     ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=gcr.io/spectro-images-public/stylus-linux-$ARCH:$PE_VERSION
 END
 
-ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION
+ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION-$K8S_VERSION
 ARG CMDLINE="stylus.registration"
 
 build-all-images:
@@ -91,23 +100,41 @@ build-all-images:
     END
 
 build-provider-images:
-    BUILD  +provider-image --K8S_VERSION=1.24.6
-    BUILD  +provider-image --K8S_VERSION=1.25.2
-    BUILD  +provider-image --K8S_VERSION=1.26.4
-    BUILD  +provider-image --K8S_VERSION=1.27.2
-    BUILD  +provider-image --K8S_VERSION=1.25.13
-    BUILD  +provider-image --K8S_VERSION=1.26.8
-    BUILD  +provider-image --K8S_VERSION=1.27.5
-    BUILD  +provider-image --K8S_VERSION=1.27.7
-    BUILD  +provider-image --K8S_VERSION=1.26.10
-    BUILD  +provider-image --K8S_VERSION=1.25.15
-    BUILD  +provider-image --K8S_VERSION=1.28.2
-    BUILD  +provider-image --K8S_VERSION=1.29.0
-    BUILD  +provider-image --K8S_VERSION=1.27.9
-    BUILD  +provider-image --K8S_VERSION=1.26.12
-    BUILD  +provider-image --K8S_VERSION=1.28.5
-
-
+    IF [ "$IS_UKI" = "true" ]
+        ARG TARGET=uki-provider-image
+    ELSE
+        ARG TARGET=provider-image
+    END
+    IF [ "$K8S_VERSION" = "" ]
+        BUILD  +$TARGET --K8S_VERSION=1.24.6
+        BUILD  +$TARGET --K8S_VERSION=1.25.2
+        BUILD  +$TARGET --K8S_VERSION=1.26.4
+        BUILD  +$TARGET --K8S_VERSION=1.27.2
+        BUILD  +$TARGET --K8S_VERSION=1.25.13
+        BUILD  +$TARGET --K8S_VERSION=1.26.8
+        BUILD  +$TARGET --K8S_VERSION=1.27.5
+        BUILD  +$TARGET --K8S_VERSION=1.27.7
+        BUILD  +$TARGET --K8S_VERSION=1.26.10
+        BUILD  +$TARGET --K8S_VERSION=1.25.15
+        BUILD  +$TARGET --K8S_VERSION=1.28.2
+        BUILD  +$TARGET --K8S_VERSION=1.29.0
+        BUILD  +$TARGET --K8S_VERSION=1.27.9
+        BUILD  +$TARGET --K8S_VERSION=1.26.12
+        BUILD  +$TARGET --K8S_VERSION=1.28.5
+        IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+            BUILD  +$TARGET --K8S_VERSION=1.26.14
+            BUILD  +$TARGET --K8S_VERSION=1.27.11
+            BUILD  +$TARGET --K8S_VERSION=1.28.7
+            BUILD  +$TARGET --K8S_VERSION=1.29.3
+        ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+            BUILD  +$TARGET --K8S_VERSION=1.26.14
+            BUILD  +$TARGET --K8S_VERSION=1.27.11
+            BUILD  +$TARGET --K8S_VERSION=1.28.7
+            BUILD  +$TARGET --K8S_VERSION=1.29.2
+        END
+    ELSE
+        BUILD  +$TARGET --K8S_VERSION="$K8S_VERSION"
+    END
 
 build-provider-images-fips:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -124,20 +151,28 @@ build-provider-images-fips:
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.25.0
        BUILD  +provider-image --K8S_VERSION=1.26.4
+       BUILD  +provider-image --K8S_VERSION=1.26.14
        BUILD  +provider-image --K8S_VERSION=1.27.2
        BUILD  +provider-image --K8S_VERSION=1.26.12
        BUILD  +provider-image --K8S_VERSION=1.27.9
+       BUILD  +provider-image --K8S_VERSION=1.27.11
        BUILD  +provider-image --K8S_VERSION=1.28.5
+       BUILD  +provider-image --K8S_VERSION=1.28.7
        BUILD  +provider-image --K8S_VERSION=1.29.0
+       BUILD  +provider-image --K8S_VERSION=1.29.3
     ELSE
        BUILD  +provider-image --K8S_VERSION=1.24.6
        BUILD  +provider-image --K8S_VERSION=1.25.2
        BUILD  +provider-image --K8S_VERSION=1.26.4
        BUILD  +provider-image --K8S_VERSION=1.27.2
        BUILD  +provider-image --K8S_VERSION=1.26.12
+       BUILD  +provider-image --K8S_VERSION=1.26.14
        BUILD  +provider-image --K8S_VERSION=1.27.9
+       BUILD  +provider-image --K8S_VERSION=1.27.11
        BUILD  +provider-image --K8S_VERSION=1.28.5
+       BUILD  +provider-image --K8S_VERSION=1.28.7
        BUILD  +provider-image --K8S_VERSION=1.29.0
+       BUILD  +provider-image --K8S_VERSION=1.29.2
     END
 
 BASE_ALPINE:
@@ -165,9 +200,10 @@ uki-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
-    FROM scratch
+    FROM gcr.io/spectro-images-public/ubuntu-systemd:22.04
     WORKDIR /
-
+    COPY +luet/luet /usr/bin/luet
+    COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --platform=linux/${ARCH} +install-k8s/ /k8s
     SAVE IMAGE --push $IMAGE_PATH
@@ -181,7 +217,7 @@ trust-boot-unpack:
 
 stylus-image-pack:  
     COPY +luet/luet /usr/bin/luet
-    COPY --platform=linux/${ARCH} +stylus-image/ /stylus
+    COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
     RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
     SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
@@ -190,10 +226,13 @@ luet:
     FROM quay.io/luet/base:latest
     SAVE ARTIFACT /usr/bin/luet /luet
 
+kairos-agent:
+    FROM $BASE_IMAGE
+    SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
+
 install-k8s:
     FROM alpine
     COPY +luet/luet /usr/bin/luet
-    ARG K8S_VERSION=1.27.9
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
@@ -267,7 +306,11 @@ build-uki-iso:
 iso:
     ARG ISO_NAME=installer
     WORKDIR /build
-    COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    IF [ "$IS_UKI" = "true" ]
+        COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
+    ELSE
+        COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
+    END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 build-iso:
@@ -305,18 +348,21 @@ build-iso:
 
 ### UKI targets
 ## Generate UKI keys
-## earthly +uki-gen --MY_ORG="ACME Corp"
+## earthly +uki-gen --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=365
 uki-genkey:
     ARG MY_ORG="ACME Corp"
+    ARG EXPIRATION_IN_DAYS=365
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
-    RUN /entrypoint.sh genkey "$MY_ORG" -o /keys
+    RUN /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+    RUN  mkdir -p /private-keys
+    RUN cd /keys; mv PK.{key,pem,esl} db.esl KEK.{key,pem,esl} /private-keys
     SAVE ARTIFACT /keys AS LOCAL ./
+    SAVE ARTIFACT /private-keys AS LOCAL ./
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
-provider-image:   
+provider-image:
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
-    ARG K8S_VERSION=1.26.4
     ARG IMAGE_REPO
     IF [ "$CUSTOM_TAG" != "" ]
         ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
@@ -368,7 +414,7 @@ build-provider-trustedboot-image:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
     COPY keys /keys
-    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys
+    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
@@ -377,6 +423,10 @@ stylus-image:
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
+
+stylus-package-image:
+    FROM $STYLUS_PACKAGE_BASE
+    SAVE ARTIFACT --keep-own  ./*
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -434,16 +484,16 @@ base-image:
             RUN  update-ca-certificates
         END
 
-        RUN apt update && \
-            apt install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
+        RUN apt-get update && \
+            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
         IF [ "$IS_UKI" = "false" ]
             IF [ "$UPDATE_KERNEL" = "false" ]
                 RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
                     if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
                     if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
             END
-            RUN apt update && \
-                apt upgrade -y
+            RUN apt-get update && \
+                apt-get upgrade -y
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
             RUN kernel=$(ls /lib/modules | tail -n1) && \
@@ -457,7 +507,7 @@ base-image:
             fi
 
             RUN rm -rf /var/cache/* && \
-                apt clean
+                apt-get clean
         END 
             
     # IF OS Type is Opensuse
@@ -517,9 +567,11 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
+    IF [ "$DISABLE_SELINUX" = "true" ]
     # Ensure SElinux gets disabled
-    RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
-        if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+        RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+            if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+    END
 
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
@@ -528,7 +580,7 @@ iso-image:
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
         COPY --platform=linux/${ARCH} +stylus-image/ /
-        RUN rm -rf /opt/spectrocloud/bin
+        RUN find /opt/spectrocloud/bin/. ! -name 'agent-provider-stylus' -type f -exec rm -f {} +
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
