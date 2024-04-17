@@ -11,7 +11,7 @@ FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.2
-ARG SPECTRO_LUET_VERSION=v1.2.7
+ARG SPECTRO_LUET_VERSION=v1.2.8
 ARG KAIROS_VERSION=v2.4.5
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -81,7 +81,7 @@ build-all-images:
     END
 
 build-provider-images:
-    IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         BUILD  +provider-image --K8S_VERSION=1.24.6
         BUILD  +provider-image --K8S_VERSION=1.25.2
         BUILD  +provider-image --K8S_VERSION=1.26.4
