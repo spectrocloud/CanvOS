@@ -297,8 +297,6 @@ build-uki-iso:
        RUN ls -liah /keys
        RUN mkdir /iso
        RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
-       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --extend-cmdline "$CMDLINE" --boot-branding "Palette eXtended Kubernetes Edge"
-       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --extend-cmdline "$CMDLINE" --boot-branding "Palette eXtended Kubernetes Edge"
     END
     WORKDIR /iso
     RUN mv /iso/*.iso $ISO_NAME.iso
