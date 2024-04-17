@@ -6,7 +6,7 @@ FROM quay.io/kairos/framework:v2.7.22-fips as kairos-fips
 FROM ubuntu:focal as base
 
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.200.9 as osbuilder
+FROM quay.io/kairos/osbuilder-tools:v0.200.11 as osbuilder
 RUN zypper install -y gettext && zypper clean
 RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
