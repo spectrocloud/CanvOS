@@ -48,7 +48,12 @@ ARG PROXY_CERT_PATH
 ARG UPDATE_KERNEL=false
 ARG IS_UKI=false
 ARG K8S_VERSION
+ARG INCLUDE_MS_SECUREBOOT_KEYS=true
+ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
+ARG UKI_SELF_SIGNED_KEYS=true
 
+ARG CMDLINE="stylus.registration"
+ARG BRANDING="Palette eXtended Kubernetes Edge"
 ARG ETCD_VERSION="v3.5.13"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
@@ -293,10 +298,14 @@ build-uki-iso:
     IF [ "$ARCH" = "arm64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
     ELSE IF [ "$ARCH" = "amd64" ]
-       COPY keys /keys
+       COPY secure_boot/enrollment/ secure_boot/private_keys/ secure_boot/public_keys/ /keys
        RUN ls -liah /keys
        RUN mkdir /iso
-       RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
+       IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
+           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+       ELSE
+           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+       END
     END
     WORKDIR /iso
     RUN mv /iso/*.iso $ISO_NAME.iso
@@ -347,16 +356,34 @@ build-iso:
 
 ### UKI targets
 ## Generate UKI keys
-## earthly +uki-gen --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=365
+#  Default Expiry 15 years
+## earthly +uki-gen --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=5475
 uki-genkey:
     ARG MY_ORG="ACME Corp"
-    ARG EXPIRATION_IN_DAYS=365
+    ARG EXPIRATION_IN_DAYS=5475
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
-    RUN /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
-    RUN  mkdir -p /private-keys
-    RUN cd /keys; mv PK.{key,pem,esl} db.esl KEK.{key,pem,esl} /private-keys
-    SAVE ARTIFACT /keys AS LOCAL ./
-    SAVE ARTIFACT /private-keys AS LOCAL ./
+
+    IF [ "$UKI_SELF_SIGNED_KEYS" = "false" ]
+       RUN  mkdir -p /custom_keys/{db,KEK,PK,dbx}
+       COPY secure_boot/exported_keys/db.esl /custom_keys/db
+       COPY secure_boot/exported_keys/dbx.esl /custom_keys/dbx | true
+       COPY secure_boot/exported_keys/PK.esl /custom_keys/PK
+       COPY secure_boot/exported_keys/KEK.esl /custom_keys/KEK
+       RUN /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom_keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+    ELSE
+       IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
+               RUN /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+       ELSE
+               RUN /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+       END
+    END
+    RUN  mkdir -p /private_keys
+    RUN  mkdir -p /public_keys
+    RUN cd /keys; mv *.key tpm2-pcr-private.pem /private_keys
+    RUN cd /keys; mv *.pem /public_keys
+    SAVE ARTIFACT /keys AS LOCAL ./secure_boot/enrollment
+    SAVE ARTIFACT /private_keys AS LOCAL ./secure_boot/private_keys
+    SAVE ARTIFACT /public_keys AS LOCAL ./secure_boot/public_keys
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
@@ -412,7 +439,7 @@ provider-image-rootfs:
 build-provider-trustedboot-image:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
-    COPY keys /keys
+    COPY secure_boot/enrollment/ secure_boot/private_keys/ secure_boot/public_keys/ /keys
     RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
@@ -597,7 +624,7 @@ uki:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     COPY (+provider-image/) /provider-image
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
-    COPY keys /keys
+    COPY secure_boot/enrollment/ secure_boot/private_keys/ secure_boot/public_keys/ /keys
     RUN ls -liah /keys
     RUN /entrypoint.sh build-uki dir:/provider-image -t container -d /iso -k /keys
     WORKDIR /iso
