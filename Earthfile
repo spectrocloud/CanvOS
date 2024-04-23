@@ -369,10 +369,7 @@ uki-genkey:
 
     IF [ "$UKI_SELF_SIGNED_KEYS" = "false" ]
        RUN  mkdir -p /custom_keys
-       COPY secure_boot/exported_keys/db.esl /custom_keys/db
-       COPY secure_boot/exported_keys/dbx.esl /custom_keys/dbx
-       COPY secure_boot/exported_keys/PK.esl /custom_keys/PK
-       COPY secure_boot/exported_keys/KEK.esl /custom_keys/KEK
+       COPY secure_boot/exported_keys/ /custom_keys
        RUN /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom_keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
     ELSE
        IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
