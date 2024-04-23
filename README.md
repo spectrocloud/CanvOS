@@ -254,4 +254,4 @@ cp spectro-luet-auth.yaml.template spectro-luet-auth.yaml
 # modify serveraddess, username and password in spectro-luet-auth.yaml to yours
 ```
 
-4. Build the image using same command as before
+4. Build the image using the same command as before
