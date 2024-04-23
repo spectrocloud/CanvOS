@@ -378,8 +378,12 @@ base-image:
         ARG LUET_REPO=luet-repo
     END
     RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y && \
-          luet repo update
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y 
+    
+    COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
+    RUN if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
+    RUN cat /etc/luet/repos.conf.d/spectro.yaml
+    RUN luet repo update
 
      IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl
