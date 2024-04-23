@@ -302,7 +302,7 @@ build-uki-iso:
     IF [ "$ARCH" = "arm64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
     ELSE IF [ "$ARCH" = "amd64" ]
-       COPY secure_boot/enrollment/ secure_boot/private_keys/ secure_boot/public_keys/ /keys
+       COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
        RUN mkdir /iso
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
@@ -368,9 +368,9 @@ uki-genkey:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
 
     IF [ "$UKI_SELF_SIGNED_KEYS" = "false" ]
-       RUN --no-cache mkdir -p /custom_keys
-       COPY secure_boot/exported_keys/ /custom_keys
-       RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom_keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+       RUN --no-cache mkdir -p /custom-keys
+       COPY secure-boot/exported-keys/ /custom-keys
+       RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
     ELSE
        IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
             RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
@@ -378,13 +378,38 @@ uki-genkey:
             RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
        END
     END
-    RUN --no-cache mkdir -p /private_keys
-    RUN --no-cache mkdir -p /public_keys
-    RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private_keys
-    RUN --no-cache cd /keys; mv *.pem /public_keys
-    SAVE ARTIFACT /keys AS LOCAL ./secure_boot/enrollment
-    SAVE ARTIFACT /private_keys AS LOCAL ./secure_boot/private_keys
-    SAVE ARTIFACT /public_keys AS LOCAL ./secure_boot/public_keys
+    RUN --no-cache mkdir -p /private-keys
+    RUN --no-cache mkdir -p /public-keys
+    RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
+    RUN --no-cache cd /keys; mv *.pem /public-keys
+
+    RUN --no-cache printf "\
+\tCanvOS\n\
+\t\tsecure-boot/\n\
+\t\t\tenrollment/\n\
+\t\t\t\tPK.auth\n\
+\t\t\t\tPK.der\n\
+\t\t\t\tPK.esl\n\
+\t\t\t\tKEK.auth              <-- I'm a combined hash of exported-keys/KEK.esl and my own KEK\n\
+\t\t\t\tKEK.der\n\
+\t\t\t\tKEK.esl               <-- I'm a concatenation of exported-keys/KEK.esl and my own KEK\n\
+\t\t\t\tdb.auth               <-- I'm a combined hash of exported-keys/db.esl and my own db\n\
+\t\t\t\tdb.der\n\
+\t\t\t\tdb.esl                <-- I'm a concatenation of exported-keys/db.esl and my own db\n\
+\t\t\t\tdbx.esl               <-- I'm a copy of exported-keys/dbx.esl\n\
+\t\t\tprivate-keys/\n\
+\t\t\t\tPK.key                <-- Remove me from this directory and keep me safe!\n\
+\t\t\t\tKEK.key               <-- Remove me from this directory and keep me safe!\n\
+\t\t\t\tdb.key\n\
+\t\t\t\ttpm2-pcr-private.pem\n\
+\t\t\tpublic-keys/\n\
+\t\t\t\tPK.pem\n\
+\t\t\t\tKEK.pem\n\
+\t\t\t\tdb.pem\n" 
+
+    SAVE ARTIFACT /keys AS LOCAL ./secure-boot/enrollment
+    SAVE ARTIFACT /private-keys AS LOCAL ./secure-boot/private-keys
+    SAVE ARTIFACT /public-keys AS LOCAL ./secure-boot/public-keys
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
@@ -435,7 +460,7 @@ provider-image-rootfs:
 build-provider-trustedboot-image:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
-    COPY secure_boot/enrollment/ secure_boot/private_keys/ secure_boot/public_keys/ /keys
+    COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
     RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
@@ -620,7 +645,7 @@ uki:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     COPY (+provider-image/) /provider-image
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
-    COPY secure_boot/enrollment/ secure_boot/private_keys/ secure_boot/public_keys/ /keys
+    COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
     RUN ls -liah /keys
     RUN /entrypoint.sh build-uki dir:/provider-image -t container -d /iso -k /keys
     WORKDIR /iso
