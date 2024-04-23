@@ -382,7 +382,6 @@ base-image:
     
     COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
     RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
-    RUN --no-cache cat /etc/luet/repos.conf.d/spectro.yaml
     RUN --no-cache luet repo update
 
      IF [ "$OS_DISTRIBUTION" = "rhel" ]
