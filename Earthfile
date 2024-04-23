@@ -368,20 +368,20 @@ uki-genkey:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
 
     IF [ "$UKI_SELF_SIGNED_KEYS" = "false" ]
-       RUN  mkdir -p /custom_keys
+       RUN --no-cache mkdir -p /custom_keys
        COPY secure_boot/exported_keys/ /custom_keys
-       RUN /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom_keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+       RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom_keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
     ELSE
        IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
-               RUN /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+            RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
        ELSE
-               RUN /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+            RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
        END
     END
-    RUN  mkdir -p /private_keys
-    RUN  mkdir -p /public_keys
-    RUN cd /keys; mv *.key tpm2-pcr-private.pem /private_keys
-    RUN cd /keys; mv *.pem /public_keys
+    RUN --no-cache mkdir -p /private_keys
+    RUN --no-cache mkdir -p /public_keys
+    RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private_keys
+    RUN --no-cache cd /keys; mv *.pem /public_keys
     SAVE ARTIFACT /keys AS LOCAL ./secure_boot/enrollment
     SAVE ARTIFACT /private_keys AS LOCAL ./secure_boot/private_keys
     SAVE ARTIFACT /public_keys AS LOCAL ./secure_boot/public_keys
