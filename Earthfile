@@ -647,16 +647,12 @@ iso-image:
         SAVE IMAGE palette-installer-image:$PE_VERSION
     END
 
-uki:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
-    COPY (+provider-image/) /provider-image
-    DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
-    COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
-    RUN ls -liah /keys
-    RUN /entrypoint.sh build-uki dir:/provider-image -t container -d /iso -k /keys
-    WORKDIR /iso
-    SAVE ARTIFACT /iso/*
-    SAVE IMAGE --push $IMAGE_PATH 
+iso-disk-image:
+    FROM scratch
+
+    COPY +iso/ /disk/
+
+    SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$CUSTOM_TAG
 
 OS_RELEASE:
     COMMAND
