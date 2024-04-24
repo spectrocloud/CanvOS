@@ -18,12 +18,12 @@ stages:
       if: '[ -e "/run/cos/uki_install_mode" ]'
       commands:
         - echo "Copying files to persistent path"
-        - umount /oem || true
-        - cryptsetup close /dev/mapper/oem
+        - if mount | grep /oem >/dev/null; then umount /oem; fi
+        - if [ -e /dev/mapper/oem ]; then cryptsetup close /dev/mapper/oem; fi
         - /usr/lib/systemd/systemd-cryptsetup attach oem $(findfs PARTLABEL=oem) - tpm2-device=auto
         - mount /dev/mapper/oem /oem
         - mkdir -p /oem/opt.bind
         - cp -rfv /run/initramfs/live/luet /oem/opt.bind/
         - cp -rfv /run/initramfs/live/stylus-image.tar /oem/opt.bind/
         - umount /dev/mapper/oem
-        - cryptsetup close /dev/mapper/oem
+        - if [ -e /dev/mapper/oem ]; then cryptsetup close /dev/mapper/oem; fi
