@@ -28,6 +28,7 @@ ARG OS_DISTRIBUTION
 ARG OS_VERSION
 ARG IMAGE_REGISTRY
 ARG IMAGE_REPO=$OS_DISTRIBUTION
+ARG ISO_NAME=installer
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
@@ -204,9 +205,8 @@ iso-image-rootfs:
     SAVE ARTIFACT --keep-own /. rootfs
 
 uki-iso:
-    ARG ISO_NAME=installer
     WORKDIR /build
-    COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
+    COPY --platform=linux/${ARCH} +build-uki-iso/ .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
@@ -276,8 +276,6 @@ internal-slink:
     SAVE ARTIFACT /slink
 
 build-uki-iso:
-    ARG ISO_NAME
-
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
@@ -317,18 +315,15 @@ build-uki-iso:
     SAVE ARTIFACT /iso/*
 
 iso:
-    ARG ISO_NAME=installer
     WORKDIR /build
     IF [ "$IS_UKI" = "true" ]
-        COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
+        COPY --platform=linux/${ARCH} +build-uki-iso/ .
     ELSE
-        COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
+        COPY --platform=linux/${ARCH} +build-iso/ .
     END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 build-iso:
-    ARG ISO_NAME
-
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
@@ -650,7 +645,7 @@ iso-image:
 iso-disk-image:
     FROM scratch
 
-    COPY +iso/ /disk/
+    COPY +iso/*.iso /disk/
 
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$CUSTOM_TAG
 
