@@ -33,6 +33,7 @@ ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG ARCH
 ARG DISABLE_SELINUX=true
+ARG CIS_HARDENING=true
 
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -555,7 +556,12 @@ base-image:
 
             RUN rm -rf /var/cache/* && \
                 apt-get clean
-        END 
+        END
+
+        IF [ "$CIS_HARDENING" = "true" ]
+            COPY cis-harden/harden.sh /tmp/harden.sh
+            RUN /tmp/harden.sh && rm /tmp/harden.sh
+        END
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
