@@ -646,8 +646,11 @@ iso-disk-image:
     FROM scratch
 
     COPY +iso/*.iso /disk/
-
-    SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$CUSTOM_TAG
+    IF [ "$CUSTOM_TAG" != "" ]
+        SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$PE_VERSION-$CUSTOM_TAG
+    ELSE
+        SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$PE_VERSION
+    END
 
 OS_RELEASE:
     COMMAND
