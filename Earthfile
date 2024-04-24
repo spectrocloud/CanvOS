@@ -361,7 +361,7 @@ build-iso:
 ### UKI targets
 ## Generate UKI keys
 #  Default Expiry 15 years
-## earthly +uki-gen --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=5475
+## earthly +uki-genkey --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=5475
 uki-genkey:
     ARG MY_ORG="ACME Corp"
     ARG EXPIRATION_IN_DAYS=5475
