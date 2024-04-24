@@ -28,7 +28,7 @@ RUN mkdir -p /run/lock
 RUN mkdir -p /usr/libexec
 RUN touch /usr/libexec/.keep
 
-COPY --from=quay.io/kairos/framework:v2.4.5 / /
+COPY --from=quay.io/kairos/framework:v2.8.0 / /
 
 # Remove file below to allow dracut to build initrd without dhcp-client
 RUN rm -rf /usr/lib/dracut/modules.d/35network-legacy
