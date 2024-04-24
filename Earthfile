@@ -249,11 +249,11 @@ install-k8s:
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo  --priority 1 -y && \
         luet repo update
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        RUN luet install -y container-runtime/containerd
+        RUN luet install -y container-runtime/containerd --system-target /output
     END
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       RUN luet install -y container-runtime/containerd-fips
+       RUN luet install -y container-runtime/containerd-fips --system-target /output
     END
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
     RUN rm -rf /output/var/cache/*

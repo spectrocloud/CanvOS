@@ -83,7 +83,7 @@ RUN mkdir -p /run/lock && \
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 
-COPY --from=quay.io/kairos/framework:v2.7.22-fips / /
+COPY --from=quay.io/kairos/framework:v2.8.0-fips / /
 
 COPY overlay/rhel8 /
 
