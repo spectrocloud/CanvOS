@@ -77,7 +77,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
-IF [[ "$BASE_IMAGE" =~ "20.04-arm64-nvidia-jetson-agx-orin" ]]
+IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
