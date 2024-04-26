@@ -10,3 +10,8 @@ content-*/*
 .idea
 
 .DS_Store
+
+build/
+local/
+keys/
+secure-boot/
