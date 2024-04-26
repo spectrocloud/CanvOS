@@ -11,7 +11,7 @@ docker build --build-arg USERNAME=$USERNAME --build-arg PASSWORD=$PASSWORD -t $B
 
 docker run -v "$PWD"/build:/tmp/auroraboot \
         -v /var/run/docker.sock:/var/run/docker.sock \
-        --rm -ti quay.io/kairos/auroraboot \
+        --rm quay.io/kairos/auroraboot \
         --set container_image=docker://$BASE_IMAGE \
         --set "disable_http_server=true" \
         --set "disable_netboot=true" \
