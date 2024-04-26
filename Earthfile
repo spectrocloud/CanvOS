@@ -397,7 +397,7 @@ uki-byok:
 
     RUN apt-get update && apt-get install -y efitools curl
     COPY +download-sbctl/sbctl /usr/bin/sbctl
-    COPY secure-boot/exported-keys/ /exported-keys
+    COPY --if-exists secure-boot/exported-keys/ /exported-keys
     COPY secure-boot/private-keys/ secure-boot/public-keys /keys
     WORKDIR /keys
     RUN sbctl import-keys \
