@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -ex
 
 USERNAME=$1
 PASSWORD=$2
