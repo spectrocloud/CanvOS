@@ -81,7 +81,7 @@ build-all-images:
     END
 
 build-provider-images:
-    IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         BUILD  +provider-image --K8S_VERSION=1.24.6
         BUILD  +provider-image --K8S_VERSION=1.25.2
         BUILD  +provider-image --K8S_VERSION=1.26.4
@@ -97,7 +97,7 @@ build-provider-images:
         BUILD  +provider-image --K8S_VERSION=1.27.9
         BUILD  +provider-image --K8S_VERSION=1.26.12
         BUILD  +provider-image --K8S_VERSION=1.28.5
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+    IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         BUILD  +provider-image --K8S_VERSION=1.26.14
         BUILD  +provider-image --K8S_VERSION=1.27.11
         BUILD  +provider-image --K8S_VERSION=1.28.7
