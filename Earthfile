@@ -53,6 +53,7 @@ ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_SELF_SIGNED_KEYS=true
+ARG UKI_BRING_YOUR_OWN_KEYS=false
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
@@ -363,25 +364,80 @@ uki-genkey:
     ARG EXPIRATION_IN_DAYS=5475
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
 
-    IF [ "$UKI_SELF_SIGNED_KEYS" = "false" ]
-       RUN --no-cache mkdir -p /custom-keys
-       COPY secure-boot/exported-keys/ /custom-keys
-       RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
-    ELSE
-       IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
-            RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
-       ELSE
-            RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
-       END
+    IF [ "UKI_BRING_YOUR_OWN_KEYS" = "false" ]
+        IF [ "$UKI_SELF_SIGNED_KEYS" = "false" ]
+            RUN --no-cache mkdir -p /custom-keys
+            COPY secure-boot/exported-keys/ /custom-keys
+            RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+        ELSE
+            IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
+                    RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+            ELSE
+                    RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+            END
+        END
+        RUN --no-cache mkdir -p /private-keys
+        RUN --no-cache mkdir -p /public-keys
+        RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
+        RUN --no-cache cd /keys; mv *.pem /public-keys
+    ELSE 
+        COPY +uki-byok/ /keys
     END
-    RUN --no-cache mkdir -p /private-keys
-    RUN --no-cache mkdir -p /public-keys
-    RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
-    RUN --no-cache cd /keys; mv *.pem /public-keys
+    SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
+    SAVE ARTIFACT --if-exists /private-keys AS LOCAL ./secure-boot/private-keys
+    SAVE ARTIFACT --if-exists /public-keys AS LOCAL ./secure-boot/public-keys
 
-    SAVE ARTIFACT /keys AS LOCAL ./secure-boot/enrollment
-    SAVE ARTIFACT /private-keys AS LOCAL ./secure-boot/private-keys
-    SAVE ARTIFACT /public-keys AS LOCAL ./secure-boot/public-keys
+download-sbctl:
+    DO +BASE_ALPINE
+    RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
+    SAVE ARTIFACT /usr/bin/sbctl
+
+uki-byok:
+    FROM ubuntu:latest
+
+    RUN apt-get update && apt-get install -y efitools curl
+    COPY +download-sbctl/sbctl /usr/bin/sbctl
+    COPY secure-boot/exported-keys/ /exported-keys
+    COPY secure-boot/private-keys/ secure-boot/public-keys /keys
+    WORKDIR /keys
+    RUN sbctl import-keys \
+        --pk-key /keys/PK.key \
+        --pk-cert /keys/PK.pem \
+        --kek-key /keys/KEK.key \
+        --kek-cert /keys/KEK.pem \
+        --db-key /keys/db.key \
+        --db-cert /keys/db.pem
+    RUN sbctl create-keys
+    RUN sbctl enroll-keys --export esl --yes-this-might-brick-my-machine
+
+    RUN mkdir -p /output
+    RUN [ -f db.esl ] && cat db.esl > /output/db.esl || true
+    RUN [ -f /exported-keys/db ] && cat /exported-keys/db >> /output/db.esl || true
+    RUN [ -f KEK.esl ] && cat KEK.esl > /output/KEK.esl || true
+    RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl  || true
+    RUN [ -f PK.esl ] && cat PK.esl > /output/PK.esl || true
+    RUN [ -f /exported-keys/PK ] && cat /exported-keys/PK >> /output/PK.esl || true
+    RUN [ -f dbx.esl ] && cat dbx.esl > /output/dbx.esl || true
+    RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
+    
+    WORKDIR /output
+    RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  PK  PK.esl  PK.auth
+    RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  KEK KEK.esl KEK.auth
+    RUN sign-efi-sig-list -c /keys/KEK.pem -k /keys/KEK.key db  db.esl  db.auth
+    RUN sign-efi-sig-list -c /keys/KEK.pem -k /keys/KEK.key dbx dbx.esl dbx.auth
+
+    RUN sig-list-to-certs 'PK.esl' 'PK'
+    RUN sig-list-to-certs 'KEK.esl' 'KEK'
+    RUN sig-list-to-certs 'db.esl' 'db'
+
+    RUN cp PK-0.der  PK.der 2>/dev/null
+    RUN cp KEK-0.der KEK.der 2>/dev/null
+    RUN cp db-0.der  db.der 2>/dev/null
+
+    SAVE ARTIFACT /output/*
+
+
+
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
