@@ -6,7 +6,7 @@ ARG TARGETARCH
 ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
-ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
+ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
@@ -26,13 +26,16 @@ ARG RKE2_PROVIDER_VERSION=v4.1.1
 # Variables used in the builds.  Update for ADVANCED use cases only Modify in .arg file or via CLI arguements
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
+ARG K8S_VERSION
 ARG IMAGE_REGISTRY
 ARG IMAGE_REPO=$OS_DISTRIBUTION
+ARG ISO_NAME=installer
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG ARCH
 ARG DISABLE_SELINUX=true
+ARG CIS_HARDENING=true
 
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -43,12 +46,16 @@ ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 
-
-
 ARG UPDATE_KERNEL=false
-ARG IS_UKI=false
-ARG K8S_VERSION
 
+# UKI Variables
+ARG IS_UKI=false
+ARG INCLUDE_MS_SECUREBOOT_KEYS=true
+ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
+ARG UKI_SELF_SIGNED_KEYS=true
+
+ARG CMDLINE="stylus.registration"
+ARG BRANDING="Palette eXtended Kubernetes Edge"
 ARG ETCD_VERSION="v3.5.13"
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
@@ -70,7 +77,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
-IF [[ "$BASE_IMAGE" =~ "20.04-arm64-nvidia-jetson-agx-orin" ]]
+IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
@@ -82,7 +89,11 @@ ELSE
     ARG STYLUS_PACKAGE_BASE=gcr.io/spectro-images-public/stylus-linux-$ARCH:$PE_VERSION
 END
 
-ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$PE_VERSION-$K8S_VERSION
+IF [ "$CUSTOM_TAG" != "" ]
+    ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
+ELSE
+    ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION
+END
 ARG CMDLINE="stylus.registration"
 
 build-all-images:
@@ -194,9 +205,8 @@ iso-image-rootfs:
     SAVE ARTIFACT --keep-own /. rootfs
 
 uki-iso:
-    ARG ISO_NAME=installer
     WORKDIR /build
-    COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
+    COPY --platform=linux/${ARCH} +build-uki-iso/ .
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
@@ -266,8 +276,6 @@ internal-slink:
     SAVE ARTIFACT /slink
 
 build-uki-iso:
-    ARG ISO_NAME
-
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
@@ -293,29 +301,29 @@ build-uki-iso:
     IF [ "$ARCH" = "arm64" ]
        RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
     ELSE IF [ "$ARCH" = "amd64" ]
-       COPY keys /keys
+       COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
        RUN mkdir /iso
-       RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
-       RUN enki --config-dir /config build-uki dir:/build/image -t uki -d /iso -k /keys --extend-cmdline "$CMDLINE" --boot-branding "Palette eXtended Kubernetes Edge"
-       RUN enki --config-dir /config build-uki dir:/build/image -t container -d /iso -k /keys --extend-cmdline "$CMDLINE" --boot-branding "Palette eXtended Kubernetes Edge"
+       IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
+           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+       ELSE
+           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+       END
     END
     WORKDIR /iso
+    RUN mv /iso/*.iso $ISO_NAME.iso
     SAVE ARTIFACT /iso/*
 
 iso:
-    ARG ISO_NAME=installer
     WORKDIR /build
     IF [ "$IS_UKI" = "true" ]
-        COPY --platform=linux/${ARCH} (+build-uki-iso/  --ISO_NAME=$ISO_NAME) .
+        COPY --platform=linux/${ARCH} +build-uki-iso/ .
     ELSE
-        COPY --platform=linux/${ARCH} (+build-iso/  --ISO_NAME=$ISO_NAME) .
+        COPY --platform=linux/${ARCH} +build-iso/ .
     END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 build-iso:
-    ARG ISO_NAME
-
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
@@ -348,30 +356,44 @@ build-iso:
 
 ### UKI targets
 ## Generate UKI keys
-## earthly +uki-gen --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=365
+#  Default Expiry 15 years
+## earthly +uki-genkey --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=5475
 uki-genkey:
     ARG MY_ORG="ACME Corp"
-    ARG EXPIRATION_IN_DAYS=365
+    ARG EXPIRATION_IN_DAYS=5475
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
-    RUN /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
-    RUN  mkdir -p /private-keys
-    RUN cd /keys; mv PK.{key,pem,esl} db.esl KEK.{key,pem,esl} /private-keys
-    SAVE ARTIFACT /keys AS LOCAL ./
-    SAVE ARTIFACT /private-keys AS LOCAL ./
+
+    IF [ "$UKI_SELF_SIGNED_KEYS" = "false" ]
+       RUN --no-cache mkdir -p /custom-keys
+       COPY secure-boot/exported-keys/ /custom-keys
+       RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+    ELSE
+       IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
+            RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+       ELSE
+            RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+       END
+    END
+    RUN --no-cache mkdir -p /private-keys
+    RUN --no-cache mkdir -p /public-keys
+    RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
+    RUN --no-cache cd /keys; mv *.pem /public-keys
+
+    SAVE ARTIFACT /keys AS LOCAL ./secure-boot/enrollment
+    SAVE ARTIFACT /private-keys AS LOCAL ./secure-boot/private-keys
+    SAVE ARTIFACT /public-keys AS LOCAL ./secure-boot/public-keys
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG IMAGE_REPO
-    IF [ "$CUSTOM_TAG" != "" ]
-        ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
-    ELSE
-        ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION
-    END
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
+        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+            RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+        END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
@@ -413,7 +435,7 @@ provider-image-rootfs:
 build-provider-trustedboot-image:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
-    COPY keys /keys
+    COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
     RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
@@ -446,7 +468,8 @@ kairos-provider-image:
 # base build image used to create the base image for all other image types
 base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE --build-arg PROXY_CERT_PATH=$PROXY_CERT_PATH \ 
-    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
+    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \ 
+    --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
     --build-arg NO_PROXY=$NO_PROXY .
 
     IF [ "$IS_JETSON" = "true" ]
@@ -486,12 +509,13 @@ base-image:
 
         RUN apt-get update && \
             apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
+
+        IF [ "$UPDATE_KERNEL" = "false" ]
+            RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION" ; fi && \
+                if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
+        END
+
         IF [ "$IS_UKI" = "false" ]
-            IF [ "$UPDATE_KERNEL" = "false" ]
-                RUN if dpkg -l linux-image-generic-hwe-20.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-20.04; fi && \
-                    if dpkg -l linux-image-generic-hwe-22.04 > /dev/null; then apt-mark hold linux-image-generic-hwe-22.04; fi && \
-                    if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
-            END
             RUN apt-get update && \
                 apt-get upgrade -y
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
@@ -508,7 +532,12 @@ base-image:
 
             RUN rm -rf /var/cache/* && \
                 apt-get clean
-        END 
+        END
+
+        IF [ "$CIS_HARDENING" = "true" ]
+            COPY cis-harden/harden.sh /tmp/harden.sh
+            RUN /tmp/harden.sh && rm /tmp/harden.sh
+        END
             
     # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
@@ -594,16 +623,15 @@ iso-image:
         SAVE IMAGE palette-installer-image:$PE_VERSION
     END
 
-uki:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
-    COPY (+provider-image/) /provider-image
-    DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
-    COPY keys /keys
-    RUN ls -liah /keys
-    RUN /entrypoint.sh build-uki dir:/provider-image -t container -d /iso -k /keys
-    WORKDIR /iso
-    SAVE ARTIFACT /iso/*
-    SAVE IMAGE --push $IMAGE_PATH 
+iso-disk-image:
+    FROM scratch
+
+    COPY +iso/*.iso /disk/
+    IF [ "$CUSTOM_TAG" != "" ]
+        SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$PE_VERSION-$CUSTOM_TAG
+    ELSE
+        SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$PE_VERSION
+    END
 
 OS_RELEASE:
     COMMAND
