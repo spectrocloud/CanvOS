@@ -61,7 +61,7 @@ docker rmi gcr.io/spectro-images-public/earthly/buildkitd:$EARTHLY_VERSION
 docker rmi alpine:latest
 
 if [[ "$1" == "+uki-genkey" ]]; then
-    ./commment.sh secure-boot/
+    ./keys.sh secure-boot/
 else
     # Print the output for use in Palette Profile.
     echo -e '##########################################################################################################'

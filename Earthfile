@@ -379,30 +379,6 @@ uki-genkey:
     RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
     RUN --no-cache cd /keys; mv *.pem /public-keys
 
-    RUN --no-cache printf "\
-\tCanvOS\n\
-\t\tsecure-boot/\n\
-\t\t\tenrollment/\n\
-\t\t\t\tPK.auth\n\
-\t\t\t\tPK.der\n\
-\t\t\t\tPK.esl\n\
-\t\t\t\tKEK.auth              <-- I'm a combined hash of exported-keys/KEK.esl and my own KEK\n\
-\t\t\t\tKEK.der\n\
-\t\t\t\tKEK.esl               <-- I'm a concatenation of exported-keys/KEK.esl and my own KEK\n\
-\t\t\t\tdb.auth               <-- I'm a combined hash of exported-keys/db.esl and my own db\n\
-\t\t\t\tdb.der\n\
-\t\t\t\tdb.esl                <-- I'm a concatenation of exported-keys/db.esl and my own db\n\
-\t\t\t\tdbx.esl               <-- I'm a copy of exported-keys/dbx.esl\n\
-\t\t\tprivate-keys/\n\
-\t\t\t\tPK.key                <-- Remove me from this directory and keep me safe!\n\
-\t\t\t\tKEK.key               <-- Remove me from this directory and keep me safe!\n\
-\t\t\t\tdb.key\n\
-\t\t\t\ttpm2-pcr-private.pem\n\
-\t\t\tpublic-keys/\n\
-\t\t\t\tPK.pem\n\
-\t\t\t\tKEK.pem\n\
-\t\t\t\tdb.pem\n" 
-
     SAVE ARTIFACT /keys AS LOCAL ./secure-boot/enrollment
     SAVE ARTIFACT /private-keys AS LOCAL ./secure-boot/private-keys
     SAVE ARTIFACT /public-keys AS LOCAL ./secure-boot/public-keys
