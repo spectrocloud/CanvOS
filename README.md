@@ -237,21 +237,30 @@ platform=linux/arm64
 
 2. ./earthly.sh +build-all-images
 
-### Building with luet repo hosted in private registry
+### Building with private registry
 
 1. Make sure you have logged into your registry using docker login
 2. In .arg, add following entries
 
-```
+```shell
 SPECTRO_LUET_REPO=reg.xxx.com
-LUET_REPO=luet-repo
+SPECTRO_PUB_REPO=reg.xxx.com
+SPECTRO_LUET_REPO=reg.xxx.com
+BASE_IMAGE=reg.xxx.com/opensuse:leap-15.4-core-amd64-v2.4.5
 ```
 
-3. Prepare luet auth config
+3. Make sure you have following images retagged to your repo
 
+```shell
+gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0 to reg.xxx.com/canvos/alpine-cert:v1.0.0
+gcr.io/spectro-images-public/osbuilder-tools:v0.7.11 to reg.xxx.com/osbuilder-tools:v0.7.11
 ```
+
+4. Prepare luet auth config
+
+```shell
 cp spectro-luet-auth.yaml.template spectro-luet-auth.yaml
 # modify serveraddess, username and password in spectro-luet-auth.yaml to yours
 ```
 
-4. Build the image using the same command as before
+5. Build the image using the same command as before

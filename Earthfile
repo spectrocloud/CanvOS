@@ -41,8 +41,6 @@ ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 
-
-
 ARG UPDATE_KERNEL=false
 
 ARG ETCD_VERSION="v3.5.13"
