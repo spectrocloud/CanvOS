@@ -6,7 +6,7 @@ ARG TARGETARCH
 ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
-ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
+ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
