@@ -254,6 +254,7 @@ BASE_IMAGE=reg.xxx.com/opensuse:leap-15.4-core-amd64-v2.4.5
 ```shell
 gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0 to reg.xxx.com/canvos/alpine-cert:v1.0.0
 gcr.io/spectro-images-public/osbuilder-tools:v0.7.11 to reg.xxx.com/osbuilder-tools:v0.7.11
+gcr.io/spectro-images-public/stylus-framework-linux-amd64:v4.3.2 to reg.xxx.com/stylus-framework-linux-amd64:v4.3.2
 ```
 
 4. Prepare luet auth config
