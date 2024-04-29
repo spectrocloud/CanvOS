@@ -245,7 +245,6 @@ platform=linux/arm64
 ```shell
 SPECTRO_LUET_REPO=reg.xxx.com
 SPECTRO_PUB_REPO=reg.xxx.com
-SPECTRO_LUET_REPO=reg.xxx.com
 BASE_IMAGE=reg.xxx.com/opensuse:leap-15.4-core-amd64-v2.4.5
 ```
 
@@ -255,6 +254,9 @@ BASE_IMAGE=reg.xxx.com/opensuse:leap-15.4-core-amd64-v2.4.5
 gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0 to reg.xxx.com/canvos/alpine-cert:v1.0.0
 gcr.io/spectro-images-public/osbuilder-tools:v0.7.11 to reg.xxx.com/osbuilder-tools:v0.7.11
 gcr.io/spectro-images-public/stylus-framework-linux-amd64:v4.3.2 to reg.xxx.com/stylus-framework-linux-amd64:v4.3.2
+gcr.io/spectro-images-public/kairos-io/provider-kubeadm:v4.3.1 to reg.xxx.com/kairos-io/provider-kubeadm:v4.3.1
+gcr.io/spectro-images-public/kairos-io/provider-k3s:v4.2.1 to reg.xxx.com/kairos-io/provider-k3s:v4.2.1
+gcr.io/spectro-images-public/kairos-io/provider-rke2:v4.1.1 to reg.xxx.com/kairos-io/provider-rke2:v4.1.1
 ```
 
 4. Prepare luet auth config
