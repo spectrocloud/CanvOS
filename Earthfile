@@ -437,13 +437,12 @@ uki-byok:
     RUN sbctl enroll-keys --export esl --yes-this-might-brick-my-machine
 
     RUN mkdir -p /output
-    RUN [ -f db.esl ] && cat db.esl > /output/db.esl || true
-    RUN [ -f /exported-keys/db ] && cat /exported-keys/db >> /output/db.esl || true
-    RUN [ -f KEK.esl ] && cat KEK.esl > /output/KEK.esl || true
-    RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl  || true
-    RUN [ -f PK.esl ] && cat PK.esl > /output/PK.esl || true
-    RUN [ -f /exported-keys/PK ] && cat /exported-keys/PK >> /output/PK.esl || true
-    RUN [ -f dbx.esl ] && cat dbx.esl > /output/dbx.esl || true
+    RUN cp PK.esl  /output/PK.esl  2>/dev/null
+    RUN cp KEK.esl /output/KEK.esl 2>/dev/null
+    RUN cp db.esl  /output/db.esl  2>/dev/null
+    RUN if [ -f dbx.esl ]; then cp dbx.esl /output/dbx.esl; else touch /output/dbx.esl; fi
+    RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl || true
+    RUN [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true
     RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
     
     WORKDIR /output
@@ -456,14 +455,11 @@ uki-byok:
     RUN sig-list-to-certs 'KEK.esl' 'KEK'
     RUN sig-list-to-certs 'db.esl' 'db'
 
-    RUN cp PK-0.der  PK.der 2>/dev/null
+    RUN cp PK-0.der  PK.der  2>/dev/null
     RUN cp KEK-0.der KEK.der 2>/dev/null
-    RUN cp db-0.der  db.der 2>/dev/null
+    RUN cp db-0.der  db.der  2>/dev/null
 
     SAVE ARTIFACT /output/*
-
-
-
 
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
