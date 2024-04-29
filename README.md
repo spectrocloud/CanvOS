@@ -135,13 +135,13 @@ cp .arg.template .arg
 | DISABLE_SELINUX             | Disable selinux in the operating system. Some applications (like Kubevirt) do not like selinux                                                                                                                                                                                                                                                 | boolean | `true`                   |
 | CLUSTERCONFIG               | Path of the cluster config                                                                                                                                                                                                                                                                                                                     | string  |                          |
 | IS_UKI                      | Build UKI(Trusted boot) images                                                                                                                                                                                                                                                                                                                 | boolean | `false`                  |
-| UKI_SELF_SIGNED_KEYS        | Use self signed keys for UKI. Set to false if you want to use exported keys from hardware                                                                                                                                                                                                                                                      | boolean | `true`                   |
+| UKI_BRING_YOUR_OWN_KEYS     | Bring your own public/private key pairs if this is set to true. Otherwise, CanvOS will generate the key pair.                                                                                                                                                                                                                                  | boolean | `false`                  |
 | INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                   |
 | AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                   |
 
-8. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
+1. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
-9. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
+2. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
 
 ```shell
 ./earthly.sh +build-all-images --ARCH=amd64
@@ -233,29 +233,55 @@ docker push ttl.sh/ubuntu:k3s-1.25.2-v4.2.3-demo
 
 1. Your .arg file should contain these values
 
-```
+```shell
 BASE_IMAGE=quay.io/kairos/ubuntu:20.04-core-arm64-nvidia-jetson-agx-orin-v2.4.3
 ARCH=arm64
 platform=linux/arm64
 ```
 
-2. ./earthly.sh +build-all-images
+2. `./earthly.sh +build-all-images`
+
+### Prepare keys for Trusted Boot
+
+1. In .arg, we have these options to configure the key generation for Trusted Boot.
+
+```
+UKI_BRING_YOUR_OWN_KEYS=false # set to true if you want to to use your own public/private key pairs to generate SecureBoot keys
+INCLUDE_MS_SECUREBOOT_KEYS=true # if you want to include Microsoft 3rd Party UEFI CA certificate in generated keys
+```
+
+2. Copy required keys into secure-boot directory. It should look like this:
+
+```shell
+secure-boot/
+|   enrollment
+|   exported-keys <-- keys exported from hardware
+|   |   db
+|   |   KEK
+|   private-keys <-- Will be used if UKI_BRING_YOUR_OWN_KEYS=true, otherwise CanvOS will generate the keys
+|   |   db.key
+|   |   KEK.key
+|   |   PK.key
+|   |   tpm2-pcr-private.pem
+|   public-keys <-- Will be used if UKI_BRING_YOUR_OWN_KEYS=true, otherwise CanvOS will generate the keys
+|   |   db.pem
+|   |   KEK.pem
+|   |   PK.pem
+```
+
+3. Generate keys for Trusted Boot
+
+```shell
+./earthly.sh +uki-genkey --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=5475
+```
 
 ### Build Trusted Boot Images
 
 1. Your .arg file should contain these values.
 
-```
+```shell
 IS_UKI=true
-UKI_SELF_SIGNED_KEYS=true # Set to false if you want to use exported keys from hardware
-INCLUDE_MS_SECUREBOOT_KEYS=true # Include Microsoft 3rd Party UEFI CA certificate in generated keys
 AUTO_ENROLL_SECUREBOOT_KEYS=false # Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot
 ```
 
-2. Prepare keys for installer and provider image creation. If you have faactory keys exported from your hw, put them under `secure-boot/exported-keys`. The keys should be named as follows: db, KEK
-
-```
-./earthly.sh +uki-genkey --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=5475
-```
-
-3. ./earthly.sh +build-all-images
+2. `./earthly.sh +build-all-images`
