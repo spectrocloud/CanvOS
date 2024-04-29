@@ -390,23 +390,27 @@ uki-genkey:
     ARG EXPIRATION_IN_DAYS=5475
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
 
-    IF [ "UKI_BRING_YOUR_OWN_KEYS" = "false" ]
-        IF [ "$UKI_SELF_SIGNED_KEYS" = "false" ]
-            RUN --no-cache mkdir -p /custom-keys
-            COPY secure-boot/exported-keys/ /custom-keys
-            RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
+    IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "false" ]
+        RUN --no-cache mkdir -p /custom-keys
+        COPY --if-exists secure-boot/exported-keys/ /custom-keys
+        IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
+            RUN --no-cache if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
+                  echo "Generating Secure Boot keys, including exported UEFI keys..." && \
+                  /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; else \
+                  echo "Generating Secure Boot keys..." && \
+                  /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; fi
         ELSE
-            IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
-                    RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
-            ELSE
-                    RUN --no-cache /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys
-            END
+            RUN --no-cache if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
+                  echo "Generating Secure Boot keys, including exported UEFI keys and Microsoft keys..." && \
+                  /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; else \
+                  echo "Generating Secure Boot keys, including Microsoft keys..." && \
+                  /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; fi
         END
         RUN --no-cache mkdir -p /private-keys
         RUN --no-cache mkdir -p /public-keys
         RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
         RUN --no-cache cd /keys; mv *.pem /public-keys
-    ELSE 
+    ELSE
         COPY +uki-byok/ /keys
     END
     SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
