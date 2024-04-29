@@ -32,7 +32,7 @@ function add_comment {
             "db.auth"*)
                 echo "$line <-- Signature Database"
                 ;;
-            "dbx.esl"*)
+            "dbx.auth"*)
                 echo "$line <-- Forbidden Signatures Database"
                 ;;
             "PK.key"*)
@@ -40,6 +40,9 @@ function add_comment {
                 ;;
             "KEK.key"*)
                 echo "$line <-- Remove me from this directory and keep me safe"
+                ;;
+            "tpm2-pcr-private.pem"*)
+                echo "$line <-- Don't lose me! Without me you lose access to your encrypted disks"
                 ;;
             *)
                 echo "$line"
