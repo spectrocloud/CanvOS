@@ -554,11 +554,11 @@ base-image:
     --build-arg NO_PROXY=$NO_PROXY .
 
     IF [ "$IS_JETSON" = "true" ]
-        COPY mount.yaml /system/oem/mount.yaml
+        COPY cloudconfigs/mount.yaml /system/oem/mount.yaml
     END
 
     IF [ "$IS_UKI" = "true" ]
-        COPY stylus_uki.yaml /system/oem/stylus_uki.yaml
+        COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
     END
 
     IF [ "$ARCH" = "arm64" ]
