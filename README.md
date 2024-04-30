@@ -245,7 +245,6 @@ platform=linux/arm64
 ```shell
 SPECTRO_LUET_REPO=reg.xxx.com
 SPECTRO_PUB_REPO=reg.xxx.com
-BASE_IMAGE=reg.xxx.com/opensuse:leap-15.4-core-amd64-v2.4.5
 ```
 
 3. Make sure you have following images retagged to your repo
