@@ -245,9 +245,10 @@ platform=linux/arm64
 ```shell
 SPECTRO_LUET_REPO=reg.xxx.com
 SPECTRO_PUB_REPO=reg.xxx.com
+KAIROS_BASE_IMAGE_URL=reg.xxx.com
 ```
 
-3. Make sure you have following images retagged to your repo
+3. Make sure you have following images and your base image retagged to your repo
 
 ```shell
 gcr.io/spectro-images-public/earthly/earthly:v0.8.5 to reg.xxx.com/earthly/earthly:v0.8.5
