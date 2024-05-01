@@ -311,16 +311,16 @@ build-uki-iso:
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/data/stylus-image.tar
     COPY --platform=linux/${ARCH} +luet/luet /overlay/data/luet
  
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    COPY --if-exists content-*/*.zst /overlay/data/opt/spectrocloud/content/
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
-        COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
+        COPY --if-exists "$CLUSTERCONFIG" /overlay/data/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
-    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
-        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
+    COPY --if-exists ui.tar /overlay/data/opt/spectrocloud/emc/
+    RUN if [ -f /overlay/data/opt/spectrocloud/emc/ui.tar ]; then \
+        tar -xf /overlay/data/opt/spectrocloud/emc/ui.tar -C /overlay/data/opt/spectrocloud/emc && \
+        rm -f /overlay/data/opt/spectrocloud/emc/ui.tar; \
     fi
 
     WORKDIR /build
