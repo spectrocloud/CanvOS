@@ -16,3 +16,5 @@ IS_UKI=false
 UKI_BRING_YOUR_OWN_KEYS=false
 INCLUDE_MS_SECUREBOOT_KEYS=true
 AUTO_ENROLL_SECUREBOOT_KEYS=false
+# If you have Ubuntu Pro, use the UBUNTU_PRO_KEY variable to activate it as part of the image build
+# UBUNTU_PRO_KEY=your-key

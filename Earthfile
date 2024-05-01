@@ -36,6 +36,7 @@ ARG CLUSTERCONFIG
 ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=true
+ARG UBUNTU_PRO_KEY
 
 ARG FIPS_ENABLED=false
 ARG HTTP_PROXY
@@ -582,6 +583,12 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+        IF [ ! -z "$UBUNTU_PRO_KEY" ]
+            RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
+            apt update && apt-get install -y snapd && \
+            pro attach $UBUNTU_PRO_KEY
+        END
+
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /etc/ssl/certs
@@ -619,8 +626,12 @@ base-image:
             COPY cis-harden/harden.sh /tmp/harden.sh
             RUN /tmp/harden.sh && rm /tmp/harden.sh
         END
-            
-    # IF OS Type is Opensuse
+
+        IF [ ! -z "$UBUNTU_PRO_KEY" ]
+            RUN pro detach --assume-yes
+        END
+
+        # IF OS Type is Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
