@@ -56,7 +56,9 @@ CanvOS/
        dbx
 ```
 
-9. Run the "uki-byok" function in CanvOS to generate the Secure Boot enrollment payload:
+9. Ensure your `.arg` file contains `UKI_BRING_YOUR_OWN_KEYS=true`
+
+10. Run the "uki-genkey" function in CanvOS to generate the Secure Boot enrollment payload:
 ```
-./earthly.sh +uki-byok
+./earthly.sh +uki-genkey
 ```
