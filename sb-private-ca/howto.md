@@ -46,7 +46,15 @@ CanvOS/
   Get-SecureBootUEFI –Name dbx –OutputFilePath dbx
   ```
 
-8. Place the exported `KEK`, `db` and `dbx` files in `secure-boot/exported-keys`
+8. Place the exported `KEK`, `db` and `dbx` files in the following directory structure:
+```
+CanvOS/
+   secure-boot/
+     exported-keys/
+       KEK
+       db
+       dbx
+```
 
 9. Run the "uki-byok" function in CanvOS to generate the Secure Boot enrollment payload:
 ```
