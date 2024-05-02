@@ -31,7 +31,14 @@ CanvOS/
        db.pem
 ```
 
-7. Export the factory UEFI keys from your device by installing a regular Linux or Windows OS on the device. Then run the following commands to export the factory keys:
+7. Create the Full Disk Encryption key for the TPM:
+```
+openssl genrsa -out tpm2-pcr-private.pem 2048
+```
+
+8. Place the resulting `tpm2-pcr-private.pem` file in `secure-boot/private-keys`
+
+9. Export the factory UEFI keys from your device by installing a regular Linux or Windows OS on the device. Then run the following commands to export the factory keys:
   * Linux:
   ```
   apt update && apt install -y efitools
@@ -46,7 +53,7 @@ CanvOS/
   Get-SecureBootUEFI –Name dbx –OutputFilePath dbx
   ```
 
-8. Place the exported `KEK`, `db` and `dbx` files in the following directory structure:
+10. Place the exported `KEK`, `db` and `dbx` files in the following directory structure:
 ```
 CanvOS/
    secure-boot/
@@ -56,9 +63,9 @@ CanvOS/
        dbx
 ```
 
-9. Ensure your `.arg` file contains `UKI_BRING_YOUR_OWN_KEYS=true`
+11. Ensure your `.arg` file contains `UKI_BRING_YOUR_OWN_KEYS=true`
 
-10. Run the "uki-genkey" function in CanvOS to generate the Secure Boot enrollment payload:
+12. Run the "uki-genkey" function in CanvOS to generate the Secure Boot enrollment payload:
 ```
 ./earthly.sh +uki-genkey
 ```
