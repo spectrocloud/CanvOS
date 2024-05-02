@@ -58,5 +58,5 @@ CanvOS/
 
 9. Run the "uki-byok" function in CanvOS to generate the Secure Boot enrollment payload:
 ```
-./earthly +uki-byok
+./earthly.sh +uki-byok
 ```
