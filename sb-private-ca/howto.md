@@ -31,7 +31,24 @@ CanvOS/
        db.pem
 ```
 
-7. Run the "uki-genkey" function in CanvOS to generate the Secure Boot enrollment payload:
+7. Export the factory UEFI keys from your device by installing a regular Linux or Windows OS on the device. Then run the following commands to export the factory keys:
+  * Linux:
+  ```
+  apt update && apt install -y efitools
+  efi-readvar -v KEK -o KEK
+  efi-readvar -v db -o db
+  efi-readvar -v dbx -o dbx
+  ```
+  * Windows:
+  ```
+  Get-SecureBootUEFI –Name KEK –OutputFilePath KEK
+  Get-SecureBootUEFI –Name db –OutputFilePath db
+  Get-SecureBootUEFI –Name dbx –OutputFilePath dbx
+  ```
+
+8. Place the exported `KEK`, `db` and `dbx` files in `secure-boot/exported-keys`
+
+9. Run the "uki-byok" function in CanvOS to generate the Secure Boot enrollment payload:
 ```
-./earthly +uki-genkey
+./earthly +uki-byok
 ```
