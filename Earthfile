@@ -307,22 +307,22 @@ build-uki-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/config.yaml
-    COPY --if-exists user-data /overlay/data/config.yaml
-    COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/data/stylus-image.tar
-    COPY --platform=linux/${ARCH} +luet/luet /overlay/data/luet
+    COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
+    COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
  
-    COPY --if-exists content-*/*.zst /overlay/data/opt/spectrocloud/content/
-    RUN split --bytes=3GB --numeric-suffixes /overlay/data/opt/spectrocloud/content/*.zst /overlay/data/opt/spectrocloud/content/content.part
-    RUN rm /overlay/data/opt/spectrocloud/content/*.zst
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    RUN split --bytes=3GB --numeric-suffixes /overlay/opt/spectrocloud/content/*.zst /overlay/opt/spectrocloud/content/content.part
+    RUN rm /overlay/opt/spectrocloud/content/*.zst
+    
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
-        COPY --if-exists "$CLUSTERCONFIG" /overlay/data/opt/spectrocloud/clusterconfig/spc.tgz
+        COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-    COPY --if-exists ui.tar /overlay/data/opt/spectrocloud/emc/
-    RUN if [ -f /overlay/data/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /overlay/data/opt/spectrocloud/emc/ui.tar -C /overlay/data/opt/spectrocloud/emc && \
-        rm -f /overlay/data/opt/spectrocloud/emc/ui.tar; \
+    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
+    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
+        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
+        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
     fi
 
     WORKDIR /build
@@ -334,9 +334,9 @@ build-uki-iso:
        RUN ls -liah /keys
        RUN mkdir /iso
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
        ELSE
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --overlay-iso /overlay/data -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys --boot-branding "$BRANDING"
        END
     END
     WORKDIR /iso

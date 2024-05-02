@@ -19,7 +19,7 @@ stages:
       commands:
         - echo "Copying files to persistent path"
         - if mount | grep /oem >/dev/null; then umount /oem; fi
-        - if [ -e /dev/mapper/oem ]; then cryptsetup close /dev/mapper/oem; fi
+        - for d in /dev/mapper/*; do if [ ! "$d" = "/dev/mapper/control" ]; then cryptsetup close $d; fi; done
         - /usr/lib/systemd/systemd-cryptsetup attach oem $(findfs PARTLABEL=oem) - tpm2-device=auto
         - mount /dev/mapper/oem /oem
         - mkdir -p /oem/opt.bind
