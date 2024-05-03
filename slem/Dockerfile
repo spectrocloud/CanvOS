@@ -30,6 +30,11 @@ RUN touch /usr/libexec/.keep
 
 COPY --from=quay.io/kairos/framework:v2.7.31 / /
 
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+
 # Remove file below to allow dracut to build initrd without dhcp-client
 RUN rm -rf /usr/lib/dracut/modules.d/35network-legacy
 
