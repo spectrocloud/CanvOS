@@ -99,7 +99,6 @@ RUN apt-get install -y --no-install-recommends \
     qemu-guest-agent \
     rsync \
     shared-mime-info \
-    snapd \
     snmpd \
     squashfs-tools \
     sudo \
@@ -119,6 +118,11 @@ RUN apt-get install -y --no-install-recommends \
 
 # Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
 COPY --from=kairos-fips / /
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 

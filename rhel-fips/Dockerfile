@@ -86,6 +86,10 @@ COPY --from=osbuilder /workspace/os-release /etc/os-release
 
 COPY --from=quay.io/kairos/framework:v2.7.31-fips / /
 
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
 COPY overlay/rhel8 /
 
 # Configure the box. The ubi image masks services for containers, we unmask them 
