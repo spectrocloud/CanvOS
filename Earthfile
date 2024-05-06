@@ -451,8 +451,11 @@ uki-byok:
         --db-key /keys/db.key \
         --db-cert /keys/db.pem
     RUN sbctl create-keys
-    RUN sbctl enroll-keys --export esl --yes-this-might-brick-my-machine
-
+    IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
+        RUN sbctl enroll-keys --export esl --yes-this-might-brick-my-machine
+    ELSE
+        RUN sbctl enroll-keys --export esl --yes-this-might-brick-my-machine --microsoft
+    END
     RUN mkdir -p /output
     RUN cp PK.esl  /output/PK.esl  2>/dev/null
     RUN cp KEK.esl /output/KEK.esl 2>/dev/null
