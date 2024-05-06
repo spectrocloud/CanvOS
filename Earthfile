@@ -423,9 +423,12 @@ uki-genkey:
     ELSE
         COPY +uki-byok/ /keys
     END
+
     SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
-    SAVE ARTIFACT --if-exists /private-keys AS LOCAL ./secure-boot/private-keys
-    SAVE ARTIFACT --if-exists /public-keys AS LOCAL ./secure-boot/public-keys
+    IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "false" ]
+        SAVE ARTIFACT --if-exists /private-keys AS LOCAL ./secure-boot/private-keys
+        SAVE ARTIFACT --if-exists /public-keys AS LOCAL ./secure-boot/public-keys
+    END
 
 download-sbctl:
     DO +BASE_ALPINE
