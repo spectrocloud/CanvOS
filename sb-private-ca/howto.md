@@ -1,7 +1,7 @@
 INSTRUCTIONS FOR USING YOUR OWN CA FOR SECURE BOOT KEYS
 -------------------------------------------------------
 
-1. First, create certificate requests for the PK, KEK and db certificates:
+1. First, create certificate requests for the PK, KEK and db certificates. Review the company information in the *.conf files, adjust `req_dn` section of each file to your liking, and then run:
 ```
 openssl req -new -config PK_request.conf  -keyout PK.key  -out CSR_PK.req
 openssl req -new -config KEK_request.conf -keyout KEK.key -out CSR_KEK.req
@@ -22,7 +22,7 @@ db.pem
 CanvOS/
    secure-boot/
      private-keys/
-       PK.pem
+       PK.key
        KEK.key
        db.key
      public-keys/
