@@ -311,8 +311,10 @@ build-uki-iso:
     COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
  
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
-    RUN split --bytes=3GB --numeric-suffixes /overlay/opt/spectrocloud/content/*.zst /overlay/opt/spectrocloud/content/content.part
-    RUN rm /overlay/opt/spectrocloud/content/*.zst
+    RUN if [ -f /overlay/opt/spectrocloud/content/*.zst ]; then \
+        split --bytes=3GB --numeric-suffixes /overlay/opt/spectrocloud/content/*.zst /overlay/opt/spectrocloud/content/content.part && \
+        rm -f /overlay/opt/spectrocloud/content/*.zst; \
+    fi
     
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
@@ -357,9 +359,10 @@ build-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
-    RUN split --bytes=3GB --numeric-suffixes /overlay/opt/spectrocloud/content/*.zst /overlay/opt/spectrocloud/content/content.part
-    RUN rm /overlay/opt/spectrocloud/content/*.zst
+    RUN if [ -f /overlay/opt/spectrocloud/content/*.zst ]; then \
+        split --bytes=3GB --numeric-suffixes /overlay/opt/spectrocloud/content/*.zst /overlay/opt/spectrocloud/content/content.part && \
+        rm -f /overlay/opt/spectrocloud/content/*.zst; \
+    fi
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
