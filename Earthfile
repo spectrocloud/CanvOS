@@ -312,7 +312,9 @@ build-uki-iso:
  
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     RUN if [ -f /overlay/opt/spectrocloud/content/*.zst ]; then \
-        split --bytes=3GB --numeric-suffixes /overlay/opt/spectrocloud/content/*.zst /overlay/opt/spectrocloud/content/content.part && \
+        for file in /overlay/opt/spectrocloud/content/*.zst; do \
+            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part && \
+        done; \
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
     
@@ -360,15 +362,15 @@ build-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     RUN if [ -f /overlay/opt/spectrocloud/content/*.zst ]; then \
-        split --bytes=3GB --numeric-suffixes /overlay/opt/spectrocloud/content/*.zst /overlay/opt/spectrocloud/content/content.part && \
+        for file in /overlay/opt/spectrocloud/content/*.zst; do \
+            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part && \
+        done; \
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
-
-
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
