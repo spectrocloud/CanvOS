@@ -475,6 +475,21 @@ uki-byok:
 
     SAVE ARTIFACT /output/*
 
+secure-boot-dirs:
+    FROM ubuntu:latest
+    RUN mkdir -p --mode=0644 /secure-boot/enrollment
+    RUN mkdir -p --mode=0600 /secure-boot/exported-keys
+    RUN mkdir -p --mode=0600 /secure-boot/private-keys
+    RUN mkdir -p --mode=0644 /secure-boot/public-keys
+    COPY --if-exists --keep-ts secure-boot/enrollment/ /secure-boot/enrollment
+    COPY --if-exists --keep-ts secure-boot/exported-keys/ /secure-boot/exported-keys
+    COPY --if-exists --keep-ts secure-boot/private-keys/ /secure-boot/private-keys
+    COPY --if-exists --keep-ts secure-boot/public-keys/ /secure-boot/public-keys
+    RUN chmod 0600 /secure-boot/exported-keys
+    RUN chmod 0600 /secure-boot/private-keys
+    RUN chmod 0644 /secure-boot/public-keys
+    SAVE ARTIFACT --keep-ts /secure-boot AS LOCAL ./secure-boot
+
 # Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
 provider-image:
     FROM --platform=linux/${ARCH} +base-image

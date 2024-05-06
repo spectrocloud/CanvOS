@@ -16,7 +16,7 @@ PK.pem
 KEK.pem
 db.pem
 
-5. Create a `secure-boot` directory in CanvOS.
+5. Run `./earthly.sh +secure-boot-dirs` to create the secure-boot directory structure in CanvOS.
 6. Place the files in the following directory structure:
 ```
 CanvOS/
