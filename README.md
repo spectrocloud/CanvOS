@@ -268,4 +268,7 @@ cp spectro-luet-auth.yaml.template spectro-luet-auth.yaml
 # modify serveraddess, username and password in spectro-luet-auth.yaml to yours
 ```
 
-5. Build the image using the same command as before
+5. Build the image using earthly installed on the host
+```shell
+earthly --push +build-all-images
+```
