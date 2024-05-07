@@ -285,3 +285,40 @@ AUTO_ENROLL_SECUREBOOT_KEYS=false # Auto enroll SecureBoot keys when device boot
 ```
 
 2. `./earthly.sh +build-all-images`
+
+### Building with private registry
+
+1. Make sure you have logged into your registry using docker login
+2. In .arg, add following entries
+
+```shell
+SPECTRO_LUET_REPO=reg.xxx.com
+SPECTRO_PUB_REPO=reg.xxx.com
+KAIROS_BASE_IMAGE_URL=reg.xxx.com
+```
+
+3. Make sure you have following images and your base image retagged to your repo
+
+```shell
+gcr.io/spectro-images-public/earthly/earthly:v0.8.5 to reg.xxx.com/earthly/earthly:v0.8.5
+gcr.io/spectro-images-public/earthly/buildkitd:v0.8.5 to reg.xxx.com/earthly/buildkitd:v0.8.5
+gcr.io/spectro-images-public/canvos/alpine-cert:v1.0.0 to reg.xxx.com/canvos/alpine-cert:v1.0.0
+gcr.io/spectro-images-public/osbuilder-tools:v0.7.11 to reg.xxx.com/osbuilder-tools:v0.7.11
+gcr.io/spectro-images-public/stylus-framework-linux-amd64:v4.3.2 to reg.xxx.com/stylus-framework-linux-amd64:v4.3.2
+gcr.io/spectro-images-public/kairos-io/provider-kubeadm:v4.3.1 to reg.xxx.com/kairos-io/provider-kubeadm:v4.3.1
+gcr.io/spectro-images-public/kairos-io/provider-k3s:v4.2.1 to reg.xxx.com/kairos-io/provider-k3s:v4.2.1
+gcr.io/spectro-images-public/kairos-io/provider-rke2:v4.1.1 to reg.xxx.com/kairos-io/provider-rke2:v4.1.1
+```
+
+4. Prepare luet auth config
+
+```shell
+cp spectro-luet-auth.yaml.template spectro-luet-auth.yaml
+# modify serveraddess, username and password in spectro-luet-auth.yaml to yours
+```
+
+5. Build the image using earthly installed on the host
+
+```shell
+earthly --push +build-all-images
+```

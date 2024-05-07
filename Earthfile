@@ -697,9 +697,12 @@ base-image:
     ELSE IF [ "$ARCH" = "amd64" ]
         ARG LUET_REPO=luet-repo
     END
-    RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y && \
-          luet repo update
+    RUN --no-cache mkdir -p /etc/luet/repos.conf.d && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y 
+    
+    COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
+    RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
+    RUN --no-cache luet repo update
 
      IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl
