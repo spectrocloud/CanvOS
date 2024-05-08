@@ -26,12 +26,9 @@ function build_without_proxy() {
 
 global_config="{disable_analytics: true}"
 PE_VERSION=$(git describe --abbrev=0 --tags)
+SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 EARTHLY_VERSION=v0.8.5
 source .arg
-
-if [ -z "SPECTRO_PUB_REPO" ]; then
-    SPECTRO_PUB_REPO=gcr.io/spectro-images-public
-fi
 
 ### Verify Depencies
 # Check if Docker is installed
