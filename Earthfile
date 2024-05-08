@@ -237,7 +237,7 @@ uki-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
-    FROM gcr.io/spectro-images-public/ubuntu-systemd:22.04
+    FROM --platform=linux/${ARCH} gcr.io/spectro-images-public/ubuntu-systemd:22.04
     WORKDIR /
     COPY +luet/luet /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
@@ -260,15 +260,15 @@ stylus-image-pack:
     SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
 
 luet:
-    FROM quay.io/luet/base:latest
+    FROM --platform=linux/${ARCH} quay.io/luet/base:latest
     SAVE ARTIFACT /usr/bin/luet /luet
 
 kairos-agent:
-    FROM $BASE_IMAGE
+    FROM --platform=linux/${ARCH} $BASE_IMAGE
     SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
 
 install-k8s:
-    FROM alpine
+    FROM --platform=linux/${ARCH} alpine:3.19
     COPY +luet/luet /usr/bin/luet
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -297,7 +297,7 @@ install-k8s:
     SAVE ARTIFACT /output/*
 
 internal-slink:
-    FROM alpine
+    FROM --platform=linux/${ARCH} alpine
     COPY internal/slink/slink /slink
     RUN chmod +x /slink
     SAVE ARTIFACT /slink
@@ -436,7 +436,7 @@ download-sbctl:
     SAVE ARTIFACT /usr/bin/sbctl
 
 uki-byok:
-    FROM ubuntu:latest
+    FROM --platform=linux/${ARCH} ubuntu:latest
 
     RUN apt-get update && apt-get install -y efitools curl
     COPY +download-sbctl/sbctl /usr/bin/sbctl
@@ -482,7 +482,7 @@ uki-byok:
     SAVE ARTIFACT /output/*
 
 secure-boot-dirs:
-    FROM ubuntu:latest
+    FROM --platform=linux/${ARCH} ubuntu:latest
     RUN mkdir -p --mode=0644 /secure-boot/enrollment
     RUN mkdir -p --mode=0600 /secure-boot/exported-keys
     RUN mkdir -p --mode=0600 /secure-boot/private-keys
@@ -553,14 +553,14 @@ build-provider-trustedboot-image:
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
-    FROM $STYLUS_BASE
+    FROM --platform=linux/${ARCH} $STYLUS_BASE
     SAVE ARTIFACT --keep-own  ./*
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
 
 stylus-package-image:
-    FROM $STYLUS_PACKAGE_BASE
+    FROM --platform=linux/${ARCH} $STYLUS_PACKAGE_BASE
     SAVE ARTIFACT --keep-own  ./*
 
 kairos-provider-image:
