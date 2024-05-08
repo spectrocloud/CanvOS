@@ -73,6 +73,9 @@ get_os() {
 	elif [ -f /etc/centos-release ]; then
 		OS='CentOS Linux'
 		VER=$(cat /etc/centos-release | sed 's/.*\( [0-9][^ ]\+\) .*/\1/')
+	elif [ -f /etc/rocky-release ]; then
+		OS='Rocky Linux'
+		VER=$(cat /etc/rocky-release | sed 's/.*\( [0-9][^ ]\+\) .*/\1/')
 	elif [ -f /etc/redhat-release ]; then
 		OS='Red Hat Enterprise Linux'
 		VER=$(cat /etc/redhat-release | sed 's/.*\( [0-9][^ ]\+\) .*/\1/')
@@ -85,6 +88,8 @@ get_os() {
 		OS_FLAVOUR="rhel"
 	elif [[ $OS =~ 'CentOS' ]]; then
 		OS_FLAVOUR="centos"
+	elif [[ $OS =~ 'Rocky' ]]; then
+			OS_FLAVOUR="centos"
 	elif [[ $OS =~ 'Ubuntu' ]]; then
 		OS_FLAVOUR="ubuntu"
 	else
@@ -116,14 +121,16 @@ upgrade_packages() {
 
 	if [[ ${OS_FLAVOUR} == "centos" ]]; then
 		yum -y update
-		yum install -y auditd apparmor-utils libpam-pwquality
+		yum install -y audit libpwquality
 		check_error $? "Failed upgrading packages" 1
+		yum clean all
 	fi
 
 	if [[ ${OS_FLAVOUR} == "rhel" ]]; then
 		yum -y update
-		yum install -y auditd apparmor-utils libpam-pwquality
+		yum install -y audit libpwquality
 		check_error $? "Failed upgrading packages" 1
+		yum clean all
 	fi
 
 	# Placeholder for supporting other linux OS
@@ -731,10 +738,6 @@ harden_log() {
 ##########################################################################
 harden_auth() {
 
-	#Install the pam_pwquality module
-	apt-get update -y
-	apt-get install -y libpam-pwquality
-
 	# Define the new values for minlen and minclass
 	new_minlen="minlen = 14"
 	new_minclass="minclass = 4"
@@ -848,7 +851,7 @@ harden_auth() {
 	update_config_files 'PASS_MAX_DAYS' 'PASS_MAX_DAYS 365' ${config_file}
 	update_config_files 'PASS_WARN_AGE' 'PASS_WARN_AGE 7' ${config_file}
 
-	echo "Password expiry policy updated to PASS_MIN_DAYS 1 & PASS_MAX_DAYS 365"
+	echo "Password expiry policy updated to PASS_MIN_DAYS 1 & PASS_MAX_DAYS 365 & PASS_WARN_AGE 7"
 
 	#####################Password encryption standards##########
 
