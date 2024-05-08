@@ -731,10 +731,6 @@ harden_log() {
 ##########################################################################
 harden_auth() {
 
-	#Install the pam_pwquality module
-	apt-get update -y
-	apt-get install -y libpam-pwquality
-
 	# Define the new values for minlen and minclass
 	new_minlen="minlen = 14"
 	new_minclass="minclass = 4"
@@ -848,7 +844,7 @@ harden_auth() {
 	update_config_files 'PASS_MAX_DAYS' 'PASS_MAX_DAYS 365' ${config_file}
 	update_config_files 'PASS_WARN_AGE' 'PASS_WARN_AGE 7' ${config_file}
 
-	echo "Password expiry policy updated to PASS_MIN_DAYS 1 & PASS_MAX_DAYS 365"
+	echo "Password expiry policy updated to PASS_MIN_DAYS 1 & PASS_MAX_DAYS 365 & PASS_WARN_AGE 7"
 
 	#####################Password encryption standards##########
 
