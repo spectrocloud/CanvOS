@@ -59,6 +59,10 @@ ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
 ARG ETCD_VERSION="v3.5.13"
 
+# EFI size check
+ARG EFI_MAX_SIZE=2048
+ARG EFI_IMG_SIZE=2200
+
 # internal variables
 ARG GOLANG_VERSION=1.22
 
@@ -240,7 +244,7 @@ uki-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
-    FROM --platform=linux/${ARCH} gcr.io/spectro-images-public/ubuntu-systemd:22.04
+    FROM --platform=linux/${ARCH} +ubuntu-systemd
     WORKDIR /
     COPY +luet/luet /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
@@ -433,7 +437,7 @@ download-sbctl:
     SAVE ARTIFACT /usr/bin/sbctl
 
 uki-byok:
-    FROM --platform=linux/${ARCH} ubuntu:latest
+    FROM +ubuntu-systemd
 
     RUN apt-get update && apt-get install -y efitools curl
     COPY +download-sbctl/sbctl /usr/bin/sbctl
@@ -794,6 +798,48 @@ internal-slink:
     DO +BUILD_GOLANG --BIN=slink --SRC=cmd/slink/slink.go --WORKDIR=$BUILD_DIR
 
     SAVE ARTIFACT slink
+
+rust-deps:
+    FROM rust:1.78-bookworm
+    RUN apt-get update -qq
+    RUN apt-get install --no-install-recommends -qq autoconf autotools-dev libtool-bin clang cmake bsdmainutils
+
+build-efi-size-check:
+    FROM +rust-deps
+
+    WORKDIR /build
+    COPY --keep-ts efi-size-check efi-size-check
+
+    WORKDIR /build/efi-size-check
+    RUN cargo build --target x86_64-unknown-uefi
+
+    SAVE ARTIFACT target/x86_64-unknown-uefi/debug/efi-size-check.efi
+
+iso-efi-size-check:
+    FROM +ubuntu-systemd
+
+    RUN apt-get update
+    RUN apt-get install -y mtools xorriso
+
+    WORKDIR /build
+
+    COPY +build-efi-size-check/efi-size-check.efi /build/efi-size-check.efi
+    RUN mkdir -p esp
+    RUN dd if=/dev/urandom of=esp/ABC bs=1M count=$EFI_MAX_SIZE
+    RUN dd if=/dev/zero of=fat.img bs=1M count=$EFI_IMG_SIZE
+    RUN mformat -i fat.img -F ::
+    RUN mmd -i fat.img ::/EFI
+    RUN mmd -i fat.img ::/EFI/BOOT
+    RUN mcopy -i fat.img efi-size-check.efi ::/EFI/BOOT/BOOTX64.EFI
+    RUN mcopy -i fat.img esp/ABC ::
+    RUN mkdir -p iso
+    RUN cp fat.img iso
+    RUN xorriso -as mkisofs -e fat.img -no-emul-boot -o efi-size-check.iso iso
+
+    SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
+
+ubuntu-systemd:
+    FROM $SPECTRO_PUB_REPO/ubuntu-systemd:22.04
 
 OS_RELEASE:
     COMMAND
