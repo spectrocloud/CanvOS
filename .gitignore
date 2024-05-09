@@ -17,3 +17,4 @@ sb-private-ca/*.pem
 sb-private-ca/*.key
 sb-private-ca/*.req
 spectro-luet-auth.yaml
+spc.tgz
