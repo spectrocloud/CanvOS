@@ -59,6 +59,9 @@ ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
 ARG ETCD_VERSION="v3.5.13"
 
+# internal variables
+ARG GOLANG_VERSION=1.22
+
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
         ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
@@ -295,12 +298,6 @@ install-k8s:
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
-
-internal-slink:
-    FROM --platform=linux/${ARCH} alpine
-    COPY internal/slink/slink /slink
-    RUN chmod +x /slink
-    SAVE ARTIFACT /slink
 
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
@@ -758,6 +755,45 @@ iso-disk-image:
     ELSE
         SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$PE_VERSION
     END
+
+go-deps:
+    FROM $SPECTRO_PUB_REPO/golang:${GOLANG_VERSION}-alpine
+    RUN apk add libc-dev binutils-gold clang
+
+
+BUILD_GOLANG:
+    COMMAND
+    ARG WORKDIR=/build
+    WORKDIR $WORKDIR
+
+    ARG BIN
+    ARG SRC
+    ARG GOOS
+    ARG GOARCH
+    ARG VERSION=dev
+
+    ENV GOOS=$GOOS 
+    ENV GOARCH=$GOARCH
+    ENV GO_LDFLAGS=" -X github.com/spectrocloud/stylus/pkg/version.Version=${VERSION} -w -s"
+
+    ENV CC=clang
+    RUN go mod download
+    RUN go-build-static.sh -a -o ${BIN} ./${SRC}
+
+    SAVE ARTIFACT ${BIN} ${BIN} AS LOCAL build/${BIN}
+
+internal-slink:
+    FROM +go-deps
+
+    WORKDIR /build
+    COPY internal internal
+
+    ARG BUILD_DIR=/build/internal
+    WORKDIR $BUILD_DIR
+    
+    DO +BUILD_GOLANG --BIN=slink --SRC=cmd/slink/slink.go --WORKDIR=$BUILD_DIR
+
+    SAVE ARTIFACT slink
 
 OS_RELEASE:
     COMMAND
