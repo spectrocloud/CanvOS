@@ -141,6 +141,7 @@ build-provider-images:
            BUILD  +$TARGET --K8S_VERSION=1.27.9
            BUILD  +$TARGET --K8S_VERSION=1.26.12
            BUILD  +$TARGET --K8S_VERSION=1.28.5
+           BUILD  +$TARGET --K8S_VERSION=1.27.11
        ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
            BUILD  +$TARGET --K8S_VERSION=1.26.14
            BUILD  +$TARGET --K8S_VERSION=1.27.11
