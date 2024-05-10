@@ -1,12 +1,12 @@
 
 # Kairos framework packages for ubuntu fips
-FROM quay.io/kairos/framework:v2.4.5-fips as kairos-fips
+FROM quay.io/kairos/framework:v2.7.31-fips as kairos-fips
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base
 
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.7.11 as osbuilder
+FROM quay.io/kairos/osbuilder-tools:v0.200.11 as osbuilder
 RUN zypper install -y gettext && zypper clean
 RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
@@ -99,7 +99,6 @@ RUN apt-get install -y --no-install-recommends \
     qemu-guest-agent \
     rsync \
     shared-mime-info \
-    snapd \
     snmpd \
     squashfs-tools \
     sudo \
@@ -119,6 +118,11 @@ RUN apt-get install -y --no-install-recommends \
 
 # Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
 COPY --from=kairos-fips / /
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 
