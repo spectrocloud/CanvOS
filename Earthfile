@@ -98,10 +98,12 @@ ELSE
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
-    ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION-$CUSTOM_TAG
+    ARG IMAGE_TAG=$PE_VERSION-$CUSTOM_TAG
 ELSE
-    ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$PE_VERSION
+    ARG IMAGE_TAG=$PE_VERSION
 END
+
+ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE_TAG
 ARG CMDLINE="stylus.registration"
 
 build-all-images:
@@ -745,21 +747,14 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
-    IF [ "$CUSTOM_TAG" != "" ]
-        SAVE IMAGE palette-installer-image:$PE_VERSION-$CUSTOM_TAG
-    ELSE
-        SAVE IMAGE palette-installer-image:$PE_VERSION
-    END
+
+    SAVE IMAGE palette-installer-image:$IMAGE_TAG
 
 iso-disk-image:
     FROM scratch
 
     COPY +iso/*.iso /disk/
-    IF [ "$CUSTOM_TAG" != "" ]
-        SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$PE_VERSION-$CUSTOM_TAG
-    ELSE
-        SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$PE_VERSION
-    END
+    SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/golang:${GOLANG_VERSION}-alpine
