@@ -13,7 +13,7 @@ FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.2
 ARG SPECTRO_LUET_VERSION=v1.2.7
-ARG KAIROS_VERSION=v3.0.9
+ARG KAIROS_VERSION=v3.0.10
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -182,42 +182,46 @@ build-provider-images:
     END
 
 build-provider-images-fips:
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       BUILD  +provider-image --K8S_VERSION=1.24.13
-       BUILD  +provider-image --K8S_VERSION=1.25.9
-       BUILD  +provider-image --K8S_VERSION=1.26.4
-       BUILD  +provider-image --K8S_VERSION=1.27.2
-       BUILD  +provider-image --K8S_VERSION=1.29.0
-       BUILD  +provider-image --K8S_VERSION=1.27.9
-       BUILD  +provider-image --K8S_VERSION=1.26.12
-       BUILD  +provider-image --K8S_VERSION=1.28.5
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-       BUILD  +provider-image --K8S_VERSION=1.24.6
-       BUILD  +provider-image --K8S_VERSION=1.25.2
-       BUILD  +provider-image --K8S_VERSION=1.25.0
-       BUILD  +provider-image --K8S_VERSION=1.26.4
-       BUILD  +provider-image --K8S_VERSION=1.26.14
-       BUILD  +provider-image --K8S_VERSION=1.27.2
-       BUILD  +provider-image --K8S_VERSION=1.26.12
-       BUILD  +provider-image --K8S_VERSION=1.27.9
-       BUILD  +provider-image --K8S_VERSION=1.27.11
-       BUILD  +provider-image --K8S_VERSION=1.28.5
-       BUILD  +provider-image --K8S_VERSION=1.28.7
-       BUILD  +provider-image --K8S_VERSION=1.29.0
-       BUILD  +provider-image --K8S_VERSION=1.29.3
+    IF [ "$K8S_VERSION" = "" ]
+        IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+           BUILD  +provider-image --K8S_VERSION=1.24.13
+           BUILD  +provider-image --K8S_VERSION=1.25.9
+           BUILD  +provider-image --K8S_VERSION=1.26.4
+           BUILD  +provider-image --K8S_VERSION=1.27.2
+           BUILD  +provider-image --K8S_VERSION=1.29.0
+           BUILD  +provider-image --K8S_VERSION=1.27.9
+           BUILD  +provider-image --K8S_VERSION=1.26.12
+           BUILD  +provider-image --K8S_VERSION=1.28.5
+        ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+           BUILD  +provider-image --K8S_VERSION=1.24.6
+           BUILD  +provider-image --K8S_VERSION=1.25.2
+           BUILD  +provider-image --K8S_VERSION=1.25.0
+           BUILD  +provider-image --K8S_VERSION=1.26.4
+           BUILD  +provider-image --K8S_VERSION=1.26.14
+           BUILD  +provider-image --K8S_VERSION=1.27.2
+           BUILD  +provider-image --K8S_VERSION=1.26.12
+           BUILD  +provider-image --K8S_VERSION=1.27.9
+           BUILD  +provider-image --K8S_VERSION=1.27.11
+           BUILD  +provider-image --K8S_VERSION=1.28.5
+           BUILD  +provider-image --K8S_VERSION=1.28.7
+           BUILD  +provider-image --K8S_VERSION=1.29.0
+           BUILD  +provider-image --K8S_VERSION=1.29.3
+        ELSE
+           BUILD  +provider-image --K8S_VERSION=1.24.6
+           BUILD  +provider-image --K8S_VERSION=1.25.2
+           BUILD  +provider-image --K8S_VERSION=1.26.4
+           BUILD  +provider-image --K8S_VERSION=1.27.2
+           BUILD  +provider-image --K8S_VERSION=1.26.12
+           BUILD  +provider-image --K8S_VERSION=1.26.14
+           BUILD  +provider-image --K8S_VERSION=1.27.9
+           BUILD  +provider-image --K8S_VERSION=1.27.11
+           BUILD  +provider-image --K8S_VERSION=1.28.5
+           BUILD  +provider-image --K8S_VERSION=1.28.7
+           BUILD  +provider-image --K8S_VERSION=1.29.0
+           BUILD  +provider-image --K8S_VERSION=1.29.2
+        END
     ELSE
-       BUILD  +provider-image --K8S_VERSION=1.24.6
-       BUILD  +provider-image --K8S_VERSION=1.25.2
-       BUILD  +provider-image --K8S_VERSION=1.26.4
-       BUILD  +provider-image --K8S_VERSION=1.27.2
-       BUILD  +provider-image --K8S_VERSION=1.26.12
-       BUILD  +provider-image --K8S_VERSION=1.26.14
-       BUILD  +provider-image --K8S_VERSION=1.27.9
-       BUILD  +provider-image --K8S_VERSION=1.27.11
-       BUILD  +provider-image --K8S_VERSION=1.28.5
-       BUILD  +provider-image --K8S_VERSION=1.28.7
-       BUILD  +provider-image --K8S_VERSION=1.29.0
-       BUILD  +provider-image --K8S_VERSION=1.29.2
+        BUILD  +provider-image --K8S_VERSION="$K8S_VERSION"
     END
 
 BASE_ALPINE:

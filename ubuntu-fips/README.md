@@ -1,7 +1,7 @@
 # Kairos Ubuntu focal fips
 
 - Edit `pro-attach-config.yaml` with your token
-- run `bash build.sh`
+- run `bash build.sh [<base image>]`
 - start the ISO with qemu `bash run.sh`
 
 The system is not enabling FIPS by default in kernel space. 
