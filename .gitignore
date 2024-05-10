@@ -18,3 +18,4 @@ sb-private-ca/*.key
 sb-private-ca/*.req
 spectro-luet-auth.yaml
 spc.tgz
+efi-size-check/target/
