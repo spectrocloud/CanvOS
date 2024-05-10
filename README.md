@@ -115,29 +115,33 @@ cp .arg.template .arg
 
 7. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
 
-| Parameter        | Description                                                                                                                                                                                                                                                                                                                                    | Type    | Default Value            |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------ |
-| CUSTOM_TAG       | Environment name for provider image tagging. The default value is `demo`.                                                                                                                                                                                                                                                                      | String  | `demo`                   |
-| IMAGE_REGISTRY   | Image registry name that will store the image artifacts. The default value points to the _ttl.sh_ image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String  | `ttl.sh`                 |
-| OS_DISTRIBUTION  | OS distribution of your choice. For example, it can be `ubuntu`, `opensuse-leap`, `rhel` or `sles`                                                                                                                                                                                                                                             | String  | `ubuntu`                 |
-| IMAGE_REPO       | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                 | String  | `$OS_DISTRIBUTION`       |
-| OS_VERSION       | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. For sles, possible values are `5.4`. This example uses `22` for Ubuntu.                                                                                                                                               | String  | `22`                     |
-| K8S_DISTRIBUTION | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, or `kubeadm-fips`.                                                                                                                                                                                                                                             | String  | `k3s`                    |
-| ISO_NAME         | Name of the Edge installer ISO image. In this example, the name is _palette-edge-installer_.                                                                                                                                                                                                                                                   | String  | `palette-edge-installer` |
-| ARCH             | Type of platform to use for the build. Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                              | string  | `amd64`                  |
-| BASE_IMAGE       | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                              | String  |                          |
-| FIPS_ENABLED     | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                         | string  | `false`                  |
-| HTTP_PROXY       | URL of the HTTP Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string  |                          |
-| HTTPS_PROXY      | URL of the HTTPS Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                  | string  |                          |
-| NO_PROXY         | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                          | string  |                          |
-| PROXY_CERT_PATH  | Absolute path of the SSL Proxy certificate in PEM format if needed (Optional)                                                                                                                                                                                                                                                                  | string  |                          |
-| UPDATE_KERNEL    | Determines whether to upgrade the Kernel version to the latest from the upstream OS provider                                                                                                                                                                                                                                                   | boolean | `false`                  |
-| DISABLE_SELINUX  | Disable selinux in the operating system. Some applications (like Kubevirt) do not like selinux                                                                                                                                                                                                                                                 | boolean | `true`                   |
-| CLUSTERCONFIG    | Path of the cluster config                                                                                                                                                                                                                                                                                                                     | string  |                          |
+| Parameter                   | Description                                                                                                                                                                                                                                                                                                                                    | Type    | Default Value            |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------ |
+| CUSTOM_TAG                  | Environment name for provider image tagging. The default value is `demo`.                                                                                                                                                                                                                                                                      | String  | `demo`                   |
+| IMAGE_REGISTRY              | Image registry name that will store the image artifacts. The default value points to the _ttl.sh_ image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String  | `ttl.sh`                 |
+| OS_DISTRIBUTION             | OS distribution of your choice. For example, it can be `ubuntu`, `opensuse-leap`, `rhel` or `sles`                                                                                                                                                                                                                                             | String  | `ubuntu`                 |
+| IMAGE_REPO                  | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                 | String  | `$OS_DISTRIBUTION`       |
+| OS_VERSION                  | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.4`. For sles, possible values are `5.4`. This example uses `22` for Ubuntu.                                                                                                                                               | String  | `22`                     |
+| K8S_DISTRIBUTION            | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, or `kubeadm-fips`.                                                                                                                                                                                                                                             | String  | `k3s`                    |
+| ISO_NAME                    | Name of the Edge installer ISO image. In this example, the name is _palette-edge-installer_.                                                                                                                                                                                                                                                   | String  | `palette-edge-installer` |
+| ARCH                        | Type of platform to use for the build. Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                              | string  | `amd64`                  |
+| BASE_IMAGE                  | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                              | String  |                          |
+| FIPS_ENABLED                | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                         | string  | `false`                  |
+| HTTP_PROXY                  | URL of the HTTP Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string  |                          |
+| HTTPS_PROXY                 | URL of the HTTPS Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                  | string  |                          |
+| NO_PROXY                    | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                          | string  |                          |
+| PROXY_CERT_PATH             | Absolute path of the SSL Proxy certificate in PEM format if needed (Optional)                                                                                                                                                                                                                                                                  | string  |                          |
+| UPDATE_KERNEL               | Determines whether to upgrade the Kernel version to the latest from the upstream OS provider                                                                                                                                                                                                                                                   | boolean | `false`                  |
+| DISABLE_SELINUX             | Disable selinux in the operating system. Some applications (like Kubevirt) do not like selinux                                                                                                                                                                                                                                                 | boolean | `true`                   |
+| CLUSTERCONFIG               | Path of the cluster config                                                                                                                                                                                                                                                                                                                     | string  |                          |
+| IS_UKI                      | Build UKI(Trusted boot) images                                                                                                                                                                                                                                                                                                                 | boolean | `false`                  |
+| UKI_BRING_YOUR_OWN_KEYS     | Bring your own public/private key pairs if this is set to true. Otherwise, CanvOS will generate the key pair.                                                                                                                                                                                                                                  | boolean | `false`                  |
+| INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                   |
+| AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                   |
 
-8. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
+1. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
-9. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
+2. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
 
 ```shell
 ./earthly.sh +build-all-images --ARCH=amd64
@@ -229,13 +233,58 @@ docker push ttl.sh/ubuntu:k3s-1.25.2-v4.2.3-demo
 
 1. Your .arg file should contain these values
 
-```
+```shell
 BASE_IMAGE=quay.io/kairos/ubuntu:20.04-core-arm64-nvidia-jetson-agx-orin-v2.4.3
 ARCH=arm64
 platform=linux/arm64
 ```
 
-2. ./earthly.sh +build-all-images
+2. `./earthly.sh +build-all-images`
+
+### Prepare keys for Trusted Boot
+
+1. In .arg, we have these options to configure the key generation for Trusted Boot.
+
+```
+UKI_BRING_YOUR_OWN_KEYS=false # set to true if you want to to use your own public/private key pairs to generate SecureBoot keys
+INCLUDE_MS_SECUREBOOT_KEYS=true # if you want to include Microsoft 3rd Party UEFI CA certificate in generated keys
+```
+
+2. Copy required keys into secure-boot directory. It should look like this:
+
+```shell
+secure-boot/
+|   enrollment
+|   exported-keys <-- keys exported from hardware
+|   |   db
+|   |   KEK
+|   private-keys <-- Will be used if UKI_BRING_YOUR_OWN_KEYS=true, otherwise CanvOS will generate the keys
+|   |   db.key
+|   |   KEK.key
+|   |   PK.key
+|   |   tpm2-pcr-private.pem
+|   public-keys <-- Will be used if UKI_BRING_YOUR_OWN_KEYS=true, otherwise CanvOS will generate the keys
+|   |   db.pem
+|   |   KEK.pem
+|   |   PK.pem
+```
+
+3. Generate keys for Trusted Boot
+
+```shell
+./earthly.sh +uki-genkey --MY_ORG="ACME Corp" --EXPIRATION_IN_DAYS=5475
+```
+
+### Build Trusted Boot Images
+
+1. Your .arg file should contain these values.
+
+```shell
+IS_UKI=true
+AUTO_ENROLL_SECUREBOOT_KEYS=false # Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot
+```
+
+2. `./earthly.sh +build-all-images`
 
 ### Building with private registry
 
@@ -269,6 +318,7 @@ cp spectro-luet-auth.yaml.template spectro-luet-auth.yaml
 ```
 
 5. Build the image using earthly installed on the host
+
 ```shell
 earthly --push +build-all-images
 ```

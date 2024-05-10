@@ -8,11 +8,13 @@ config.yaml
 content-*/*
 *.arg
 .idea
-
 .DS_Store
-
 build/
 local/
 keys/
 secure-boot/
+sb-private-ca/*.pem
+sb-private-ca/*.key
+sb-private-ca/*.req
 spectro-luet-auth.yaml
+spc.tgz
