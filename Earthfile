@@ -12,7 +12,7 @@ FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.2
-ARG SPECTRO_LUET_VERSION=v1.3.0
+ARG SPECTRO_LUET_VERSION=v4.4.0-alpha4
 ARG KAIROS_VERSION=v3.0.10
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -298,9 +298,9 @@ install-k8s:
     WORKDIR /output
 
     IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=luet-repo-arm
+        ARG LUET_REPO=luet-dev-repo-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=luet-repo
+        ARG LUET_REPO=luet-dev-repo
     END
     RUN mkdir -p /etc/luet/repos.conf.d && \
         luet repo add spectro --type docker --url gcr.io/spectro-dev-public/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
@@ -610,11 +610,11 @@ base-image:
 
     IF [ "$ARCH" = "arm64" ]
         RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm/$SPECTRO_LUET_VERSION  --priority 1 -y && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-dev-repo-arm/$SPECTRO_LUET_VERSION  --priority 1 -y && \
           luet repo update
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo/$SPECTRO_LUET_VERSION  --priority 1 -y && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-dev-repo/$SPECTRO_LUET_VERSION  --priority 1 -y && \
           luet repo update
     END
 
@@ -708,9 +708,9 @@ base-image:
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
     IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=luet-repo-arm
+        ARG LUET_REPO=luet-dev-repo-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=luet-repo
+        ARG LUET_REPO=luet-dev-repo
     END
     RUN --no-cache mkdir -p /etc/luet/repos.conf.d && \
           SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y
