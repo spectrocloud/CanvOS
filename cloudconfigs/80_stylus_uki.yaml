@@ -25,5 +25,5 @@ stages:
         - mkdir -p /oem/opt.bind
         - cp -rfv /run/initramfs/live/luet /oem/opt.bind/
         - cp -rfv /run/initramfs/live/stylus-image.tar /oem/opt.bind/
-        - umount /dev/mapper/oem
+        - if mount | grep /oem >/dev/null; then umount /oem; fi
         - if [ -e /dev/mapper/oem ]; then cryptsetup close /dev/mapper/oem; fi
