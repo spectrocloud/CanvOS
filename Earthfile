@@ -54,6 +54,7 @@ ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_BRING_YOUR_OWN_KEYS=false
+ARG UKI_INSTALL_ALL_FW=true
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
@@ -666,6 +667,12 @@ base-image:
 
             RUN rm -rf /var/cache/* && \
                 apt-get clean
+        ELSE
+            IF [ "$UKI_INSTALL_ALL_FW" = "false" ]
+                RUN modulesextra=$(dpkg-query -W -f='${Package}\n' | grep '^linux-modules-extra-' | head -n 1) && \
+                    linuximage=$(dpkg-query -W -f='${Package}\n' | grep '^linux-image-generic-hwe-' | head -n 1) && \
+                    apt-get purge -y --allow-remove-essential linux-firmware wireless-regdb $linuximage $modulesextra
+            END
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
