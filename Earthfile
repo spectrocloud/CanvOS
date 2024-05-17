@@ -90,11 +90,11 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
 END
 
 IF [ "$FIPS_ENABLED" = "true" ]
-    ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-fips-linux-$ARCH:$PE_VERSION
-    ARG STYLUS_PACKAGE_BASE=gcr.io/spectro-images-public/stylus-fips-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-fips-linux-$ARCH:$PE_VERSION
 ELSE
-    ARG STYLUS_BASE=gcr.io/spectro-images-public/stylus-framework-linux-$ARCH:$PE_VERSION
-    ARG STYLUS_PACKAGE_BASE=gcr.io/spectro-images-public/stylus-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-linux-$ARCH:$PE_VERSION
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
