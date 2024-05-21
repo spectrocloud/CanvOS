@@ -8,10 +8,10 @@ config.yaml
 content-*/*
 *.arg
 .idea
-hack/*.img
 .DS_Store
-test/.env
 
+hack/*.img
+test/.env
 two-node-create.json
 two-node-update.json
 
@@ -19,3 +19,9 @@ build/
 local/
 keys/
 secure-boot/
+sb-private-ca/*.pem
+sb-private-ca/*.key
+sb-private-ca/*.req
+spectro-luet-auth.yaml
+spc.tgz
+efi-size-check/target/

@@ -1,11 +1,12 @@
 ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.7-10
-ARG USERNAME
-ARG PASSWORD
 
 FROM $BASE_IMAGE as base
 
+ARG USERNAME
+ARG PASSWORD
+
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.7.11 as osbuilder
+FROM quay.io/kairos/osbuilder-tools:v0.200.11 as osbuilder
 RUN zypper install -y gettext && zypper clean
 RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
@@ -83,7 +84,11 @@ RUN mkdir -p /run/lock && \
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 
-COPY --from=quay.io/kairos/framework:v2.4.5-fips / /
+COPY --from=quay.io/kairos/framework:v2.7.33-fips / /
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
 
 COPY overlay/rhel8 /
 

@@ -1,0 +1,29 @@
+#cloud-config
+stages:
+  initramfs:
+    - if: '[ -e "/run/cos/uki_boot_mode" ] && [ ! -f "/run/cos/live_mode" ]'
+      name: link agent provider stylus
+      commands:
+        - echo "Linking agent provider"
+        - mkdir -p /usr/local/bin/
+        - ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+    - if: '[ -e "/run/cos/uki_boot_mode" ] && [ ! -f "/run/cos/live_mode" ] && [ ! -f "/opt/spectrocloud/bin/stylus-agent" ]'
+      name: unpack stylus package
+      commands:
+        - echo "Unpacking stylus package"
+        - ln -sf /oem/opt.bind/luet /usr/local/bin/luet
+        - /oem/opt.bind/luet util unpack file://oem/opt.bind/stylus-image.tar /
+  after-install:
+    - name: uki stylus package persist
+      if: '[ -e "/run/cos/uki_install_mode" ]'
+      commands:
+        - echo "Copying files to persistent path"
+        - if mount | grep /oem >/dev/null; then umount /oem; fi
+        - for d in /dev/mapper/*; do if [ ! "$d" = "/dev/mapper/control" ]; then cryptsetup close $d; fi; done
+        - /usr/lib/systemd/systemd-cryptsetup attach oem $(findfs PARTLABEL=oem) - tpm2-device=auto
+        - mount /dev/mapper/oem /oem
+        - mkdir -p /oem/opt.bind
+        - cp -rfv /run/initramfs/live/luet /oem/opt.bind/
+        - cp -rfv /run/initramfs/live/stylus-image.tar /oem/opt.bind/
+        - umount /dev/mapper/oem
+        - if [ -e /dev/mapper/oem ]; then cryptsetup close /dev/mapper/oem; fi
