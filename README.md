@@ -112,8 +112,9 @@ cp .arg.template .arg
    Follow the instructions in the respective sub-folders (rhel-fips, ubuntu-fips) to create base images.
    For ubuntu-fips, this image can be used as base image - `gcr.io/spectro-images-public/ubuntu-fips:v3.0.11`
    Skip this step if your base image is ubuntu or opensuse-leap. If you are building ubuntu or opensuse-leap installer images, do not pass the BASE_IMAGE attribute as an arg to build command.
+7. To use Fedora, set the `BASE_IMAGE` arguement to a Kairos Fedora base image.  They can be found here.  [Fedora Images](https://quay.io/repository/kairos/fedora?tab=tags).  For example. quay.io/kairos/fedora:39-core-amd64-generic-v3.0.11 or quay.io/kairos/fedora:39-core-amd64-generic-v3.0.11-uki
 
-7. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
+8. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
 
 | Parameter                   | Description                                                                                                                                                                                                                                                                                                                                    | Type    | Default Value            |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------ |
