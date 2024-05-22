@@ -648,7 +648,7 @@ base-image:
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
             RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
-            apt update && apt-get install -y snapd && \
+            apt update && apt-get install -y snapd ubuntu-advantage-tools && \
             pro attach $UBUNTU_PRO_KEY
         END
 
