@@ -23,7 +23,7 @@ ARG K3S_PROVIDER_VERSION=v4.4.0-alpha2
 ARG KUBEADM_PROVIDER_VERSION=v4.4.0-alpha2
 ARG RKE2_PROVIDER_VERSION=v4.4.0-alpha1
 
-# Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguements.
+# Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
 ARG K8S_VERSION
@@ -560,7 +560,7 @@ provider-image:
     IF $TWO_NODE
         # Install postgresql 16
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-            RUN apt install -y apt-transport-https ca-certificates curl && \
+            RUN apt install -y apt-transport-https ca-certificates curl gnupg && \
                 echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
                 curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
                 gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
