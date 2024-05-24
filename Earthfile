@@ -560,11 +560,10 @@ provider-image:
     IF $TWO_NODE
         # Install postgresql 16
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-            RUN apt install -y apt-transport-https ca-certificates curl gnupg && \
-                echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-                curl -fsSL -o postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
-                gpg --batch --yes --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg postgresql.asc && \
-                rm postgresql.asc && \
+            RUN apt install -y ca-certificates curl && \
+                install -d /usr/share/postgresql-common/pgdg && \
+                curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
                 apt update && \
                 apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
@@ -582,7 +581,6 @@ provider-image:
     END
 
     SAVE IMAGE --push $IMAGE_PATH
-
 
 provider-image-rootfs:
     FROM --platform=linux/${ARCH} +provider-image
