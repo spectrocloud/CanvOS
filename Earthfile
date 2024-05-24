@@ -263,6 +263,8 @@ uki-iso:
 
 uki-provider-image:
     FROM --platform=linux/${ARCH} +ubuntu-systemd
+    RUN apt-get update && apt-get install -y rsync
+
     WORKDIR /
     COPY +luet/luet /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
