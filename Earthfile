@@ -11,17 +11,17 @@ ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.3.2
-ARG SPECTRO_LUET_VERSION=v1.3.0
+ARG PE_VERSION=v4.4.0
+ARG SPECTRO_LUET_VERSION=v1.3.1
 ARG KAIROS_VERSION=v3.0.11
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.201.0
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v4.4.0-alpha2
-ARG KUBEADM_PROVIDER_VERSION=v4.4.0-alpha2
-ARG RKE2_PROVIDER_VERSION=v4.4.0-alpha1
+ARG K3S_PROVIDER_VERSION=v4.4.0
+ARG KUBEADM_PROVIDER_VERSION=v4.4.0
+ARG RKE2_PROVIDER_VERSION=v4.4.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -69,6 +69,7 @@ ARG EFI_IMG_SIZE=2200
 
 # internal variables
 ARG GOLANG_VERSION=1.22
+ARG DEBUG=false
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
@@ -148,6 +149,8 @@ build-provider-images:
            BUILD  +$TARGET --K8S_VERSION=1.26.12
            BUILD  +$TARGET --K8S_VERSION=1.28.5
            BUILD  +$TARGET --K8S_VERSION=1.27.11
+           BUILD  +$TARGET --K8S_VERSION=1.26.15
+           BUILD  +$TARGET --K8S_VERSION=1.28.9
        ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
            BUILD  +$TARGET --K8S_VERSION=1.26.14
            BUILD  +$TARGET --K8S_VERSION=1.27.11
@@ -167,6 +170,10 @@ build-provider-images:
            BUILD  +$TARGET --K8S_VERSION=1.27.9
            BUILD  +$TARGET --K8S_VERSION=1.26.12
            BUILD  +$TARGET --K8S_VERSION=1.28.5
+           BUILD  +$TARGET --K8S_VERSION=1.26.15
+           BUILD  +$TARGET --K8S_VERSION=1.27.13
+           BUILD  +$TARGET --K8S_VERSION=1.28.9
+           BUILD  +$TARGET --K8S_VERSION=1.29.4
        ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
            BUILD  +$TARGET --K8S_VERSION=1.26.14
            BUILD  +$TARGET --K8S_VERSION=1.27.11
@@ -199,6 +206,10 @@ build-provider-images-fips:
            BUILD  +provider-image --K8S_VERSION=1.27.9
            BUILD  +provider-image --K8S_VERSION=1.26.12
            BUILD  +provider-image --K8S_VERSION=1.28.5
+           BUILD  +provider-image --K8S_VERSION=1.26.15
+           BUILD  +provider-image --K8S_VERSION=1.27.14
+           BUILD  +provider-image --K8S_VERSION=1.28.10
+           BUILD  +provider-image --K8S_VERSION=1.29.5
         ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
            BUILD  +provider-image --K8S_VERSION=1.24.6
            BUILD  +provider-image --K8S_VERSION=1.25.2
@@ -256,6 +267,8 @@ uki-iso:
 
 uki-provider-image:
     FROM --platform=linux/${ARCH} +ubuntu-systemd
+    RUN apt-get update && apt-get install -y rsync
+
     WORKDIR /
     COPY +luet/luet /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
@@ -351,7 +364,9 @@ build-uki-iso:
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
     IF [ "$ARCH" = "arm64" ]
-       RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
+       RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
+              $CMD
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
@@ -402,9 +417,13 @@ build-iso:
     fi
     
     IF [ "$ARCH" = "arm64" ]
-       RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
+        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
+                $CMD 
     ELSE IF [ "$ARCH" = "amd64" ]
-       RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch x86_64
+        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch x86_64" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
+                $CMD
     END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
