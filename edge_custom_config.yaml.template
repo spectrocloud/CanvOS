@@ -1,0 +1,5 @@
+content:
+ signing:
+  publicKey:
+   base64EncodedValue: ""
+   description: "This is a public key used for signing content and cluster-config"

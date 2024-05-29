@@ -33,6 +33,7 @@ ARG ISO_NAME=installer
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
+ARG EDGE_CUSTOM_CONFIG=edge_custom_config.yaml
 ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=true
@@ -335,11 +336,11 @@ build-uki-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/config.yaml
-    COPY --if-exists public-key /overlay/oem/.signing-public-key
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
  
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
@@ -393,6 +394,7 @@ build-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
