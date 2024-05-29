@@ -322,3 +322,31 @@ cp spectro-luet-auth.yaml.template spectro-luet-auth.yaml
 ```shell
 earthly --push +build-all-images
 ```
+
+### Using untrusted or insecure registries for Base Images
+
+During execution process Earthly pulls Base Images (specified as `BASE_IMAGE` in .arg file) from external registries. By default, it connects to the registry via HTTPS protocol using trusted CA installed inside the container. For the cases where external registry exposed via plain HTTP or HTTPs with self-signed certificates, it is possible to configured Earthly buildkit to use HTTP or ignore untrusted certificates by using environment variable `EARTHLY_ADDITIONAL_BUILDKIT_CONFIG`. 
+
+For registries exposed via HTTP, use the following commands:
+```shell
+$ export EARTHLY_ADDITIONAL_BUILDKIT_CONFIG="
+[registry.\"10.10.131.24:5000\"]
+  http = true
+"
+$ earthly --push +build-all-images
+```
+
+For registries exposed via HTTPs with self-signed certificates, use the following commands:
+```shell
+$ export EARTHLY_ADDITIONAL_BUILDKIT_CONFIG="
+[registry.\"10.10.131.24:5000\"]
+  insecure = true
+"
+$ earthly --push +build-all-images
+```
+
+If this configuration is no longer required, unset the variable:
+
+```shell
+$ unset EARTHLY_ADDITIONAL_BUILDKIT_CONFIG
+```
