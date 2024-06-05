@@ -57,7 +57,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     rsync jq && dnf clean all
 
 
-COPY --from=quay.io/kairos/framework:v2.7.33 / /
+COPY --from=quay.io/kairos/framework:v2.7.36 / /
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
