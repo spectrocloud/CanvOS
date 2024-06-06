@@ -54,6 +54,7 @@ ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_BRING_YOUR_OWN_KEYS=false
+ARG UKI_INSTALL_ALL_FW=true
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
@@ -685,6 +686,12 @@ base-image:
 
             RUN rm -rf /var/cache/* && \
                 apt-get clean
+        ELSE
+            IF [ "$UKI_INSTALL_ALL_FW" = "false" ]
+                RUN modulesextra=$(dpkg-query -W -f='${Package}\n' | grep '^linux-modules-extra-' | head -n 1) && \
+                    linuximage=$(dpkg-query -W -f='${Package}\n' | grep '^linux-image-generic-hwe-' | head -n 1) && \
+                    apt-get purge -y --auto-remove --allow-remove-essential linux-firmware wireless-regdb $linuximage $modulesextra
+            END
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
@@ -761,6 +768,8 @@ base-image:
         RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
             if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
     END
+
+    SAVE IMAGE palette-base-image:$IMAGE_TAG
 
 # Used to build the installer image.  The installer ISO will be created from this.
 iso-image:
