@@ -138,6 +138,8 @@ cp .arg.template .arg
 | UKI_BRING_YOUR_OWN_KEYS     | Bring your own public/private key pairs if this is set to true. Otherwise, CanvOS will generate the key pair.                                                                                                                                                                                                                                  | boolean | `false`                  |
 | INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                   |
 | AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                   |
+| EARTHLY_ADDITIONAL_BUILDKIT_CONFIG | Can be used to provide additional parameters to buildkit, use this when you need to retrieve your base image from a HTTP registry or a HTTPS registry with an untrusted certificate                                                                                                                                                                                                                                                           | string |                    |
+
 
 1. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
@@ -325,28 +327,22 @@ earthly --push +build-all-images
 
 ### Using untrusted or insecure registries for Base Images
 
-During execution process Earthly pulls Base Images (specified as `BASE_IMAGE` in .arg file) from external registries. By default, it connects to the registry via HTTPS protocol using trusted CA installed inside the container. For the cases where external registry exposed via plain HTTP or HTTPs with self-signed certificates, it is possible to configured Earthly buildkit to use HTTP or ignore untrusted certificates by using environment variable `EARTHLY_ADDITIONAL_BUILDKIT_CONFIG`. 
+During execution process Earthly pulls Base Images (specified as `BASE_IMAGE` in .arg file) from external registries. By default, it connects to the registry via HTTPS protocol using trusted CA installed inside the container. For the cases where external registry exposed via plain HTTP or HTTPs with self-signed certificates, it is possible to configured Earthly buildkit to use HTTP or ignore untrusted certificates by using the environment variable `EARTHLY_ADDITIONAL_BUILDKIT_CONFIG`. 
 
-For registries exposed via HTTP, use the following commands:
+For registries exposed via HTTP, set the EARTHLY_ADDITIONAL_BUILDKIT_CONFIG parameter in your .arg file as follows:
 ```shell
-$ export EARTHLY_ADDITIONAL_BUILDKIT_CONFIG="
-[registry.\"10.10.131.24:5000\"]
+EARTHLY_ADDITIONAL_BUILDKIT_CONFIG='
+[registry."10.10.131.24:5000"]
   http = true
-"
-$ earthly --push +build-all-images
+'
 ```
 
-For registries exposed via HTTPs with self-signed certificates, use the following commands:
+For registries exposed via HTTPs with self-signed certificates, set the EARTHLY_ADDITIONAL_BUILDKIT_CONFIG parameter in your .arg file as follows:
 ```shell
-$ export EARTHLY_ADDITIONAL_BUILDKIT_CONFIG="
-[registry.\"10.10.131.24:5000\"]
+EARTHLY_ADDITIONAL_BUILDKIT_CONFIG='
+[registry."10.10.131.24:5000"]
   insecure = true
-"
-$ earthly --push +build-all-images
+'
 ```
 
-If this configuration is no longer required, unset the variable:
-
-```shell
-$ unset EARTHLY_ADDITIONAL_BUILDKIT_CONFIG
-```
+Replace `10.10.131.24:5000` with the actual FQDN or IP address of your registry. A port number is only necessary when using a non-standard port.

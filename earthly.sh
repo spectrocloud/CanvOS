@@ -29,6 +29,7 @@ PE_VERSION=$(git describe --abbrev=0 --tags)
 SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 EARTHLY_VERSION=v0.8.5
 source .arg
+export EARTHLY_ADDITIONAL_BUILDKIT_CONFIG="$EARTHLY_ADDITIONAL_BUILDKIT_CONFIG"
 
 ### Verify Depencies
 # Check if Docker is installed
