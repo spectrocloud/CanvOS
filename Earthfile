@@ -350,7 +350,7 @@ no-kairos:
     COPY --platform=linux/${ARCH} +install-k8s/ /k8s
     COPY +kairos-provider-image/ /providers
 
-    SAVE IMAGE --push $IMAGE_PATH
+    SAVE IMAGE --push $IMAGE_REGISTRY/k8s:$K8S_DISTRIBUTION-$K8S_VERSION
 
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
