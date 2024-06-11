@@ -10,8 +10,13 @@ ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
+<<<<<<< HEAD
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.4.0
+=======
+## Spectro Cloud and Kairos Tags ##
+ARG PE_VERSION=v4.4.1
+>>>>>>> main
 ARG SPECTRO_LUET_VERSION=v1.3.1
 ARG KAIROS_VERSION=v3.0.11
 ARG K3S_FLAVOR_TAG=k3s1
@@ -542,7 +547,7 @@ provider-image:
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
-        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
         END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
