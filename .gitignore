@@ -9,6 +9,12 @@ content-*/*
 *.arg
 .idea
 .DS_Store
+
+hack/*.img
+test/.env
+two-node-create.json
+two-node-update.json
+
 build/
 local/
 keys/

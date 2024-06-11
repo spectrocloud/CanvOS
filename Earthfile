@@ -2,7 +2,7 @@ VERSION 0.6
 ARG TARGETOS
 ARG TARGETARCH
 
-## Default Image Repos Used in the Builds. 
+# Default image repositories used in the builds.
 ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
@@ -10,7 +10,7 @@ ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
-## Spectro Cloud and Kairos Tags ##
+# Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.4.1
 ARG SPECTRO_LUET_VERSION=v1.3.1
 ARG KAIROS_VERSION=v3.0.11
@@ -19,11 +19,11 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.201.0
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v4.4.0
+ARG K3S_PROVIDER_VERSION=v4.4.1
 ARG KUBEADM_PROVIDER_VERSION=v4.4.0
 ARG RKE2_PROVIDER_VERSION=v4.4.0
 
-# Variables used in the builds.  Update for ADVANCED use cases only Modify in .arg file or via CLI arguements
+# Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
 ARG K8S_VERSION
@@ -48,6 +48,11 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 
 ARG UPDATE_KERNEL=false
+ARG ETCD_VERSION="v3.5.13"
+
+# Two node variables
+ARG TWO_NODE=false
+ARG KINE_VERSION=0.11.4
 
 # UKI Variables
 ARG IS_UKI=false
@@ -57,7 +62,6 @@ ARG UKI_BRING_YOUR_OWN_KEYS=false
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
-ARG ETCD_VERSION="v3.5.13"
 
 # EFI size check
 ARG EFI_MAX_SIZE=2048
@@ -530,7 +534,7 @@ secure-boot-dirs:
     RUN chmod 0644 /secure-boot/public-keys
     SAVE ARTIFACT --keep-ts /secure-boot AS LOCAL ./secure-boot
 
-# Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
+# Used to create the provider images. The --K8S_VERSION will be passed in the earthly build.
 provider-image:
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
@@ -572,8 +576,30 @@ provider-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    SAVE IMAGE --push $IMAGE_PATH
+    IF $TWO_NODE
+        # Install postgresql 16
+        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+            RUN apt install -y ca-certificates curl && \
+                install -d /usr/share/postgresql-common/pgdg && \
+                curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+                apt update && \
+                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
+        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
+            RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
+                zypper --gpg-auto-import-keys ref && \
+                zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
+        END
 
+        # Install kine
+        RUN mkdir -p /opt/spectrocloud/bin && \
+            curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
+
+        # Ensure psql works ootb for the postgres user
+        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
+    END
+
+    SAVE IMAGE --push $IMAGE_PATH
 
 provider-image-rootfs:
     FROM --platform=linux/${ARCH} +provider-image
@@ -647,6 +673,7 @@ base-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
+    # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
             RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
@@ -696,27 +723,27 @@ base-image:
             RUN pro detach --assume-yes
         END
 
-        # IF OS Type is Opensuse
+    # OS == Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /usr/share/pki/trust/anchors
-            RUN  update-ca-certificates
+            RUN update-ca-certificates
         END
         # Enable or Disable Kernel Updates
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN zypper al kernel-de*
         END
 
-        RUN zypper refresh && \
-            zypper update -y
+        RUN zypper refresh && zypper update -y
 
-           IF [ -e "/usr/bin/dracut" ]
-             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
-             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
-           END
-        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump
-        RUN zypper cc && \
+        IF [ -e "/usr/bin/dracut" ]
+            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
+            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
+        END
+
+        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
+            zypper cc && \
             zypper clean
     END
 
@@ -726,6 +753,7 @@ base-image:
             zypper clean
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
+
     IF [ "$ARCH" = "arm64" ]
         ARG LUET_REPO=luet-repo-arm
     ELSE IF [ "$ARCH" = "amd64" ]
@@ -738,7 +766,7 @@ base-image:
     RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
     RUN --no-cache luet repo update
 
-     IF [ "$OS_DISTRIBUTION" = "rhel" ]
+    IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl
     END
 
@@ -762,7 +790,7 @@ base-image:
             if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
     END
 
-# Used to build the installer image.  The installer ISO will be created from this.
+# Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
     IF [ "$IS_UKI" = "false" ]
