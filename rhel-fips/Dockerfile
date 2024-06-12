@@ -6,7 +6,7 @@ ARG USERNAME
 ARG PASSWORD
 
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.200.11 as osbuilder
+FROM quay.io/kairos/osbuilder-tools:v0.7.11 as osbuilder
 RUN zypper install -y gettext && zypper clean
 RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
