@@ -138,6 +138,7 @@ cp .arg.template .arg
 | UKI_BRING_YOUR_OWN_KEYS     | Bring your own public/private key pairs if this is set to true. Otherwise, CanvOS will generate the key pair.                                                                                                                                                                                                                                  | boolean | `false`                  |
 | INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                   |
 | AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                   |
+| EDGE_CUSTOM_CONFIG | Path to edge custom configuration file                                                                                                                                                                                                                                                            | string | `.edge-custom-config.yaml`                   |
 
 1. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
@@ -318,6 +319,29 @@ cp spectro-luet-auth.yaml.template spectro-luet-auth.yaml
 ```
 
 5. Build the image using earthly installed on the host
+
+```shell
+earthly --push +build-all-images
+```
+
+### Building Installer Image with public key for verifying signed content
+
+1. Copy the .edge.custom-config.yaml.template file to .edge.custom-config.yaml 
+
+```shell
+cp .edge.custom-config.yaml.template .edge.custom-config.yaml
+```
+
+2. Edit the property signing.publicKey in `.edge.custom-config.yaml`
+
+3. Include the following property in `.arg` file
+```
+...
+
+EDGE_CUSTOM_CONFIG=/path/to/.edge.custom-config.yaml
+```
+
+4. Build the image using earthly installed on the host
 
 ```shell
 earthly --push +build-all-images
