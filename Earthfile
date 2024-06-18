@@ -33,6 +33,7 @@ ARG ISO_NAME=installer
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
+ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=true
@@ -274,6 +275,7 @@ uki-provider-image:
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --platform=linux/${ARCH} +install-k8s/ /k8s
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -343,6 +345,7 @@ build-uki-iso:
     COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
  
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
@@ -396,6 +399,7 @@ build-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
@@ -557,6 +561,7 @@ provider-image:
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
 
     IF [ "$IS_UKI" = "true" ]
         COPY +internal-slink/slink /usr/bin/slink
