@@ -58,7 +58,7 @@ docker rmi $SPECTRO_PUB_REPO/earthly/earthly:$EARTHLY_VERSION
 if [ "$(docker container inspect -f '{{.State.Running}}' earthly-buildkitd)" = "true" ]; then
     docker stop earthly-buildkitd
 fi
-docker rmi $SPECTRO_PUB_REPO/earthly/buildkitd:$EARTHLY_VERSION
+docker rmi $SPECTRO_PUB_REPO/earthly/buildkitd:$EARTHLY_VERSION 2>/dev/null
 docker rmi alpine:latest
 
 if [[ "$1" == "+uki-genkey" ]]; then
