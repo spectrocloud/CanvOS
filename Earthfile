@@ -342,7 +342,7 @@ install-k8s:
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
 
-no-kairos:
+edge-standard:
     FROM --platform=linux/${ARCH} +ubuntu-systemd
     RUN apt-get update && apt-get install -y rsync
 
