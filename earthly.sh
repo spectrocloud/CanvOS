@@ -65,7 +65,7 @@ if [[ "$1" == "+uki-genkey" ]]; then
     ./keys.sh secure-boot/
 fi
 
-if [[ "$1" == "+build-provider-images" ]] || [[ "$1" == "+build-provider-images-fips" ]] ; then
+if [[ "$1" == "+build-all-images" ]] || [[ "$1" == "+build-provider-images" ]] || [[ "$1" == "+build-provider-images-fips" ]] ; then
     # Print the output for use in Palette Profile.
     echo -e '##########################################################################################################'
     echo -e '\nPASTE THE CONTENT BELOW INTO YOUR CLUSTER PROFILE IN PALETTE REPLACING ALL THE CONTENTS IN THE PROFILE\n'
