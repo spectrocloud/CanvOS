@@ -16,7 +16,7 @@ To build RHEL 9 Kairos Image, execute:
 docker build -t <local-registry>/<image>:<image-tag> --build-arg USERNAME=<RHSM username> --build-arg PASSWORD='<RHSM password>' -f Dockerfile.rhel9 .
 ```
 
-**In case of any errors during package installation steps - these errors might be cause by previous build attempts. Execute `docker build` command again by providing argument `--no-cache` to build the image from scratch**
+**In case of any errors during package installation steps - these errors might be caused by previous build attempts. Execute `docker build` command again by providing argument `--no-cache` to build the image from scratch**
 
 ## Build the image using Red Hat Satellite and mirrored repositories
 
