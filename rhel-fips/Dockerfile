@@ -12,7 +12,7 @@ RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
 # You should change the following values according to your own versioning and other details
 RUN OS_NAME=kairos-core-rhel-fips \
-  OS_VERSION=v3.0.13 \
+  OS_VERSION=v3.0.14 \
   OS_ID="kairos" \
   BUG_REPORT_URL="https://github.com/spectrocloud/pxke-samples/issues" \
   HOME_URL="https://github.com/spectrocloud/pxke-samples" \
@@ -83,7 +83,7 @@ RUN mkdir -p /run/lock && \
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 
-COPY --from=quay.io/kairos/framework:v2.7.39-fips / /
+COPY --from=quay.io/kairos/framework:v2.7.41-fips / /
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
