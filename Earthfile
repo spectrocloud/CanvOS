@@ -358,10 +358,10 @@ build-uki-iso:
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
-    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
-        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
+    COPY --if-exists emc.tar /overlay/opt/spectrocloud/
+    RUN if [ -f /overlay/opt/spectrocloud/emc.tar ]; then \
+        tar -xf /overlay/opt/spectrocloud/emc.tar -C /overlay/opt/spectrocloud && \
+        rm -f /overlay/opt/spectrocloud/emc.tar; \
     fi
 
     WORKDIR /build
@@ -414,10 +414,10 @@ build-iso:
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
 
-    COPY --if-exists ui.tar /build/image/opt/spectrocloud/emc/
-    RUN if [ -f /build/image/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /build/image/opt/spectrocloud/emc/ui.tar -C /build/image/opt/spectrocloud/emc && \
-        rm -f /build/image/opt/spectrocloud/emc/ui.tar; \
+    COPY --if-exists emc.tar /build/image/opt/spectrocloud/
+    RUN if [ -f /build/image/opt/spectrocloud/emc.tar ]; then \
+        tar -xf /build/image/opt/spectrocloud/emc.tar -C /build/image/opt/spectrocloud && \
+        rm -f /build/image/opt/spectrocloud/emc.tar; \
     fi
     
     IF [ "$ARCH" = "arm64" ]
