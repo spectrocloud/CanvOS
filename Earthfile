@@ -86,6 +86,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
+ARG PROVIDER_BASE
 IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
     ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
 ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -95,7 +96,7 @@ ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
 ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
     ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
 ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+    ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
 END
 
 IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
@@ -328,11 +329,15 @@ install-k8s:
         ARG LUET_REPO=luet-repo
     END
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
+        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
         luet repo update
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd --system-target /output
+    END
+
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-edge-standard" ]
+        RUN luet install -y container-runtime/containerd-edge-standard --system-target /output
     END
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
