@@ -75,7 +75,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     iscsi-initiator-utils \
     iptables ethtool socat iproute-tc conntrack \
     kernel kernel-modules kernel-modules-extra \
-    rsync jq && dnf clean all
+    rsync jq rsyslog logrotate && dnf clean all
 
 RUN mkdir -p /run/lock && \
   touch /usr/libexec/.keep

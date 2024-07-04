@@ -54,7 +54,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     iscsi-initiator-utils \
     iptables ethtool socat iproute-tc conntrack \
     kernel kernel-modules kernel-modules-extra \
-    rsync jq && dnf clean all
+    rsync jq rsyslog logrotate && dnf clean all
 
 
 COPY --from=quay.io/kairos/framework:v2.7.41 / /
