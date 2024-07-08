@@ -14,10 +14,13 @@ set -e
 #    - jq (https://jqlang.github.io/jq/download/)
 #    - mkisofs (https://command-not-found.com/mkisofs)
 #
-# 2. Clone CanvOS and checkout this branch.
+# 2. Clone CanvOS and 'git checkout' this branch.
 #
-# 3. Configure your Earthly argument file by running: cp .arg.template .arg
-#    No modifications to the template are required.
+# 3. Configure your Earthly argument file by running: cp .arg.template .arg.
+#    Ensure the following vars are customized:
+#
+#    K3S_PROVIDER_VERSION=v4.4.2-2node
+#    K8S_VERSION=1.28.7 (pick any supported K3s version)
 #
 # 4. Create a .netrc file in the stylus repo root with GitHub
 #    credentials capable of cloning Spectro Cloud internal repos.
@@ -25,10 +28,10 @@ set -e
 # 5. Copy the test/env.example file to test/.env and edit test/.env
 #    as required.
 #
-# 6. Source and execute this script:
+# 6. Source this script and execute 'deploy':
 #
 #    source ./test/test-two-node.sh
-#    ./test/test-two-node.sh
+#    deploy
 
 # Do not edit anything below
 
@@ -321,13 +324,13 @@ function prepare_cluster_profile() {
     jq '
       .metadata.name = env.CLUSTER_NAME |
       .spec.template.packs[0].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
-      .spec.template.packs[1].version = env.K3S_VERSION |
-      .spec.template.packs[1].tag = env.K3S_VERSION |
+      .spec.template.packs[1].version = env.K8S_VERSION |
+      .spec.template.packs[1].tag = env.K8S_VERSION |
       .spec.template.packs[1].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[2].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
       .spec.template.packs[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
-      .spec.template.packs[0].values |= gsub("K3S_VERSION"; env.K3S_VERSION) |
+      .spec.template.packs[0].values |= gsub("K8S_VERSION"; env.K8S_VERSION) |
       .spec.template.packs[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
     ' test/templates/two-node-cluster-profile.json.tmpl > two-node-cluster-profile.json
 }
@@ -376,9 +379,9 @@ function prepare_master_master_cluster() {
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
       .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
       .spec.profiles[0].packValues[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
-      .spec.profiles[0].packValues[0].values |= gsub("K3S_VERSION"; env.K3S_VERSION) |
+      .spec.profiles[0].packValues[0].values |= gsub("K8S_VERSION"; env.K8S_VERSION) |
       .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH) |
-      .spec.profiles[0].packValues[1].tag = env.K3S_VERSION
+      .spec.profiles[0].packValues[1].tag = env.K8S_VERSION
     ' test/templates/two-node-master-master.json.tmpl > two-node-create.json
 }
 
@@ -471,9 +474,9 @@ function build_canvos() {
         --IMAGE_REGISTRY=${OCI_REGISTRY} \
         --TWO_NODE=true \
         --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
-        --CUSTOM_TAG=${STYLUS_HASH} \
-	--PE_VERSION=v${PE_VERSION}
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-${K3S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
+        --CUSTOM_TAG=${STYLUS_HASH}
+
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-${K8S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
 }
 
 function build_all() {
@@ -501,7 +504,7 @@ function build_all() {
     (
         test -f build/palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso && \
         docker image ls --format "{{.Repository}}:{{.Tag}}" | \
-        grep -q ${OCI_REGISTRY}/ubuntu:k3s-${K3S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
+        grep -q ${OCI_REGISTRY}/ubuntu:k3s-${K8S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
     ) || ( build_canvos )
 }
 
@@ -510,6 +513,35 @@ function clean_all() {
     docker images | grep palette-installer | awk '{print $3;}' | xargs docker rmi --force
     earthly prune --reset
     docker system prune --all --volumes --force
+}
+
+# Builds 2-node provider image and ISO, uploads the ISO to vCenter, and provisions edge hosts
+# for deploying a 2-node cluster.
+function deploy() {
+    earthly +build-all-images \
+        --ARCH=amd64 \
+        --ISO_NAME=palette-edge-installer-stylus-k3s-twonode \
+        --IMAGE_REGISTRY=${OCI_REGISTRY} \
+        --TWO_NODE=true \
+        --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
+        --CUSTOM_TAG=twonode
+
+    docker push ${OCI_REGISTRY}/ubuntu:k3s-${K8S_VERSION}-v${PE_VERSION}-twonode
+
+    # create & upload user-data ISOs, configured to enable two node mode
+    create_userdata_iso
+    upload_userdata_iso
+
+    echo Uploading installer ISO $iso...
+    iso=palette-edge-installer-stylus-k3s-twonode.iso
+    govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER build/$iso $STYLUS_ISO
+
+    vm_array=("two-node-jul8-1" "two-node-jul8-2")
+    create_vms
+    wait_for_vms_to_power_off
+    reboot_vms
+
+    echo Edge hosts should register with Palette shortly. Please proceed to deploying an Edge cluster via the UI.
 }
 
 function main() {
