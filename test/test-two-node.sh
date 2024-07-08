@@ -2,6 +2,8 @@
 
 set -e
 
+source .arg
+
 # Usage
 # -----
 #
