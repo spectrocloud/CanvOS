@@ -100,7 +100,7 @@ ELSE
     ARG PROVIDER_BASE
 END
 
-IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-edge-standard" ]
     ARG BASE_K8S_VERSION=$K8S_VERSION
 ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
     ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
