@@ -772,11 +772,16 @@ base-image:
     RUN --no-cache luet repo update
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
-        RUN yum install -y openssl
+        RUN yum install -y openssl rsyslog logrotate
     END
 
     IF [ "$OS_DISTRIBUTION" = "sles" ]
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
+        # https://software.opensuse.org//download.html?project=home%3Argerhards&package=rsyslog
+        # RUN zypper -n addrepo https://download.opensuse.org/repositories/home:rgerhards/SLE_15/home:rgerhards.repo
+
+        RUN zypper refresh
+        RUN zypper install rsyslog
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
