@@ -24,6 +24,38 @@ function build_without_proxy() {
     docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace $SPECTRO_PUB_REPO/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
 
+function print_os_pack() {
+    # Print the output for use in Palette Profile.
+    echo -e '##########################################################################################################'
+    echo -e '\nPASTE THE CONTENT BELOW INTO YOUR CLUSTER PROFILE IN PALETTE REPLACING ALL THE CONTENTS IN THE PROFILE\n'
+    echo -e '##########################################################################################################'
+    echo -e '\n'
+    echo -e 'pack:'
+    echo -e '  content:'
+    echo -e '    images:'
+    echo -e '      - image: "{{.spectro.pack.edge-native-byoi.options.system.uri}}"'
+    echo -e '  # Below config is default value, please uncomment if you want to modify default values'
+    echo -e '  #drain:'
+    echo -e '    #cordon: true'
+    echo -e '    #timeout: 60 # The length of time to wait before giving up, zero means infinite'
+    echo -e '    #gracePeriod: 60 # Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used'
+    echo -e '    #ignoreDaemonSets: true'
+    echo -e '    #deleteLocalData: true # Continue even if there are pods using emptyDir (local data that will be deleted when the node is drained)'
+    echo -e '    #force: true # Continue even if there are pods that do not declare a controller'
+    echo -e '    #disableEviction: false # Force drain to use delete, even if eviction is supported. This will bypass checking PodDisruptionBudgets, use with caution'
+    echo -e '    #skipWaitForDeleteTimeout: 60 # If pod DeletionTimestamp older than N seconds, skip waiting for the pod. Seconds must be greater than 0 to skip.'
+    echo -e 'options:'
+    echo -e '  system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"'
+    echo -e '\n'
+    echo -e "  system.registry: $IMAGE_REGISTRY"
+    echo -e "  system.repo: $IMAGE_REPO"
+    echo -e "  system.k8sDistribution: $K8S_DISTRIBUTION"
+    echo -e "  system.osName: $OS_DISTRIBUTION"
+    echo -e "  system.peVersion: $PE_VERSION"
+    echo -e "  system.customTag: $CUSTOM_TAG"
+    echo -e "  system.osVersion: $OS_VERSION"
+}
+
 global_config="{disable_analytics: true}"
 PE_VERSION=$(git describe --abbrev=0 --tags)
 SPECTRO_PUB_REPO=gcr.io/spectro-images-public
@@ -65,34 +97,10 @@ if [[ "$1" == "+uki-genkey" ]]; then
     ./keys.sh secure-boot/
 fi
 
-if [[ "$1" == "+build-provider-images" ]] || [[ "$1" == "+build-provider-images-fips" ]] ; then
-    # Print the output for use in Palette Profile.
-    echo -e '##########################################################################################################'
-    echo -e '\nPASTE THE CONTENT BELOW INTO YOUR CLUSTER PROFILE IN PALETTE REPLACING ALL THE CONTENTS IN THE PROFILE\n'
-    echo -e '##########################################################################################################'
-    echo -e '\n'
-    echo -e 'pack:'
-    echo -e '  content:'
-    echo -e '    images:'
-    echo -e '      - image: "{{.spectro.pack.edge-native-byoi.options.system.uri}}"'
-    echo -e '  # Below config is default value, please uncomment if you want to modify default values'
-    echo -e '  #drain:'
-    echo -e '    #cordon: true'
-    echo -e '    #timeout: 60 # The length of time to wait before giving up, zero means infinite'
-    echo -e '    #gracePeriod: 60 # Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used'
-    echo -e '    #ignoreDaemonSets: true'
-    echo -e '    #deleteLocalData: true # Continue even if there are pods using emptyDir (local data that will be deleted when the node is drained)'
-    echo -e '    #force: true # Continue even if there are pods that do not declare a controller'
-    echo -e '    #disableEviction: false # Force drain to use delete, even if eviction is supported. This will bypass checking PodDisruptionBudgets, use with caution'
-    echo -e '    #skipWaitForDeleteTimeout: 60 # If pod DeletionTimestamp older than N seconds, skip waiting for the pod. Seconds must be greater than 0 to skip.'
-    echo -e 'options:'
-    echo -e '  system.uri: "{{ .spectro.pack.edge-native-byoi.options.system.registry }}/{{ .spectro.pack.edge-native-byoi.options.system.repo }}:{{ .spectro.pack.edge-native-byoi.options.system.k8sDistribution }}-{{ .spectro.system.kubernetes.version }}-{{ .spectro.pack.edge-native-byoi.options.system.peVersion }}-{{ .spectro.pack.edge-native-byoi.options.system.customTag }}"'
-    echo -e '\n'
-    echo -e "  system.registry: $IMAGE_REGISTRY"
-    echo -e "  system.repo: $IMAGE_REPO"
-    echo -e "  system.k8sDistribution: $K8S_DISTRIBUTION"
-    echo -e "  system.osName: $OS_DISTRIBUTION"
-    echo -e "  system.peVersion: $PE_VERSION"
-    echo -e "  system.customTag: $CUSTOM_TAG"
-    echo -e "  system.osVersion: $OS_VERSION"
-fi
+# if $1 is in oen of the following values, print the output for use in Palette Profile.
+targets=("+build-provider-images" "+build-provider-images-fips" "+build-all-images")
+for arg in "${targets[@]}"; do
+    if [[ "$1" == "$arg" ]]; then
+        print_os_pack
+    fi
+done
