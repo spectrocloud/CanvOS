@@ -1,12 +1,12 @@
 
 # Kairos framework packages for ubuntu fips
-FROM quay.io/kairos/framework:v2.7.41-fips as kairos-fips
+FROM quay.io/kairos/framework:v2.9.2-fips as kairos-fips
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base
 
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.200.11 as osbuilder
+FROM quay.io/kairos/osbuilder-tools:v0.300.1 as osbuilder
 RUN zypper install -y gettext && zypper clean
 RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release

@@ -6,7 +6,7 @@ ARG USERNAME
 ARG PASSWORD
 
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.7.11 as osbuilder
+FROM quay.io/kairos/osbuilder-tools:v0.300.1 as osbuilder
 RUN zypper install -y gettext && zypper clean
 RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
@@ -83,7 +83,7 @@ RUN mkdir -p /run/lock && \
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 
-COPY --from=quay.io/kairos/framework:v2.7.41-fips / /
+COPY --from=quay.io/kairos/framework:v2.9.2-fips / /
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
