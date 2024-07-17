@@ -111,8 +111,6 @@ RUN apt-get install -y --no-install-recommends \
     zerofree \
     zfsutils-linux \
     zstd \
-    rsyslog \
-    logrotate \
     && apt-get remove -y unattended-upgrades && apt-get clean \
     && apt-get purge --auto-remove -y ubuntu-advantage-tools \
     && rm -rf /var/lib/apt/lists/*
