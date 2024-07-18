@@ -98,9 +98,11 @@ END
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-fips-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-fips:${PE_VERSION}
 ELSE
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
@@ -358,7 +360,7 @@ build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists user-data /overlay/config.yaml
+    COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
  
@@ -411,11 +413,24 @@ iso:
     END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
+validate-user-data:
+    FROM --platform=linux/${TARGETARCH} $CLI_IMAGE
+    COPY --if-exists user-data /user-data
+
+    RUN chmod +x /usr/local/bin/palette-edge-cli;
+    RUN if [ -f /user-data ]; then \
+            /usr/local/bin/palette-edge-cli validate -f /user-data; \
+        else \
+            echo "user-data file does not exist."; \
+        fi
+    SAVE ARTIFACT --if-exists /user-data
+
+
 build-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists user-data /overlay/files-iso/config.yaml
+    COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
