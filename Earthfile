@@ -11,7 +11,7 @@ FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
 ## Spectro Cloud and Kairos Tags ##
 ARG PE_VERSION=v4.3.2
-ARG SPECTRO_LUET_VERSION=v1.2.7
+ARG SPECTRO_LUET_VERSION=v1.2.73
 ARG KAIROS_VERSION=v2.4.5
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -132,6 +132,7 @@ build-provider-images:
         BUILD  +provider-image --K8S_VERSION=1.26.10
         BUILD  +provider-image --K8S_VERSION=1.25.15
         BUILD  +provider-image --K8S_VERSION=1.28.2
+        BUILD  +provider-image --K8S_VERSION=1.29.6
     END
 
 build-provider-images-fips:
@@ -378,7 +379,7 @@ base-image:
         ARG LUET_REPO=luet-repo
     END
     RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y && \
           luet repo update
 
      IF [ "$OS_DISTRIBUTION" = "rhel" ]
