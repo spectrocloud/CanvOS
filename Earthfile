@@ -379,7 +379,7 @@ base-image:
         ARG LUET_REPO=luet-repo
     END
     RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y && \
+          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y && \
           luet repo update
 
      IF [ "$OS_DISTRIBUTION" = "rhel" ]
