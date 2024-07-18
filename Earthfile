@@ -192,126 +192,6 @@ iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-own /. rootfs
 
-<<<<<<< HEAD
-=======
-uki-iso:
-    WORKDIR /build
-    COPY --platform=linux/${ARCH} +build-uki-iso/ .
-    SAVE ARTIFACT /build/* AS LOCAL ./build/
-
-uki-provider-image:
-    FROM --platform=linux/${ARCH} +ubuntu-systemd
-    WORKDIR /
-    COPY +luet/luet /usr/bin/luet
-    COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
-    COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --platform=linux/${ARCH} +install-k8s/ /k8s
-    SAVE IMAGE --push $IMAGE_PATH
-
-trust-boot-unpack:
-    COPY +luet/luet /usr/bin/luet
-    COPY --platform=linux/${ARCH} +build-provider-trustedboot-image/ /image
-    RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
-        luet util unpack $FILE /trusted-boot
-    SAVE ARTIFACT /trusted-boot/*
-
-stylus-image-pack:  
-    COPY +luet/luet /usr/bin/luet
-    COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
-    RUN cd stylus && tar -czf ../stylus.tar *
-    RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
-    SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
-
-luet:
-    FROM --platform=linux/${ARCH} quay.io/luet/base:latest
-    SAVE ARTIFACT /usr/bin/luet /luet
-
-kairos-agent:
-    FROM --platform=linux/${ARCH} $BASE_IMAGE
-    SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
-
-install-k8s:
-    FROM --platform=linux/${ARCH} alpine:3.19
-    COPY +luet/luet /usr/bin/luet
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG BASE_K8S_VERSION=$K8S_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    END
-
-    WORKDIR /output
-
-    IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=luet-repo-arm
-    ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=luet-repo
-    END
-    RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-        luet repo update
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        RUN luet install -y container-runtime/containerd --system-target /output
-    END
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       RUN luet install -y container-runtime/containerd-fips --system-target /output
-    END
-    RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
-    RUN rm -rf /output/var/cache/*
-    SAVE ARTIFACT /output/*
-
-build-uki-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
-    ENV ISO_NAME=${ISO_NAME}
-    COPY overlay/files-iso/ /overlay/
-    COPY --if-exists user-data /overlay/config.yaml
-    COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
-    COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
- 
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
-    RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
-        for file in /overlay/opt/spectrocloud/content/*.zst; do \
-            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
-        done; \
-        rm -f /overlay/opt/spectrocloud/content/*.zst; \
-    fi
-    
-    #check if clusterconfig is passed in
-    IF [ "$CLUSTERCONFIG" != "" ]
-        COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
-    END
-
-    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
-    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
-        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
-    fi
-
-    WORKDIR /build
-    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
-    IF [ "$ARCH" = "arm64" ]
-       RUN /entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay  dir:/build/image --debug  --output /iso/ --arch $ARCH
-    ELSE IF [ "$ARCH" = "amd64" ]
-       COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
-       RUN ls -liah /keys
-       RUN mkdir /iso
-       IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
-       ELSE
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys --boot-branding "$BRANDING"
-       END
-    END
-    WORKDIR /iso
-    RUN mv /iso/*.iso $ISO_NAME.iso
-    SAVE ARTIFACT /iso/*
-
->>>>>>> eac9cfb (update luet pkg version in image tag (#188))
 iso:
     ARG ISO_NAME=installer
     WORKDIR /build
@@ -429,35 +309,7 @@ base-image:
     --build-arg NO_PROXY=$NO_PROXY .
 
     IF [ "$IS_JETSON" = "true" ]
-<<<<<<< HEAD
        COPY mount.yaml /system/oem/mount.yaml
-=======
-        COPY cloudconfigs/mount.yaml /system/oem/mount.yaml
-    END
-
-    IF [ "$IS_UKI" = "true" ]
-        COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
-    END
-
-    IF [ "$ARCH" = "arm64" ]
-        RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-          luet repo update
-    ELSE IF [ "$ARCH" = "amd64" ]
-        RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-          luet repo update
-    END
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG BASE_K8S_VERSION=$K8S_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
->>>>>>> eac9cfb (update luet pkg version in image tag (#188))
     END
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
@@ -526,18 +378,9 @@ base-image:
     ELSE IF [ "$ARCH" = "amd64" ]
         ARG LUET_REPO=luet-repo
     END
-<<<<<<< HEAD
     RUN  mkdir -p /etc/luet/repos.conf.d && \
           SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y && \
           luet repo update
-=======
-    RUN --no-cache mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y
-    
-    COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
-    RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
-    RUN --no-cache luet repo update
->>>>>>> eac9cfb (update luet pkg version in image tag (#188))
 
      IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl
