@@ -1,6 +1,6 @@
 
 # Kairos framework packages for ubuntu fips
-FROM quay.io/kairos/framework:v2.9.2-fips as kairos-fips
+FROM gcr.io/spectro-dev-public/nianyu/framework:v2.7.41-fips-spectro as kairos-fips
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base

@@ -83,7 +83,7 @@ RUN mkdir -p /run/lock && \
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 
-COPY --from=quay.io/kairos/framework:v2.9.2-fips / /
+COPY --from=gcr.io/spectro-dev-public/nianyu/framework:v2.7.41-fips-spectro / /
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
