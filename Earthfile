@@ -271,6 +271,7 @@ uki-provider-image:
     RUN apt-get update && apt-get install -y rsync
 
     WORKDIR /
+    COPY overlay/files/etc/ /etc/
     COPY +luet/luet /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
@@ -557,6 +558,7 @@ provider-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
+    COPY overlay/files/etc/ /etc/
     COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
