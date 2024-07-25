@@ -1,6 +1,6 @@
 
 # Kairos framework packages for ubuntu fips
-FROM quay.io/kairos/framework:v2.7.33-fips as kairos-fips
+FROM quay.io/kairos/framework:v2.7.41-fips as kairos-fips
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base
@@ -12,9 +12,8 @@ RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
 # You should change the following values according to your own versioning and other details
 RUN OS_NAME=kairos-core-ubuntu-fips \
-  OS_VERSION=v1.0.0 \
+  OS_VERSION=v3.0.14 \
   OS_ID="ubuntu" \
-  OS_NAME=kairos-ubuntu-fips \
   BUG_REPORT_URL="https://github.com/spectrocloud/ubuntu-fips-edge/issues" \
   HOME_URL="https://github.com/spectrocloud/ubuntu-fips-edge" \
   OS_REPO="gcr.io/spectro-images-public/ubuntu-focal-fips" \

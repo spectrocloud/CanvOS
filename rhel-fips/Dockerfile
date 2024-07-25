@@ -6,15 +6,14 @@ ARG USERNAME
 ARG PASSWORD
 
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.200.11 as osbuilder
+FROM quay.io/kairos/osbuilder-tools:v0.7.11 as osbuilder
 RUN zypper install -y gettext && zypper clean
 RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
 # You should change the following values according to your own versioning and other details
 RUN OS_NAME=kairos-core-rhel-fips \
-  OS_VERSION=v1.0.0 \
+  OS_VERSION=v3.0.14 \
   OS_ID="kairos" \
-  OS_NAME=kairos-fedora-fips \
   BUG_REPORT_URL="https://github.com/spectrocloud/pxke-samples/issues" \
   HOME_URL="https://github.com/spectrocloud/pxke-samples" \
   OS_REPO="quay.io/spectrocloud/fedora-fips" \
@@ -84,7 +83,7 @@ RUN mkdir -p /run/lock && \
 # Copy the os-release file to identify the OS
 COPY --from=osbuilder /workspace/os-release /etc/os-release
 
-COPY --from=quay.io/kairos/framework:v2.7.33-fips / /
+COPY --from=quay.io/kairos/framework:v2.7.41-fips / /
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml

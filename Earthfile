@@ -2,7 +2,7 @@ VERSION 0.6
 ARG TARGETOS
 ARG TARGETARCH
 
-## Default Image Repos Used in the Builds. 
+# Default image repositories used in the builds.
 ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
@@ -10,20 +10,20 @@ ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
-## Spectro Cloud and Kairos Tags ##
-ARG PE_VERSION=v4.4.1
-ARG SPECTRO_LUET_VERSION=v1.3.1
-ARG KAIROS_VERSION=v3.0.11
+# Spectro Cloud and Kairos tags.
+ARG PE_VERSION=v4.4.4
+ARG SPECTRO_LUET_VERSION=v1.3.2
+ARG KAIROS_VERSION=v3.0.14
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.201.0
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v4.4.0
-ARG KUBEADM_PROVIDER_VERSION=v4.4.0
-ARG RKE2_PROVIDER_VERSION=v4.4.0
+ARG K3S_PROVIDER_VERSION=v4.4.2
+ARG KUBEADM_PROVIDER_VERSION=v4.4.1
+ARG RKE2_PROVIDER_VERSION=v4.4.1
 
-# Variables used in the builds.  Update for ADVANCED use cases only Modify in .arg file or via CLI arguements
+# Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
 ARG K8S_VERSION
@@ -33,9 +33,10 @@ ARG ISO_NAME=installer
 ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
+ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 ARG ARCH
 ARG DISABLE_SELINUX=true
-ARG CIS_HARDENING=true
+ARG CIS_HARDENING=false
 ARG UBUNTU_PRO_KEY
 
 ARG FIPS_ENABLED=false
@@ -48,6 +49,11 @@ ARG no_proxy=${NO_PROXY}
 ARG PROXY_CERT_PATH
 
 ARG UPDATE_KERNEL=false
+ARG ETCD_VERSION="v3.5.13"
+
+# Two node variables
+ARG TWO_NODE=false
+ARG KINE_VERSION=0.11.4
 
 # UKI Variables
 ARG IS_UKI=false
@@ -57,7 +63,6 @@ ARG UKI_BRING_YOUR_OWN_KEYS=false
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
-ARG ETCD_VERSION="v3.5.13"
 
 # EFI size check
 ARG EFI_MAX_SIZE=2048
@@ -117,9 +122,11 @@ END
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-fips-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
@@ -155,61 +162,69 @@ build-provider-images:
         IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
            BUILD  +$TARGET --K8S_VERSION=1.24.6
            BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
            BUILD  +$TARGET --K8S_VERSION=1.25.13
+           BUILD  +$TARGET --K8S_VERSION=1.25.15
+           BUILD  +$TARGET --K8S_VERSION=1.26.4
            BUILD  +$TARGET --K8S_VERSION=1.26.8
+           BUILD  +$TARGET --K8S_VERSION=1.26.10
+           BUILD  +$TARGET --K8S_VERSION=1.26.12
+           BUILD  +$TARGET --K8S_VERSION=1.26.15
+           BUILD  +$TARGET --K8S_VERSION=1.27.2
            BUILD  +$TARGET --K8S_VERSION=1.27.5
            BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.29.0
            BUILD  +$TARGET --K8S_VERSION=1.27.9
-           BUILD  +$TARGET --K8S_VERSION=1.26.12
+           BUILD  +$TARGET --K8S_VERSION=1.27.11
+           BUILD  +$TARGET --K8S_VERSION=1.27.15
+           BUILD  +$TARGET --K8S_VERSION=1.28.2
            BUILD  +$TARGET --K8S_VERSION=1.28.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.26.15
            BUILD  +$TARGET --K8S_VERSION=1.28.9
+           BUILD  +$TARGET --K8S_VERSION=1.28.11
+           BUILD  +$TARGET --K8S_VERSION=1.29.0
+           BUILD  +$TARGET --K8S_VERSION=1.29.6
        ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-           BUILD  +$TARGET --K8S_VERSION=1.26.14
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.28.7
-           BUILD  +$TARGET --K8S_VERSION=1.29.3
            BUILD  +$TARGET --K8S_VERSION=1.24.6
            BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
            BUILD  +$TARGET --K8S_VERSION=1.25.13
+           BUILD  +$TARGET --K8S_VERSION=1.25.15
+           BUILD  +$TARGET --K8S_VERSION=1.26.4
            BUILD  +$TARGET --K8S_VERSION=1.26.8
+           BUILD  +$TARGET --K8S_VERSION=1.26.10
+           BUILD  +$TARGET --K8S_VERSION=1.26.12
+           BUILD  +$TARGET --K8S_VERSION=1.26.14
+           BUILD  +$TARGET --K8S_VERSION=1.26.15
+           BUILD  +$TARGET --K8S_VERSION=1.27.2
            BUILD  +$TARGET --K8S_VERSION=1.27.5
            BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
            BUILD  +$TARGET --K8S_VERSION=1.27.9
-           BUILD  +$TARGET --K8S_VERSION=1.26.12
-           BUILD  +$TARGET --K8S_VERSION=1.28.5
-           BUILD  +$TARGET --K8S_VERSION=1.26.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.13
-           BUILD  +$TARGET --K8S_VERSION=1.28.9
-           BUILD  +$TARGET --K8S_VERSION=1.29.4
-       ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-           BUILD  +$TARGET --K8S_VERSION=1.26.14
            BUILD  +$TARGET --K8S_VERSION=1.27.11
+           BUILD  +$TARGET --K8S_VERSION=1.27.13
+           BUILD  +$TARGET --K8S_VERSION=1.27.14
+           BUILD  +$TARGET --K8S_VERSION=1.28.2
+           BUILD  +$TARGET --K8S_VERSION=1.28.5
+           BUILD  +$TARGET --K8S_VERSION=1.28.7
+           BUILD  +$TARGET --K8S_VERSION=1.28.9
+           BUILD  +$TARGET --K8S_VERSION=1.28.10
+           BUILD  +$TARGET --K8S_VERSION=1.29.3
+           BUILD  +$TARGET --K8S_VERSION=1.29.4
+           BUILD  +$TARGET --K8S_VERSION=1.29.5
+       ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+           BUILD  +$TARGET --K8S_VERSION=1.24.6
+           BUILD  +$TARGET --K8S_VERSION=1.25.2
+           BUILD  +$TARGET --K8S_VERSION=1.25.13
+           BUILD  +$TARGET --K8S_VERSION=1.25.15
+           BUILD  +$TARGET --K8S_VERSION=1.26.4
+           BUILD  +$TARGET --K8S_VERSION=1.26.8
+           BUILD  +$TARGET --K8S_VERSION=1.26.10
+           BUILD  +$TARGET --K8S_VERSION=1.26.14
+           BUILD  +$TARGET --K8S_VERSION=1.27.2
+           BUILD  +$TARGET --K8S_VERSION=1.27.5
+           BUILD  +$TARGET --K8S_VERSION=1.27.7
+           BUILD  +$TARGET --K8S_VERSION=1.27.11
+           BUILD  +$TARGET --K8S_VERSION=1.27.15
+           BUILD  +$TARGET --K8S_VERSION=1.28.2
            BUILD  +$TARGET --K8S_VERSION=1.28.7
            BUILD  +$TARGET --K8S_VERSION=1.29.2
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
+           BUILD  +$TARGET --K8S_VERSION=1.29.6
        END
     ELSE
         BUILD  +$TARGET --K8S_VERSION="$K8S_VERSION"
@@ -221,42 +236,51 @@ build-provider-images-fips:
            BUILD  +provider-image --K8S_VERSION=1.24.13
            BUILD  +provider-image --K8S_VERSION=1.25.9
            BUILD  +provider-image --K8S_VERSION=1.26.4
-           BUILD  +provider-image --K8S_VERSION=1.27.2
-           BUILD  +provider-image --K8S_VERSION=1.29.0
-           BUILD  +provider-image --K8S_VERSION=1.27.9
            BUILD  +provider-image --K8S_VERSION=1.26.12
-           BUILD  +provider-image --K8S_VERSION=1.28.5
            BUILD  +provider-image --K8S_VERSION=1.26.15
+           BUILD  +provider-image --K8S_VERSION=1.27.2
+           BUILD  +provider-image --K8S_VERSION=1.27.9
            BUILD  +provider-image --K8S_VERSION=1.27.14
+           BUILD  +provider-image --K8S_VERSION=1.27.15
+           BUILD  +provider-image --K8S_VERSION=1.28.5
            BUILD  +provider-image --K8S_VERSION=1.28.10
+           BUILD  +provider-image --K8S_VERSION=1.28.11
+           BUILD  +provider-image --K8S_VERSION=1.29.0
            BUILD  +provider-image --K8S_VERSION=1.29.5
+           BUILD  +provider-image --K8S_VERSION=1.29.6
         ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
            BUILD  +provider-image --K8S_VERSION=1.24.6
-           BUILD  +provider-image --K8S_VERSION=1.25.2
            BUILD  +provider-image --K8S_VERSION=1.25.0
+           BUILD  +provider-image --K8S_VERSION=1.25.2
            BUILD  +provider-image --K8S_VERSION=1.26.4
+           BUILD  +provider-image --K8S_VERSION=1.26.12
            BUILD  +provider-image --K8S_VERSION=1.26.14
            BUILD  +provider-image --K8S_VERSION=1.27.2
-           BUILD  +provider-image --K8S_VERSION=1.26.12
            BUILD  +provider-image --K8S_VERSION=1.27.9
            BUILD  +provider-image --K8S_VERSION=1.27.11
+           BUILD  +provider-image --K8S_VERSION=1.27.14
            BUILD  +provider-image --K8S_VERSION=1.28.5
            BUILD  +provider-image --K8S_VERSION=1.28.7
+           BUILD  +provider-image --K8S_VERSION=1.28.10
            BUILD  +provider-image --K8S_VERSION=1.29.0
            BUILD  +provider-image --K8S_VERSION=1.29.3
+           BUILD  +provider-image --K8S_VERSION=1.29.6
         ELSE
            BUILD  +provider-image --K8S_VERSION=1.24.6
            BUILD  +provider-image --K8S_VERSION=1.25.2
            BUILD  +provider-image --K8S_VERSION=1.26.4
-           BUILD  +provider-image --K8S_VERSION=1.27.2
            BUILD  +provider-image --K8S_VERSION=1.26.12
            BUILD  +provider-image --K8S_VERSION=1.26.14
+           BUILD  +provider-image --K8S_VERSION=1.27.2
            BUILD  +provider-image --K8S_VERSION=1.27.9
            BUILD  +provider-image --K8S_VERSION=1.27.11
+           BUILD  +provider-image --K8S_VERSION=1.27.15
            BUILD  +provider-image --K8S_VERSION=1.28.5
            BUILD  +provider-image --K8S_VERSION=1.28.7
+           BUILD  +provider-image --K8S_VERSION=1.28.11
            BUILD  +provider-image --K8S_VERSION=1.29.0
            BUILD  +provider-image --K8S_VERSION=1.29.2
+           BUILD  +provider-image --K8S_VERSION=1.29.6
         END
     ELSE
         BUILD  +provider-image --K8S_VERSION="$K8S_VERSION"
@@ -294,6 +318,7 @@ uki-provider-image:
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --platform=linux/${ARCH} +install-k8s/ /k8s
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -362,11 +387,12 @@ build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists user-data /overlay/config.yaml
+    COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
  
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
@@ -379,10 +405,10 @@ build-uki-iso:
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-    COPY --if-exists ui.tar /overlay/opt/spectrocloud/emc/
-    RUN if [ -f /overlay/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /overlay/opt/spectrocloud/emc/ui.tar -C /overlay/opt/spectrocloud/emc && \
-        rm -f /overlay/opt/spectrocloud/emc/ui.tar; \
+    COPY --if-exists local-ui.tar /overlay/opt/spectrocloud/
+    RUN if [ -f /overlay/opt/spectrocloud/local-ui.tar ]; then \
+        tar -xf /overlay/opt/spectrocloud/local-ui.tar -C /overlay/opt/spectrocloud && \
+        rm -f /overlay/opt/spectrocloud/local-ui.tar; \
     fi
 
     WORKDIR /build
@@ -414,12 +440,26 @@ iso:
     END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
+validate-user-data:
+    FROM --platform=linux/${TARGETARCH} $CLI_IMAGE
+    COPY --if-exists user-data /user-data
+
+    RUN chmod +x /usr/local/bin/palette-edge-cli;
+    RUN if [ -f /user-data ]; then \
+            /usr/local/bin/palette-edge-cli validate -f /user-data; \
+        else \
+            echo "user-data file does not exist."; \
+        fi
+    SAVE ARTIFACT --if-exists /user-data
+
+
 build-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists user-data /overlay/files-iso/config.yaml
+    COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
@@ -434,10 +474,10 @@ build-iso:
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
 
-    COPY --if-exists ui.tar /build/image/opt/spectrocloud/emc/
-    RUN if [ -f /build/image/opt/spectrocloud/emc/ui.tar ]; then \
-        tar -xf /build/image/opt/spectrocloud/emc/ui.tar -C /build/image/opt/spectrocloud/emc && \
-        rm -f /build/image/opt/spectrocloud/emc/ui.tar; \
+    COPY --if-exists local-ui.tar /build/image/opt/spectrocloud/
+    RUN if [ -f /build/image/opt/spectrocloud/local-ui.tar ]; then \
+        tar -xf /build/image/opt/spectrocloud/local-ui.tar -C /build/image/opt/spectrocloud && \
+        rm -f /build/image/opt/spectrocloud/local-ui.tar; \
     fi
     
     IF [ "$ARCH" = "arm64" ]
@@ -558,7 +598,7 @@ secure-boot-dirs:
     RUN chmod 0644 /secure-boot/public-keys
     SAVE ARTIFACT --keep-ts /secure-boot AS LOCAL ./secure-boot
 
-# Used to create the provider images.  The --K8S_VERSION will be passed in the earthly build
+# Used to create the provider images. The --K8S_VERSION will be passed in the earthly build.
 provider-image:
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
@@ -571,6 +611,7 @@ provider-image:
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
 
     IF [ "$IS_UKI" = "true" ]
         COPY +internal-slink/slink /usr/bin/slink
@@ -590,8 +631,30 @@ provider-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    SAVE IMAGE --push $IMAGE_PATH
+    IF $TWO_NODE
+        # Install postgresql 16
+        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+            RUN apt install -y ca-certificates curl && \
+                install -d /usr/share/postgresql-common/pgdg && \
+                curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+                apt update && \
+                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
+        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
+            RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
+                zypper --gpg-auto-import-keys ref && \
+                zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils
+        END
 
+        # Install kine
+        RUN mkdir -p /opt/spectrocloud/bin && \
+            curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
+
+        # Ensure psql works ootb for the postgres user
+        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
+    END
+
+    SAVE IMAGE --push $IMAGE_PATH
 
 provider-image-rootfs:
     FROM --platform=linux/${ARCH} +provider-image
@@ -654,6 +717,7 @@ base-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
+    # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
             RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
@@ -703,27 +767,27 @@ base-image:
             RUN pro detach --assume-yes
         END
 
-        # IF OS Type is Opensuse
+    # OS == Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
         # Add proxy certificate if present
         IF [ ! -z $PROXY_CERT_PATH ]
             COPY sc.crt /usr/share/pki/trust/anchors
-            RUN  update-ca-certificates
+            RUN update-ca-certificates
         END
         # Enable or Disable Kernel Updates
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN zypper al kernel-de*
         END
 
-        RUN zypper refresh && \
-            zypper update -y
+        RUN zypper refresh && zypper update -y
 
-           IF [ -e "/usr/bin/dracut" ]
-             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
-             RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
-           END
-        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump
-        RUN zypper cc && \
+        IF [ -e "/usr/bin/dracut" ]
+            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
+            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
+        END
+
+        RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
+            zypper cc && \
             zypper clean
     END
 
@@ -733,6 +797,7 @@ base-image:
             zypper clean
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
+
     IF [ "$ARCH" = "arm64" ]
         ARG LUET_REPO=luet-repo-arm
     ELSE IF [ "$ARCH" = "amd64" ]
@@ -745,7 +810,7 @@ base-image:
     RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
     RUN --no-cache luet repo update
 
-     IF [ "$OS_DISTRIBUTION" = "rhel" ]
+    IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl
     END
 
@@ -769,7 +834,7 @@ base-image:
             if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
     END
 
-# Used to build the installer image.  The installer ISO will be created from this.
+# Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
     IF [ "$IS_UKI" = "false" ]
