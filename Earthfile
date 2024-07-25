@@ -387,7 +387,8 @@ build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
+    # COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
+    COPY --if-exists user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
  
@@ -457,7 +458,8 @@ build-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
+    # COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
+    COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
