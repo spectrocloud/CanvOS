@@ -24,6 +24,6 @@ jobs:
       target: build-provider-images
       branch: ${{ github.head_ref }}
       envs: |
-        TARGET=install-k8s
+        TARGET=install-k8s-test
         K8S_DISTRIBUTION=${{ matrix.flavor }}
         ARCH=amd64

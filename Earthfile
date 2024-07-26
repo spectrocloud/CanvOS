@@ -355,6 +355,10 @@ install-k8s:
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
 
+install-k8s-test:
+    FROM +install-k8s
+    RUN rm -rf /output
+
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
