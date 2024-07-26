@@ -20,6 +20,7 @@ jobs:
       matrix:
         flavor: [k3s, kubeadm, rke2]
     with:
+      cleanup: true
       target: build-provider-images
       branch: ${{ github.head_ref }}
       envs: |
