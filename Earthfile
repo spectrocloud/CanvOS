@@ -197,7 +197,6 @@ build-provider-images:
            BUILD  +$TARGET --K8S_VERSION=1.27.15
            BUILD  +$TARGET --K8S_VERSION=1.28.2
            BUILD  +$TARGET --K8S_VERSION=1.28.7
-           BUILD  +$TARGET --K8S_VERSION=1.28.10
            BUILD  +$TARGET --K8S_VERSION=1.29.2
            BUILD  +$TARGET --K8S_VERSION=1.29.6
        END
