@@ -23,6 +23,11 @@ on:
         description: "Environment variables to build"
         required: false
         default: ""
+      cleanup:
+        type: boolean
+        description: "Cleanup"
+        required: false
+        default: false
 
 env:
   IMAGE_REPOSITORY: gcr.io/spectro-dev-public
@@ -35,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Release space from worker
+        if: ${{ inputs.cleanup }}
         run: |
           echo "Listing top largest packages"
           pkgs=$(dpkg-query -Wf '${Installed-Size}\t${Package}\t${Status}\n' | awk '$NF == "installed"{print $1 "\t" $2}' | sort -nr)
