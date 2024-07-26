@@ -3,7 +3,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 # Default image repositories used in the builds.
-ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
+ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.17
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
@@ -320,7 +320,7 @@ kairos-agent:
     SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
 
 install-k8s:
-    FROM --platform=linux/${ARCH} alpine:3.19
+    FROM --platform=linux/${ARCH} $ALPINE_IMG
     COPY +luet/luet /usr/bin/luet
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
