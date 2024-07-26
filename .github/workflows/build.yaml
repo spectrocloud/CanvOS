@@ -36,7 +36,7 @@ permissions:
   contents: read
 
 jobs:
-  package:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Release space from worker
@@ -96,6 +96,13 @@ jobs:
         with:
           repository: quay.io/kairos/packages
           packages: utils/earthly
+      - name: Set environment variables
+        if: ${{ inputs.envs }}
+        run: |
+          for i in "${{ inputs.envs }}"
+          do
+            printf "%s\n" $i >> $GITHUB_ENV
+          done
       - run: earthly --ci +${{ inputs.target }}
         if: ${{ !inputs.push }}
       - run: earthly --ci --output --push +${{ inputs.target }}
