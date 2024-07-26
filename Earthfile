@@ -99,10 +99,12 @@ IF [ "$FIPS_ENABLED" = "true" ]
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-fips-linux-$ARCH:$PE_VERSION
     ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
+    ARG UBUNTU_SYSTEMD_IMG=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd-fips:22.04
 ELSE
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-linux-$ARCH:$PE_VERSION
     ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
+    ARG UBUNTU_SYSTEMD_IMG=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd:22.04
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
@@ -787,6 +789,14 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+        RUN zypper addrepo https://download.opensuse.org/repositories/Linux-PAM/openSUSE_Tumbleweed/Linux-PAM.repo && \
+            zypper refresh
+        IF [ "$ARCH" = "amd64" ]
+            zypper install -y pam-1.6.1-1.4.x86_64
+        ELSE IF [ "$ARCH" = "arm64" ]
+            zypper install -y pam-1.6.1-1.4.aarch64
+        END
+
         RUN zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate
         RUN zypper cc && \
             zypper clean
@@ -932,7 +942,7 @@ iso-efi-size-check:
     SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
 
 ubuntu-systemd:
-    FROM $SPECTRO_PUB_REPO/ubuntu-systemd:22.04
+    FROM $UBUNTU_SYSTEMD_IMG
 
 OS_RELEASE:
     COMMAND
