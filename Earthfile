@@ -290,6 +290,7 @@ uki-provider-image:
     RUN apt-get update && apt-get install -y rsync
 
     WORKDIR /
+    COPY overlay/files/etc/ /etc/
     COPY +luet/luet /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
@@ -589,6 +590,7 @@ provider-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
+    COPY overlay/files/etc/ /etc/
     COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
@@ -725,7 +727,7 @@ base-image:
         END
 
         RUN apt-get update && \
-            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
+            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION" ; fi && \
@@ -785,7 +787,7 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-        RUN zypper install -y apparmor-parser apparmor-profiles
+        RUN zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate
         RUN zypper cc && \
             zypper clean
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
@@ -804,7 +806,7 @@ base-image:
     RUN --no-cache luet repo update
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
-        RUN yum install -y openssl
+        RUN yum install -y openssl rsyslog logrotate
     END
 
     IF [ "$OS_DISTRIBUTION" = "sles" ]
