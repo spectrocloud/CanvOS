@@ -99,7 +99,7 @@ jobs:
       - name: Set .arg file
         if: ${{ inputs.envs }}
         run: |
-          cat ${{ inputs.envs }} > .arg
+          cat "${{ inputs.envs }}" > .arg
           cat .arg
       - run: earthly --ci +${{ inputs.target }}
         if: ${{ !inputs.push }}
