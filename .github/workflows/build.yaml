@@ -101,7 +101,7 @@ jobs:
         run: |
           echo "${{ inputs.envs }}" > .arg
           cat .arg
-      - run: earthly --ci +${{ inputs.target }}
+      - run: earthly --ci --no-cache +${{ inputs.target }}
         if: ${{ !inputs.push }}
-      - run: earthly --ci --output --push +${{ inputs.target }}
+      - run: earthly --ci --output --push --no-cache +${{ inputs.target }}
         if: ${{ inputs.push  }}
