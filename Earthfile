@@ -792,9 +792,9 @@ base-image:
         RUN zypper addrepo https://download.opensuse.org/repositories/Linux-PAM/openSUSE_Tumbleweed/Linux-PAM.repo && \
             zypper refresh
         IF [ "$ARCH" = "amd64" ]
-            zypper install -y pam-1.6.1-1.4.x86_64
+            RUN zypper install -y pam-1.6.1-1.4.x86_64
         ELSE IF [ "$ARCH" = "arm64" ]
-            zypper install -y pam-1.6.1-1.4.aarch64
+            RUN zypper install -y pam-1.6.1-1.4.aarch64
         END
 
         RUN zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate
