@@ -351,11 +351,11 @@ earthly --push +build-all-images
 ### Audit Logs User Customisation
 
 #### Configuration
-rsyslog config file: `/etc/rsyslog.d/49-stylus.conf`  
-logrotate config file: `/etc/logrotate.d/stylus.conf`
+rsyslog config file: `overlay/files/etc/rsyslog.d/49-stylus.conf` copied to `/etc/rsyslog.d/49-stylus.conf`  
+logrotate config file: `overlay/files/etc/logrotate.d/stylus.conf` copied to `/etc/logrotate.d/stylus.conf`
 
 #### Send stylus audit events to user file
-To log stylus audit events to custom files, create a configuration file in the `/etc/rsyslog.d` directory named `<filename>.conf` (must be before `49-stylus.conf` lexicographically).
+Users can log stylus audit events to additional files, in addition to `/var/log/stylus-audit.log`. To log stylus audit events to custom files, create a configuration file in the `overlay/files/etc/rsyslog.d` directory named `<filename>.conf` (must be before `49-stylus.conf` lexicographically).
 
 Example: `48-audit.conf`
 
