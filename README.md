@@ -346,3 +346,56 @@ EDGE_CUSTOM_CONFIG=/path/to/.edge.custom-config.yaml
 ```shell
 earthly --push +build-all-images
 ```
+
+
+### Audit Logs User Customisation
+
+#### Configuration
+rsyslog config file: `/etc/rsyslog.d/49-stylus.conf`  
+logrotate config file: `/etc/logrotate.d/stylus.conf`
+
+#### Send stylus audit events to user file
+To log stylus audit events to custom files, create a configuration file in the `/etc/rsyslog.d` directory named `<filename>.conf` (must be before `49-stylus.conf` lexicographically).
+
+Example: `48-audit.conf`
+
+Users can use the following configuration as a base for their filtering logic. replace `<log file name>` with the desired file name
+```
+$PrivDropToUser root
+$PrivDropToGroup root
+if ($syslogfacility-text == 'local7' and $syslogseverity-text == 'notice' and $syslogtag contains 'stylus-audit') then {
+    action(
+        type="omfile" 
+        file="<log file name>" 
+    )
+}
+```
+
+#### Send user application audit events to stylus audit file
+To include user application audit events in the `/var/log/stylus-audit.log` file, add the following to the same configuration file (e.g. `48-audit.conf`) or create a new config file before `49-stylus.conf`:
+
+`<user app name>` : user application name or tag
+```
+$PrivDropToUser root
+$PrivDropToGroup root
+$Umask 0000
+$template ForwardFormat,"<%pri%>1 %timestamp:::date-rfc3339% %HOSTNAME% %syslogtag% %procid% - - %msg%\n"
+if ($syslogfacility-text == 'local7' and $syslogseverity-text == 'notice' and $syslogtag contains '<user app name>') then {
+    action(
+        type="omfile" 
+        file="/var/log/stylus-audit.log" 
+        FileCreateMode="0600"
+        fileowner="root"
+        template="ForwardFormat"
+    )
+}
+```
+
+To display user audit entries on the Local UI dashboard, audit entries must be logged in RFC 5424 format with the message (`msg`) part in JSON format. This JSON message must include the following keys: `edgeHostId`, `contentMsg`, `action`, `actor`, `actorType`, `resourceId`, `resourceName`, `resourceKind`
+
+Example syslog entry
+```
+<189>1 2024-07-23T15:35:32.644461+00:00 edge-ce0a38422e4662887313fb673bbfb2a2 stylus-audit[2911]: 2911 - - {"edgeHostId":"edge-ce0a38422e4662887313fb6 73bbfb2a2","contentMsg":"kairos password reset failed","action":"activity","actor":"kairos","actorType":"user","resourceId":"kairos","resourceName":"kairos","resourceKi nd":"user"}
+```
+
+Entries without these keys in the MSG part of RFC 5424 will still be logged to the stylus-audit.log file but will not be displayed on LocalUI.
