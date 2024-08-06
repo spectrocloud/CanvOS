@@ -336,7 +336,7 @@ kairos-agent:
     SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
 
 install-k8s:
-    FROM --platform=linux/${ARCH} alpine:3.19
+    FROM --platform=linux/${ARCH} $ALPINE_IMG
     COPY +luet/luet /usr/bin/luet
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
