@@ -1,15 +1,29 @@
-# name: Pr
+name: Pr
 
-# on: [pull_request]
+on: [pull_request]
 
-# concurrency:
-#   group: ${{ github.pr_workflow }}-${{ github.ref }}
-#   cancel-in-progress: true
+concurrency:
+  group: pr-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
-# permissions:
-#   contents: read
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+  checks: write
 
-# jobs:
-#   build: 
-#     uses: ./.github/workflows/release.yaml
-#     secrets: inherit
+jobs:
+  k8s:
+    name: k8s install test
+    uses: ./.github/workflows/build.yaml
+    strategy:
+      matrix:
+        flavor: [k3s, kubeadm, rke2]
+    with:
+      cleanup: true
+      target: build-provider-images
+      branch: ${{ github.head_ref }}
+      envs: |
+        TARGET=install-k8s-test
+        K8S_DISTRIBUTION=${{ matrix.flavor }}
+        ARCH=amd64

@@ -3,7 +3,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 # Default image repositories used in the builds.
-ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
+ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.17
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
@@ -370,6 +370,10 @@ install-k8s:
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
+
+install-k8s-test:
+    FROM +install-k8s
+    RUN rm -rf /output
 
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
