@@ -8,6 +8,7 @@ ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
+ARG LUET_PROJECT=luet-repo
 FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
 
 # Spectro Cloud and Kairos tags.
@@ -352,12 +353,12 @@ install-k8s:
     WORKDIR /output
 
     IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=luet-repo-arm
+        ARG LUET_REPO=$LUET_PROJECT-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=luet-repo
+        ARG LUET_REPO=$LUET_PROJECT
     END
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
+        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
         luet repo update
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -712,14 +713,14 @@ base-image:
     END
 
     IF [ "$ARCH" = "arm64" ]
-        RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-          luet repo update
+        ARG LUET_REPO=$LUET_PROJECT-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-          luet repo update
+        ARG LUET_REPO=$LUET_PROJECT
     END
+
+    RUN mkdir -p /etc/luet/repos.conf.d && \
+      SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
+      luet repo update
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
@@ -813,9 +814,9 @@ base-image:
     END
 
     IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=luet-repo-arm
+        ARG LUET_REPO=$LUET_PROJECT-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=luet-repo
+        ARG LUET_REPO=$LUET_PROJECT
     END
     RUN --no-cache mkdir -p /etc/luet/repos.conf.d && \
           SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y
