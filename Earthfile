@@ -950,7 +950,11 @@ iso-efi-size-check:
     SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
 
 ubuntu-systemd:
-    FROM $SPECTRO_PUB_REPO/ubuntu-systemd:22.04
+    IF [ "$FIPS_ENABLED" = "true" ]
+        ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd-fips:20.04
+    ELSE
+        ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd:22.04
+    END
 
 OS_RELEASE:
     COMMAND
@@ -969,7 +973,6 @@ OS_RELEASE:
     # update OS-release file
     # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
     RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
-
 
 download-third-party:
     ARG TARGETPLATFORM
