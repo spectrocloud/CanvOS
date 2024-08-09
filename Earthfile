@@ -283,7 +283,7 @@ BASE_ALPINE:
     COMMAND
     IF [ ! -z $PROXY_CERT_PATH ]
         COPY sc.crt /etc/ssl/certs
-        RUN  update-ca-certificates
+        RUN update-ca-certificates
     END
     RUN apk add curl
 
@@ -984,7 +984,7 @@ download-third-party:
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
 
 third-party:
-    FROM $ALPINE_IMG
+    DO +BASE_ALPINE
     ARG binary
     RUN apk add upx
     WORKDIR /WORKDIR
