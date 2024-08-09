@@ -955,6 +955,7 @@ ubuntu-systemd:
     ELSE
         ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd:22.04
     END
+    FROM $SYSTEMD_IMAGE
 
 OS_RELEASE:
     COMMAND
