@@ -1,4 +1,36 @@
 #cloud-config
+
+# Optional: Configurations for the edge host
+install:
+  bind_mounts:
+    - /axone
+  partitions:
+    persistent:
+      size: 75000
+      fs: ext4
+  extra-partitions:
+    - name: data
+      size: 0
+      fs: ext4
+      label: DATA_PARTITION
+  poweroff: true
+  reboot: false
+  grub_options:
+    extra_cmdline: "mitigations=auto"
+
+stages:
+  initramfs:
+    # Optional: Creating a user for the edge host
+    - users:
+        kairos:
+          groups:
+            - sudo
+          passwd: kairos
+    - name: "Mount DATA_PARTITION under /opt/localpath-provisioner"
+      commands:
+        - mkdir -p /opt/localpath-provisioner
+        - mount -o rw /dev/disk/by-label/DATA_PARTITION /opt/localpath-provisioner
+
 stylus:
   site:
     # host for hubble api to register device.
@@ -6,9 +38,14 @@ stylus:
 
     # newly added field to use for auto registration
     edgeHostToken: aUAxxxxxxxxx0ChYCrO
+
+    disableAutoRegister: false
     
     # projectUid <Optional :need to provide if token is not generated using project id>
     projectName: stores
+
+    projectUid: 12345677788
+
     # tags which will be assigned to devices as labels.  These are examples
     tags:
       key1: value1
@@ -25,6 +62,33 @@ stylus:
     # ease of creation of devices and cluster on PaletteUI via an application e.g vercel.app .
     # QR code will appear only of the device is not registered on Palette
     registrationURL: https://edge-registration-app.vercel.app/
+    
+    hostName: "machine1"
+    prefix: "US"
+
+    # If the site.name is not specified, the optional field is used to identify the edge ID. Stylus will check each 
+    # entry in this key to generate the product UID. Preferences are given in the following order: 
+    # site.name > site.deviceUIDPath > device serial number > random id
+    # Each entry consists of two fields: the file name and an optional regex to filter its content.
+    deviceUIDPaths:
+      - name: /etc/palette/metadata-regex
+        regex: "edge.*"
+      - name: /etc/palette/metadata-no-regex
+    
+
+    # Optional field to assign labels. Default value for delimiter is,\n” and separator is “=”. 
+    # Skipped when disableAutoRegister is true
+    tagsFromFile:
+      fileName: "/etc/palette/tags.txt"
+      delimiter: ";"
+      separator: ":"
+    
+    # Optional field to assign labels. The script must be a bash script and must return labels in JSON format.
+    # timeout specified as seconds will ensure that the script will not run forever. Default timeout is 60 seconds.
+    # Skipped when disableAutoRegister is true
+    tagsFromScript:
+      scriptName: "/etc/palette/tags.sh"
+      timeout: 5
     
     # Optional 
     network:
@@ -67,3 +131,47 @@ stylus:
     username: bob
     password: ####
     insecure: false
+
+  # Optional: configurations for 2-node setup
+  twoNode:
+    livenessSeconds: 60
+    healthCheckScript: "command"
+    enable: true
+
+  # Optional: field to enable or disable the Palette TUI, defaults to false if not specified. 
+  # Refer to the documentation for more information: https://docs.spectrocloud.com/clusters/edge/edge-configuration/installer-reference/#initial-configuration
+  includeTui: true
+
+  # Optional: field to enable or disable the password update via local UI. 
+  # If set to true, the password update option will be disabled in the local UI. Defaults to false if not specified
+  disablePasswordUpdate: true
+
+  # Optional: fields to set the log level
+  debug: true 
+  trace: true
+
+  # Optional: field to to set the installation mode, defaults to 'connected' if not specified.
+  # Can be set to 'connected' or 'airgap'
+  installationMode: airgap
+
+  # Optional: configurations for Harbor PVC
+  harborPVC:
+    registrySize: 30
+    jobServiceSize: 5
+    databaseSize:   20
+    redisSize:      5
+    trivySize:      5
+
+  # Optional: Configure Local UI port. Defaults to 5080 if not specified, 
+  localUI:
+    port: 5080
+
+env:
+  Key: value
+
+providerCredentials:
+  registry: registry.example.com
+  username: bob
+  password: ####
+  encodedPassword: false
+  certificates: ""
