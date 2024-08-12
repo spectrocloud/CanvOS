@@ -72,6 +72,7 @@ ARG EFI_IMG_SIZE=2200
 # internal variables
 ARG GOLANG_VERSION=1.22
 ARG DEBUG=false
+ARG BUILDER_3RDPARTY_VERSION=4.5
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
@@ -97,10 +98,12 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
 END
 
 IF [ "$FIPS_ENABLED" = "true" ]
+    ARG BIN_TYPE=vertex
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-fips-linux-$ARCH:$PE_VERSION
     ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
+    ARG BIN_TYPE=palette
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-linux-$ARCH:$PE_VERSION
     ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
@@ -280,15 +283,9 @@ BASE_ALPINE:
     COMMAND
     IF [ ! -z $PROXY_CERT_PATH ]
         COPY sc.crt /etc/ssl/certs
-        RUN  update-ca-certificates
+        RUN update-ca-certificates
     END
     RUN apk add curl
-
-download-etcdctl:
-    DO +BASE_ALPINE
-    RUN curl  --retry 5 -Ls $ETCD_REPO/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
-            chmod +x etcdctl
-    SAVE ARTIFACT etcdctl
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
@@ -308,7 +305,7 @@ uki-provider-image:
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
-    COPY +luet/luet /usr/bin/luet
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --platform=linux/${ARCH} +install-k8s/ /k8s
@@ -316,22 +313,18 @@ uki-provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
-    COPY +luet/luet /usr/bin/luet
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY --platform=linux/${ARCH} +build-provider-trustedboot-image/ /image
     RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
         luet util unpack $FILE /trusted-boot
     SAVE ARTIFACT /trusted-boot/*
 
 stylus-image-pack:  
-    COPY +luet/luet /usr/bin/luet
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
     RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
     SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
-
-luet:
-    FROM --platform=linux/${ARCH} quay.io/luet/base:latest
-    SAVE ARTIFACT /usr/bin/luet /luet
 
 kairos-agent:
     FROM --platform=linux/${ARCH} $BASE_IMAGE
@@ -339,7 +332,7 @@ kairos-agent:
 
 install-k8s:
     FROM --platform=linux/${ARCH} $ALPINE_IMG
-    COPY +luet/luet /usr/bin/luet
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
@@ -631,7 +624,7 @@ provider-image:
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
-    COPY (+download-etcdctl/etcdctl) /usr/bin/
+    COPY (+third-party/etcdctl --binary=etcdctl) /usr/bin/
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
@@ -957,7 +950,12 @@ iso-efi-size-check:
     SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
 
 ubuntu-systemd:
-    FROM $SPECTRO_PUB_REPO/ubuntu-systemd:22.04
+    IF [ "$FIPS_ENABLED" = "true" ]
+        ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd-fips:20.04
+    ELSE
+        ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd:22.04
+    END
+    FROM $SYSTEMD_IMAGE
 
 OS_RELEASE:
     COMMAND
@@ -976,3 +974,30 @@ OS_RELEASE:
     # update OS-release file
     # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
     RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
+
+download-third-party:
+    ARG TARGETPLATFORM
+    ARG binary
+    FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    ARG TARGETARCH
+    SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
+    SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
+
+third-party:
+    DO +BASE_ALPINE
+    ARG binary
+    RUN apk add upx
+    WORKDIR /WORKDIR
+
+    COPY (+download-third-party/${binary} --binary=${binary}) /WORKDIR/${binary}
+    COPY (+download-third-party/${binary}.version --binary=${binary}) /WORKDIR/${binary}.version
+
+    DO +UPX --bin=/WORKDIR/${binary}
+
+    SAVE ARTIFACT /WORKDIR/${binary} ${binary}
+    SAVE ARTIFACT /WORKDIR/${binary}.version ${binary}.version
+
+UPX:
+    COMMAND
+    ARG bin
+    RUN upx -1 $bin
