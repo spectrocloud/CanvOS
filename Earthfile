@@ -116,6 +116,7 @@ ELSE
 END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE_TAG
+ARG ISO_DISK_IMG=$IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
 ARG CMDLINE="stylus.registration"
 
 build-all-images:
@@ -866,10 +867,11 @@ iso-image:
     SAVE IMAGE palette-installer-image:$IMAGE_TAG
 
 iso-disk-image:
-    FROM scratch
+    BUILD +iso
 
+    FROM scratch
     COPY +iso/*.iso /disk/
-    SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
+    SAVE IMAGE --push $ISO_DISK_IMG
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/golang:${GOLANG_VERSION}-alpine
