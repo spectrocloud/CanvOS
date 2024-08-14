@@ -372,7 +372,7 @@ build-uki-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
-    COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
+    COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
  
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
