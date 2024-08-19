@@ -174,8 +174,11 @@ harden_sysctl() {
 
 	update_config_files 'net.ipv4.icmp_echo_ignore_broadcasts' 'net.ipv4.icmp_echo_ignore_broadcasts=1' ${config_file}
 	update_config_files 'net.ipv4.icmp_ignore_bogus_error_responses' 'net.ipv4.icmp_ignore_bogus_error_responses=1' ${config_file}
-	update_config_files 'net.ipv4.conf.all.rp_filter' 'net.ipv4.conf.all.rp_filter=1' ${config_file}
-	update_config_files 'net.ipv4.conf.default.rp_filter' 'net.ipv4.conf.default.rp_filter=1' ${config_file}
+
+        # CIS hardening requires "net.ipv4.conf.all.rp_filter=1" but this is incompatible with CNIs, hence we set this to 0 instead
+        update_config_files 'net.ipv4.conf.all.rp_filter' 'net.ipv4.conf.all.rp_filter=0' ${config_file}
+
+        update_config_files 'net.ipv4.conf.default.rp_filter' 'net.ipv4.conf.default.rp_filter=1' ${config_file}
 	update_config_files 'net.ipv4.tcp_syncookies' 'net.ipv4.tcp_syncookies=1' ${config_file}
 	update_config_files 'kernel.randomize_va_space' 'kernel.randomize_va_space=2' ${config_file}
 	update_config_files 'fs.suid_dumpable' 'fs.suid_dumpable=0' ${config_file}
