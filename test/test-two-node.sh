@@ -472,7 +472,7 @@ function build_canvos() {
         --TWO_NODE=true \
         --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
         --CUSTOM_TAG=${STYLUS_HASH} \
-	--PE_VERSION=v${PE_VERSION}
+        --PE_VERSION=v${PE_VERSION}
     docker push ${OCI_REGISTRY}/ubuntu:k3s-${K3S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
 }
 

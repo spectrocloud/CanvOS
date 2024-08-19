@@ -23,6 +23,7 @@ ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.4.2
 ARG KUBEADM_PROVIDER_VERSION=v4.4.1
 ARG RKE2_PROVIDER_VERSION=v4.4.1
+ARG NODEADM_PROVIDER_VERSION=latest
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -140,79 +141,81 @@ build-provider-images:
     END
     IF [ "$K8S_VERSION" = "" ]
         IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.12
-           BUILD  +$TARGET --K8S_VERSION=1.26.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.9
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.27.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.16
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.5
-           BUILD  +$TARGET --K8S_VERSION=1.28.9
-           BUILD  +$TARGET --K8S_VERSION=1.28.11
-           BUILD  +$TARGET --K8S_VERSION=1.28.12
-           BUILD  +$TARGET --K8S_VERSION=1.29.0
-           BUILD  +$TARGET --K8S_VERSION=1.29.6
-           BUILD  +$TARGET --K8S_VERSION=1.29.7
-       ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.12
-           BUILD  +$TARGET --K8S_VERSION=1.26.14
-           BUILD  +$TARGET --K8S_VERSION=1.26.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.9
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.27.13
-           BUILD  +$TARGET --K8S_VERSION=1.27.14
-           BUILD  +$TARGET --K8S_VERSION=1.27.15
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.5
-           BUILD  +$TARGET --K8S_VERSION=1.28.7
-           BUILD  +$TARGET --K8S_VERSION=1.28.9
-           BUILD  +$TARGET --K8S_VERSION=1.28.10
-           BUILD  +$TARGET --K8S_VERSION=1.28.11
-           BUILD  +$TARGET --K8S_VERSION=1.29.3
-           BUILD  +$TARGET --K8S_VERSION=1.29.4
-           BUILD  +$TARGET --K8S_VERSION=1.29.5
-           BUILD  +$TARGET --K8S_VERSION=1.29.6
-       ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.14
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.27.15
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.7
-           BUILD  +$TARGET --K8S_VERSION=1.28.11
-           BUILD  +$TARGET --K8S_VERSION=1.29.2
-           BUILD  +$TARGET --K8S_VERSION=1.29.6
-       END
+            BUILD  +$TARGET --K8S_VERSION=1.24.6
+            BUILD  +$TARGET --K8S_VERSION=1.25.2
+            BUILD  +$TARGET --K8S_VERSION=1.25.13
+            BUILD  +$TARGET --K8S_VERSION=1.25.15
+            BUILD  +$TARGET --K8S_VERSION=1.26.4
+            BUILD  +$TARGET --K8S_VERSION=1.26.8
+            BUILD  +$TARGET --K8S_VERSION=1.26.10
+            BUILD  +$TARGET --K8S_VERSION=1.26.12
+            BUILD  +$TARGET --K8S_VERSION=1.26.15
+            BUILD  +$TARGET --K8S_VERSION=1.27.2
+            BUILD  +$TARGET --K8S_VERSION=1.27.5
+            BUILD  +$TARGET --K8S_VERSION=1.27.7
+            BUILD  +$TARGET --K8S_VERSION=1.27.9
+            BUILD  +$TARGET --K8S_VERSION=1.27.11
+            BUILD  +$TARGET --K8S_VERSION=1.27.15
+            BUILD  +$TARGET --K8S_VERSION=1.27.16
+            BUILD  +$TARGET --K8S_VERSION=1.28.2
+            BUILD  +$TARGET --K8S_VERSION=1.28.5
+            BUILD  +$TARGET --K8S_VERSION=1.28.9
+            BUILD  +$TARGET --K8S_VERSION=1.28.11
+            BUILD  +$TARGET --K8S_VERSION=1.28.12
+            BUILD  +$TARGET --K8S_VERSION=1.29.0
+            BUILD  +$TARGET --K8S_VERSION=1.29.6
+            BUILD  +$TARGET --K8S_VERSION=1.29.7
+        ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+            BUILD  +$TARGET --K8S_VERSION=1.24.6
+            BUILD  +$TARGET --K8S_VERSION=1.25.2
+            BUILD  +$TARGET --K8S_VERSION=1.25.13
+            BUILD  +$TARGET --K8S_VERSION=1.25.15
+            BUILD  +$TARGET --K8S_VERSION=1.26.4
+            BUILD  +$TARGET --K8S_VERSION=1.26.8
+            BUILD  +$TARGET --K8S_VERSION=1.26.10
+            BUILD  +$TARGET --K8S_VERSION=1.26.12
+            BUILD  +$TARGET --K8S_VERSION=1.26.14
+            BUILD  +$TARGET --K8S_VERSION=1.26.15
+            BUILD  +$TARGET --K8S_VERSION=1.27.2
+            BUILD  +$TARGET --K8S_VERSION=1.27.5
+            BUILD  +$TARGET --K8S_VERSION=1.27.7
+            BUILD  +$TARGET --K8S_VERSION=1.27.9
+            BUILD  +$TARGET --K8S_VERSION=1.27.11
+            BUILD  +$TARGET --K8S_VERSION=1.27.13
+            BUILD  +$TARGET --K8S_VERSION=1.27.14
+            BUILD  +$TARGET --K8S_VERSION=1.27.15
+            BUILD  +$TARGET --K8S_VERSION=1.28.2
+            BUILD  +$TARGET --K8S_VERSION=1.28.5
+            BUILD  +$TARGET --K8S_VERSION=1.28.7
+            BUILD  +$TARGET --K8S_VERSION=1.28.9
+            BUILD  +$TARGET --K8S_VERSION=1.28.10
+            BUILD  +$TARGET --K8S_VERSION=1.28.11
+            BUILD  +$TARGET --K8S_VERSION=1.29.3
+            BUILD  +$TARGET --K8S_VERSION=1.29.4
+            BUILD  +$TARGET --K8S_VERSION=1.29.5
+            BUILD  +$TARGET --K8S_VERSION=1.29.6
+        ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+            BUILD  +$TARGET --K8S_VERSION=1.24.6
+            BUILD  +$TARGET --K8S_VERSION=1.25.2
+            BUILD  +$TARGET --K8S_VERSION=1.25.13
+            BUILD  +$TARGET --K8S_VERSION=1.25.15
+            BUILD  +$TARGET --K8S_VERSION=1.26.4
+            BUILD  +$TARGET --K8S_VERSION=1.26.8
+            BUILD  +$TARGET --K8S_VERSION=1.26.10
+            BUILD  +$TARGET --K8S_VERSION=1.26.14
+            BUILD  +$TARGET --K8S_VERSION=1.27.2
+            BUILD  +$TARGET --K8S_VERSION=1.27.5
+            BUILD  +$TARGET --K8S_VERSION=1.27.7
+            BUILD  +$TARGET --K8S_VERSION=1.27.11
+            BUILD  +$TARGET --K8S_VERSION=1.27.15
+            BUILD  +$TARGET --K8S_VERSION=1.28.2
+            BUILD  +$TARGET --K8S_VERSION=1.28.7
+            BUILD  +$TARGET --K8S_VERSION=1.28.11
+            BUILD  +$TARGET --K8S_VERSION=1.29.2
+            BUILD  +$TARGET --K8S_VERSION=1.29.6
+        ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+            BUILD  +$TARGET
+        END
     ELSE
         BUILD  +$TARGET --K8S_VERSION="$K8S_VERSION"
     END
@@ -357,12 +360,14 @@ install-k8s:
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd --system-target /output
+    ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+        RUN luet install -y container-runtime/containerd-fips --system-target /output
     END
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       RUN luet install -y container-runtime/containerd-fips --system-target /output
+    IF [ "$K8S_DISTRIBUTION" != "nodeadm" ]
+        RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
     END
-    RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
+
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
 
@@ -383,7 +388,7 @@ build-uki-iso:
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
     
-    #check if clusterconfig is passed in
+    # check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
@@ -449,7 +454,7 @@ build-iso:
         done; \
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
-    #check if clusterconfig is passed in
+    # check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
@@ -598,6 +603,8 @@ provider-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+    ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ] && [ "$OS_DISTRIBUTION" = "ubuntu" ]
+        RUN apt install -y dnsutils strongswan
     END
 
     COPY --if-exists overlay/files/etc/ /etc/
@@ -686,7 +693,10 @@ kairos-provider-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+        # ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-nodeadm:$NODEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=tylergillson/provider-nodeadm:$NODEADM_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
