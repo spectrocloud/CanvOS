@@ -94,6 +94,30 @@ ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     ARG BASE_IMAGE
 END
 
+IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+    ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+    ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
+ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
+    ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
+ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+    ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+ELSE
+    ARG PROVIDER_BASE
+END
+
+IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-edge-standard" ]
+    ARG BASE_K8S_VERSION=$K8S_VERSION
+ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
+    ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
+    ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
+    ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
+    ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
+END
+
 IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
@@ -337,16 +361,6 @@ install-k8s:
     FROM --platform=linux/${ARCH} $ALPINE_IMG
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG BASE_K8S_VERSION=$K8S_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    END
-
     WORKDIR /output
 
     IF [ "$ARCH" = "arm64" ]
@@ -360,22 +374,33 @@ install-k8s:
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd --system-target /output
-    ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    END
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         RUN luet install -y container-runtime/containerd-fips --system-target /output
     END
-
-    IF [ "$K8S_DISTRIBUTION" != "nodeadm" ]
-        RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm-edge-standard" ]
+        RUN luet install -y container-runtime/containerd-edge-standard --system-target /output
     END
 
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
 
+edge-standard:
+    FROM --platform=linux/${ARCH} +ubuntu-systemd
+    RUN apt-get update && apt-get install -y rsync
+
+    WORKDIR /
+    COPY --platform=linux/${ARCH} +install-k8s/ /k8s
+    COPY +kairos-provider-image/ /providers
+
+    SAVE IMAGE --push $IMAGE_REGISTRY/k8s:$K8S_DISTRIBUTION-$K8S_VERSION
+
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
+    # COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
+    COPY --if-exists user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
  
@@ -445,7 +470,8 @@ build-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
+    # COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
+    COPY --if-exists user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
@@ -590,26 +616,9 @@ secure-boot-dirs:
 provider-image:
     FROM --platform=linux/${ARCH} +base-image
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
-    ARG IMAGE_REPO
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG BASE_K8S_VERSION=$K8S_VERSION
-        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-            RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
-        END
-    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ] && [ "$OS_DISTRIBUTION" = "ubuntu" ]
-        RUN apt install -y dnsutils strongswan
-    END
-
-    COPY --if-exists overlay/files/etc/ /etc/
-    IF [ -f /etc/logrotate.d/stylus.conf ]
-        RUN chmod 644 /etc/logrotate.d/stylus.conf
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
+        RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
     END
 
     COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
@@ -684,20 +693,6 @@ stylus-package-image:
     SAVE ARTIFACT --keep-own  ./*
 
 kairos-provider-image:
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
-        # ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-nodeadm:$NODEADM_PROVIDER_VERSION
-        ARG PROVIDER_BASE=tylergillson/provider-nodeadm:$NODEADM_PROVIDER_VERSION
-    END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
@@ -843,7 +838,7 @@ base-image:
         journalctl --vacuum-size=1K && \
         rm -rf /etc/machine-id && \
         rm -rf /var/lib/dbus/machine-id
-    RUN touch /etc/machine-id && \ 
+    RUN touch /etc/machine-id && \
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
