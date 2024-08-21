@@ -61,7 +61,7 @@ PE_VERSION=$(git describe --abbrev=0 --tags)
 SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 EARTHLY_VERSION=v0.8.5
 source .arg
-
+ALPINE_IMG=$SPECTRO_PUB_REPO/alpine:3.20.2
 ### Verify Depencies
 # Check if Docker is installed
 if command -v docker >/dev/null 2>&1; then
@@ -70,7 +70,7 @@ else
     echo "Docker not found.  Please use the guide for your platform located https://docs.docker.com/engine/install/ to install Docker."
 fi
 # Check if the current user has permission to run privileged containers
-if ! docker run --rm --privileged alpine sh -c 'echo "Privileged container test"' &>/dev/null; then
+if ! docker run --rm --privileged $ALPINE_IMG sh -c 'echo "Privileged container test"' &>/dev/null; then
     echo "Privileged containers are not allowed for the current user."
     exit 1
 fi
@@ -91,7 +91,7 @@ if [ "$(docker container inspect -f '{{.State.Running}}' earthly-buildkitd)" = "
     docker stop earthly-buildkitd
 fi
 docker rmi $SPECTRO_PUB_REPO/earthly/buildkitd:$EARTHLY_VERSION 2>/dev/null
-docker rmi alpine:latest
+docker rmi $ALPINE_IMG
 
 if [[ "$1" == "+uki-genkey" ]]; then
     ./keys.sh secure-boot/
