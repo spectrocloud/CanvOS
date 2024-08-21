@@ -3,8 +3,8 @@ ARG TARGETOS
 ARG TARGETARCH
 
 # Default image repositories used in the builds.
-ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.20.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
+ARG ALPINE_IMG=$SPECTRO_PUB_REPO/alpine:3.20.2
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
