@@ -653,6 +653,9 @@ provider-image:
 
         # Ensure psql waits for the network to be online
         RUN sed -i 's/After=network.target/After=network-online.target/' /lib/systemd/system/postgresql@.service
+
+        # Disable psql by default, Stylus will enable it when it needs it
+        RUN systemctl disable postgresql
     END
 
     SAVE IMAGE --push $IMAGE_PATH
