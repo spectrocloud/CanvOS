@@ -212,9 +212,6 @@ build-provider-images:
            BUILD  +$TARGET --K8S_VERSION=1.28.11
            BUILD  +$TARGET --K8S_VERSION=1.29.2
            BUILD  +$TARGET --K8S_VERSION=1.29.6
-           BUILD  +$TARGET --K8S_VERSION=1.28.13
-           BUILD  +$TARGET --K8S_VERSION=1.29.8
-           BUILD  +$TARGET --K8S_VERSION=1.30.4
        END
     ELSE
         BUILD  +$TARGET --K8S_VERSION="$K8S_VERSION"
@@ -241,9 +238,6 @@ build-provider-images-fips:
            BUILD  +provider-image --K8S_VERSION=1.29.5
            BUILD  +provider-image --K8S_VERSION=1.29.6
            BUILD  +provider-image --K8S_VERSION=1.29.7
-           BUILD  +provider-image --K8S_VERSION=1.28.13
-           BUILD  +provider-image --K8S_VERSION=1.29.8
-           BUILD  +provider-image --K8S_VERSION=1.30.4
         ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
            BUILD  +provider-image --K8S_VERSION=1.24.6
            BUILD  +provider-image --K8S_VERSION=1.25.0
@@ -264,9 +258,6 @@ build-provider-images-fips:
            BUILD  +provider-image --K8S_VERSION=1.29.3
            BUILD  +provider-image --K8S_VERSION=1.29.5
            BUILD  +provider-image --K8S_VERSION=1.29.6
-           BUILD  +provider-image --K8S_VERSION=1.28.12
-           BUILD  +provider-image --K8S_VERSION=1.29.7
-           BUILD  +provider-image --K8S_VERSION=1.30.3
         ELSE
            BUILD  +provider-image --K8S_VERSION=1.24.6
            BUILD  +provider-image --K8S_VERSION=1.25.2
@@ -283,9 +274,6 @@ build-provider-images-fips:
            BUILD  +provider-image --K8S_VERSION=1.29.0
            BUILD  +provider-image --K8S_VERSION=1.29.2
            BUILD  +provider-image --K8S_VERSION=1.29.6
-           BUILD  +provider-image --K8S_VERSION=1.28.13
-           BUILD  +provider-image --K8S_VERSION=1.29.8
-           BUILD  +provider-image --K8S_VERSION=1.30.4
         END
     ELSE
         BUILD  +provider-image --K8S_VERSION="$K8S_VERSION"
