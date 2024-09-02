@@ -26,7 +26,7 @@ This scenario is for the environment where Red Hat Satellite must be used and ac
 
 1. Mirror base RHEL UBI image (`registry.access.redhat.com/ubi9-init:9.4-6`) to the internal Container registry. Provide image path for the build process by using argument `BASE_IMAGE`. 
 
-2. Mirror Kairos framework image (`quay.io/kairos/framework:v2.7.41`) to the internal Container registry. Provide image path for the build process by using argument `KAIROS_FRAMEWORK_IMAGE`. 
+2. Mirror Kairos framework image (`quay.io/kairos/framework:v2.11.2`) to the internal Container registry. Provide image path for the build process by using argument `KAIROS_FRAMEWORK_IMAGE`. 
 
 3. Have the following repostiories synced and available on Red Hat Satellite:
 
