@@ -146,6 +146,10 @@ build-all-images:
 build-provider-images:
     FROM $ALPINE_IMG
 
+    IF [ !-n "$K8S_DISTRIBUTION"]
+        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, or rke2." && exit 1
+    END
+
     IF [ "$IS_UKI" = "true" ]
         ARG TARGET=uki-provider-image
     ELSE
