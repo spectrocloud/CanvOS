@@ -160,7 +160,7 @@ build-provider-images:
         WORKDIR /workdir
         COPY k8s_version.json k8s_version.json
         ENV K8S_DISTRIBUTION=$K8S_DISTRIBUTION
-        RUN jq -r ".$K8S_DISTRIBUTION[]" k8s_version.json > k8s_version.txt
+        RUN jq -r --arg key "$K8S_DISTRIBUTION" 'if .[$key] then .[$key][] else empty end' k8s_version.json > k8s_version.txt
         FOR version IN $(cat k8s_version.txt)
             BUILD +$TARGET --K8S_VERSION=$version
         END
