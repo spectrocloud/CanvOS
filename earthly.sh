@@ -61,7 +61,7 @@ PE_VERSION=$(git describe --abbrev=0 --tags)
 SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 EARTHLY_VERSION=v0.8.5
 source .arg
-ALPINE_IMG=$SPECTRO_PUB_REPO/alpine:3.20.2
+ALPINE_IMG=$SPECTRO_PUB_REPO/canvos/alpine:3.20
 ### Verify Depencies
 # Check if Docker is installed
 if command -v docker >/dev/null 2>&1; then

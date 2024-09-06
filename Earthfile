@@ -189,7 +189,7 @@ uki-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
-    FROM --platform=linux/${ARCH} +ubuntu-systemd
+    FROM --platform=linux/${ARCH} +ubuntu
     RUN apt-get update && apt-get install -y rsync
 
     WORKDIR /
@@ -414,7 +414,7 @@ download-sbctl:
     SAVE ARTIFACT /usr/bin/sbctl
 
 uki-byok:
-    FROM +ubuntu-systemd
+    FROM +ubuntu
 
     RUN apt-get update && apt-get install -y efitools curl
     COPY +download-sbctl/sbctl /usr/bin/sbctl
@@ -826,7 +826,7 @@ build-efi-size-check:
     SAVE ARTIFACT target/x86_64-unknown-uefi/debug/efi-size-check.efi
 
 iso-efi-size-check:
-    FROM +ubuntu-systemd
+    FROM +ubuntu
 
     RUN apt-get update
     RUN apt-get install -y mtools xorriso
@@ -848,13 +848,13 @@ iso-efi-size-check:
 
     SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
 
-ubuntu-systemd:
+ubuntu:
     IF [ "$FIPS_ENABLED" = "true" ]
-        ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd-fips:20.04
+        ARG UBUNTU_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-fips:22.04
     ELSE
-        ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd:22.04
+        ARG UBUNTU_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu:22.04
     END
-    FROM $SYSTEMD_IMAGE
+    FROM $UBUNTU_IMAGE
 
 OS_RELEASE:
     COMMAND
