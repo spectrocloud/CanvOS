@@ -22,6 +22,8 @@ RUN zypper in --force-resolution -y --no-allow-vendor-change \
     fail2ban \
     lldpd \
     nethogs \
+    rsyslog \
+    logrotate \
     && zypper cc
 # NOTE: removed dhcp-client
 RUN mkdir -p /run/lock

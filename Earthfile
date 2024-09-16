@@ -3,16 +3,18 @@ ARG TARGETOS
 ARG TARGETARCH
 
 # Default image repositories used in the builds.
-ARG ALPINE_IMG=gcr.io/spectro-images-public/alpine:3.16.2
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
-FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
+ARG LUET_PROJECT=luet-repo
+ARG ALPINE_TAG=3.20
+ARG ALPINE_IMG=$SPECTRO_PUB_REPO/canvos/alpine:$ALPINE_TAG
+FROM $ALPINE_IMG
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.4.1
-ARG SPECTRO_LUET_VERSION=v1.3.1
+ARG PE_VERSION=v4.4.12
+ARG SPECTRO_LUET_VERSION=v1.3.7
 ARG KAIROS_VERSION=v3.0.14
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -71,6 +73,7 @@ ARG EFI_IMG_SIZE=2200
 # internal variables
 ARG GOLANG_VERSION=1.22
 ARG DEBUG=false
+ARG BUILDER_3RDPARTY_VERSION=4.4
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
@@ -96,11 +99,15 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
 END
 
 IF [ "$FIPS_ENABLED" = "true" ]
+    ARG BIN_TYPE=vertex
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-fips-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
+    ARG BIN_TYPE=palette
     ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
     ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
@@ -111,6 +118,16 @@ END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE_TAG
 ARG CMDLINE="stylus.registration"
+
+alpine-all:
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +alpine
+
+alpine:
+    FROM alpine:$ALPINE_TAG
+    RUN apk add --no-cache bash curl jq ca-certificates upx
+    RUN update-ca-certificates
+
+    SAVE IMAGE --push gcr.io/spectro-dev-public/canvos/alpine:$ALPINE_TAG
 
 build-all-images:
     IF $FIPS_ENABLED
@@ -127,135 +144,40 @@ build-all-images:
     END
 
 build-provider-images:
+    FROM $ALPINE_IMG
+
+    IF [ !-n "$K8S_DISTRIBUTION"]
+        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, or rke2." && exit 1
+    END
+
     IF [ "$IS_UKI" = "true" ]
         ARG TARGET=uki-provider-image
     ELSE
         ARG TARGET=provider-image
     END
+
     IF [ "$K8S_VERSION" = "" ]
-        IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.12
-           BUILD  +$TARGET --K8S_VERSION=1.26.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.9
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.5
-           BUILD  +$TARGET --K8S_VERSION=1.28.9
-           BUILD  +$TARGET --K8S_VERSION=1.29.0
-       ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.12
-           BUILD  +$TARGET --K8S_VERSION=1.26.14
-           BUILD  +$TARGET --K8S_VERSION=1.26.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.9
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.27.13
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.5
-           BUILD  +$TARGET --K8S_VERSION=1.28.7
-           BUILD  +$TARGET --K8S_VERSION=1.28.9
-           BUILD  +$TARGET --K8S_VERSION=1.29.3
-           BUILD  +$TARGET --K8S_VERSION=1.29.4
-       ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.14
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.7
-           BUILD  +$TARGET --K8S_VERSION=1.29.2
-       END
+        WORKDIR /workdir
+        COPY k8s_version.json k8s_version.json
+        ENV K8S_DISTRIBUTION=$K8S_DISTRIBUTION
+        RUN jq -r --arg key "$K8S_DISTRIBUTION" 'if .[$key] then .[$key][] else empty end' k8s_version.json > k8s_version.txt
+        FOR version IN $(cat k8s_version.txt)
+            BUILD +$TARGET --K8S_VERSION=$version
+        END
     ELSE
-        BUILD  +$TARGET --K8S_VERSION="$K8S_VERSION"
+        BUILD +$TARGET --K8S_VERSION=$K8S_VERSION
     END
 
 build-provider-images-fips:
-    IF [ "$K8S_VERSION" = "" ]
-        IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-           BUILD  +provider-image --K8S_VERSION=1.24.13
-           BUILD  +provider-image --K8S_VERSION=1.25.9
-           BUILD  +provider-image --K8S_VERSION=1.26.4
-           BUILD  +provider-image --K8S_VERSION=1.26.12
-           BUILD  +provider-image --K8S_VERSION=1.26.15
-           BUILD  +provider-image --K8S_VERSION=1.27.2
-           BUILD  +provider-image --K8S_VERSION=1.27.9
-           BUILD  +provider-image --K8S_VERSION=1.27.14
-           BUILD  +provider-image --K8S_VERSION=1.28.5
-           BUILD  +provider-image --K8S_VERSION=1.28.10
-           BUILD  +provider-image --K8S_VERSION=1.29.0
-           BUILD  +provider-image --K8S_VERSION=1.29.5
-        ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-           BUILD  +provider-image --K8S_VERSION=1.24.6
-           BUILD  +provider-image --K8S_VERSION=1.25.0
-           BUILD  +provider-image --K8S_VERSION=1.25.2
-           BUILD  +provider-image --K8S_VERSION=1.26.4
-           BUILD  +provider-image --K8S_VERSION=1.26.12
-           BUILD  +provider-image --K8S_VERSION=1.26.14
-           BUILD  +provider-image --K8S_VERSION=1.27.2
-           BUILD  +provider-image --K8S_VERSION=1.27.9
-           BUILD  +provider-image --K8S_VERSION=1.27.11
-           BUILD  +provider-image --K8S_VERSION=1.28.5
-           BUILD  +provider-image --K8S_VERSION=1.28.7
-           BUILD  +provider-image --K8S_VERSION=1.29.0
-           BUILD  +provider-image --K8S_VERSION=1.29.3
-        ELSE
-           BUILD  +provider-image --K8S_VERSION=1.24.6
-           BUILD  +provider-image --K8S_VERSION=1.25.2
-           BUILD  +provider-image --K8S_VERSION=1.26.4
-           BUILD  +provider-image --K8S_VERSION=1.26.12
-           BUILD  +provider-image --K8S_VERSION=1.26.14
-           BUILD  +provider-image --K8S_VERSION=1.27.2
-           BUILD  +provider-image --K8S_VERSION=1.27.9
-           BUILD  +provider-image --K8S_VERSION=1.27.11
-           BUILD  +provider-image --K8S_VERSION=1.28.5
-           BUILD  +provider-image --K8S_VERSION=1.28.7
-           BUILD  +provider-image --K8S_VERSION=1.29.0
-           BUILD  +provider-image --K8S_VERSION=1.29.2
-        END
-    ELSE
-        BUILD  +provider-image --K8S_VERSION="$K8S_VERSION"
-    END
+   BUILD +build-provider-images
 
 BASE_ALPINE:
     COMMAND
     IF [ ! -z $PROXY_CERT_PATH ]
         COPY sc.crt /etc/ssl/certs
-        RUN  update-ca-certificates
+        RUN update-ca-certificates
     END
     RUN apk add curl
-
-download-etcdctl:
-    DO +BASE_ALPINE
-    RUN curl  --retry 5 -Ls $ETCD_REPO/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xvzf - --strip-components=1 etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
-            chmod +x etcdctl
-    SAVE ARTIFACT etcdctl
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
@@ -267,11 +189,15 @@ uki-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
-    FROM --platform=linux/${ARCH} +ubuntu-systemd
+    FROM --platform=linux/${ARCH} +ubuntu
     RUN apt-get update && apt-get install -y rsync
 
     WORKDIR /
-    COPY +luet/luet /usr/bin/luet
+    COPY --if-exists overlay/files/etc/ /etc/
+    IF [ -f /etc/logrotate.d/stylus.conf ]
+        RUN chmod 644 /etc/logrotate.d/stylus.conf
+    END
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --platform=linux/${ARCH} +install-k8s/ /k8s
@@ -279,30 +205,26 @@ uki-provider-image:
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
-    COPY +luet/luet /usr/bin/luet
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY --platform=linux/${ARCH} +build-provider-trustedboot-image/ /image
     RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
         luet util unpack $FILE /trusted-boot
     SAVE ARTIFACT /trusted-boot/*
 
 stylus-image-pack:  
-    COPY +luet/luet /usr/bin/luet
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
     RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
     SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
-
-luet:
-    FROM --platform=linux/${ARCH} quay.io/luet/base:latest
-    SAVE ARTIFACT /usr/bin/luet /luet
 
 kairos-agent:
     FROM --platform=linux/${ARCH} $BASE_IMAGE
     SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
 
 install-k8s:
-    FROM --platform=linux/${ARCH} alpine:3.19
-    COPY +luet/luet /usr/bin/luet
+    FROM --platform=linux/${ARCH} $ALPINE_IMG
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
@@ -317,12 +239,12 @@ install-k8s:
     WORKDIR /output
 
     IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=luet-repo-arm
+        ARG LUET_REPO=$LUET_PROJECT-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=luet-repo
+        ARG LUET_REPO=$LUET_PROJECT
     END
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url gcr.io/spectro-dev-public/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
+        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
         luet repo update
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -340,9 +262,9 @@ build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists user-data /overlay/config.yaml
+    COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
-    COPY --platform=linux/${ARCH} +luet/luet /overlay/luet
+    COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
  
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
@@ -393,11 +315,24 @@ iso:
     END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
+validate-user-data:
+    FROM --platform=linux/${TARGETARCH} $CLI_IMAGE
+    COPY --if-exists user-data /user-data
+
+    RUN chmod +x /usr/local/bin/palette-edge-cli;
+    RUN if [ -f /user-data ]; then \
+            /usr/local/bin/palette-edge-cli validate -f /user-data; \
+        else \
+            echo "user-data file does not exist."; \
+        fi
+    SAVE ARTIFACT --if-exists /user-data
+
+
 build-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    COPY --if-exists user-data /overlay/files-iso/config.yaml
+    COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
@@ -473,12 +408,13 @@ uki-genkey:
     END
 
 download-sbctl:
+    FROM $ALPINE_IMG
     DO +BASE_ALPINE
     RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
     SAVE ARTIFACT /usr/bin/sbctl
 
 uki-byok:
-    FROM +ubuntu-systemd
+    FROM +ubuntu
 
     RUN apt-get update && apt-get install -y efitools curl
     COPY +download-sbctl/sbctl /usr/bin/sbctl
@@ -557,6 +493,11 @@ provider-image:
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
+    COPY --if-exists overlay/files/etc/ /etc/
+    IF [ -f /etc/logrotate.d/stylus.conf ]
+        RUN chmod 644 /etc/logrotate.d/stylus.conf
+    END
+
     COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
@@ -576,7 +517,7 @@ provider-image:
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
-    COPY (+download-etcdctl/etcdctl) /usr/bin/
+    COPY (+third-party/etcdctl --binary=etcdctl) /usr/bin/
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
@@ -601,7 +542,13 @@ provider-image:
             curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
 
         # Ensure psql works ootb for the postgres user
-        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34" > ~/.bash_profile'
+        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/etc/perl:/usr/lib/x86_64-linux-gnu/perl5/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34:/usr/lib/x86_64-linux-gnu/perl-base" > ~/.bash_profile'
+
+        # Ensure psql waits for the network to be online
+        RUN sed -i 's/After=network.target/After=network-online.target/' /lib/systemd/system/postgresql@.service
+
+        # Disable psql by default, Stylus will enable it when it needs it
+        RUN systemctl disable postgresql
     END
 
     SAVE IMAGE --push $IMAGE_PATH
@@ -659,14 +606,14 @@ base-image:
     END
 
     IF [ "$ARCH" = "arm64" ]
-        RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo-arm/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-          luet repo update
+        ARG LUET_REPO=$LUET_PROJECT-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        RUN  mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url gcr.io/spectro-dev-public/luet-repo/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-          luet repo update
+        ARG LUET_REPO=$LUET_PROJECT
     END
+
+    RUN mkdir -p /etc/luet/repos.conf.d && \
+      SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
+      luet repo update
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
@@ -693,7 +640,7 @@ base-image:
         END
 
         RUN apt-get update && \
-            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool -y
+            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION" ; fi && \
@@ -753,16 +700,16 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-        RUN zypper install -y apparmor-parser apparmor-profiles
+        RUN zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate
         RUN zypper cc && \
             zypper clean
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
 
     IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=luet-repo-arm
+        ARG LUET_REPO=$LUET_PROJECT-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=luet-repo
+        ARG LUET_REPO=$LUET_PROJECT
     END
     RUN --no-cache mkdir -p /etc/luet/repos.conf.d && \
           SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y
@@ -772,7 +719,7 @@ base-image:
     RUN --no-cache luet repo update
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
-        RUN yum install -y openssl
+        RUN yum install -y openssl rsyslog logrotate
     END
 
     IF [ "$OS_DISTRIBUTION" = "sles" ]
@@ -806,6 +753,10 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+
+    IF [ -f /etc/logrotate.d/stylus.conf ]
+        RUN chmod 644 /etc/logrotate.d/stylus.conf
+    END
     
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
@@ -875,7 +826,7 @@ build-efi-size-check:
     SAVE ARTIFACT target/x86_64-unknown-uefi/debug/efi-size-check.efi
 
 iso-efi-size-check:
-    FROM +ubuntu-systemd
+    FROM +ubuntu
 
     RUN apt-get update
     RUN apt-get install -y mtools xorriso
@@ -897,8 +848,13 @@ iso-efi-size-check:
 
     SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
 
-ubuntu-systemd:
-    FROM $SPECTRO_PUB_REPO/ubuntu-systemd:22.04
+ubuntu:
+    IF [ "$FIPS_ENABLED" = "true" ]
+        ARG UBUNTU_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-fips:22.04
+    ELSE
+        ARG UBUNTU_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu:22.04
+    END
+    FROM $UBUNTU_IMAGE
 
 OS_RELEASE:
     COMMAND
@@ -917,3 +873,29 @@ OS_RELEASE:
     # update OS-release file
     # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
     RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
+
+download-third-party:
+    ARG TARGETPLATFORM
+    ARG binary
+    FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    ARG TARGETARCH
+    SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
+    SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
+
+third-party:
+    FROM $ALPINE_IMG
+    ARG binary
+    WORKDIR /WORKDIR
+
+    COPY (+download-third-party/${binary} --binary=${binary}) /WORKDIR/${binary}
+    COPY (+download-third-party/${binary}.version --binary=${binary}) /WORKDIR/${binary}.version
+
+    DO +UPX --bin=/WORKDIR/${binary}
+
+    SAVE ARTIFACT /WORKDIR/${binary} ${binary}
+    SAVE ARTIFACT /WORKDIR/${binary}.version ${binary}.version
+
+UPX:
+    COMMAND
+    ARG bin
+    RUN upx -1 $bin
