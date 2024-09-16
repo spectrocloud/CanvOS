@@ -11,12 +11,12 @@ function build_with_proxy() {
         docker stop earthly-buildkitd
     fi
     # start earthly buildkitd
-    docker run -d --privileged --name earthly-buildkitd -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm -t -e GLOBAL_CONFIG="$global_config" -e BUILDKIT_TCP_TRANSPORT_ENABLED=true -e http_proxy=$HTTP_PROXY -e https_proxy=$HTTPS_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e HTTP_PROXY=$HTTP_PROXY -e NO_PROXY=$NO_PROXY -e no_proxy=$no_proxy -e EARTHLY_GIT_CONFIG=$gitconfig -v "$PROXY_CERT_PATH:/usr/local/share/ca-certificates/sc.crt:ro" -v earthly-tmp:/tmp/earthly:rw -p 8372:8372 $SPECTRO_PUB_REPO/earthly/buildkitd:$EARTHLY_VERSION
+    docker run -d --privileged --name earthly-buildkitd -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm -t -e GLOBAL_CONFIG="$global_config" -e BUILDKIT_TCP_TRANSPORT_ENABLED=true -e http_proxy=$HTTP_PROXY -e https_proxy=$HTTPS_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e HTTP_PROXY=$HTTP_PROXY -e NO_PROXY=$NO_PROXY -e no_proxy=$no_proxy -e EARTHLY_GIT_CONFIG=$gitconfig -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" -v earthly-tmp:/tmp/earthly:rw -p 8372:8372 $SPECTRO_PUB_REPO/earthly/buildkitd:$EARTHLY_VERSION
     # Update the CA certificates in the container
     docker exec -it earthly-buildkitd update-ca-certificates
 
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 -e BUILDKIT_TLS_ENABLED=false -v "$(pwd)":/workspace -v "$PROXY_CERT_PATH:/workspace/sc.crt:ro" $SPECTRO_PUB_REPO/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 -e BUILDKIT_TLS_ENABLED=false -v "$(pwd)":/workspace $SPECTRO_PUB_REPO/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
 
 function build_without_proxy() {

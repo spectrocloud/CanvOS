@@ -65,7 +65,6 @@ ISO_NAME=palette-edge-installer
 ARCH=amd64
 HTTPS_PROXY=
 HTTP_PROXY=
-PROXY_CERT_PATH=
 UPDATE_KERNEL=false
 EOF
 }

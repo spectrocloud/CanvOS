@@ -7,15 +7,22 @@ ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
 
-COPY sc.cr[t] /tmp/sc.crt
-RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ] && [ "${PROXY_CERT_PATH}" != "" ]; then \
-    cp /tmp/sc.crt /etc/ssl/certs && \
+WORKDIR /certs
+COPY certs/ /certs/
+RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
+    cp -f /certs/ /usr/local/share/ca-certificates/ && \
     update-ca-certificates; \
     fi 
-RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] && [ "${PROXY_CERT_PATH}" != "" ]; then \
-    cp /tmp/sc.crt /usr/share/pki/trust/anchors && \
+RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ]; then \
+    cp -f /certs/ /tmp//usr/share/pki/trust/anchors/ && \
     update-ca-certificates; \
     fi
+
+RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
+    cp -f /certs/ /etc/pki/ca-trust/source/anchors/ && \
+    update-ca-trust; \
+    fi
+RUN rm -rf /certs
 
 ########################### Add any other image customizations here #######################
 
