@@ -517,7 +517,7 @@ harden_system() {
 	echo "Error out if there are users with empty password"
 	cat /etc/shadow |awk -F : '($2 == "" ){ exit 1}'
 	if [[ $? -ne 0 ]]; then
-		echo "Users present with empty password. Remove the user or set pasword for the users"
+		echo "Users present with empty password. Remove the user or set password for the users"
 		exit 1
 	fi
 
@@ -540,7 +540,7 @@ harden_system() {
 	fi
 	done
 
-	echo "Remove cron and at deny files anf have allow files in place"
+	echo "Remove cron and at deny files and have allow files in place"
 	rm -f /etc/cron.deny
 	rm -f /etc/at.deny
 	touch /etc/cron.allow

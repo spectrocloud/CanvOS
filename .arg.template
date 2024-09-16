@@ -19,6 +19,6 @@ EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 # For enabling Secure Boot with Full Disk Encryption
 # IS_UKI=true
 # MY_ORG="ACME Corporation"
-# UKI_BRING_YOUR_OWN_KEYS=false         # See sb-private-ca/howto.md for instructions on bringing your own certiticates
+# UKI_BRING_YOUR_OWN_KEYS=false         # See sb-private-ca/howto.md for instructions on bringing your own certificates
 # INCLUDE_MS_SECUREBOOT_KEYS=true       # Adds Microsoft Secure Boot certificates; if you export existing keys from a device, you typically won't need this
 # AUTO_ENROLL_SECUREBOOT_KEYS=false     # Set to true to automatically enroll certificates on devices in Setup Mode, useful for flashing devices without user interaction

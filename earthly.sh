@@ -62,7 +62,7 @@ SPECTRO_PUB_REPO=gcr.io/spectro-images-public
 EARTHLY_VERSION=v0.8.5
 source .arg
 ALPINE_IMG=$SPECTRO_PUB_REPO/canvos/alpine:3.20
-### Verify Depencies
+### Verify Dependencies
 # Check if Docker is installed
 if command -v docker >/dev/null 2>&1; then
     echo "version: $(docker -v)"
@@ -97,7 +97,7 @@ if [[ "$1" == "+uki-genkey" ]]; then
     ./keys.sh secure-boot/
 fi
 
-# if $1 is in oen of the following values, print the output for use in Palette Profile.
+# if $1 is in one of the following values, print the output for use in Palette Profile.
 targets=("+build-provider-images" "+build-provider-images-fips" "+build-all-images")
 for arg in "${targets[@]}"; do
     if [[ "$1" == "$arg" ]]; then

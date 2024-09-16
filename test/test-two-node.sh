@@ -207,7 +207,7 @@ function get_ready_edge_hosts() {
         '
             {
                 "filter": {
-                    "conjuction": "and",
+                    "conjunction": "and",
                     "filterGroups": [
                         {
                             "conjunction": "and",
@@ -273,7 +273,7 @@ function destroy_edge_hosts() {
     '
         {
             "filter": {
-                "conjuction": "and",
+                "conjunction": "and",
                 "filterGroups": [
                     {
                         "conjunction": "and",

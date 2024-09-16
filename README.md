@@ -24,7 +24,7 @@ From the Base Image, the provider image is used to package in the Kubernetes dis
 
 ### Installer Image
 
-From the base image, this image is used to provide the initial flashing of a device (bare-metal or virtual machine). This image contains the user-data configuration that has been provided in `user-data`. It will also contain the contents of any content bundle for pre-staged builds. Pre-staged builds can be used to embed all of the artifacts that are required to build a cluster. These artifacts include Helm charts, manifests, and container images. These images are loaded into containerd when the cluster is initialized elminating the need for the initial download. For more information on how to build pre-loaded content checkout the Palette Docs at [Build your Own Content](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/build-content-bundle).
+From the base image, this image is used to provide the initial flashing of a device (bare-metal or virtual machine). This image contains the user-data configuration that has been provided in `user-data`. It will also contain the contents of any content bundle for pre-staged builds. Pre-staged builds can be used to embed all of the artifacts that are required to build a cluster. These artifacts include Helm charts, manifests, and container images. These images are loaded into containerd when the cluster is initialized eliminating the need for the initial download. For more information on how to build pre-loaded content checkout the Palette Docs at [Build your Own Content](https://docs.spectrocloud.com/clusters/edge/edgeforge-workflow/build-content-bundle).
 
 ### Custom Configuration
 
@@ -219,7 +219,7 @@ docker push ttl.sh/ubuntu:k3s-1.25.2-v4.2.3-demo
 
 12. Create a cluster profile using the command output. Use the [Model Edge Cluster Profile](https://docs.spectrocloud.com/clusters/edge/site-deployment/model-profile) to help you complete this step.
 
-13. Flash VM or Baremetal device with the generated ISO. Refer to the [Prepare Edge Host for Installation](https://docs.spectrocloud.com/clusters/edge/site-deployment/stage) guide for additonal guidance.
+13. Flash VM or Baremetal device with the generated ISO. Refer to the [Prepare Edge Host for Installation](https://docs.spectrocloud.com/clusters/edge/site-deployment/stage) guide for additional guidance.
 
 14. Register the Edge host with Palette. Checkout the [Register Edge Host](https://docs.spectrocloud.com/clusters/edge/site-deployment/site-installation/edge-host-registration) guide.
 
@@ -394,7 +394,7 @@ To display user audit entries on the Local UI dashboard, audit entries must be l
 
 Example syslog entry
 ```
-<189>1 2024-07-23T15:35:32.644461+00:00 edge-ce0a38422e4662887313fb673bbfb2a2 stylus-audit[2911]: 2911 - - {"edgeHostId":"edge-ce0a38422e4662887313fb6 73bbfb2a2","contentMsg":"kairos password reset failed","action":"activity","actor":"kairos","actorType":"user","resourceId":"kairos","resourceName":"kairos","resourceKi nd":"user"}
+<189>1 2024-07-23T15:35:32.644461+00:00 edge-ce0a38422e4662887313fb673bbfb2a2 stylus-audit[2911]: 2911 - - {"edgeHostId":"edge-ce0a38422e4662887313fb6 73bbfb2a2","contentMsg":"kairos password reset failed","action":"activity","actor":"kairos","actorType":"user","resourceId":"kairos","resourceName":"kairos","resourceKi and":"user"}
 ```
 
 Entries without these keys in the MSG part of RFC 5424 will still be logged to the stylus-audit.log file but will not be displayed on LocalUI.
