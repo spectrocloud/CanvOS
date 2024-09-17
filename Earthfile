@@ -4,17 +4,18 @@ ARG TARGETARCH
 
 # Default image repositories used in the builds.
 ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
-ARG ALPINE_IMG=$SPECTRO_PUB_REPO/alpine:3.20.2
 ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
 ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
 ARG ETCD_REPO=https://github.com/etcd-io
 ARG LUET_PROJECT=luet-repo
-FROM $SPECTRO_PUB_REPO/canvos/alpine-cert:v1.0.0
+ARG ALPINE_TAG=3.20
+ARG ALPINE_IMG=$SPECTRO_PUB_REPO/canvos/alpine:$ALPINE_TAG
+FROM $ALPINE_IMG
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.4.8
-ARG SPECTRO_LUET_VERSION=v1.3.5-alpha1
-ARG KAIROS_VERSION=v3.1.2
+ARG PE_VERSION=v4.4.12
+ARG SPECTRO_LUET_VERSION=v1.3.7
+ARG KAIROS_VERSION=v3.1.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -118,6 +119,16 @@ END
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE_TAG
 ARG CMDLINE="stylus.registration"
 
+alpine-all:
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +alpine
+
+alpine:
+    FROM alpine:$ALPINE_TAG
+    RUN apk add --no-cache bash curl jq ca-certificates upx
+    RUN update-ca-certificates
+
+    SAVE IMAGE --push gcr.io/spectro-dev-public/canvos/alpine:$ALPINE_TAG
+
 build-all-images:
     IF $FIPS_ENABLED
         BUILD +build-provider-images-fips
@@ -133,151 +144,32 @@ build-all-images:
     END
 
 build-provider-images:
+    FROM $ALPINE_IMG
+
+    IF [ !-n "$K8S_DISTRIBUTION"]
+        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, or rke2." && exit 1
+    END
+
     IF [ "$IS_UKI" = "true" ]
         ARG TARGET=uki-provider-image
     ELSE
         ARG TARGET=provider-image
     END
+
     IF [ "$K8S_VERSION" = "" ]
-        IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.12
-           BUILD  +$TARGET --K8S_VERSION=1.26.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.9
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.27.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.16
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.5
-           BUILD  +$TARGET --K8S_VERSION=1.28.9
-           BUILD  +$TARGET --K8S_VERSION=1.28.11
-           BUILD  +$TARGET --K8S_VERSION=1.28.12
-           BUILD  +$TARGET --K8S_VERSION=1.29.0
-           BUILD  +$TARGET --K8S_VERSION=1.29.6
-           BUILD  +$TARGET --K8S_VERSION=1.29.7
-       ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.12
-           BUILD  +$TARGET --K8S_VERSION=1.26.14
-           BUILD  +$TARGET --K8S_VERSION=1.26.15
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.9
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.27.13
-           BUILD  +$TARGET --K8S_VERSION=1.27.14
-           BUILD  +$TARGET --K8S_VERSION=1.27.15
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.5
-           BUILD  +$TARGET --K8S_VERSION=1.28.7
-           BUILD  +$TARGET --K8S_VERSION=1.28.9
-           BUILD  +$TARGET --K8S_VERSION=1.28.10
-           BUILD  +$TARGET --K8S_VERSION=1.28.11
-           BUILD  +$TARGET --K8S_VERSION=1.29.3
-           BUILD  +$TARGET --K8S_VERSION=1.29.4
-           BUILD  +$TARGET --K8S_VERSION=1.29.5
-           BUILD  +$TARGET --K8S_VERSION=1.29.6
-       ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-           BUILD  +$TARGET --K8S_VERSION=1.24.6
-           BUILD  +$TARGET --K8S_VERSION=1.25.2
-           BUILD  +$TARGET --K8S_VERSION=1.25.13
-           BUILD  +$TARGET --K8S_VERSION=1.25.15
-           BUILD  +$TARGET --K8S_VERSION=1.26.4
-           BUILD  +$TARGET --K8S_VERSION=1.26.8
-           BUILD  +$TARGET --K8S_VERSION=1.26.10
-           BUILD  +$TARGET --K8S_VERSION=1.26.14
-           BUILD  +$TARGET --K8S_VERSION=1.27.2
-           BUILD  +$TARGET --K8S_VERSION=1.27.5
-           BUILD  +$TARGET --K8S_VERSION=1.27.7
-           BUILD  +$TARGET --K8S_VERSION=1.27.11
-           BUILD  +$TARGET --K8S_VERSION=1.27.15
-           BUILD  +$TARGET --K8S_VERSION=1.28.2
-           BUILD  +$TARGET --K8S_VERSION=1.28.7
-           BUILD  +$TARGET --K8S_VERSION=1.28.11
-           BUILD  +$TARGET --K8S_VERSION=1.29.2
-           BUILD  +$TARGET --K8S_VERSION=1.29.6
-       END
+        WORKDIR /workdir
+        COPY k8s_version.json k8s_version.json
+        ENV K8S_DISTRIBUTION=$K8S_DISTRIBUTION
+        RUN jq -r --arg key "$K8S_DISTRIBUTION" 'if .[$key] then .[$key][] else empty end' k8s_version.json > k8s_version.txt
+        FOR version IN $(cat k8s_version.txt)
+            BUILD +$TARGET --K8S_VERSION=$version
+        END
     ELSE
-        BUILD  +$TARGET --K8S_VERSION="$K8S_VERSION"
+        BUILD +$TARGET --K8S_VERSION=$K8S_VERSION
     END
 
 build-provider-images-fips:
-    IF [ "$K8S_VERSION" = "" ]
-        IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-           BUILD  +provider-image --K8S_VERSION=1.24.13
-           BUILD  +provider-image --K8S_VERSION=1.25.9
-           BUILD  +provider-image --K8S_VERSION=1.26.4
-           BUILD  +provider-image --K8S_VERSION=1.26.12
-           BUILD  +provider-image --K8S_VERSION=1.26.15
-           BUILD  +provider-image --K8S_VERSION=1.27.2
-           BUILD  +provider-image --K8S_VERSION=1.27.9
-           BUILD  +provider-image --K8S_VERSION=1.27.14
-           BUILD  +provider-image --K8S_VERSION=1.27.15
-           BUILD  +provider-image --K8S_VERSION=1.27.16
-           BUILD  +provider-image --K8S_VERSION=1.28.5
-           BUILD  +provider-image --K8S_VERSION=1.28.10
-           BUILD  +provider-image --K8S_VERSION=1.28.11
-           BUILD  +provider-image --K8S_VERSION=1.28.12
-           BUILD  +provider-image --K8S_VERSION=1.29.0
-           BUILD  +provider-image --K8S_VERSION=1.29.5
-           BUILD  +provider-image --K8S_VERSION=1.29.6
-           BUILD  +provider-image --K8S_VERSION=1.29.7
-        ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-           BUILD  +provider-image --K8S_VERSION=1.24.6
-           BUILD  +provider-image --K8S_VERSION=1.25.0
-           BUILD  +provider-image --K8S_VERSION=1.25.2
-           BUILD  +provider-image --K8S_VERSION=1.26.4
-           BUILD  +provider-image --K8S_VERSION=1.26.12
-           BUILD  +provider-image --K8S_VERSION=1.26.14
-           BUILD  +provider-image --K8S_VERSION=1.27.2
-           BUILD  +provider-image --K8S_VERSION=1.27.9
-           BUILD  +provider-image --K8S_VERSION=1.27.11
-           BUILD  +provider-image --K8S_VERSION=1.27.14
-           BUILD  +provider-image --K8S_VERSION=1.27.15
-           BUILD  +provider-image --K8S_VERSION=1.28.5
-           BUILD  +provider-image --K8S_VERSION=1.28.7
-           BUILD  +provider-image --K8S_VERSION=1.28.10
-           BUILD  +provider-image --K8S_VERSION=1.28.11
-           BUILD  +provider-image --K8S_VERSION=1.29.0
-           BUILD  +provider-image --K8S_VERSION=1.29.3
-           BUILD  +provider-image --K8S_VERSION=1.29.5
-           BUILD  +provider-image --K8S_VERSION=1.29.6
-        ELSE
-           BUILD  +provider-image --K8S_VERSION=1.24.6
-           BUILD  +provider-image --K8S_VERSION=1.25.2
-           BUILD  +provider-image --K8S_VERSION=1.26.4
-           BUILD  +provider-image --K8S_VERSION=1.26.12
-           BUILD  +provider-image --K8S_VERSION=1.26.14
-           BUILD  +provider-image --K8S_VERSION=1.27.2
-           BUILD  +provider-image --K8S_VERSION=1.27.9
-           BUILD  +provider-image --K8S_VERSION=1.27.11
-           BUILD  +provider-image --K8S_VERSION=1.27.15
-           BUILD  +provider-image --K8S_VERSION=1.28.5
-           BUILD  +provider-image --K8S_VERSION=1.28.7
-           BUILD  +provider-image --K8S_VERSION=1.28.11
-           BUILD  +provider-image --K8S_VERSION=1.29.0
-           BUILD  +provider-image --K8S_VERSION=1.29.2
-           BUILD  +provider-image --K8S_VERSION=1.29.6
-        END
-    ELSE
-        BUILD  +provider-image --K8S_VERSION="$K8S_VERSION"
-    END
+   BUILD +build-provider-images
 
 BASE_ALPINE:
     COMMAND
@@ -297,7 +189,7 @@ uki-iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 uki-provider-image:
-    FROM --platform=linux/${ARCH} +ubuntu-systemd
+    FROM --platform=linux/${ARCH} +ubuntu
     RUN apt-get update && apt-get install -y rsync
 
     WORKDIR /
@@ -516,12 +408,13 @@ uki-genkey:
     END
 
 download-sbctl:
+    FROM $ALPINE_IMG
     DO +BASE_ALPINE
     RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
     SAVE ARTIFACT /usr/bin/sbctl
 
 uki-byok:
-    FROM +ubuntu-systemd
+    FROM +ubuntu
 
     RUN apt-get update && apt-get install -y efitools curl
     COPY +download-sbctl/sbctl /usr/bin/sbctl
@@ -933,7 +826,7 @@ build-efi-size-check:
     SAVE ARTIFACT target/x86_64-unknown-uefi/debug/efi-size-check.efi
 
 iso-efi-size-check:
-    FROM +ubuntu-systemd
+    FROM +ubuntu
 
     RUN apt-get update
     RUN apt-get install -y mtools xorriso
@@ -955,13 +848,13 @@ iso-efi-size-check:
 
     SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
 
-ubuntu-systemd:
+ubuntu:
     IF [ "$FIPS_ENABLED" = "true" ]
-        ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd-fips:20.04
+        ARG UBUNTU_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-fips:22.04
     ELSE
-        ARG SYSTEMD_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu-systemd:22.04
+        ARG UBUNTU_IMAGE=$SPECTRO_PUB_REPO/third-party/ubuntu:22.04
     END
-    FROM $SYSTEMD_IMAGE
+    FROM $UBUNTU_IMAGE
 
 OS_RELEASE:
     COMMAND
@@ -990,9 +883,8 @@ download-third-party:
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
 
 third-party:
-    DO +BASE_ALPINE
+    FROM $ALPINE_IMG
     ARG binary
-    RUN apk add upx
     WORKDIR /WORKDIR
 
     COPY (+download-third-party/${binary} --binary=${binary}) /WORKDIR/${binary}
