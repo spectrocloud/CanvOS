@@ -83,6 +83,8 @@ stylus:
   users:
   - name: kairos
     passwd: kairos
+  twoNode:
+    enable: true
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
     paletteEndpoint: "$DOMAIN"
@@ -520,15 +522,15 @@ function clean_all() {
 # Builds 2-node provider image and ISO, uploads the ISO to vCenter, and provisions edge hosts
 # for deploying a 2-node cluster.
 function deploy() {
-    earthly +build-all-images \
+    set +e
+
+    earthly --push +build-all-images \
         --ARCH=amd64 \
         --ISO_NAME=palette-edge-installer-stylus-k3s-twonode \
         --IMAGE_REGISTRY=${OCI_REGISTRY} \
         --TWO_NODE=true \
         --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
         --CUSTOM_TAG=twonode
-
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-${K8S_VERSION}-v${PE_VERSION}-twonode
 
     # create & upload user-data ISOs, configured to enable two node mode
     create_userdata_iso
@@ -538,12 +540,13 @@ function deploy() {
     iso=palette-edge-installer-stylus-k3s-twonode.iso
     govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER build/$iso $STYLUS_ISO
 
-    vm_array=("two-node-jul8-1" "two-node-jul8-2")
+    vm_array=("two-node-sep16-1" "two-node-sep16-2")
     create_vms
     wait_for_vms_to_power_off
     reboot_vms
 
     echo Edge hosts should register with Palette shortly. Please proceed to deploying an Edge cluster via the UI.
+    set -e
 }
 
 function main() {
