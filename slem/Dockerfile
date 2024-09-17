@@ -30,7 +30,7 @@ RUN mkdir -p /run/lock
 RUN mkdir -p /usr/libexec
 RUN touch /usr/libexec/.keep
 
-COPY --from=quay.io/kairos/framework:v2.11.2 / /
+COPY --from=quay.io/kairos/framework:v2.11.7 / /
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
