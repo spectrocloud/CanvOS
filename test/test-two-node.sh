@@ -336,7 +336,7 @@ function prepare_cluster_profile() {
       .spec.template.packs[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
       .spec.template.packs[0].values |= gsub("K8S_VERSION"; env.K8S_VERSION) |
       .spec.template.packs[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
-    ' test/templates/two-node-cluster-profile.json.tmpl > two-node-cluster-profile.json
+    ' test/templates/two-node-cluster-profile.json.tmpl > /tmp/two-node-cluster-profile.json
 }
 
 function create_cluster_profile() {
@@ -344,8 +344,7 @@ function create_cluster_profile() {
         -H "ApiKey: $API_KEY" \
         -H "Content-Type: application/json" \
         -H "ProjectUid: $PROJECT_UID" \
-        -d @two-node-cluster-profile.json | jq -r .uid)
-    rm -f two-node-cluster-profile.json
+        -d @/tmp/two-node-cluster-profile.json | jq -r .uid)
     if [ "$CLUSTER_PROFILE_UID" = "null" ]; then
         echo Cluster Profile creation failed as it already exists. Please delete it and retry.
         return 1
@@ -386,7 +385,7 @@ function prepare_master_master_cluster() {
       .spec.profiles[0].packValues[0].values |= gsub("K8S_VERSION"; env.K8S_VERSION) |
       .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH) |
       .spec.profiles[0].packValues[1].tag = env.K8S_VERSION
-    ' test/templates/two-node-master-master.json.tmpl > two-node-create.json
+    ' test/templates/two-node-master-master.json.tmpl > /tmp/two-node-create.json
 }
 
 function create_cluster() {
@@ -394,12 +393,11 @@ function create_cluster() {
         -H "ApiKey: $API_KEY" \
         -H "Content-Type: application/json" \
         -H "ProjectUid: $PROJECT_UID" \
-        -d @two-node-create.json | jq -r .uid)
+        -d @/tmp/two-node-create.json | jq -r .uid)
     if [ "$uid" = "null" ]; then
         echo "Cluster creation failed. Please check two-node-create.json and retry creation manually to see Hubble's response."
         return 1
     else
-        rm -f two-node-create.json
         echo "Cluster $uid created"
     fi
 }
