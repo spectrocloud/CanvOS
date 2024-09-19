@@ -2,6 +2,8 @@
 
 set -e
 
+source .arg
+
 # Usage
 # -----
 #
@@ -14,10 +16,13 @@ set -e
 #    - jq (https://jqlang.github.io/jq/download/)
 #    - mkisofs (https://command-not-found.com/mkisofs)
 #
-# 2. Clone CanvOS and checkout this branch.
+# 2. Clone CanvOS and 'git checkout' this branch.
 #
-# 3. Configure your Earthly argument file by running: cp .arg.template .arg
-#    No modifications to the template are required.
+# 3. Configure your Earthly argument file by running: cp .arg.template .arg.
+#    Ensure the following vars are customized:
+#
+#    K3S_PROVIDER_VERSION=v4.4.2-2node
+#    K8S_VERSION=1.28.7 (pick any supported K3s version)
 #
 # 4. Create a .netrc file in the stylus repo root with GitHub
 #    credentials capable of cloning Spectro Cloud internal repos.
@@ -25,10 +30,10 @@ set -e
 # 5. Copy the test/env.example file to test/.env and edit test/.env
 #    as required.
 #
-# 6. Source and execute this script:
+# 6. Source this script and execute 'deploy':
 #
 #    source ./test/test-two-node.sh
-#    ./test/test-two-node.sh
+#    deploy
 
 # Do not edit anything below
 
@@ -78,6 +83,9 @@ stylus:
   users:
   - name: kairos
     passwd: kairos
+  includeTui: true
+  twoNode:
+    enable: true
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
     paletteEndpoint: "$DOMAIN"
@@ -321,15 +329,15 @@ function prepare_cluster_profile() {
     jq '
       .metadata.name = env.CLUSTER_NAME |
       .spec.template.packs[0].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
-      .spec.template.packs[1].version = env.K3S_VERSION |
-      .spec.template.packs[1].tag = env.K3S_VERSION |
+      .spec.template.packs[1].version = env.K8S_VERSION |
+      .spec.template.packs[1].tag = env.K8S_VERSION |
       .spec.template.packs[1].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[2].registry.metadata.uid = env.PUBLIC_PACK_REPO_UID |
       .spec.template.packs[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
       .spec.template.packs[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
-      .spec.template.packs[0].values |= gsub("K3S_VERSION"; env.K3S_VERSION) |
+      .spec.template.packs[0].values |= gsub("K8S_VERSION"; env.K8S_VERSION) |
       .spec.template.packs[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH)
-    ' test/templates/two-node-cluster-profile.json.tmpl > two-node-cluster-profile.json
+    ' test/templates/two-node-cluster-profile.json.tmpl > /tmp/two-node-cluster-profile.json
 }
 
 function create_cluster_profile() {
@@ -337,8 +345,7 @@ function create_cluster_profile() {
         -H "ApiKey: $API_KEY" \
         -H "Content-Type: application/json" \
         -H "ProjectUid: $PROJECT_UID" \
-        -d @two-node-cluster-profile.json | jq -r .uid)
-    rm -f two-node-cluster-profile.json
+        -d @/tmp/two-node-cluster-profile.json | jq -r .uid)
     if [ "$CLUSTER_PROFILE_UID" = "null" ]; then
         echo Cluster Profile creation failed as it already exists. Please delete it and retry.
         return 1
@@ -376,10 +383,10 @@ function prepare_master_master_cluster() {
       .spec.profiles[0].uid = env.CLUSTER_PROFILE_UID |
       .spec.profiles[0].packValues[0].values |= gsub("OCI_REGISTRY"; env.OCI_REGISTRY) |
       .spec.profiles[0].packValues[0].values |= gsub("PE_VERSION"; env.PE_VERSION) |
-      .spec.profiles[0].packValues[0].values |= gsub("K3S_VERSION"; env.K3S_VERSION) |
+      .spec.profiles[0].packValues[0].values |= gsub("K8S_VERSION"; env.K8S_VERSION) |
       .spec.profiles[0].packValues[0].values |= gsub("STYLUS_HASH"; env.STYLUS_HASH) |
-      .spec.profiles[0].packValues[1].tag = env.K3S_VERSION
-    ' test/templates/two-node-master-master.json.tmpl > two-node-create.json
+      .spec.profiles[0].packValues[1].tag = env.K8S_VERSION
+    ' test/templates/two-node-master-master.json.tmpl > /tmp/two-node-create.json
 }
 
 function create_cluster() {
@@ -387,12 +394,11 @@ function create_cluster() {
         -H "ApiKey: $API_KEY" \
         -H "Content-Type: application/json" \
         -H "ProjectUid: $PROJECT_UID" \
-        -d @two-node-create.json | jq -r .uid)
+        -d @/tmp/two-node-create.json | jq -r .uid)
     if [ "$uid" = "null" ]; then
         echo "Cluster creation failed. Please check two-node-create.json and retry creation manually to see Hubble's response."
         return 1
     else
-        rm -f two-node-create.json
         echo "Cluster $uid created"
     fi
 }
@@ -443,27 +449,24 @@ function update_cluster() {
 
 function build_provider_k3s() {
     echo "Building provider-k3s image..."
-    earthly +build-provider-package \
+    earthly --push +build-provider-package \
         --platform=linux/amd64 \
         --IMAGE_REPOSITORY=${OCI_REGISTRY} \
         --VERSION=${PROVIDER_K3S_HASH}
-    docker push ${OCI_REGISTRY}/provider-k3s:${PROVIDER_K3S_HASH}
 }
 
 function build_stylus_package_and_framework() {
     echo "Building stylus image and stylus framework image..."
-    earthly --allow-privileged +package \
+    earthly --allow-privileged --push +package \
         --platform=linux/amd64 \
         --IMAGE_REPOSITORY=${OCI_REGISTRY} \
         --BASE_IMAGE=quay.io/kairos/core-opensuse-leap:v2.3.2 \
         --VERSION=v0.0.0-${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH}
 }
 
 function build_canvos() {
     echo "Building provider image & installer ISO..."
-    earthly +build-all-images \
+    earthly --push +build-all-images \
         --ARCH=amd64 \
         --PROVIDER_BASE=${OCI_REGISTRY}/provider-k3s:${PROVIDER_K3S_HASH} \
         --STYLUS_BASE=${OCI_REGISTRY}/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH} \
@@ -471,9 +474,7 @@ function build_canvos() {
         --IMAGE_REGISTRY=${OCI_REGISTRY} \
         --TWO_NODE=true \
         --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
-        --CUSTOM_TAG=${STYLUS_HASH} \
-	--PE_VERSION=v${PE_VERSION}
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-${K3S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
+        --CUSTOM_TAG=${STYLUS_HASH}
 }
 
 function build_all() {
@@ -501,7 +502,7 @@ function build_all() {
     (
         test -f build/palette-edge-installer-stylus-${STYLUS_HASH}-k3s-${PROVIDER_K3S_HASH}.iso && \
         docker image ls --format "{{.Repository}}:{{.Tag}}" | \
-        grep -q ${OCI_REGISTRY}/ubuntu:k3s-${K3S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
+        grep -q ${OCI_REGISTRY}/ubuntu:k3s-${K8S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
     ) || ( build_canvos )
 }
 
@@ -510,6 +511,36 @@ function clean_all() {
     docker images | grep palette-installer | awk '{print $3;}' | xargs docker rmi --force
     earthly prune --reset
     docker system prune --all --volumes --force
+}
+
+# Builds 2-node provider image and ISO, uploads the ISO to vCenter, and provisions edge hosts
+# for deploying a 2-node cluster.
+function deploy() {
+    set +e
+
+    earthly --push +build-all-images \
+        --ARCH=amd64 \
+        --ISO_NAME=palette-edge-installer-stylus-k3s-twonode \
+        --IMAGE_REGISTRY=${OCI_REGISTRY} \
+        --TWO_NODE=true \
+        --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
+        --CUSTOM_TAG=twonode
+
+    # create & upload user-data ISOs, configured to enable two node mode
+    create_userdata_iso
+    upload_userdata_iso
+
+    echo Uploading installer ISO $iso...
+    iso=palette-edge-installer-stylus-k3s-twonode.iso
+    govc datastore.upload --ds=$GOVC_DATASTORE --dc=$GOVC_DATACENTER build/$iso $STYLUS_ISO
+
+    vm_array=("two-node-sep16-1" "two-node-sep16-2")
+    create_vms
+    wait_for_vms_to_power_off
+    reboot_vms
+
+    echo Edge hosts should register with Palette shortly. Please proceed to deploying an Edge cluster via the UI.
+    set -e
 }
 
 function main() {
