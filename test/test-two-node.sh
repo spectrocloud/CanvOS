@@ -450,27 +450,24 @@ function update_cluster() {
 
 function build_provider_k3s() {
     echo "Building provider-k3s image..."
-    earthly +build-provider-package \
+    earthly --push +build-provider-package \
         --platform=linux/amd64 \
         --IMAGE_REPOSITORY=${OCI_REGISTRY} \
         --VERSION=${PROVIDER_K3S_HASH}
-    docker push ${OCI_REGISTRY}/provider-k3s:${PROVIDER_K3S_HASH}
 }
 
 function build_stylus_package_and_framework() {
     echo "Building stylus image and stylus framework image..."
-    earthly --allow-privileged +package \
+    earthly --allow-privileged --push +package \
         --platform=linux/amd64 \
         --IMAGE_REPOSITORY=${OCI_REGISTRY} \
         --BASE_IMAGE=quay.io/kairos/core-opensuse-leap:v2.3.2 \
         --VERSION=v0.0.0-${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/stylus-linux-amd64:v0.0.0-${STYLUS_HASH}
-    docker push ${OCI_REGISTRY}/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH}
 }
 
 function build_canvos() {
     echo "Building provider image & installer ISO..."
-    earthly +build-all-images \
+    earthly --push +build-all-images \
         --ARCH=amd64 \
         --PROVIDER_BASE=${OCI_REGISTRY}/provider-k3s:${PROVIDER_K3S_HASH} \
         --STYLUS_BASE=${OCI_REGISTRY}/stylus-framework-linux-amd64:v0.0.0-${STYLUS_HASH} \
@@ -479,8 +476,6 @@ function build_canvos() {
         --TWO_NODE=true \
         --TWO_NODE_BACKEND=${TWO_NODE_BACKEND} \
         --CUSTOM_TAG=${STYLUS_HASH}
-
-    docker push ${OCI_REGISTRY}/ubuntu:k3s-${K8S_VERSION}-v${PE_VERSION}-${STYLUS_HASH}
 }
 
 function build_all() {
