@@ -83,6 +83,7 @@ stylus:
   users:
   - name: kairos
     passwd: kairos
+  includeTui: true
   twoNode:
     enable: true
   site:
