@@ -270,6 +270,19 @@ secure-boot/
 |   |   PK.pem
 ```
 
+Optionally, you can add additional public keys to be added to the KEK and/or db database, by placing them in the following directories:
+```shell
+secure-boot/
+|   extra-KEK-keys <-- extra KEK keys to include, can be any filename, supports PEM and DER certificates
+|   |   key1.pem
+|   |   key2.pem
+|   |   ...
+|   extra-db-keys <-- extra db keys to include, can be any filename, supports PEM and DER certificates
+|   |   key1.pem
+|   |   key2.pem
+|   |   ...
+```
+
 3. Generate keys for Trusted Boot
 
 ```shell

@@ -419,6 +419,8 @@ uki-byok:
     RUN apt-get update && apt-get install -y efitools curl
     COPY +download-sbctl/sbctl /usr/bin/sbctl
     COPY --if-exists secure-boot/exported-keys/ /exported-keys
+    COPY --if-exists secure-boot/extra-KEK-keys/ /usr/share/secureboot/keys/custom/KEK/
+    COPY --if-exists secure-boot/extra-db-keys/ /usr/share/secureboot/keys/custom/db/
     COPY secure-boot/private-keys/ secure-boot/public-keys /keys
     WORKDIR /keys
     RUN sbctl import-keys \
@@ -430,9 +432,9 @@ uki-byok:
         --db-cert /keys/db.pem
     RUN sbctl create-keys
     IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
-        RUN sbctl enroll-keys --export esl --yes-this-might-brick-my-machine
+        RUN sbctl enroll-keys --custom --export esl --yes-this-might-brick-my-machine
     ELSE
-        RUN sbctl enroll-keys --export esl --yes-this-might-brick-my-machine --microsoft
+        RUN sbctl enroll-keys --custom --export esl --yes-this-might-brick-my-machine --microsoft
     END
     RUN mkdir -p /output
     RUN cp PK.esl  /output/PK.esl  2>/dev/null
