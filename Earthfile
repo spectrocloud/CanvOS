@@ -22,7 +22,7 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.201.0
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.4.2
-ARG KUBEADM_PROVIDER_VERSION=v4.4.1
+ARG KUBEADM_PROVIDER_VERSION=v4.5.0-alpha1
 ARG RKE2_PROVIDER_VERSION=v4.4.1
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
