@@ -16,7 +16,7 @@ function build_with_proxy() {
     docker exec -it earthly-buildkitd update-ca-certificates
 
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 -e BUILDKIT_TLS_ENABLED=false -v "$(pwd)":/workspace $SPECTRO_PUB_REPO/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 -e BUILDKIT_TLS_ENABLED=false -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" -v "$(pwd)":/workspace --entrypoint /workspace/earthly-cert.sh  $SPECTRO_PUB_REPO/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
 
 function build_without_proxy() {
@@ -75,7 +75,8 @@ if ! docker run --rm --privileged $ALPINE_IMG sh -c 'echo "Privileged container 
     exit 1
 fi
 if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY"]; then
-    build_without_proxy "$@"
+    # build_without_proxy "$@"
+    build_with_proxy "$@"
 else
     build_with_proxy "$@"
 fi
