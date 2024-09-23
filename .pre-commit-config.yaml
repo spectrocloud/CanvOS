@@ -1,0 +1,24 @@
+# install pre-commit on your system and then
+# run pre-commit install in this repository.
+# You can by pass commit hooks with:
+# git commit -n
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+        stages: [commit]
+      - id: check-json
+        stages: [commit]
+      - id: check-toml
+        stages: [commit]
+      - id: check-merge-conflict
+        stages: [commit]
+      - id: check-case-conflict
+        stages: [commit]
+      - id: detect-private-key
+        stages: [commit]
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.24.5
+    hooks:
+      - id: typos
