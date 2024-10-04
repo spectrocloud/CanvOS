@@ -18,7 +18,6 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG LUET_PROJECT=luet-repo
 
-
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.5.0-rc4
 ARG SPECTRO_LUET_VERSION=v1.3.8-alpha5
@@ -245,13 +244,16 @@ install-k8s:
     WORKDIR /output
 
     IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=$LUET_PROJECT-arm
+        LET LUET_REPO=$LUET_PROJECT-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=$LUET_PROJECT
+        LET LUET_REPO=$LUET_PROJECT
     END
+
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-        luet repo update
+        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y
+    COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
+    RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
+    RUN --no-cache luet repo update
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd --system-target /output
@@ -504,7 +506,7 @@ provider-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
+    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
@@ -611,26 +613,6 @@ base-image:
         COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
     END
 
-    IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=$LUET_PROJECT-arm
-    ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=$LUET_PROJECT
-    END
-
-    RUN mkdir -p /etc/luet/repos.conf.d && \
-      SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-      luet repo update
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG BASE_K8S_VERSION=$K8S_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    END
-
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
@@ -711,18 +693,6 @@ base-image:
             zypper clean
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
-
-    IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=$LUET_PROJECT-arm
-    ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=$LUET_PROJECT
-    END
-    RUN --no-cache mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y
-    
-    COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
-    RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
-    RUN --no-cache luet repo update
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl rsyslog logrotate
