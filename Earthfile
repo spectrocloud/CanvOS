@@ -124,7 +124,6 @@ ELSE
 END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE_TAG
-ARG CMDLINE="stylus.registration"
 
 alpine-all:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +alpine
