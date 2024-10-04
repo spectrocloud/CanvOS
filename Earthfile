@@ -2,21 +2,22 @@ VERSION 0.6
 ARG TARGETOS
 ARG TARGETARCH
 
-ARG FIPS_ENABLED=false
-
 # Default image repositories used in the builds.
+ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
+ARG ALPINE_TAG=3.20
+ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
+FROM $ALPINE_IMG
+
+ARG FIPS_ENABLED=false
 IF [ "$FIPS_ENABLED" = "true" ]
-    ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
-ELSE
     ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images-fips
+    ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 END
 
 ARG SPECTRO_LUET_REPO=$SPECTRO_PUB_REPO/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG LUET_PROJECT=luet-repo
-ARG ALPINE_TAG=3.20
-ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
-FROM $ALPINE_IMG
+
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.5.0-rc2
