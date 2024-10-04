@@ -1,4 +1,4 @@
-VERSION 0.6
+VERSION --arg-scope-and-set --shell-out-anywhere 0.6
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -9,9 +9,9 @@ ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 FROM $ALPINE_IMG
 
 ARG FIPS_ENABLED=false
-IF [ "$FIPS_ENABLED" = "true" ]
-    ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images-fips
-    ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
+IF [ "$FIPS_ENABLED" = "true" ] && [ "$SPECTRO_PUB_REPO" = "us-docker.pkg.dev/palette-images" ]
+    LET SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images-fips
+    LET ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 END
 
 ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
