@@ -884,7 +884,8 @@ OS_RELEASE:
 download-third-party:
     ARG TARGETPLATFORM
     ARG binary
-    FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    FROM --platform=$TARGETPLATFORM gcr.io/spectro-images-public/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    #FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
     ARG TARGETARCH
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
