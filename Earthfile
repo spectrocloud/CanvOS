@@ -14,7 +14,7 @@ IF [ "$FIPS_ENABLED" = "true" ]
     ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 END
 
-ARG SPECTRO_LUET_REPO=$SPECTRO_PUB_REPO/edge
+ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG LUET_PROJECT=luet-repo
 
