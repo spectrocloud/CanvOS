@@ -3,27 +3,34 @@ ARG TARGETOS
 ARG TARGETARCH
 
 # Default image repositories used in the builds.
-ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
-ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
-ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
-ARG ETCD_REPO=https://github.com/etcd-io
-ARG LUET_PROJECT=luet-repo
+ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 ARG ALPINE_TAG=3.20
-ARG ALPINE_IMG=$SPECTRO_PUB_REPO/canvos/alpine:$ALPINE_TAG
+ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 FROM $ALPINE_IMG
 
+ARG FIPS_ENABLED=false
+IF [ "$FIPS_ENABLED" = "true" ]
+    ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images-fips
+    ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
+END
+
+ARG SPECTRO_LUET_REPO=$SPECTRO_PUB_REPO/edge
+ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
+ARG LUET_PROJECT=luet-repo
+
+
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.4.12
-ARG SPECTRO_LUET_VERSION=v1.3.8-alpha2
+ARG PE_VERSION=v4.5.0-rc4
+ARG SPECTRO_LUET_VERSION=v1.3.8-alpha5
 ARG KAIROS_VERSION=v3.1.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.300.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v4.5.0-alpha2
-ARG KUBEADM_PROVIDER_VERSION=v4.5.0-alpha3
-ARG RKE2_PROVIDER_VERSION=v4.4.1
+ARG K3S_PROVIDER_VERSION=v4.5.0-alpha3
+ARG KUBEADM_PROVIDER_VERSION=v4.5.0-alpha5
+ARG RKE2_PROVIDER_VERSION=v4.5.0-alpha1
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -41,7 +48,7 @@ ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
 ARG UBUNTU_PRO_KEY
 
-ARG FIPS_ENABLED=false
+
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -100,14 +107,14 @@ END
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
-    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
-    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-fips-linux-$ARCH:$PE_VERSION
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
+    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-fips-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
-    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-linux-$ARCH:$PE_VERSION
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
+    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
@@ -577,15 +584,15 @@ stylus-package-image:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
@@ -877,7 +884,8 @@ OS_RELEASE:
 download-third-party:
     ARG TARGETPLATFORM
     ARG binary
-    FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    FROM --platform=$TARGETPLATFORM gcr.io/spectro-images-public/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    #FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
     ARG TARGETARCH
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
