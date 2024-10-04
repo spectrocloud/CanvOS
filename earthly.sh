@@ -58,7 +58,7 @@ function print_os_pack() {
 
 global_config="{disable_analytics: true}"
 PE_VERSION=$(git describe --abbrev=0 --tags)
-SPECTRO_PUB_REPO=gcr.io/spectro-images-public
+SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 EARTHLY_VERSION=v0.8.15
 source .arg
 ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:3.20
