@@ -77,7 +77,7 @@ ARG EFI_MAX_SIZE=2048
 ARG EFI_IMG_SIZE=2200
 
 # internal variables
-ARG GOLANG_VERSION=1.22
+ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
 ARG BUILDER_3RDPARTY_VERSION=4.4
 
@@ -747,7 +747,7 @@ iso-disk-image:
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
 
 go-deps:
-    FROM $SPECTRO_PUB_REPO/golang:${GOLANG_VERSION}-alpine
+    FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine
     RUN apk add libc-dev binutils-gold clang
 
 
