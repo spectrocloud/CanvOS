@@ -13,7 +13,7 @@ RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
 # You should change the following values according to your own versioning and other details
 RUN OS_NAME=kairos-core-ubuntu-fips \
-  OS_VERSION=v3.0.14 \
+  OS_VERSION=v3.1.3 \
   OS_ID="ubuntu" \
   BUG_REPORT_URL="https://github.com/spectrocloud/ubuntu-fips-edge/issues" \
   HOME_URL="https://github.com/spectrocloud/ubuntu-fips-edge" \
