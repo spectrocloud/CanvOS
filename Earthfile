@@ -30,6 +30,7 @@ ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.5.0
 ARG KUBEADM_PROVIDER_VERSION=v4.5.0
 ARG RKE2_PROVIDER_VERSION=v4.5.0
+ARG NODEADM_PROVIDER_VERSION=v4.5.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -152,7 +153,7 @@ build-provider-images:
     FROM $ALPINE_IMG
 
     IF [ !-n "$K8S_DISTRIBUTION"]
-        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, or rke2." && exit 1
+        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, or rke2." && exit 1
     END
 
     IF [ "$IS_UKI" = "true" ]
@@ -231,7 +232,7 @@ install-k8s:
     FROM --platform=linux/${ARCH} $ALPINE_IMG
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -488,7 +489,7 @@ provider-image:
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG IMAGE_REPO
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
@@ -594,6 +595,8 @@ kairos-provider-image:
         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-nodeadm:$NODEADM_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
