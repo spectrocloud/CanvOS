@@ -230,6 +230,7 @@ kairos-agent:
 
 install-k8s:
     FROM --platform=linux/${ARCH} $ALPINE_IMG
+    DO +BASE_ALPINE
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
