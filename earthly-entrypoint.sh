@@ -1,7 +1,6 @@
 #!/bin/sh
 # uncomment the line below to enable debug mode
 set -ex
-cp /workspace/sc.crt /usr/local/share/ca-certificates/sc.crt
 update-ca-certificates
 
 # reference: https://github.com/earthly/earthly/blob/main/earthly-entrypoint.sh

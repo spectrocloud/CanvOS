@@ -25,7 +25,7 @@ function build_with_proxy() {
         -e NO_PROXY=$NO_PROXY \
         -e no_proxy=$NO_PROXY \
         -e EARTHLY_GIT_CONFIG=$gitconfig \
-        -v "$PROXY_CERT_PATH:/usr/local/share/ca-certificates/sc.crt:ro" \
+        -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
         -v earthly-tmp:/tmp/earthly:rw \
         -p 8372:8372 \
         $SPECTRO_PUB_REPO/third-party/edge/earthly/buildkitd:$EARTHLY_VERSION
@@ -47,7 +47,7 @@ function build_with_proxy() {
         -e NO_PROXY=$NO_PROXY \
         -e no_proxy=$NO_PROXY \
         -v "$(pwd)":/workspace \
-        -v "$PROXY_CERT_PATH:/workspace/sc.crt:ro" \
+        -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
         --entrypoint /workspace/earthly-entrypoint.sh \
         $SPECTRO_PUB_REPO/third-party/edge/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
