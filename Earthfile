@@ -1,29 +1,36 @@
-VERSION 0.6
+VERSION --arg-scope-and-set --shell-out-anywhere 0.6
 ARG TARGETOS
 ARG TARGETARCH
 
 # Default image repositories used in the builds.
-ARG SPECTRO_PUB_REPO=gcr.io/spectro-images-public
-ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public
-ARG KAIROS_BASE_IMAGE_URL=gcr.io/spectro-images-public
-ARG ETCD_REPO=https://github.com/etcd-io
-ARG LUET_PROJECT=luet-repo
+ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 ARG ALPINE_TAG=3.20
-ARG ALPINE_IMG=$SPECTRO_PUB_REPO/canvos/alpine:$ALPINE_TAG
+ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 FROM $ALPINE_IMG
 
+ARG FIPS_ENABLED=false
+IF [ "$FIPS_ENABLED" = "true" ] && [ "$SPECTRO_PUB_REPO" = "us-docker.pkg.dev/palette-images" ]
+    LET SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images-fips
+    LET ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
+END
+
+ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
+ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
+ARG LUET_PROJECT=luet-repo
+
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.4.12
-ARG SPECTRO_LUET_VERSION=v1.3.7
+ARG PE_VERSION=v4.5.3
+ARG SPECTRO_LUET_VERSION=v1.3.11
 ARG KAIROS_VERSION=v3.1.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.300.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v4.4.2
-ARG KUBEADM_PROVIDER_VERSION=v4.5.0-alpha1
-ARG RKE2_PROVIDER_VERSION=v4.4.1
+ARG K3S_PROVIDER_VERSION=v4.5.0
+ARG KUBEADM_PROVIDER_VERSION=v4.5.0
+ARG RKE2_PROVIDER_VERSION=v4.5.0
+ARG NODEADM_PROVIDER_VERSION=v4.5.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -41,7 +48,7 @@ ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
 ARG UBUNTU_PRO_KEY
 
-ARG FIPS_ENABLED=false
+
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -70,7 +77,7 @@ ARG EFI_MAX_SIZE=2048
 ARG EFI_IMG_SIZE=2200
 
 # internal variables
-ARG GOLANG_VERSION=1.22
+ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
 ARG BUILDER_3RDPARTY_VERSION=4.4
 
@@ -99,14 +106,14 @@ END
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
-    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-fips-linux-$ARCH:$PE_VERSION
-    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-fips-linux-$ARCH:$PE_VERSION
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
+    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-fips-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-fips-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/stylus-framework-linux-$ARCH:$PE_VERSION
-    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/stylus-linux-$ARCH:$PE_VERSION
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
+    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
+    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
@@ -116,7 +123,6 @@ ELSE
 END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE_TAG
-ARG CMDLINE="stylus.registration"
 
 alpine-all:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +alpine
@@ -146,7 +152,7 @@ build-provider-images:
     FROM $ALPINE_IMG
 
     IF [ !-n "$K8S_DISTRIBUTION"]
-        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, or rke2." && exit 1
+        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, or rke2." && exit 1
     END
 
     IF [ "$IS_UKI" = "true" ]
@@ -221,9 +227,10 @@ kairos-agent:
 
 install-k8s:
     FROM --platform=linux/${ARCH} $ALPINE_IMG
+    DO +BASE_ALPINE
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -236,13 +243,16 @@ install-k8s:
     WORKDIR /output
 
     IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=$LUET_PROJECT-arm
+        LET LUET_REPO=$LUET_PROJECT-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=$LUET_PROJECT
+        LET LUET_REPO=$LUET_PROJECT
     END
+
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-        luet repo update
+        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y
+    COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
+    RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
+    RUN --no-cache luet repo update
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         RUN luet install -y container-runtime/containerd --system-target /output
@@ -477,7 +487,7 @@ provider-image:
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG IMAGE_REPO
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
@@ -495,7 +505,7 @@ provider-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    COPY  --platform=linux/${ARCH} +kairos-provider-image/ /
+    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
@@ -574,15 +584,17 @@ stylus-package-image:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-kubeadm-fips:$KUBEADM_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
-        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2-fips:$RKE2_PROVIDER_VERSION
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-nodeadm:$NODEADM_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
@@ -600,26 +612,6 @@ base-image:
 
     IF [ "$IS_UKI" = "true" ]
         COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
-    END
-
-    IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=$LUET_PROJECT-arm
-    ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=$LUET_PROJECT
-    END
-
-    RUN mkdir -p /etc/luet/repos.conf.d && \
-      SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y && \
-      luet repo update
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG BASE_K8S_VERSION=$K8S_VERSION
-    ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
-        ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
-    ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ]
-        ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
-        ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
 
     # OS == Ubuntu
@@ -692,18 +684,6 @@ base-image:
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
 
-    IF [ "$ARCH" = "arm64" ]
-        ARG LUET_REPO=$LUET_PROJECT-arm
-    ELSE IF [ "$ARCH" = "amd64" ]
-        ARG LUET_REPO=$LUET_PROJECT
-    END
-    RUN --no-cache mkdir -p /etc/luet/repos.conf.d && \
-          SPECTRO_LUET_VERSION=$SPECTRO_LUET_VERSION luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y
-    
-    COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
-    RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
-    RUN --no-cache luet repo update
-
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl rsyslog logrotate
     END
@@ -757,7 +737,7 @@ iso-disk-image:
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
 
 go-deps:
-    FROM $SPECTRO_PUB_REPO/golang:${GOLANG_VERSION}-alpine
+    FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine
     RUN apk add libc-dev binutils-gold clang
 
 
@@ -863,7 +843,8 @@ OS_RELEASE:
 download-third-party:
     ARG TARGETPLATFORM
     ARG binary
-    FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    FROM --platform=$TARGETPLATFORM gcr.io/spectro-images-public/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    #FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
     ARG TARGETARCH
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
