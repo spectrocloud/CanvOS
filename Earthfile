@@ -4,6 +4,7 @@ ARG TARGETARCH
 
 # Default image repositories used in the builds.
 ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
+ARG SPECTRO_THIRD_PARTY_IMAGE=us-east1-docker.pkg.dev/spectro-images/third-party/spectro-third-party:4.5
 ARG ALPINE_TAG=3.20
 ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 FROM $ALPINE_IMG
@@ -80,7 +81,6 @@ ARG EFI_IMG_SIZE=2200
 # internal variables
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
-ARG BUILDER_3RDPARTY_VERSION=4.4
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
@@ -857,8 +857,7 @@ OS_RELEASE:
 download-third-party:
     ARG TARGETPLATFORM
     ARG binary
-    FROM --platform=$TARGETPLATFORM gcr.io/spectro-images-public/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
-    #FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    FROM --platform=$TARGETPLATFORM ${SPECTRO_THIRD_PARTY_IMAGE}
     ARG TARGETARCH
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
