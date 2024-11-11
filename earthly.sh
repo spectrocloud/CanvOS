@@ -94,6 +94,14 @@ PE_VERSION=$(git describe --abbrev=0 --tags)
 SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 EARTHLY_VERSION=v0.8.15
 source .arg
+
+# Workaround to support deprecated field PROXY_CERT_PATH
+if [ -n "$PROXY_CERT_PATH" ]; then
+    echo "PROXY_CERT_PATH is deprecated. Please place your certificates in the certs directory."
+    echo "Copying the certificates from $PROXY_CERT_PATH to certs/"
+    cp $PROXY_CERT_PATH certs/
+fi
+
 ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:3.20
 ### Verify Dependencies
 # Check if Docker is installed
