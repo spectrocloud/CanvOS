@@ -14,7 +14,7 @@ RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
     update-ca-certificates; \
     fi 
 RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ]; then \
-    cp -f /certs/* /tmp//usr/share/pki/trust/anchors/ && \
+    cp -f /certs/* /usr/share/pki/trust/anchors/ && \
     update-ca-certificates; \
     fi
 

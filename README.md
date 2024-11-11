@@ -115,29 +115,29 @@ cp .arg.template .arg
 
 7. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
 
-| Parameter                   | Description                                                                                                                                                                                                                                                                                                                                    | Type    | Default Value            |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------ |
-| CUSTOM_TAG                  | Environment name for provider image tagging. The default value is `demo`.                                                                                                                                                                                                                                                                      | String  | `demo`                   |
-| IMAGE_REGISTRY              | Image registry name that will store the image artifacts. The default value points to the _ttl.sh_ image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String  | `ttl.sh`                 |
-| OS_DISTRIBUTION             | OS distribution of your choice. For example, it can be `ubuntu`, `opensuse-leap`, `rhel` or `sles`                                                                                                                                                                                                                                             | String  | `ubuntu`                 |
-| IMAGE_REPO                  | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                 | String  | `$OS_DISTRIBUTION`       |
-| OS_VERSION                  | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.6`. For sles, possible values are `5.4`. This example uses `22` for Ubuntu.                                                                                                                                               | String  | `22`                     |
-| K8S_DISTRIBUTION            | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, or `kubeadm-fips`.                                                                                                                                                                                                                                             | String  | `k3s`                    |
-| ISO_NAME                    | Name of the Edge installer ISO image. In this example, the name is _palette-edge-installer_.                                                                                                                                                                                                                                                   | String  | `palette-edge-installer` |
-| ARCH                        | Type of platform to use for the build. Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                              | string  | `amd64`                  |
-| BASE_IMAGE                  | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                              | String  |                          |
-| FIPS_ENABLED                | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                         | string  | `false`                  |
-| HTTP_PROXY                  | URL of the HTTP Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string  |                          |
-| HTTPS_PROXY                 | URL of the HTTPS Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                  | string  |                          |
-| NO_PROXY                    | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                                                                                                                                                                                              | string  |                          |
-| UPDATE_KERNEL               | Determines whether to upgrade the Kernel version to the latest from the upstream OS provider                                                                                                                                                                                                                                                   | boolean | `false`                  |
-| DISABLE_SELINUX             | Disable selinux in the operating system. Some applications (like Kubevirt) do not like selinux                                                                                                                                                                                                                                                 | boolean | `true`                   |
-| CLUSTERCONFIG               | Path of the cluster config                                                                                                                                                                                                                                                                                                                     | string  |                          |
-| IS_UKI                      | Build UKI(Trusted boot) images                                                                                                                                                                                                                                                                                                                 | boolean | `false`                  |
-| UKI_BRING_YOUR_OWN_KEYS     | Bring your own public/private key pairs if this is set to true. Otherwise, CanvOS will generate the key pair.                                                                                                                                                                                                                                  | boolean | `false`                  |
-| INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                   |
-| AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                   |
-| EDGE_CUSTOM_CONFIG | Path to edge custom configuration file                                                                                                                                                                                                                                                            | string | `.edge-custom-config.yaml`                   |
+| Parameter                   | Description                                                                                                                                                                                                                                                                                                                                    | Type    | Default Value              |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------------------------- |
+| CUSTOM_TAG                  | Environment name for provider image tagging. The default value is `demo`.                                                                                                                                                                                                                                                                      | String  | `demo`                     |
+| IMAGE_REGISTRY              | Image registry name that will store the image artifacts. The default value points to the _ttl.sh_ image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String  | `ttl.sh`                   |
+| OS_DISTRIBUTION             | OS distribution of your choice. For example, it can be `ubuntu`, `opensuse-leap`, `rhel` or `sles`                                                                                                                                                                                                                                             | String  | `ubuntu`                   |
+| IMAGE_REPO                  | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                 | String  | `$OS_DISTRIBUTION`         |
+| OS_VERSION                  | OS version. For Ubuntu, the possible values are `20`, and `22`. Whereas for openSUSE Leap, the possible value is `15.6`. For sles, possible values are `5.4`. This example uses `22` for Ubuntu.                                                                                                                                               | String  | `22`                       |
+| K8S_DISTRIBUTION            | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, or `kubeadm-fips`.                                                                                                                                                                                                                                             | String  | `k3s`                      |
+| ISO_NAME                    | Name of the Edge installer ISO image. In this example, the name is _palette-edge-installer_.                                                                                                                                                                                                                                                   | String  | `palette-edge-installer`   |
+| ARCH                        | Type of platform to use for the build. Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                              | string  | `amd64`                    |
+| BASE_IMAGE                  | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                              | String  |                            |
+| FIPS_ENABLED                | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                         | string  | `false`                    |
+| HTTP_PROXY                  | URL of the HTTP Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                   | string  |                            |
+| HTTPS_PROXY                 | URL of the HTTPS Proxy server to be used if needed (Optional)                                                                                                                                                                                                                                                                                  | string  |                            |
+| NO_PROXY                    | URLS that should be excluded from proxying (Optional)                                                                                                                                                                                                                                                                                          | string  |                            |
+| UPDATE_KERNEL               | Determines whether to upgrade the Kernel version to the latest from the upstream OS provider                                                                                                                                                                                                                                                   | boolean | `false`                    |
+| DISABLE_SELINUX             | Disable selinux in the operating system. Some applications (like Kubevirt) do not like selinux                                                                                                                                                                                                                                                 | boolean | `true`                     |
+| CLUSTERCONFIG               | Path of the cluster config                                                                                                                                                                                                                                                                                                                     | string  |                            |
+| IS_UKI                      | Build UKI(Trusted boot) images                                                                                                                                                                                                                                                                                                                 | boolean | `false`                    |
+| UKI_BRING_YOUR_OWN_KEYS     | Bring your own public/private key pairs if this is set to true. Otherwise, CanvOS will generate the key pair.                                                                                                                                                                                                                                  | boolean | `false`                    |
+| INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                     |
+| AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                     |
+| EDGE_CUSTOM_CONFIG          | Path to edge custom configuration file                                                                                                                                                                                                                                                                                                         | string  | `.edge-custom-config.yaml` |
 
 1. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
@@ -325,7 +325,7 @@ earthly --push +build-all-images
 
 ### Building Installer Image with public key for verifying signed content
 
-1. Copy the .edge.custom-config.yaml.template file to .edge.custom-config.yaml 
+1. Copy the .edge.custom-config.yaml.template file to .edge.custom-config.yaml
 
 ```shell
 cp .edge.custom-config.yaml.template .edge.custom-config.yaml
@@ -334,6 +334,7 @@ cp .edge.custom-config.yaml.template .edge.custom-config.yaml
 2. Edit the property signing.publicKey in `.edge.custom-config.yaml`
 
 3. Include the following property in `.arg` file
+
 ```
 ...
 
@@ -346,34 +347,38 @@ EDGE_CUSTOM_CONFIG=/path/to/.edge.custom-config.yaml
 earthly --push +build-all-images
 ```
 
-
 ### Audit Logs User Customisation
 
 #### Configuration
+
 rsyslog config file: `overlay/files/etc/rsyslog.d/49-stylus.conf` copied to `/etc/rsyslog.d/49-stylus.conf`  
 logrotate config file: `overlay/files/etc/logrotate.d/stylus.conf` copied to `/etc/logrotate.d/stylus.conf`
 
 #### Send stylus audit events to user file
+
 Users can log stylus audit events to additional files, in addition to `/var/log/stylus-audit.log`. To log stylus audit events to custom files, create a configuration file in the `overlay/files/etc/rsyslog.d` directory named `<filename>.conf` (must be before `49-stylus.conf` lexicographically).
 
 Example: `48-audit.conf`
 
 Users can use the following configuration as a base for their filtering logic. replace `<log file name>` with the desired file name
+
 ```
 $PrivDropToUser root
 $PrivDropToGroup root
 if ($syslogfacility-text == 'local7' and $syslogseverity-text == 'notice' and $syslogtag contains 'stylus-audit') then {
     action(
-        type="omfile" 
-        file="<log file name>" 
+        type="omfile"
+        file="<log file name>"
     )
 }
 ```
 
 #### Send user application audit events to stylus audit file
+
 To include user application audit events in the `/var/log/stylus-audit.log` file, add the following to the same configuration file (e.g. `48-audit.conf`) or create a new config file before `49-stylus.conf`:
 
 `<user app name>` : user application name or tag
+
 ```
 $PrivDropToUser root
 $PrivDropToGroup root
@@ -381,8 +386,8 @@ $Umask 0000
 $template ForwardFormat,"<%pri%>1 %timestamp:::date-rfc3339% %HOSTNAME% %syslogtag% %procid% - - %msg%\n"
 if ($syslogfacility-text == 'local7' and $syslogseverity-text == 'notice' and $syslogtag contains '<user app name>') then {
     action(
-        type="omfile" 
-        file="/var/log/stylus-audit.log" 
+        type="omfile"
+        file="/var/log/stylus-audit.log"
         FileCreateMode="0600"
         fileowner="root"
         template="ForwardFormat"
@@ -393,8 +398,9 @@ if ($syslogfacility-text == 'local7' and $syslogseverity-text == 'notice' and $s
 To display user audit entries on the Local UI dashboard, audit entries must be logged in RFC 5424 format with the message (`msg`) part in JSON format. This JSON message must include the following keys: `edgeHostId`, `contentMsg`, `action`, `actor`, `actorType`, `resourceId`, `resourceName`, `resourceKind`
 
 Example syslog entry
+
 ```
-<189>1 2024-07-23T15:35:32.644461+00:00 edge-ce0a38422e4662887313fb673bbfb2a2 stylus-audit[2911]: 2911 - - {"edgeHostId":"edge-ce0a38422e4662887313fb6 73bbfb2a2","contentMsg":"kairos password reset failed","action":"activity","actor":"kairos","actorType":"user","resourceId":"kairos","resourceName":"kairos","resourceKi and":"user"}
+<189>1 2024-07-23T15:35:32.644461+00:00 edge-ce0a38422e4662887313fb673bbfb2a2 stylus-audit[2911]: 2911 - - {"edgeHostId":"edge-ce0a38422e4662887313fb6 73bbfb2a2","contentMsg":"kairos password reset failed","action":"activity","actor":"kairos","actorType":"user","resourceId":"kairos","resourceName":"kairos","resourceKind":"user"}
 ```
 
 Entries without these keys in the MSG part of RFC 5424 will still be logged to the stylus-audit.log file but will not be displayed on LocalUI.
