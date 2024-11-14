@@ -4,6 +4,7 @@ ARG TARGETARCH
 
 # Default image repositories used in the builds.
 ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
+ARG SPECTRO_THIRD_PARTY_IMAGE=us-east1-docker.pkg.dev/spectro-images/third-party/spectro-third-party:4.5
 ARG ALPINE_TAG=3.20
 ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 FROM $ALPINE_IMG
@@ -19,8 +20,8 @@ ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.5.3
-ARG SPECTRO_LUET_VERSION=v1.3.11
+ARG PE_VERSION=v4.5.8
+ARG SPECTRO_LUET_VERSION=v1.3.12
 ARG KAIROS_VERSION=v3.1.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -28,7 +29,7 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.300.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.5.0
-ARG KUBEADM_PROVIDER_VERSION=v4.5.0
+ARG KUBEADM_PROVIDER_VERSION=v4.5.1
 ARG RKE2_PROVIDER_VERSION=v4.5.0
 ARG NODEADM_PROVIDER_VERSION=v4.5.0
 
@@ -80,7 +81,6 @@ ARG EFI_IMG_SIZE=2200
 # internal variables
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
-ARG BUILDER_3RDPARTY_VERSION=4.4
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
@@ -857,8 +857,7 @@ OS_RELEASE:
 download-third-party:
     ARG TARGETPLATFORM
     ARG binary
-    FROM --platform=$TARGETPLATFORM gcr.io/spectro-images-public/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
-    #FROM --platform=$TARGETPLATFORM $SPECTRO_PUB_REPO/builders/spectro-third-party:${BUILDER_3RDPARTY_VERSION}
+    FROM --platform=$TARGETPLATFORM ${SPECTRO_THIRD_PARTY_IMAGE}
     ARG TARGETARCH
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
