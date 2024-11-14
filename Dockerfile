@@ -16,7 +16,6 @@ RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] && [ "${PROXY_CERT_PATH}" != "
     cp /tmp/sc.crt /usr/share/pki/trust/anchors && \
     update-ca-certificates; \
     fi
-RUN /axone/axone-install -v
 
 ########################### Add any other image customizations here #######################
 
