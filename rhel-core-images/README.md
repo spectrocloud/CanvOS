@@ -28,7 +28,7 @@ This scenario is for the environment where Red Hat Satellite must be used and ac
 
 2. Mirror Kairos framework image (`quay.io/kairos/framework:v2.11.7`) to the internal Container registry. Provide image path for the build process by using argument `KAIROS_FRAMEWORK_IMAGE`. 
 
-3. Have the following repostiories synced and available on Red Hat Satellite:
+3. Have the following repositories synced and available on Red Hat Satellite:
 
 For RHEL9:
 * rhel-9-for-x86_64-appstream-rpms
