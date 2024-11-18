@@ -56,7 +56,6 @@ ARG NO_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
-ARG PROXY_CERT_PATH
 
 ARG UPDATE_KERNEL=false
 ARG ETCD_VERSION="v3.5.13"
@@ -179,10 +178,8 @@ build-provider-images-fips:
 
 BASE_ALPINE:
     COMMAND
-    IF [ ! -z $PROXY_CERT_PATH ]
-        COPY sc.crt /etc/ssl/certs
-        RUN update-ca-certificates
-    END
+    COPY --if-exists certs/ /etc/ssl/certs/
+    RUN update-ca-certificates
     RUN apk add curl
 
 iso-image-rootfs:
@@ -604,7 +601,7 @@ kairos-provider-image:
 
 # base build image used to create the base image for all other image types
 base-image:
-    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE --build-arg PROXY_CERT_PATH=$PROXY_CERT_PATH \ 
+    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE \ 
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \ 
     --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
     --build-arg NO_PROXY=$NO_PROXY .
@@ -623,12 +620,6 @@ base-image:
             RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
             apt update && apt-get install -y snapd && \
             pro attach $UBUNTU_PRO_KEY
-        END
-
-        # Add proxy certificate if present
-        IF [ ! -z $PROXY_CERT_PATH ]
-            COPY sc.crt /etc/ssl/certs
-            RUN  update-ca-certificates
         END
 
         RUN apt-get update && \
@@ -669,11 +660,6 @@ base-image:
 
     # OS == Opensuse
     ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
-        # Add proxy certificate if present
-        IF [ ! -z $PROXY_CERT_PATH ]
-            COPY sc.crt /usr/share/pki/trust/anchors
-            RUN update-ca-certificates
-        END
         # Enable or Disable Kernel Updates
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN zypper al kernel-de*

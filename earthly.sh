@@ -25,7 +25,7 @@ function build_with_proxy() {
         -e NO_PROXY=$NO_PROXY \
         -e no_proxy=$NO_PROXY \
         -e EARTHLY_GIT_CONFIG=$gitconfig \
-        -v "$PROXY_CERT_PATH:/usr/local/share/ca-certificates/sc.crt:ro" \
+        -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
         -v earthly-tmp:/tmp/earthly:rw \
         -p 8372:8372 \
         $SPECTRO_PUB_REPO/third-party/edge/earthly/buildkitd:$EARTHLY_VERSION
@@ -47,7 +47,7 @@ function build_with_proxy() {
         -e NO_PROXY=$NO_PROXY \
         -e no_proxy=$NO_PROXY \
         -v "$(pwd)":/workspace \
-        -v "$PROXY_CERT_PATH:/workspace/sc.crt:ro" \
+        -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
         --entrypoint /workspace/earthly-entrypoint.sh \
         $SPECTRO_PUB_REPO/third-party/edge/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
@@ -94,6 +94,14 @@ PE_VERSION=$(git describe --abbrev=0 --tags)
 SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 EARTHLY_VERSION=v0.8.15
 source .arg
+
+# Workaround to support deprecated field PROXY_CERT_PATH
+if [ -n "$PROXY_CERT_PATH" ]; then
+    echo "PROXY_CERT_PATH is deprecated. Please place your certificates in the certs directory."
+    echo "Copying the certificates from $PROXY_CERT_PATH to certs/"
+    cp $PROXY_CERT_PATH certs/
+fi
+
 ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:3.20
 ### Verify Dependencies
 # Check if Docker is installed
