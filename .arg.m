@@ -2,7 +2,7 @@ BASE_IMAGE=registry.spectrocloud.dev/kairos-rhel9:9.4-6
 SPECTRO_LUET_REPO=us-docker.spectrocloud.dev/palette-images/edge
 SPECTRO_PUB_REPO=us-docker.spectrocloud.dev/palette-images
 ALPINE_IMG=registry.spectrocloud.dev/alpine:3.20
-SPECTRO_THIRD_PARTY_IMAGE=gcr.spectrocloud.dev/spectro-images-public/builders/spectro-third-party
+SPECTRO_THIRD_PARTY_IMAGE=gcr.spectrocloud.dev/spectro-images-public/builders/spectro-third-party:4.5
 
 HTTPS_PROXY=http://infra-proxy.spectrocloud.dev
 HTTP_PROXY=http://infra-proxy.spectrocloud.dev

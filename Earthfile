@@ -4,7 +4,7 @@ ARG TARGETARCH
 
 # Default image repositories used in the builds.
 ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
-ARG SPECTRO_THIRD_PARTY_IMAGE=us-east1-docker.pkg.dev/spectro-images/third-party/spectro-third-party:4.5
+#ARG SPECTRO_THIRD_PARTY_IMAGE=us-east1-docker.pkg.dev/spectro-images/third-party/spectro-third-party:4.5
 ARG ALPINE_TAG=3.20
 ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 FROM $ALPINE_IMG
