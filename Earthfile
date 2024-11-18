@@ -34,6 +34,7 @@ ARG RKE2_PROVIDER_VERSION=v4.5.0
 ARG NODEADM_PROVIDER_VERSION=v4.5.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
+ARG SPECTRO_THIRD_PARTY_IMAGE=$SPECTRO_THIRD_PARTY_IMAGE
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
 ARG K8S_VERSION
@@ -230,7 +231,7 @@ kairos-agent:
 
 install-k8s:
     FROM --platform=linux/${ARCH} $ALPINE_IMG
-    DO +BASE_ALPINE
+#    DO +BASE_ALPINE
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
@@ -856,8 +857,11 @@ OS_RELEASE:
 
 download-third-party:
     ARG TARGETPLATFORM
+    ARG SPECTRO_THIRD_PARTY_IMAGE_PATH=${SPECTRO_THIRD_PARTY_IMAGE}
     ARG binary
+
     FROM --platform=$TARGETPLATFORM ${SPECTRO_THIRD_PARTY_IMAGE}
+    
     ARG TARGETARCH
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
