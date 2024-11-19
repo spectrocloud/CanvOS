@@ -7,19 +7,19 @@ ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
 
-WORKDIR /certs
+RUN mkdir -p /certs
 COPY certs/ /certs/
 RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
-    cp -f /certs/* /usr/local/share/ca-certificates/ && \
+    cp -a /certs/. /usr/local/share/ca-certificates/ && \
     update-ca-certificates; \
     fi 
 RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ]; then \
-    cp -f /certs/* /usr/share/pki/trust/anchors/ && \
+    cp -a /certs/. /usr/share/pki/trust/anchors/ && \
     update-ca-certificates; \
     fi
 
 RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
-    cp -f /certs/* /etc/pki/ca-trust/source/anchors/ && \
+    cp -a /certs/. /etc/pki/ca-trust/source/anchors/ && \
     update-ca-trust; \
     fi
 RUN rm -rf /certs
