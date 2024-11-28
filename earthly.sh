@@ -115,7 +115,7 @@ if ! docker run --rm --privileged $ALPINE_IMG sh -c 'echo "Privileged container 
     echo "Privileged containers are not allowed for the current user."
     exit 1
 fi
-if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY"]; then
+if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY" ] && [ -z "$(find certs -type f ! -name '.*' -print -quit)" ]; then
     build_without_proxy "$@"
 else
     build_with_proxy "$@"
