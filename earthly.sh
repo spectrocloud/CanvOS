@@ -18,17 +18,17 @@ function build_with_proxy() {
         --rm -t \
         -e GLOBAL_CONFIG="$global_config" \
         -e BUILDKIT_TCP_TRANSPORT_ENABLED=true \
-        -e http_proxy=$HTTP_PROXY \
-        -e https_proxy=$HTTPS_PROXY \
-        -e HTTPS_PROXY=$HTTPS_PROXY \
-        -e HTTP_PROXY=$HTTP_PROXY \
-        -e NO_PROXY=$NO_PROXY \
-        -e no_proxy=$NO_PROXY \
-        -e EARTHLY_GIT_CONFIG=$gitconfig \
-        -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
+        -e http_proxy="$HTTP_PROXY" \
+        -e https_proxy="$HTTPS_PROXY" \
+        -e HTTPS_PROXY="$HTTPS_PROXY" \
+        -e HTTP_PROXY="$HTTP_PROXY" \
+        -e NO_PROXY="$NO_PROXY" \
+        -e no_proxy="$NO_PROXY" \
+        -e EARTHLY_GIT_CONFIG="$gitconfig" \
+        -v "$PROXY_CERT_PATH:/usr/local/share/ca-certificates/sc.crt:ro" \
         -v earthly-tmp:/tmp/earthly:rw \
         -p 8372:8372 \
-        $SPECTRO_PUB_REPO/third-party/edge/earthly/buildkitd:$EARTHLY_VERSION
+        "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:$EARTHLY_VERSION
     # Update the CA certificates in the container
     docker exec -it earthly-buildkitd update-ca-certificates
 
@@ -40,21 +40,21 @@ function build_with_proxy() {
         -e GLOBAL_CONFIG="$global_config" \
         -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 \
         -e BUILDKIT_TLS_ENABLED=false \
-        -e http_proxy=$HTTP_PROXY \
-        -e https_proxy=$HTTPS_PROXY \
-        -e HTTPS_PROXY=$HTTPS_PROXY \
-        -e HTTP_PROXY=$HTTP_PROXY \
-        -e NO_PROXY=$NO_PROXY \
-        -e no_proxy=$NO_PROXY \
+        -e http_proxy="$HTTP_PROXY" \
+        -e https_proxy="$HTTPS_PROXY" \
+        -e HTTPS_PROXY="$HTTPS_PROXY" \
+        -e HTTP_PROXY="$HTTP_PROXY" \
+        -e NO_PROXY="$NO_PROXY" \
+        -e no_proxy="$NO_PROXY" \
         -v "$(pwd)":/workspace \
-        -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
+        -v "$PROXY_CERT_PATH:/workspace/sc.crt:ro" \
         --entrypoint /workspace/earthly-entrypoint.sh \
-        $SPECTRO_PUB_REPO/third-party/edge/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+        "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
 
 function build_without_proxy() {
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace $SPECTRO_PUB_REPO/third-party/edge/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
 }
 
 function print_os_pack() {
@@ -94,14 +94,6 @@ PE_VERSION=$(git describe --abbrev=0 --tags)
 SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 EARTHLY_VERSION=v0.8.15
 source .arg
-
-# Workaround to support deprecated field PROXY_CERT_PATH
-if [ -n "$PROXY_CERT_PATH" ]; then
-    echo "PROXY_CERT_PATH is deprecated. Please place your certificates in the certs directory."
-    echo "Copying the certificates from $PROXY_CERT_PATH to certs/"
-    cp $PROXY_CERT_PATH certs/
-fi
-
 ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:3.20
 ### Verify Dependencies
 # Check if Docker is installed
@@ -111,28 +103,28 @@ else
     echo "Docker not found.  Please use the guide for your platform located https://docs.docker.com/engine/install/ to install Docker."
 fi
 # Check if the current user has permission to run privileged containers
-if ! docker run --rm --privileged $ALPINE_IMG sh -c 'echo "Privileged container test"' &>/dev/null; then
+if ! docker run --rm --privileged "$ALPINE_IMG" sh -c 'echo "Privileged container test"' &>/dev/null; then
     echo "Privileged containers are not allowed for the current user."
     exit 1
 fi
-if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY" ] && [ -z "$(find certs -type f ! -name '.*' -print -quit)" ]; then
+if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY"]; then
     build_without_proxy "$@"
 else
     build_with_proxy "$@"
 fi
 
 # Verify the command was successful
-if [ $? -ne 0 ]; then
+if $? -ne 0 ; then
     echo "An error occurred while running the command."
     exit 1
 fi
 # Cleanup builder helper images.
-docker rmi $SPECTRO_PUB_REPO/third-party/edge/earthly/earthly:$EARTHLY_VERSION
+docker rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:$EARTHLY_VERSION
 if [ "$(docker container inspect -f '{{.State.Running}}' earthly-buildkitd)" = "true" ]; then
     docker stop earthly-buildkitd
 fi
-docker rmi $SPECTRO_PUB_REPO/third-party/edge/earthly/buildkitd:$EARTHLY_VERSION 2>/dev/null
-docker rmi $ALPINE_IMG
+docker rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:$EARTHLY_VERSION 2>/dev/null
+docker rmi "$ALPINE_IMG"
 
 if [[ "$1" == "+uki-genkey" ]]; then
     ./keys.sh secure-boot/
