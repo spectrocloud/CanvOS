@@ -79,6 +79,8 @@ v3.4.3
 
 v4.1.0
 v4.2.3
+
+v4.5.11
 ```
 
 4. Checkout the desired tag
@@ -138,6 +140,9 @@ cp .arg.template .arg
 | INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                     |
 | AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                     |
 | EDGE_CUSTOM_CONFIG          | Path to edge custom configuration file                                                                                                                                                                                                                                                                                                         | string  | `.edge-custom-config.yaml` |
+
+>For use cases where UEFI installers are burned into a USB and then edge hosts are booted with the USB. Use the OSBUILDER_VERSION=0.300.4 in the .arg file with canvos when building the installer.
+Version 0.300.3 does not support UEFI builds loading from USB.
 
 1. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
