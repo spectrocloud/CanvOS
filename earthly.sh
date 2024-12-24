@@ -28,7 +28,7 @@ function build_with_proxy() {
         -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
         -v earthly-tmp:/tmp/earthly:rw \
         -p 8372:8372 \
-        "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:$EARTHLY_VERSION
+        "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:"$EARTHLY_VERSION"
     # Update the CA certificates in the container
     docker exec -it earthly-buildkitd update-ca-certificates
 
@@ -49,12 +49,12 @@ function build_with_proxy() {
         -v "$(pwd)":/workspace \
         -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
         --entrypoint /workspace/earthly-entrypoint.sh \
-        "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+        "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "$@"
 }
 
 function build_without_proxy() {
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:$EARTHLY_VERSION --allow-privileged "$@"
+    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "$@"
 }
 
 function print_os_pack() {
@@ -127,11 +127,11 @@ if $? -ne 0 ; then
     exit 1
 fi
 # Cleanup builder helper images.
-docker rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:$EARTHLY_VERSION
+docker rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION"
 if [ "$(docker container inspect -f '{{.State.Running}}' earthly-buildkitd)" = "true" ]; then
     docker stop earthly-buildkitd
 fi
-docker rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:$EARTHLY_VERSION 2>/dev/null
+docker rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:"$EARTHLY_VERSION" 2>/dev/null
 docker rmi "$ALPINE_IMG"
 
 if [[ "$1" == "+uki-genkey" ]]; then

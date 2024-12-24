@@ -529,15 +529,15 @@ harden_system() {
 	fi
 
 	echo "Fix permission of all cron files"
-	for each in $(echo /etc/cron.daily /etc/cron.hourly /etc/cron.d /etc/cron.monthly /etc/cron.weekly /etc/crontab)
-	do
-	if [[ -e ${each} ]]; then
-		stat -L -c "%a %u %g" "${each}" | grep -E ".00 0 0"
-		if $? -ne 0 ; then
-			chown root:root "${each}"
-			chmod og-rwx "${each}"
+	cron_files="/etc/etc/cron.daily /etc/cron.hourly /etc/cron.d /etc/cron.monthly /etc/cron.weekly /etc/crontab"
+	for each in ${cron_files}; do
+		if [[ -e ${each} ]]; then
+			stat -L -c "%a %u %g" "${each}" | grep -E ".00 0 0"
+			if $? -ne 0 ; then
+				chown root:root "${each}"
+				chmod og-rwx "${each}"
+			fi
 		fi
-	fi
 	done
 
 	echo "Remove cron and at deny files and have allow files in place"
