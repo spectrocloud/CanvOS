@@ -6,8 +6,8 @@
 #
 
 
-root_dir="$( cd "$( dirname $0 )" && pwd )"
-echo Root dir $root_dir
+root_dir="$( cd "$( dirname "$0" )" && pwd )"
+echo Root dir "$root_dir"
 
 
 ##########################################################################
@@ -21,7 +21,7 @@ check_error()
 
 	if [[ ${status} -ne 0 ]]; then
 		echo -e "\033[31m       - ${msg} \033[0m"
-		exit ${exit_status}
+		exit "${exit_status}"
 	fi
 
 	return 0
@@ -40,10 +40,10 @@ update_config_files() {
 		check_error 1 "File ${config_file} not found"
 	fi
 
-	sed -i "s/^\($search_str.*\)$/#\1/"  ${config_file}
+	sed -i "s/^\($search_str.*\)$/#\1/"  "${config_file}"
 	check_error $? "Failed commenting config value $search_str." 1
 
-	echo "$append_str" >> ${config_file}
+	echo "$append_str" >> "${config_file}"
 	check_error $? "Failed appending config value $append_str" 1
 
 	return 0
@@ -109,7 +109,7 @@ upgrade_packages() {
 		apt-get -y upgrade
 		check_error $? "Failed upgrading packages" 1
 		apt-get install -y auditd apparmor-utils libpam-pwquality
-		if [[ $? -ne 0 ]]; then
+		if  $? -ne 0 ; then
 			echo 'deb http://archive.ubuntu.com/ubuntu focal main restricted' > /etc/apt/sources.list.d/repotmp.list
 			apt-get update
 			apt-get install -y auditd apparmor-utils libpam-pwquality
@@ -516,7 +516,7 @@ harden_system() {
 
 	echo "Error out if there are users with empty password"
 	cat /etc/shadow |awk -F : '($2 == "" ){ exit 1}'
-	if [[ $? -ne 0 ]]; then
+	if $? -ne 0 ; then
 		echo "Users present with empty password. Remove the user or set password for the users"
 		exit 1
 	fi
@@ -529,15 +529,15 @@ harden_system() {
 	fi
 
 	echo "Fix permission of all cron files"
-	for each in `echo /etc/cron.daily /etc/cron.hourly /etc/cron.d /etc/cron.monthly /etc/cron.weekly /etc/crontab`
-	do
-	if [[ -e ${each} ]]; then
-		stat -L -c "%a %u %g" ${each} | egrep ".00 0 0"
-		if [[ $? -ne 0 ]]; then
-			chown root:root ${each}
-			chmod og-rwx ${each}
+	cron_files="/etc/etc/cron.daily /etc/cron.hourly /etc/cron.d /etc/cron.monthly /etc/cron.weekly /etc/crontab"
+	for each in ${cron_files}; do
+		if [[ -e ${each} ]]; then
+			stat -L -c "%a %u %g" "${each}" | grep -E ".00 0 0"
+			if $? -ne 0 ; then
+				chown root:root "${each}"
+				chmod og-rwx "${each}"
+			fi
 		fi
-	fi
 	done
 
 	echo "Remove cron and at deny files and have allow files in place"
@@ -821,12 +821,14 @@ harden_auth() {
 	# Backup the original file
 	cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
 
-	echo "auth required                   pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600" > /etc/pam.d/common-auth
-	echo "auth [success=1 default=ignore] pam_unix.so nullok" >> /etc/pam.d/common-auth
-	echo "auth [default=die]              pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600" >> /etc/pam.d/common-auth
-	echo "auth sufficient                 pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600" >> /etc/pam.d/common-auth
-	echo "auth requisite                  pam_deny.so" >> /etc/pam.d/common-auth
-	echo "auth required                   pam_permit.so" >> /etc/pam.d/common-auth
+	{
+		echo "auth required                   pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600"
+		echo "auth [success=1 default=ignore] pam_unix.so nullok"
+		echo "auth [default=die]              pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600"
+		echo "auth sufficient                 pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600"
+		echo "auth requisite                  pam_deny.so"
+		echo "auth required                   pam_permit.so"
+	} >> /etc/pam.d/common-auth
 
 	# Backup the original file
 	cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
@@ -838,10 +840,12 @@ harden_auth() {
 	# Backup the original file
 	cp /etc/pam.d/common-password /etc/pam.d/common-password.bak
 
-	echo "password	requisite			pam_pwquality.so retry=3" > /etc/pam.d/common-password
-	echo "password  [success=1 default=ignore]      pam_unix.so obscure use_authtok try_first_pass remember=5" >> /etc/pam.d/common-password
-	echo "password	requisite			pam_deny.so" >> /etc/pam.d/common-password
-	echo "password	required			pam_permit.so" >> /etc/pam.d/common-password
+	{
+		echo "password requisite pam_pwquality.so retry=3"
+		echo "password [success=1 default=ignore] pam_unix.so obscure use_authtok try_first_pass remember=5"
+		echo "password requisite pam_deny.so"
+		echo "password required pam_permit.so"
+	} >> /etc/pam.d/common-password
 
 	#####################Password expiry policy#################
 
