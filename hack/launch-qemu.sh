@@ -13,8 +13,8 @@ qemu-system-x86_64 \
     -cpu "${CPU:=host}" \
     -nographic \
     -spice port=9000,addr=127.0.0.1,disable-ticketing=yes \
-    -m ${MEMORY:=10096} \
-    -smp ${CORES:=5} \
+    -m "${MEMORY:=10096}" \
+    -smp "${CORES:=5}" \
     -monitor unix:/tmp/qemu-monitor.sock,server=on,wait=off \
     -serial mon:stdio \
     -rtc base=utc,clock=rt \

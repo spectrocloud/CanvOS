@@ -48,7 +48,7 @@ function init_globals() {
 
     if [ -n "$REPLACEMENT_HOST" ]; then
         export HOST_3="tn3-$HOST_SUFFIX"
-        vm_array+=($HOST_3)
+        vm_array+=("$HOST_3")
         echo "Added replacement VM: $HOST_3"
     fi
 }
