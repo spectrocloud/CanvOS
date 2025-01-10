@@ -261,7 +261,14 @@ install-k8s:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
        RUN luet install -y container-runtime/containerd-fips --system-target /output
     END
+
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
+
+    IF [ "K8S_DISTRIBUTION" = "nodeadm" ]
+        RUN /output/opt/nodeadmutil/bin/nodeadm install -p iam-ra $BASE_K8S_VERSION && \
+            /output/opt/nodeadmutil/bin/nodeadm install -p ssm $BASE_K8S_VERSION
+    END
+
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
 
