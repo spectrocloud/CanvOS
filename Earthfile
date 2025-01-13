@@ -21,7 +21,7 @@ ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.5.11
-ARG SPECTRO_LUET_VERSION=v1.3.17-alpha6
+ARG SPECTRO_LUET_VERSION=v1.3.17-alpha7
 ARG KAIROS_VERSION=v3.1.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -31,7 +31,7 @@ ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.5.1
 ARG KUBEADM_PROVIDER_VERSION=v4.5.4-alpha4
 ARG RKE2_PROVIDER_VERSION=v4.5.1
-ARG NODEADM_PROVIDER_VERSION=v4.5.0
+ARG NODEADM_PROVIDER_VERSION=v4.5.1
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -263,11 +263,6 @@ install-k8s:
     END
 
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
-
-    IF [ "K8S_DISTRIBUTION" = "nodeadm" ]
-        RUN /output/opt/nodeadmutil/bin/nodeadm install -p iam-ra $BASE_K8S_VERSION && \
-            /output/opt/nodeadmutil/bin/nodeadm install -p ssm $BASE_K8S_VERSION
-    END
 
     RUN rm -rf /output/var/cache/*
     SAVE ARTIFACT /output/*
@@ -535,6 +530,23 @@ provider-image:
 
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
+
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+        RUN apt-get update -y && apt-get install -y gnupg && \
+            /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION --skip validate && \
+            /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION --skip validate && \
+            # ssm-setup-cli fails to install amazon-ssm-agent after downloading the package due to
+            # PID 1 not being systemd, so we do it manually
+            find /opt/ssm -type f -name "amazon-ssm-agent.deb" -exec sudo dpkg -i {} \; && \
+            apt-get remove gnupg -y && apt autoremove -y && \
+            # nodeadm installs these bins under /usr/local/bin, which gets wiped during kairos upgrade,
+            # so we install to /usr/bin and provider-nodeadm adds symlinks to /usr/local/bin
+            mv /usr/local/bin/aws-iam-authenticator /usr/bin && \
+            mv /usr/local/bin/aws_signing_helper /usr/bin && \
+            # nodeadm is hardcoded to check for snap.amazon-ssm-agent.amazon-ssm-agent.service, so we alias it
+            cp /lib/systemd/system/amazon-ssm-agent.service /etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service
+        END
+    END
 
     IF $TWO_NODE
         # Install postgresql 16
