@@ -531,7 +531,7 @@ provider-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         RUN apt-get update -y && apt-get install -y gnupg && \
             /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION --skip validate && \
             /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION --skip validate && \
@@ -540,7 +540,7 @@ provider-image:
             find /opt/ssm -type f -name "amazon-ssm-agent.deb" -exec sudo dpkg -i {} \; && \
             apt-get remove gnupg -y && apt autoremove -y && \
             # nodeadm installs these bins under /usr/local/bin, which gets wiped during kairos upgrade,
-            # so we install to /usr/bin and provider-nodeadm adds symlinks to /usr/local/bin
+            # so we install to /usr/bin and provider-nodeadm symlinks to /usr/local/bin
             mv /usr/local/bin/aws-iam-authenticator /usr/bin && \
             mv /usr/local/bin/aws_signing_helper /usr/bin && \
             # nodeadm is hardcoded to check for snap.amazon-ssm-agent.amazon-ssm-agent.service, so we alias it
