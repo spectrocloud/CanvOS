@@ -535,8 +535,8 @@ provider-image:
         RUN apt-get update -y && apt-get install -y gnupg && \
             /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION --skip validate && \
             /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION --skip validate && \
-            # ssm-setup-cli fails to install amazon-ssm-agent after downloading the package due to
-            # PID 1 not being systemd, so we do it manually
+            # ssm-setup-cli fails to install amazon-ssm-agent via snap after downloading the package
+            # due to PID 1 not being systemd, so we do it manually
             find /opt/ssm -type f -name "amazon-ssm-agent.deb" -exec sudo dpkg -i {} \; && \
             apt-get remove gnupg -y && apt autoremove -y && \
             # nodeadm installs these bins under /usr/local/bin, which gets wiped during kairos upgrade,
