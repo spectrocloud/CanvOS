@@ -545,7 +545,6 @@ provider-image:
             mv /usr/local/bin/aws_signing_helper /usr/bin && \
             # nodeadm is hardcoded to check for snap.amazon-ssm-agent.amazon-ssm-agent.service, so we alias it
             cp /lib/systemd/system/amazon-ssm-agent.service /etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service
-        END
     END
 
     IF $TWO_NODE
