@@ -104,15 +104,14 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
+ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
+ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
+
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
-    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-fips-linux-$ARCH:$PE_VERSION
-    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-fips-linux-$ARCH:$PE_VERSION
     ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
-    ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
     ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
