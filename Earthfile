@@ -4,7 +4,7 @@ ARG TARGETARCH
 
 # Default image repositories used in the builds.
 ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
-ARG SPECTRO_THIRD_PARTY_IMAGE=us-east1-docker.pkg.dev/spectro-images/third-party/spectro-third-party:4.5
+ARG SPECTRO_THIRD_PARTY_IMAGE=us-east1-docker.pkg.dev/spectro-images/third-party/spectro-third-party:4.6
 ARG ALPINE_TAG=3.20
 ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 FROM $ALPINE_IMG
@@ -21,7 +21,7 @@ ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.6.5
-ARG SPECTRO_LUET_VERSION=v4.6.6-rc.2
+ARG SPECTRO_LUET_VERSION=v4.6.6
 ARG KAIROS_VERSION=v3.1.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -29,7 +29,7 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.300.4
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.6.0
-ARG KUBEADM_PROVIDER_VERSION=v4.6.1-rc.1
+ARG KUBEADM_PROVIDER_VERSION=v4.6.1
 ARG RKE2_PROVIDER_VERSION=v4.6.0
 ARG NODEADM_PROVIDER_VERSION=v4.6.0
 
