@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=registry.access.redhat.com/ubi9-init:9.4-6
-ARG KAIROS_FRAMEWORK_IMAGE=quay.io/kairos/framework:v2.7.41
+ARG KAIROS_FRAMEWORK_IMAGE=quay.io/kairos/framework:v2.16.1
 
 FROM $KAIROS_FRAMEWORK_IMAGE as kairosframework
 

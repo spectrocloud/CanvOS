@@ -18,7 +18,7 @@ ARG MODEL=generic
 ARG BASE_IMAGE
 ARG VARIANT
 ARG VERSION
-ARG FRAMEWORK_VERSION=v2.4.5
+ARG FRAMEWORK_VERSION=v2.16.1
 # Not to be confused with the concept of MODEL, this is either fips or generic
 ARG SECURITY_PROFILE=generic
 # TARGETARCH is used to determine the architecture of the image
