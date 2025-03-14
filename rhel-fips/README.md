@@ -1,5 +1,5 @@
 # Kairos Fedora fips
-- Build the base image with the Dockerfile.  `docker build -t rhel-fips:v1.0 .` and docker push to a registry. Use the base image as input to the next command.
+- Build the base image with the Dockerfile.  `docker build -t rhel-fips:v1.0 .` and docker tag/push to a registry. Use the base image as input to the next command.
 - run `bash build.sh <username> <password> <base image>`
 - start the ISO with qemu `bash run.sh`
 

@@ -1,5 +1,5 @@
 # Kairos Ubuntu focal fips
-- Build the base image with the Dockerfile.  'docker build -t ubuntu-focal-fips:v1.0 .' and docker push to a registry.
+- Build the base image with the Dockerfile.  'docker build -t ubuntu-focal-fips:v1.0 .' and docker tag/push to a registry. Use the base image as input to the build script command.
 - Edit `pro-attach-config.yaml` with your token
 - run `bash build.sh <base image>`
 - start the ISO with qemu `bash run.sh`
