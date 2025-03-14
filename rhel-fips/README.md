@@ -1,6 +1,6 @@
 # Kairos Fedora fips
-
-- run `bash build.sh <username> <password> [<base image>]`
+- Build the base image with the Dockerfile.  `docker build -t rhel-fips:v1.0 .` and docker push to a registry. Use the base image as input to the next command.
+- run `bash build.sh <username> <password> <base image>`
 - start the ISO with qemu `bash run.sh`
 
 The system is not enabling FIPS by default in kernel space. 

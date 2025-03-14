@@ -3,7 +3,7 @@
 
 USERNAME=$1
 PASSWORD=$2
-BASE_IMAGE="${3:-rhel-byoi-fips}"
+BASE_IMAGE=$3
 
 # Build the container image
 docker build --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" .
