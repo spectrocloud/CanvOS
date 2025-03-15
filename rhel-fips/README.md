@@ -1,7 +1,7 @@
 # Kairos Fedora fips
 
 - run `bash build.sh <username> <password> [<base image>]`
-- start the ISO with qemu `bash run.sh`
+- use the generated base image as input in installer generation with `earthly +iso`
 
 The system is not enabling FIPS by default in kernel space. 
 
