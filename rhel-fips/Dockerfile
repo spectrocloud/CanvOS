@@ -12,7 +12,7 @@ RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
 # You should change the following values according to your own versioning and other details
 RUN OS_NAME=kairos-core-rhel-fips \
-  OS_VERSION=v3.1.3 \
+  OS_VERSION=v3.3.4 \
   OS_ID="kairos" \
   BUG_REPORT_URL="https://github.com/spectrocloud/pxke-samples/issues" \
   HOME_URL="https://github.com/spectrocloud/pxke-samples" \
