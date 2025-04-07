@@ -15,7 +15,7 @@ IF [ "$FIPS_ENABLED" = "true" ] && [ "$SPECTRO_PUB_REPO" = "us-docker.pkg.dev/pa
     LET ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 END
 
-ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
+ARG SPECTRO_LUET_REPO=gcr.io/spectro-dev-public/piyush
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG LUET_PROJECT=luet-repo
 
@@ -32,6 +32,7 @@ ARG K3S_PROVIDER_VERSION=v4.6.0
 ARG KUBEADM_PROVIDER_VERSION=v4.6.2
 ARG RKE2_PROVIDER_VERSION=v4.6.0
 ARG NODEADM_PROVIDER_VERSION=v4.6.0
+ARG CANONICAL_PROVIDER_VERSION=v1.0.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -48,7 +49,6 @@ ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
 ARG UBUNTU_PRO_KEY
-
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -151,7 +151,7 @@ build-provider-images:
     FROM $ALPINE_IMG
 
     IF [ !-n "$K8S_DISTRIBUTION"]
-        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, or rke2." && exit 1
+        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, rke2 or canonical." && exit 1
     END
 
     IF [ "$IS_UKI" = "true" ]
@@ -229,7 +229,7 @@ install-k8s:
     DO +BASE_ALPINE
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ] || [ "$K8S_DISTRIBUTION" = "canonical" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -248,7 +248,7 @@ install-k8s:
     END
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y
+        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO  --priority 1 -y
     COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
     RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
     RUN --no-cache luet repo update
@@ -612,6 +612,8 @@ kairos-provider-image:
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-nodeadm:$NODEADM_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "canonical" ]
+         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-canonical:$CANONICAL_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
