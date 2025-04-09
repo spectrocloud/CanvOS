@@ -642,14 +642,20 @@ base-image:
         RUN apt-get update && \
             apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
+        ARG APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION" ; fi && \
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
+        ELSE
+            ARG APT_UPGRADE_FLAGS="-y --with-new-pkgs"
         END
 
+        # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
+        # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
+        
         IF [ "$IS_UKI" = "false" ]
-            RUN apt-get update && \
-                apt-get upgrade -y
+            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+                apt-get upgrade $APT_UPGRADE_FLAGS
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
             RUN kernel=$(ls /lib/modules | tail -n1) && \
