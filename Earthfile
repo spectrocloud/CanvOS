@@ -642,12 +642,12 @@ base-image:
         RUN apt-get update && \
             apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
-        ARG APT_UPGRADE_FLAGS="-y"
+        LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION" ; fi && \
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
-            ARG APT_UPGRADE_FLAGS="-y --with-new-pkgs"
+            SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
         END
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
@@ -655,7 +655,11 @@ base-image:
         
         IF [ "$IS_UKI" = "false" ]
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-                apt-get upgrade $APT_UPGRADE_FLAGS
+                apt-get upgrade $APT_UPGRADE_FLAGS && \
+                latest_kernel=$(ls /lib/modules | tail -n1) && \
+                apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
+                apt-get autoremove -y && \
+                rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
             RUN kernel=$(ls /lib/modules | tail -n1) && \
@@ -668,8 +672,6 @@ base-image:
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
 
-            RUN rm -rf /var/cache/* && \
-                apt-get clean
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
