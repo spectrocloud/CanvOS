@@ -113,7 +113,6 @@ RUN apt-get install -y --no-install-recommends \
     zfsutils-linux \
     zstd \
     && apt-get remove -y unattended-upgrades && apt-get clean \
-    && apt-get purge --auto-remove -y ubuntu-advantage-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
