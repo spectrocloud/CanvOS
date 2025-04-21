@@ -10,10 +10,17 @@ function build_with_proxy() {
     if [ "$(docker container inspect -f '{{.State.Running}}' earthly-buildkitd)" = "true" ]; then
         docker stop earthly-buildkitd
     fi
+    
+    # Check if Docker config file exists
+    DOCKER_CONFIG_MOUNT=""
+    if [ -f ~/.docker/config.json ]; then
+        DOCKER_CONFIG_MOUNT="-v ~/.docker/config.json:/root/.docker/config.json"
+    fi
+    
     # start earthly buildkitd
     docker run -d --privileged \
         --name earthly-buildkitd \
-        -v ~/.docker/config.json:/root/.docker/config.json \
+        ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} \
         -v /var/run/docker.sock:/var/run/docker.sock \
         --rm -t \
         -e GLOBAL_CONFIG="$global_config" \
@@ -53,8 +60,14 @@ function build_with_proxy() {
 }
 
 function build_without_proxy() {
+    # Check if Docker config file exists
+    DOCKER_CONFIG_MOUNT=""
+    if [ -f ~/.docker/config.json ]; then
+        DOCKER_CONFIG_MOUNT="-v ~/.docker/config.json:/root/.docker/config.json"
+    fi
+    
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged -v ~/.docker/config.json:/root/.docker/config.json -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "$@"
+    docker run --privileged ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "$@"
 }
 
 function print_os_pack() {
