@@ -13,8 +13,8 @@ function build_with_proxy() {
     
     # Check if Docker config file exists
     DOCKER_CONFIG_MOUNT=""
-    if [ -f ~/.docker/config.json ]; then
-        DOCKER_CONFIG_MOUNT="-v ~/.docker/config.json:/root/.docker/config.json"
+    if [ -f "$HOME/.docker/config.json" ]; then
+        DOCKER_CONFIG_MOUNT="-v$HOME/.docker/config.json:/root/.docker/config.json"
     fi
     
     # start earthly buildkitd
@@ -41,7 +41,7 @@ function build_with_proxy() {
 
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
     docker run --privileged \
-        -v ~/.docker/config.json:/root/.docker/config.json \
+        ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} \
         -v /var/run/docker.sock:/var/run/docker.sock \
         --rm --env EARTHLY_BUILD_ARGS -t \
         -e GLOBAL_CONFIG="$global_config" \
@@ -62,8 +62,8 @@ function build_with_proxy() {
 function build_without_proxy() {
     # Check if Docker config file exists
     DOCKER_CONFIG_MOUNT=""
-    if [ -f ~/.docker/config.json ]; then
-        DOCKER_CONFIG_MOUNT="-v ~/.docker/config.json:/root/.docker/config.json"
+    if [ -f "$HOME/.docker/config.json" ]; then
+        DOCKER_CONFIG_MOUNT="-v$HOME/.docker/config.json:/root/.docker/config.json"
     fi
     
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
