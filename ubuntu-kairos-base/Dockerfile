@@ -41,12 +41,12 @@ FROM ${FLAVOR}-${FLAVOR_RELEASE}-upstream AS common
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+  && apt-get install -y --no-install-recommends \
     gnupg \
     software-properties-common \
-    && add-apt-repository ppa:oibaf/test \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
+  && add-apt-repository ppa:oibaf/test \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
     conntrack \
     console-data \
     cloud-guest-utils \
@@ -99,7 +99,7 @@ RUN apt-get update \
 
 FROM common AS amd64
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+  && apt-get install -y --no-install-recommends \
     dmsetup \
     efibootmgr \
     grub2 \
@@ -124,7 +124,7 @@ RUN apt-get update \
 
 FROM common AS arm64
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+  && apt-get install -y --no-install-recommends \
     grub-efi-arm64 \
     grub-efi-arm64-bin \
     grub-efi-arm64-signed \
@@ -218,7 +218,7 @@ FROM ubuntu-20.04-upstream AS arm64-ubuntu-20.04-nvidia-jetson-agx-orin
 ###############################################################
 FROM ${TARGETARCH}-${FLAVOR}-${FLAVOR_RELEASE}-${MODEL} AS ubuntu-23.04
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+  && apt-get install -y --no-install-recommends \
     dbus-user-session \
     pkg-config \
     systemd-hwe-hwdb \
@@ -338,14 +338,14 @@ RUN kernel=$(ls /lib/modules | head -n1) && depmod -a "${kernel}"
 # Regenerate initrd if necessary, proper config files with immucore and custom initrd should already be in there installed by framework
 # for systemd distros
 RUN if [ -f "/usr/bin/dracut" ]; then \
-    kernel=$(ls /lib/modules | head -n1) && \
-    dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-    ln -sf "initrd-${kernel}" /boot/initrd; \
+      kernel=$(ls /lib/modules | head -n1) && \
+      dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+      ln -sf "initrd-${kernel}" /boot/initrd; \
     fi
 # for alpine (openrc based)
 RUN if [ -f "/sbin/mkinitfs" ]; then \
-    kernel=$(ls /lib/modules | head -n1) && \
-    mkinitfs -o /boot/initrd "${kernel}"; \
+      kernel=$(ls /lib/modules | head -n1) && \
+      mkinitfs -o /boot/initrd "${kernel}"; \
     fi
 
 # symlink kernel to /boot/vmlinuz
