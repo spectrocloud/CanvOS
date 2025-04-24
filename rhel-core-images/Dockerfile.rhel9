@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=registry.access.redhat.com/ubi9-init:9.4-6
+ARG BASE_IMAGE=registry.access.redhat.com/ubi9-init:9.5-1742937625
 
 FROM $BASE_IMAGE 
 ARG USERNAME
@@ -52,6 +52,16 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     grub2-efi-x64-modules \
     open-vm-tools \
     iscsi-initiator-utils \
+    gdisk \
+    mdadm \
+    biosdevname \
+    nvme-cli \
+    nfs-utils \
+    rpcbind \
+    e2fsprogs \
+    systemd-udev \
+    util-linux \
+    cloud-utils-growpart \
     iptables ethtool socat iproute-tc conntrack \
     kernel kernel-modules kernel-modules-extra \
     rsync jq && dnf clean all
