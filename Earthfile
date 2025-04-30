@@ -21,7 +21,7 @@ ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.6.16
-ARG SPECTRO_LUET_VERSION=v4.6.15
+ARG SPECTRO_LUET_VERSION=v4.6.17-alpha1
 ARG KAIROS_VERSION=v3.3.6
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -32,6 +32,7 @@ ARG K3S_PROVIDER_VERSION=v4.6.0
 ARG KUBEADM_PROVIDER_VERSION=v4.6.3
 ARG RKE2_PROVIDER_VERSION=v4.6.0
 ARG NODEADM_PROVIDER_VERSION=v4.6.0
+ARG CANONICAL_PROVIDER_VERSION=v1.0.1
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -48,7 +49,6 @@ ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
 ARG UBUNTU_PRO_KEY
-
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -151,7 +151,7 @@ build-provider-images:
     FROM $ALPINE_IMG
 
     IF [ !-n "$K8S_DISTRIBUTION"]
-        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, or rke2." && exit 1
+        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, rke2 or canonical." && exit 1
     END
 
     IF [ "$IS_UKI" = "true" ]
@@ -202,7 +202,7 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --platform=linux/${ARCH} +install-k8s/ /k8s
+    COPY --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
@@ -229,7 +229,7 @@ install-k8s:
     DO +BASE_ALPINE
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ] || [ "$K8S_DISTRIBUTION" = "canonical" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -264,7 +264,7 @@ install-k8s:
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
 
     RUN rm -rf /output/var/cache/*
-    SAVE ARTIFACT /output/*
+    SAVE ARTIFACT /output/ .
 
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
@@ -514,13 +514,13 @@ provider-image:
 
     IF [ "$IS_UKI" = "true" ]
         COPY +internal-slink/slink /usr/bin/slink
-        COPY +install-k8s/ /k8s
+        COPY +install-k8s/output/ /k8s
         RUN slink --source /k8s/ --target /opt/k8s
         RUN rm -f /usr/bin/slink
         RUN rm -rf /k8s
         RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
     ELSE
-        COPY +install-k8s/ /
+        COPY +install-k8s/output/ /
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
@@ -612,6 +612,8 @@ kairos-provider-image:
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-nodeadm:$NODEADM_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "canonical" ]
+         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-canonical:$CANONICAL_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
