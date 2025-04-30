@@ -10,14 +10,12 @@ set -o pipefail
 
 # --- Configuration and Setup ---
 
-# Source configuration variables. Ensure .arg exists.
 ARG_FILE=".arg"
-if [[ ! -f "$ARG_FILE" ]]; then
-  echo "Error: Configuration file '$ARG_FILE' not found." >&2
-  exit 1
+
+# source if .arg exists
+if [[ -f "$ARG_FILE" ]]; then
+  source ".arg"
 fi
-# shellcheck source=.arg
-source "$ARG_FILE"
 
 # Function for logging messages
 log() {
@@ -30,32 +28,12 @@ log "Starting RAW to AMI creation process."
 
 log "Checking dependencies..."
 # Check for essential commands
-for cmd in curl unzip jq aws; do
-  if ! command -v "$cmd" &> /dev/null; then
+for cmd in curl jq aws; do
+  if ! command -v "$cmd" &>/dev/null; then
     log "Error: Required command '$cmd' not found." >&2
-    if [[ "$cmd" == "aws" ]]; then
-      log "Attempting to install AWS CLI..."
-      # Keep existing AWS CLI installation logic
-      if ! command -v curl &> /dev/null || ! command -v unzip &> /dev/null; then
-         log "Error: 'curl' and 'unzip' are required to install AWS CLI." >&2
-         exit 1
-      fi
-      curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-      unzip -q awscliv2.zip -d aws_install_temp
-      # Use sudo thoughtfully. Consider if the user running the script has sudo privileges
-      # or if installation should be handled differently in the environment.
-      if sudo ./aws_install_temp/aws/install; then
-         log "AWS CLI installed successfully."
-         rm -rf awscliv2.zip aws_install_temp # Cleanup
-      else
-         log "Error: Failed to install AWS CLI." >&2
-         rm -rf awscliv2.zip aws_install_temp # Cleanup
-         exit 1
-      fi
-    else
-      log "Please install '$cmd' and try again." >&2
-      exit 1
-    fi
+    log "Please install '$cmd' and try again." >&2
+    exit 1
+    # fi
   fi
 done
 log "All dependencies found."
@@ -77,28 +55,28 @@ done
 
 # Validate AWS Credentials - Prefer AWS_PROFILE
 if [[ -z "${AWS_PROFILE-}" ]]; then
-    log "AWS_PROFILE not set. Checking for AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY..."
-    if [[ -z "${AWS_ACCESS_KEY_ID-}" || -z "${AWS_SECRET_ACCESS_KEY-}" ]]; then
-        missing_vars+=("AWS_PROFILE or (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)")
-    else
-        log "Warning: Using AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY from '$ARG_FILE'. Using AWS_PROFILE is recommended for production."
-        export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
-        export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
-        # Consider unsetting AWS_SESSION_TOKEN if sourced, unless explicitly needed and managed.
-        # The script had a hardcoded token commented out, ensure no active tokens are sourced insecurely.
-        if [[ -n "${AWS_SESSION_TOKEN-}" ]]; then
-           export AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"
-           log "Using AWS_SESSION_TOKEN."
-        fi
+  log "AWS_PROFILE not set. Checking for AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY..."
+  unset AWS_PROFILE
+  if [[ -z "${AWS_ACCESS_KEY_ID-}" || -z "${AWS_SECRET_ACCESS_KEY-}" ]]; then
+    missing_vars+=("AWS_PROFILE or (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)")
+  else
+    log "Warning: Using AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY from '$ARG_FILE'. Using AWS_PROFILE is recommended for production."
+    export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
+    export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
+    # Consider unsetting AWS_SESSION_TOKEN if sourced, unless explicitly needed and managed.
+    # The script had a hardcoded token commented out, ensure no active tokens are sourced insecurely.
+    if [[ -n "${AWS_SESSION_TOKEN-}" ]]; then
+      export AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"
+      log "Using AWS_SESSION_TOKEN."
     fi
+  fi
 elif [[ -n "${AWS_ACCESS_KEY_ID-}" || -n "${AWS_SECRET_ACCESS_KEY-}" ]]; then
-    log "Warning: AWS_PROFILE is set, but AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are also present in '$ARG_FILE'. AWS_PROFILE will be used."
-    # Unset keys if profile is preferred to avoid confusion
-    unset AWS_ACCESS_KEY_ID
-    unset AWS_SECRET_ACCESS_KEY
-    unset AWS_SESSION_TOKEN
+  log "Warning: AWS_PROFILE is set, but AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are also present in '$ARG_FILE'. AWS_PROFILE will be used."
+  # Unset keys if profile is preferred to avoid confusion
+  unset AWS_ACCESS_KEY_ID
+  unset AWS_SECRET_ACCESS_KEY
+  unset AWS_SESSION_TOKEN
 fi
-
 
 if [[ ${#missing_vars[@]} -ne 0 ]]; then
   log "Error: Missing required configuration variables in '$ARG_FILE': ${missing_vars[*]}" >&2
@@ -112,7 +90,6 @@ if [[ ! -f "$RAW_FILE" ]]; then
 fi
 
 log "Configuration validated successfully."
-
 
 # --- AWS Helper Functions ---
 
@@ -132,7 +109,7 @@ AWS() {
 AWSNR() {
   local args=("$@")
   local cmd=("aws")
-   if [[ -n "${AWS_PROFILE-}" ]]; then
+  if [[ -n "${AWS_PROFILE-}" ]]; then
     cmd+=("--profile" "$AWS_PROFILE")
   fi
   "${cmd[@]}" "${args[@]}"
@@ -161,13 +138,13 @@ waitForSnapshotCompletion() {
       # Optionally, get more detailed error message if available
       local status_message
       status_message=$(AWS ec2 describe-import-snapshot-tasks --import-task-ids "$taskID" --query 'ImportSnapshotTasks[0].SnapshotTaskDetail.StatusMessage' --output text 2>/dev/null)
-       if [[ -n "$status_message" ]]; then
-         log "Status Message: $status_message" >&2
-       fi
+      if [[ -n "$status_message" ]]; then
+        log "Status Message: $status_message" >&2
+      fi
       exit 1
     elif [[ "$status" == "error" ]]; then
-       log "Error querying status for task '$taskID'. Retrying..." >&2
-       sleep 15 # Wait longer if query failed
+      log "Error querying status for task '$taskID'. Retrying..." >&2
+      sleep 15 # Wait longer if query failed
     else
       log "Snapshot import task '$taskID' status: $status. Waiting..."
       sleep 30
@@ -193,17 +170,17 @@ waitAMI() {
       log "[$ami_region] AMI '$amiID' is pending. Waiting..."
       sleep 15 # Increased wait time
     elif [[ "$status" == "error" ]]; then
-       log "[$ami_region] Error querying status for AMI '$amiID'. Retrying..." >&2
-       sleep 15
+      log "[$ami_region] Error querying status for AMI '$amiID'. Retrying..." >&2
+      sleep 15
     elif [[ "$status" == "failed" ]]; then
-       log "[$ami_region] Error: AMI '$amiID' entered failed state." >&2
-       # Optionally retrieve reason for failure
-       local state_reason
-       state_reason=$(AWSNR ec2 describe-images --region "$ami_region" --image-ids "$amiID" --query "Images[0].StateReason.Message" --output text 2>/dev/null)
-       if [[ -n "$state_reason" ]]; then
-         log "[$ami_region] Failure Reason: $state_reason" >&2
-       fi
-       exit 1
+      log "[$ami_region] Error: AMI '$amiID' entered failed state." >&2
+      # Optionally retrieve reason for failure
+      local state_reason
+      state_reason=$(AWSNR ec2 describe-images --region "$ami_region" --image-ids "$amiID" --query "Images[0].StateReason.Message" --output text 2>/dev/null)
+      if [[ -n "$state_reason" ]]; then
+        log "[$ami_region] Failure Reason: $state_reason" >&2
+      fi
+      exit 1
     else
       # Handle other potential states explicitly if needed (e.g., deregistered)
       log "[$ami_region] Warning: AMI '$amiID' is in an unexpected state: $status." >&2
@@ -248,8 +225,8 @@ checkImageExistsOrCreate() {
       --output text)
 
     if [[ -z "$imageID" ]]; then
-        log "Error: Failed to register image '$imageName'." >&2
-        exit 1
+      log "Error: Failed to register image '$imageName'." >&2
+      exit 1
     fi
     log "Image '$imageName' registration initiated with Image ID: $imageID."
 
@@ -309,17 +286,17 @@ importAsSnapshot() {
   # Wait for completion and get the Snapshot ID
   snapshotID=$(waitForSnapshotCompletion "$taskID")
   if [[ -z "$snapshotID" ]]; then
-     log "Error: waitForSnapshotCompletion did not return a Snapshot ID for task '$taskID'." >&2
-     exit 1
+    log "Error: waitForSnapshotCompletion did not return a Snapshot ID for task '$taskID'." >&2
+    exit 1
   fi
 
   log "Adding tag '$snapshot_tag_key=$s3Key' to snapshot '$snapshotID'..."
   if AWS ec2 create-tags --resources "$snapshotID" --tags Key="$snapshot_tag_key",Value="$s3Key" Key=Name,Value="$s3Key"; then
-     log "Successfully tagged snapshot '$snapshotID'."
+    log "Successfully tagged snapshot '$snapshotID'."
   else
-     log "Warning: Failed to tag snapshot '$snapshotID'. Manual tagging might be required." >&2
-     # Decide if this is a critical failure or just a warning
-     # exit 1
+    log "Warning: Failed to tag snapshot '$snapshotID'. Manual tagging might be required." >&2
+    # Decide if this is a critical failure or just a warning
+    # exit 1
   fi
 
   echo "$snapshotID" # Return the newly created snapshot ID
@@ -340,8 +317,8 @@ fi
 log "Importing S3 object 's3://$S3_BUCKET/$S3_KEY' as EC2 snapshot..."
 snapshotID=$(importAsSnapshot "$S3_KEY")
 if [[ -z "$snapshotID" ]]; then
-    log "Error: Failed to import snapshot from S3 object '$S3_KEY'." >&2
-    exit 1
+  log "Error: Failed to import snapshot from S3 object '$S3_KEY'." >&2
+  exit 1
 fi
 log "Snapshot import process completed. Snapshot ID: $snapshotID"
 
@@ -351,8 +328,8 @@ ami_name="${AMI_NAME:-$S3_KEY}" # Use AMI_NAME from .arg if set, otherwise defau
 log "Creating/Verifying AMI '$ami_name' from snapshot '$snapshotID'..."
 final_ami_id=$(checkImageExistsOrCreate "$ami_name" "$snapshotID")
 if [[ -z "$final_ami_id" ]]; then
-    log "Error: Failed to create or verify AMI '$ami_name'." >&2
-    exit 1
+  log "Error: Failed to create or verify AMI '$ami_name'." >&2
+  exit 1
 fi
 
 log "Process completed successfully!"

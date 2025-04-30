@@ -818,10 +818,23 @@ cloud-image:
 aws-cloud-image:
     FROM +ubuntu
 
+    RUN apt-get update && apt-get install -y unzip ca-certificates curl
+    RUN curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+        unzip -q awscliv2.zip -d aws_install_temp && \  
+        ./aws_install_temp/aws/install && \
+        rm -rf awscliv2.zip aws_install_temp
+
+    ARG REGION
+    ARG S3_BUCKET
+    ARG S3_KEY
+
     WORKDIR /workdir
     COPY cloud-images/scripts/create-raw-to-ami.sh create-raw-to-ami.sh
     COPY +cloud-image/ /workdir/
-    RUN create-raw-to-ami.sh /workdir/kairos-ubuntu-22.04-core-amd64-generic-v3.3.6.raw
+    RUN --secret AWS_PROFILE \
+        --secret AWS_ACCESS_KEY_ID \
+        --secret AWS_SECRET_ACCESS_KEY \
+        /workdir/create-raw-to-ami.sh /workdir/kairos-ubuntu-22.04-core-amd64-generic-v3.3.6.raw
 
 iso-disk-image:
     FROM scratch
