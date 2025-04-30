@@ -181,6 +181,8 @@ BASE_ALPINE:
     RUN update-ca-certificates
     RUN apk add curl
 
+    SAVE IMAGE --push gcr.io/spectro-dev-public/canvos/alpine:$ALPINE_TAG
+
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-own /. rootfs
@@ -736,6 +738,10 @@ base-image:
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
+    ARG IS_CLOUD_IMAGE=false
+    ARG IMAGE_REGISTRY
+    ARG IMAGE_TAG
+    
     IF [ "$IS_UKI" = "false" ]
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
@@ -744,6 +750,10 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+    IF [ "$IS_CLOUD_IMAGE" = "true" ]
+        COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
+        COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
+    END
 
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
@@ -753,7 +763,65 @@ iso-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    SAVE IMAGE palette-installer-image:$IMAGE_TAG
+    SAVE IMAGE --push $IMAGE_REGISTRY/palette-installer-image:$IMAGE_TAG
+
+cloud-image:
+    ARG IS_CLOUD_IMAGE=true
+    # print the value of IS_CLOUD_IMAGE
+    # RUN echo "IS_CLOUD_IMAGE: $IS_CLOUD_IMAGE"
+    # ARG IMAGE_REGISTRY
+    # ARG IMAGE_TAG
+    # # Ensure IMAGE_REGISTRY is set
+    # IF [ "$IMAGE_REGISTRY" = "" ]
+    #     RUN echo "IMAGE_REGISTRY is not set. Please set IMAGE_REGISTRY to a valid registry." && exit 1
+    # END
+    # # Ensure IMAGE_TAG is set
+    # IF [ "$IMAGE_TAG" = "" ]
+    #     RUN echo "IMAGE_TAG is not set. Please set IMAGE_TAG." && exit 1
+    # END
+
+    # Verify the image exists before proceeding
+
+    FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    # Copy the config file first
+    COPY cloud-images/config/user-data.yaml /config.yaml
+    # Copy the create-raw-to-ami.sh script
+    # COPY .arg /.arg
+    # COPY cloud-images/scripts/create-raw-to-ami.sh /create-raw-to-ami.sh
+    # RUN chmod +x /create-raw-to-ami.sh
+    # RUN ls -al /create-raw-to-ami.sh
+    # Use the auroraboot image directly as the base for this stage
+    WORKDIR /output
+
+    # RUN ls -al /create-raw-to-ami.sh
+    WITH DOCKER \
+        --pull quay.io/kairos/auroraboot:v0.6.4 \
+        --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)
+        RUN mkdir -p /output && \
+            docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /config.yaml:/config.yaml:ro \
+                -v /output:/aurora \
+                --net host \
+                --privileged \
+                quay.io/kairos/auroraboot:v0.6.4 \
+                --debug \
+                --set "disable_http_server=true" \
+                --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
+                --set "disable_netboot=true" \
+                --set "disk.raw=true" \
+                --set "state_dir=/aurora" \
+                --cloud-config /config.yaml
+    END
+    SAVE ARTIFACT /output/* AS LOCAL ./build/
+
+aws-cloud-image:
+    FROM +ubuntu
+
+    WORKDIR /workdir
+    COPY cloud-images/scripts/create-raw-to-ami.sh create-raw-to-ami.sh
+    COPY +cloud-image/ /workdir/
+    RUN create-raw-to-ami.sh /workdir/kairos-ubuntu-22.04-core-amd64-generic-v3.3.6.raw
 
 iso-disk-image:
     FROM scratch
