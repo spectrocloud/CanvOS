@@ -303,14 +303,22 @@ importAsSnapshot() {
 }
 
 # --- Main Execution ---
+# check if object exists in s3
+OBJECT_EXISTS=false
+if AWS s3 ls "s3://$S3_BUCKET/$S3_KEY" > /dev/null 2>&1; then
+  log "Object '$S3_KEY' already exists in s3://$S3_BUCKET/$S3_KEY."
+  OBJECT_EXISTS=true
+fi
 
-# Step 1: Upload RAW file to S3
-log "Uploading '$RAW_FILE' to s3://$S3_BUCKET/$S3_KEY..."
-if AWS s3 cp "$RAW_FILE" "s3://$S3_BUCKET/$S3_KEY"; then
-  log "Successfully uploaded '$RAW_FILE' to S3."
-else
-  log "Error: Failed to upload '$RAW_FILE' to s3://$S3_BUCKET/$S3_KEY." >&2
-  exit 1
+# if object does not exist, upload it
+if ! $OBJECT_EXISTS; then
+  log "Uploading '$RAW_FILE' to s3://$S3_BUCKET/$S3_KEY..."
+  if AWS s3 cp "$RAW_FILE" "s3://$S3_BUCKET/$S3_KEY"; then
+    log "Successfully uploaded '$RAW_FILE' to S3."
+  else
+    log "Error: Failed to upload '$RAW_FILE' to s3://$S3_BUCKET/$S3_KEY." >&2
+    exit 1
+  fi
 fi
 
 # Step 2: Import S3 object as Snapshot
