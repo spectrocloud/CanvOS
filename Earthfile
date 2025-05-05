@@ -767,33 +767,12 @@ iso-image:
 
 cloud-image:
     ARG IS_CLOUD_IMAGE=true
-    # print the value of IS_CLOUD_IMAGE
-    # RUN echo "IS_CLOUD_IMAGE: $IS_CLOUD_IMAGE"
-    # ARG IMAGE_REGISTRY
-    # ARG IMAGE_TAG
-    # # Ensure IMAGE_REGISTRY is set
-    # IF [ "$IMAGE_REGISTRY" = "" ]
-    #     RUN echo "IMAGE_REGISTRY is not set. Please set IMAGE_REGISTRY to a valid registry." && exit 1
-    # END
-    # # Ensure IMAGE_TAG is set
-    # IF [ "$IMAGE_TAG" = "" ]
-    #     RUN echo "IMAGE_TAG is not set. Please set IMAGE_TAG." && exit 1
-    # END
-
-    # Verify the image exists before proceeding
 
     FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
     # Copy the config file first
     COPY cloud-images/config/user-data.yaml /config.yaml
-    # Copy the create-raw-to-ami.sh script
-    # COPY .arg /.arg
-    # COPY cloud-images/scripts/create-raw-to-ami.sh /create-raw-to-ami.sh
-    # RUN chmod +x /create-raw-to-ami.sh
-    # RUN ls -al /create-raw-to-ami.sh
-    # Use the auroraboot image directly as the base for this stage
     WORKDIR /output
 
-    # RUN ls -al /create-raw-to-ami.sh
     WITH DOCKER \
         --pull quay.io/kairos/auroraboot:v0.6.4 \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)
@@ -827,14 +806,26 @@ aws-cloud-image:
     ARG REGION
     ARG S3_BUCKET
     ARG S3_KEY
+    # Get the base image name from the BASE_IMAGE variable
 
     WORKDIR /workdir
     COPY cloud-images/scripts/create-raw-to-ami.sh create-raw-to-ami.sh
     COPY +cloud-image/ /workdir/
+
     RUN --secret AWS_PROFILE \
-        --secret AWS_ACCESS_KEY_ID \
-        --secret AWS_SECRET_ACCESS_KEY \
-        /workdir/create-raw-to-ami.sh /workdir/kairos-ubuntu-22.04-core-amd64-generic-v3.3.6.raw
+    --secret AWS_ACCESS_KEY_ID \
+    --secret AWS_SECRET_ACCESS_KEY \
+    RAW_FILE_PATH=$(ls /workdir/*.raw) && \
+    echo "RAW_FILE_PATH: $RAW_FILE_PATH" && \
+    if [ ! -f "$RAW_FILE_PATH" ]; then \
+        echo "Error: RAW file '/workdir/$RAW_FILE_PATH' not found." && \
+        ls -la /workdir/ && \
+        exit 1; \
+    else \
+        echo "RAW file '$RAW_FILE_PATH' found." && \
+        echo "Proceeding with creation of AMI..."; \
+    fi && \
+    /workdir/create-raw-to-ami.sh $RAW_FILE_PATH
 
 iso-disk-image:
     FROM scratch

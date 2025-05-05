@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Exit immediately if a command exits with a non-zero status.
-set -e
+set -ex
 # Treat unset variables as an error when substituting.
 set -u
 # Pipefail: the return value of a pipeline is the status of the last command to exit with a non-zero status,
@@ -217,7 +217,7 @@ checkImageExistsOrCreate() {
       --description "$description" \
       --architecture x86_64 \
       --root-device-name /dev/xvda \
-      --block-device-mappings "$block_device_mappings" \
+      --block-device-mappings "[{\"DeviceName\":\"/dev/xvda\",\"Ebs\":{\"SnapshotId\":\"$snapshotID\"}}]" \
       --virtualization-type hvm \
       --boot-mode uefi \
       --ena-support \
@@ -252,16 +252,15 @@ importAsSnapshot() {
   local taskID
   local snapshot_tag_key="SourceS3Key" # Using a specific tag for idempotency check
 
-  log "Checking for existing snapshot tagged with '$snapshot_tag_key=$s3Key'..."
-  snapshotID=$(AWS ec2 describe-snapshots --filters "Name=tag:$snapshot_tag_key,Values=$s3Key" "Name=status,Values=completed" --query "Snapshots[0].SnapshotId" --output text)
+  # log "Checking for existing snapshot tagged with '$snapshot_tag_key=$s3Key'..."
+  # snapshotID=$(AWS ec2 describe-snapshots --filters "Name=tag:$snapshot_tag_key,Values=$s3Key" --query "Snapshots[0].SnapshotId" --output text)
+  # if [[ "$snapshotID" != "None" && -n "$snapshotID" ]]; then
+  #   log "Snapshot '$snapshotID' already exists for S3 key '$s3Key'."
+  #   echo "$snapshotID"
+  #   return 0 # Indicate success, snapshot already exists
+  # fi
 
-  if [[ "$snapshotID" != "None" && -n "$snapshotID" ]]; then
-    log "Snapshot '$snapshotID' already exists for S3 key '$s3Key'."
-    echo "$snapshotID"
-    return 0 # Indicate success, snapshot already exists
-  fi
-
-  log "No existing snapshot found. Importing '$s3Key' from bucket '$S3_BUCKET'..."
+  # log "No existing snapshot found. Importing '$s3Key' from bucket '$S3_BUCKET'..."
 
   # Use jq to create the disk container JSON safely
   local disk_container_json
@@ -284,20 +283,20 @@ importAsSnapshot() {
   log "Snapshot import task started with ID: $taskID"
 
   # Wait for completion and get the Snapshot ID
-  snapshotID=$(waitForSnapshotCompletion "$taskID")
+  snapshotID=$(waitForSnapshotCompletion "$taskID" | tail -1 | tee /dev/fd/2)
   if [[ -z "$snapshotID" ]]; then
     log "Error: waitForSnapshotCompletion did not return a Snapshot ID for task '$taskID'." >&2
     exit 1
   fi
 
-  log "Adding tag '$snapshot_tag_key=$s3Key' to snapshot '$snapshotID'..."
-  if AWS ec2 create-tags --resources "$snapshotID" --tags Key="$snapshot_tag_key",Value="$s3Key" Key=Name,Value="$s3Key"; then
-    log "Successfully tagged snapshot '$snapshotID'."
-  else
-    log "Warning: Failed to tag snapshot '$snapshotID'. Manual tagging might be required." >&2
-    # Decide if this is a critical failure or just a warning
-    # exit 1
-  fi
+  # log "Adding tag '$snapshot_tag_key=$s3Key' to snapshot '$snapshotID'..."
+  # if AWS ec2 create-tags --resources "$snapshotID" --tags Key="$snapshot_tag_key",Value="$s3Key" Key=Name,Value="$s3Key"; then
+  #   log "Successfully tagged snapshot '$snapshotID'."
+  # else
+  #   log "Warning: Failed to tag snapshot '$snapshotID'. Manual tagging might be required." >&2
+  #   # Decide if this is a critical failure or just a warning
+  #   # exit 1
+  # fi
 
   echo "$snapshotID" # Return the newly created snapshot ID
 }
@@ -323,7 +322,7 @@ fi
 
 # Step 2: Import S3 object as Snapshot
 log "Importing S3 object 's3://$S3_BUCKET/$S3_KEY' as EC2 snapshot..."
-snapshotID=$(importAsSnapshot "$S3_KEY")
+snapshotID=$(importAsSnapshot "$S3_KEY" | tail -1)
 if [[ -z "$snapshotID" ]]; then
   log "Error: Failed to import snapshot from S3 object '$S3_KEY'." >&2
   exit 1
