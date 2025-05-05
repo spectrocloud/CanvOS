@@ -177,7 +177,9 @@ REGION="us-east-1"
 S3_BUCKET="test-bkp"
 S3_KEY=""
 ```
-TO build AWS cloud image:
+user-data should be kept under `cloud-images/config/user-data.yaml`
+
+To build AWS cloud image:
 ```shell
 ./earthly.sh -P +aws-cloud-image --ARCH=amd64
 ```
