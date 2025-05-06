@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.10-12
+ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.7-10
 
 FROM $BASE_IMAGE as base
 
@@ -73,16 +73,6 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     grub2-efi-x64-modules \
     open-vm-tools \
     iscsi-initiator-utils \
-    gdisk \
-    mdadm \
-    biosdevname \
-    nvme-cli \
-    nfs-utils \
-    rpcbind \
-    e2fsprogs \
-    systemd-udev \
-    util-linux \
-    cloud-utils-growpart \
     iptables ethtool socat iproute-tc conntrack \
     kernel kernel-modules kernel-modules-extra \
     rsync jq && dnf clean all
