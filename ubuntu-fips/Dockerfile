@@ -112,7 +112,6 @@ RUN apt-get install -y --no-install-recommends \
     zerofree \
     zfsutils-linux \
     zstd \
-    cloud-guest-utils \
     && apt-get remove -y unattended-upgrades && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
