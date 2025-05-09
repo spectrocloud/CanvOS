@@ -144,6 +144,8 @@ cp .arg.template .arg
 >For use cases where UEFI installers are burned into a USB and then edge hosts are booted with the USB. Use the OSBUILDER_VERSION=0.300.4 in the .arg file with canvos when building the installer.
 Version 0.300.3 does not support UEFI builds loading from USB.
 
+> If there are certs to be added, place them in the `certs` folder.
+
 1. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
 2. Build the images with the following command. Use the `system.uri` output when creating the cluster profile for the Edge host.
