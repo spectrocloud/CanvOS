@@ -658,7 +658,7 @@ base-image:
         IF [ "$IS_UKI" = "false" ]
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
-                latest_kernel=$(ls /lib/modules | tail -n1) && \
+                latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
                 apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
                 apt-get autoremove -y && \
                 rm -rf /var/lib/apt/lists/*
