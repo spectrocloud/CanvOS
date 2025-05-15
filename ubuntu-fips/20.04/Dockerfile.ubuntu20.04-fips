@@ -1,6 +1,9 @@
-
 # Kairos init image
 FROM quay.io/kairos/kairos-init:v0.5.18 AS kairos-init
+
+# Kairos framework packages for ubuntu fips
+# FROM gcr.io/spectro-images-public/kairos/framework:v2.11.7-fips as kairos-fips
+FROM quay.io/kairos/framework:v2.11.7-fips as kairos-fips
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base
@@ -114,3 +117,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends dracut dracut-n
 
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+RUN ln -s /usr/sbin/grub-install /usr/sbin/grub2-install
+RUN ln -s /usr/bin/grub-editenv /usr/bin/grub2-editenv
+
+# Clear cache
+RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+    journalctl --vacuum-size=1K || true && \
+    rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
