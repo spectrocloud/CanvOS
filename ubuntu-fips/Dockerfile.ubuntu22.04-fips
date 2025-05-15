@@ -1,0 +1,117 @@
+# Kairos framework packages for ubuntu fips
+FROM quay.io/kairos/framework:v2.11.7-fips AS kairos-fips
+
+# Base ubuntu image (jammy)
+FROM ubuntu:jammy AS base
+
+# Generate os-release file
+FROM quay.io/kairos/osbuilder-tools:v0.200.11 AS osbuilder
+RUN zypper install -y gettext && zypper clean
+RUN mkdir /workspace
+COPY --from=base /etc/os-release /workspace/os-release
+# You should change the following values according to your own versioning and other details
+RUN OS_NAME=kairos-core-ubuntu-fips \
+  OS_VERSION=v3.1.3 \
+  OS_ID="ubuntu" \
+  BUG_REPORT_URL="https://github.com/spectrocloud/ubuntu-fips-edge/issues" \
+  HOME_URL="https://github.com/spectrocloud/ubuntu-fips-edge" \
+  OS_REPO="gcr.io/spectro-images-public/ubuntu-focal-fips" \
+  OS_LABEL="22.04" \
+  GITHUB_REPO="https://github.com/spectrocloud/ubuntu-fips-edge" \
+  VARIANT="fips" \
+  FLAVOR="ubuntu" \
+  /update-os-release.sh
+
+# Build the custom ubuntu image
+FROM base
+
+# Don't get asked while running apt commands
+ENV DEBIAN_FRONTEND=noninteractive
+
+## Kairos setup
+## From documentation: https://kairos.io/docs/reference/build-from-scratch/
+RUN mkdir -p /run/lock
+RUN mkdir -p /usr/libexec
+RUN touch /usr/libexec/.keep
+
+RUN --mount=type=secret,id=pro-attach-config \
+    apt-get update && \
+    apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates && \
+    pro attach --attach-config /run/secrets/pro-attach-config && \
+    pro enable usg && \
+    apt-get install -y usg && \
+    pro enable fips-updates --assume-yes && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        openssl libgmp10 libgnutls30 libgcrypt20 libgcrypt20-hmac libhogweed6 libnettle8 libssl3 \
+        strongswan strongswan-hmac openssh-client openssh-server linux-image-fips && \
+    LATEST_VERSION=$(apt-cache search --names-only '^linux-image-[0-9].*-fips$' \
+        | awk '{print $1}' \
+        | sort -V \
+        | tail -n1 \
+        | sed -E 's/^linux-image-([0-9][^ ]*)-fips$/\1/') && \
+    apt-get install -y --no-install-recommends \
+        "linux-image-${LATEST_VERSION}-fips" \
+        "linux-modules-${LATEST_VERSION}-fips" && \
+    apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        "linux-headers-${LATEST_VERSION}-fips" \
+        linux-headers-virtual \
+        thin-provisioning-tools \
+        btrfs-progs busybox cifs-utils conntrack console-data coreutils cryptsetup curl debianutils \
+        dmsetup dosfstools dracut dracut-network e2fsprogs efibootmgr file fuse gawk gdisk gnupg \
+        grub2 grub2-common grub-efi-amd64-bin grub-efi-amd64-signed grub-pc-bin haveged iproute2 \
+        iptables isc-dhcp-common jq kbd krb5-locales lldpd lldpad lvm2 mdadm nano nbd-client \
+        ncurses-term neovim networkd-dispatcher nfs-common nvme-cli open-iscsi openssh-server \
+        open-vm-tools os-prober packagekit-tools parted patch policykit-1 publicsuffix qemu-guest-agent \
+        rng-tools rsync shared-mime-info snmpd squashfs-tools sudo systemd systemd-timesyncd thermald \
+        ubuntu-advantage-tools xdg-user-dirs xxd xz-utils zerofree zfsutils-linux zstd && \
+    usg fix disa_stig && \
+    apt-get remove -y unattended-upgrades && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && pro detach --assume-yes
+
+# Remove temporary and cache files
+RUN rm -rf /var/cache/* /tmp/* /var/tmp/* /etc/machine-id /var/lib/dbus/machine-id /etc/hostname
+
+# Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
+COPY --from=kairos-fips / /
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+# Copy the os-release file to identify the OS
+COPY --from=osbuilder /workspace/os-release /etc/os-release
+
+## Configuration
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+# CLEANUP
+# Installing dracut and fips creates this default packages and symlinks and we dont want that
+# We want to fully rebuild and link our initrd
+RUN rm -Rf /boot/vmlinuz.old # symlink
+RUN rm -Rf /boot/vmlinuz.img.old # symlink
+RUN rm -Rf /boot/vmlinuz.img # symlink
+RUN rm -Rf /boot/initrd.img.old # symlink to wrong initrd (no immucore, no kairos-agent)
+RUN rm -Rf /boot/initrd.img # symlink to wrong initrd (no immucore, no kairos-agent)
+RUN rm -Rf /boot/initrd.img-* # wrong initrd (no immucore, no kairos-agent)
+## Generate initrd
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+            ln -sf "${kernel#/boot/}" /boot/vmlinuz
+RUN kernel=$(ls /lib/modules | head -n1) && \
+    dracut -v -N --omit "wicked livenet bootchart fcoe-utils dcbtool biosdevname dmraid multipath fcoe fcoe-uefi dmsquash-live" \
+      -f "/boot/initrd-${kernel}" "${kernel}" && \
+    ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+
+# Fixup sudo perms
+RUN chown root:root /usr/bin/sudo && chmod 4755 /usr/bin/sudo
+
+# Symlink kernel HMAC
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+RUN ln -s /usr/sbin/grub-install /usr/sbin/grub2-install
+RUN ln -s /usr/bin/grub-editenv /usr/bin/grub2-editenv
+
+# Clear cache
+RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+    journalctl --vacuum-size=1K || true && \
+    rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
