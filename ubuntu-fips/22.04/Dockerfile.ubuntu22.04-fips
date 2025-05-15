@@ -44,22 +44,24 @@ RUN --mount=type=secret,id=pro-attach-config \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         openssl libgmp10 libgnutls30 libgcrypt20 libgcrypt20-hmac libhogweed6 libnettle8 libssl3 \
-        strongswan strongswan-hmac openssh-client openssh-server linux-image-fips && \
+        strongswan strongswan-hmac openssh-client openssh-server && \
     LATEST_VERSION=$(apt-cache search --names-only '^linux-image-[0-9].*-fips$' \
-        | awk '{print $1}' \
-        | sort -V \
-        | tail -n1 \
-        | sed -E 's/^linux-image-([0-9][^ ]*)-fips$/\1/') && \
+    | awk '{print $1}' \
+    | grep -vE '(azure|aws|gcp)' \
+    | sort -V \
+    | tail -n1 \
+    | sed -E 's/^linux-image-([0-9][^ ]*)-fips$/\1/') && \
     apt-get install -y --no-install-recommends \
         "linux-image-${LATEST_VERSION}-fips" \
         "linux-modules-${LATEST_VERSION}-fips" && \
+    apt-mark hold "linux-image-${LATEST_VERSION}-fips" "linux-modules-${LATEST_VERSION}-fips" && \
     apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
         "linux-headers-${LATEST_VERSION}-fips" \
         linux-headers-virtual \
         thin-provisioning-tools \
-        btrfs-progs busybox cifs-utils conntrack console-data coreutils cryptsetup curl debianutils \
-        dmsetup dosfstools dracut dracut-network e2fsprogs efibootmgr file fuse gawk gdisk gnupg \
+        btrfs-progs cifs-utils conntrack console-data coreutils cryptsetup curl debianutils \
+        dmsetup dosfstools dracut dracut-live dracut-network e2fsprogs efibootmgr file fuse gawk gdisk gnupg \
         grub2 grub2-common grub-efi-amd64-bin grub-efi-amd64-signed grub-pc-bin haveged iproute2 \
         iptables isc-dhcp-common jq kbd krb5-locales lldpd lldpad lvm2 mdadm nano nbd-client \
         ncurses-term neovim networkd-dispatcher nfs-common nvme-cli open-iscsi openssh-server \
@@ -69,6 +71,12 @@ RUN --mount=type=secret,id=pro-attach-config \
     usg fix disa_stig && \
     apt-get remove -y unattended-upgrades && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && pro detach --assume-yes
+    # Determine the installed FIPS kernel version
+RUN fips_kernel=$(basename $(ls /lib/modules | grep -- '-fips$' | sort -V | tail -n1)) && \
+    echo "Detected FIPS kernel: $fips_kernel" && \
+    # Remove all other kernel module trees (e.g., -generic)
+    find /lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} + && \
+    find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} +
 
 # Remove temporary and cache files
 RUN rm -rf /var/cache/* /tmp/* /var/tmp/* /etc/machine-id /var/lib/dbus/machine-id /etc/hostname
@@ -98,10 +106,10 @@ RUN rm -Rf /boot/initrd.img-* # wrong initrd (no immucore, no kairos-agent)
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz
 RUN kernel=$(ls /lib/modules | head -n1) && \
-    dracut -v -N --omit "wicked livenet bootchart fcoe-utils dcbtool biosdevname dmraid multipath fcoe fcoe-uefi dmsquash-live" \
+    dracut -v -N \
       -f "/boot/initrd-${kernel}" "${kernel}" && \
     ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
-
+RUN rm -rf /boot/initramfs-*
 # Fixup sudo perms
 RUN chown root:root /usr/bin/sudo && chmod 4755 /usr/bin/sudo
 
@@ -111,6 +119,7 @@ RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /
 RUN ln -s /usr/sbin/grub-install /usr/sbin/grub2-install
 RUN ln -s /usr/bin/grub-editenv /usr/bin/grub2-editenv
 
+COPY openssl-sslv3.cnf /etc/ssl/openssl.cnf
 # Clear cache
 RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
