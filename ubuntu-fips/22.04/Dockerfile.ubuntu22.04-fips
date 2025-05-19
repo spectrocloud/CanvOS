@@ -35,32 +35,31 @@ RUN mkdir -p /usr/libexec
 RUN touch /usr/libexec/.keep
 
 RUN --mount=type=secret,id=pro-attach-config \
-    apt-get update && \
-    apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates && \
+    apt update && \
+    apt install --no-install-recommends -y apt-utils ubuntu-advantage-tools ca-certificates util-linux && \
     pro attach --attach-config /run/secrets/pro-attach-config && \
     pro enable usg && \
-    apt-get install -y usg && \
+    apt install -y usg && \
     pro enable fips-updates --assume-yes && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
+    apt update && apt install -y \
         openssl libgmp10 libgnutls30 libgcrypt20 libgcrypt20-hmac libhogweed6 libnettle8 libssl3 \
-        strongswan strongswan-hmac openssh-client openssh-server && \
+        strongswan strongswan-hmac openssh-client openssh-server libssl3 openssl-fips-module-3 && \
     LATEST_VERSION=$(apt-cache search --names-only '^linux-image-[0-9].*-fips$' \
     | awk '{print $1}' \
     | grep -vE '(azure|aws|gcp)' \
     | sort -V \
     | tail -n1 \
     | sed -E 's/^linux-image-([0-9][^ ]*)-fips$/\1/') && \
-    apt-get install -y --no-install-recommends \
+    apt install -y --no-install-recommends \
         "linux-image-${LATEST_VERSION}-fips" \
-        "linux-modules-${LATEST_VERSION}-fips" && \
+        "linux-modules-${LATEST_VERSION}-fips" \
+        "linux-headers-${LATEST_VERSION}-fips" && \
     apt-mark hold "linux-image-${LATEST_VERSION}-fips" "linux-modules-${LATEST_VERSION}-fips" && \
-    apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
-        "linux-headers-${LATEST_VERSION}-fips" \
+    apt update && apt upgrade -y && \
+    apt install -y --no-install-recommends \
         linux-headers-virtual \
         thin-provisioning-tools \
-        btrfs-progs cifs-utils conntrack console-data coreutils cryptsetup curl debianutils \
+        btrfs-progs cifs-utils cloud-guest-utils conntrack console-data coreutils cryptsetup curl debianutils \
         dmsetup dosfstools dracut dracut-live dracut-network e2fsprogs efibootmgr file fuse gawk gdisk gnupg \
         grub2 grub2-common grub-efi-amd64-bin grub-efi-amd64-signed grub-pc-bin haveged iproute2 \
         iptables isc-dhcp-common jq kbd krb5-locales lldpd lldpad lvm2 mdadm nano nbd-client \
@@ -70,16 +69,13 @@ RUN --mount=type=secret,id=pro-attach-config \
         ubuntu-advantage-tools xdg-user-dirs xxd xz-utils zerofree zfsutils-linux zstd && \
     usg fix disa_stig && \
     apt-get remove -y unattended-upgrades && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && pro detach --assume-yes
+    apt-get clean && rm -rf /var/lib/apt/lists/*
     # Determine the installed FIPS kernel version
 RUN fips_kernel=$(basename $(ls /lib/modules | grep -- '-fips$' | sort -V | tail -n1)) && \
     echo "Detected FIPS kernel: $fips_kernel" && \
     # Remove all other kernel module trees (e.g., -generic)
     find /lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} + && \
     find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} +
-
-# Remove temporary and cache files
-RUN rm -rf /var/cache/* /tmp/* /var/tmp/* /etc/machine-id /var/lib/dbus/machine-id /etc/hostname
 
 # Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
 COPY --from=kairos-fips / /
@@ -93,6 +89,11 @@ COPY --from=osbuilder /workspace/os-release /etc/os-release
 
 ## Configuration
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+COPY openssl-sslv3.cnf /etc/ssl/openssl.cnf
+RUN openssl fipsinstall \
+      -out /usr/lib/ssl/fipsmodule.cnf \
+      -module /usr/lib/x86_64-linux-gnu/ossl-modules-3/fips.so \
+      -provider_name fips
 # CLEANUP
 # Installing dracut and fips creates this default packages and symlinks and we dont want that
 # We want to fully rebuild and link our initrd
@@ -112,7 +113,7 @@ RUN kernel=$(ls /lib/modules | head -n1) && \
     depmod -a "${kernel}"
 RUN kernel=$(ls /lib/modules | head -n1) && \
     dracut -v -N \
-      -f "/boot/initrd-${kernel}" "${kernel}" && \
+      -f "/boot/initrd-${kernel}" "${kernel}" --conf /etc/dracut.conf.d/kairos-fips.conf && \
     ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
 RUN rm -rf /boot/initramfs-*
 # Fixup sudo perms
@@ -124,8 +125,8 @@ RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /
 RUN ln -s /usr/sbin/grub-install /usr/sbin/grub2-install
 RUN ln -s /usr/bin/grub-editenv /usr/bin/grub2-editenv
 
-COPY openssl-sslv3.cnf /etc/ssl/openssl.cnf
+
 # Clear cache
-RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+RUN pro detach --assume-yes && rm -rf /var/cache/* /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
