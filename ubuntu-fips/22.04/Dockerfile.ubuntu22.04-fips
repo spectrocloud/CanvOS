@@ -103,7 +103,7 @@ RUN rm -Rf /boot/vmlinuz.img # symlink
 RUN rm -Rf /boot/initrd.img.old # symlink to wrong initrd (no immucore, no kairos-agent)
 RUN rm -Rf /boot/initrd.img # symlink to wrong initrd (no immucore, no kairos-agent)
 RUN rm -Rf /boot/initrd.img-* # wrong initrd (no immucore, no kairos-agent)
-RUN rm -f /boot/vmlinuz* /boot/initrd*
+
 
 ## Generate initrd
 RUN kernel=$(ls /lib/modules | head -n1) && \
@@ -121,7 +121,7 @@ RUN chown root:root /usr/bin/sudo && chmod 4755 /usr/bin/sudo
 
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
-
+# RUN rm -f /boot/vmlinuz* /boot/initrd*
 RUN ln -s /usr/sbin/grub-install /usr/sbin/grub2-install
 RUN ln -s /usr/bin/grub-editenv /usr/bin/grub2-editenv
 
