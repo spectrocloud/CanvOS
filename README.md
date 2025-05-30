@@ -85,6 +85,15 @@ v4.5.11
 
 4. Checkout the desired tag
 
+> **Note:** If you have a dedicated or on-prem instance of Palette, identify the correct agent version and checkout the corresponding tag. For example, if your agent version is v4.6.16, checkout tag v4.6.16.
+>
+> ```shell
+> curl --location --request GET 'https://<palette-endpoint>/v1/services/stylus/version' --header 'Content-Type: application/json' --header 'Apikey: <api-key>'  | jq --raw-output '.spec.latestVersion.content | match("version: ([^\n]+)").captures[0].string'
+> # Sample Output
+> v4.6.16
+> 
+> ```
+
 ```shell
 git checkout <tag version>
 ```
@@ -103,7 +112,7 @@ If you want to create a new branch to retain commits you create, you may
 do so (now or later) by using -c with the switch command. Example:
 ```
 
-5. Copy the .arg.template file to .arg
+1. Copy the .arg.template file to .arg
 
 ```shell
 cp .arg.template .arg
