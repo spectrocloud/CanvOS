@@ -6,7 +6,8 @@ FROM quay.io/kairos/kairos-init:v0.5.18 AS kairos-init
 FROM quay.io/kairos/framework:v2.11.7-fips as kairos-fips
 
 # Base ubuntu image (focal)
-FROM ubuntu:focal as base
+# FROM ubuntu:focal as base
+FROM 3pings/ubuntu-fips:jammy as BASE
 
 ARG KAIROS_VERSION=v3.5.1
 
@@ -19,6 +20,7 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 ## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
 ## I've just added "linux-image-fips" in the package list
 RUN --mount=type=secret,id=pro-attach-config \
+<<<<<<< HEAD
   apt-get update \
   && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
   && pro attach --attach-config /run/secrets/pro-attach-config \
@@ -103,6 +105,114 @@ RUN --mount=type=secret,id=pro-attach-config \
   && rm -rf /var/lib/apt/lists/* \
   && pro detach --assume-yes
 
+=======
+    apt update \
+    && apt install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
+    && pro attach --attach-config /run/secrets/pro-attach-config \
+    && pro enable usg \
+    && apt install -y usg \
+    && pro enable fips-updates --assume-yes \
+    && apt update && apt upgrade -y \
+    && apt install -y openssl libssl1.1 libssl1.1-hmac libgcrypt20 libgcrypt20-hmac strongswan strongswan-hmac openssh-client openssh-server linux-image-fips \
+    && apt install -y --no-install-recommends \
+    aide \
+    aide-common \
+    auditd \
+    audispd-plugins \
+    chrony \
+    conntrack \
+    console-data \
+    coreutils \
+    cryptsetup \
+    curl \
+    debianutils \
+    dmsetup \
+    dosfstools \
+    dracut \
+    dracut-network \
+    e2fsprogs \
+    efibootmgr \
+    file \
+    fuse \
+    gawk \
+    gdisk \
+    grub2 \
+    grub2-common \
+    grub-efi-amd64-bin \
+    grub-efi-amd64-signed \
+    grub-pc-bin \
+    haveged \
+    iproute2 \
+    iptables \
+    isc-dhcp-common \
+    jq \
+    kbd \
+    krb5-locales \
+    libpam-pwquality \
+    lldpd \
+    lvm2 \
+    mdadm \
+    nano \
+    nbd-client \
+    ncurses-term \
+    neovim \
+    networkd-dispatcher \
+    nfs-common \
+    open-iscsi \
+    openssh-server \
+    open-vm-tools \
+    os-prober \
+    packagekit-tools \
+    parted \
+    patch \
+    policykit-1 \
+    publicsuffix \
+    qemu-guest-agent \
+    rsync \
+    shared-mime-info \
+    snmpd \
+    squashfs-tools \
+    sudo \
+    systemd \
+    systemd-timesyncd \
+    thermald \
+    ubuntu-advantage-tools \
+    vlock \
+    xdg-user-dirs \
+    xxd \
+    xz-utils \
+    zerofree \
+    zfsutils-linux \
+    zstd \
+    && apt remove -y unattended-upgrades && apt clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && usg fix disa_stig \
+    && pro detach --assume-yes
+
+## Initialize aide
+RUN aide.wrapper --init
+RUN mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+
+## Kairos setup
+## From documentation: https://kairos.io/docs/reference/build-from-scratch/
+RUN mkdir -p /run/lock
+RUN mkdir -p /usr/libexec
+RUN touch /usr/libexec/.keep
+
+# Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
+COPY --from=kairos-fips / /
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+# Copy the os-release file to identify the OS
+COPY --from=osbuilder /workspace/os-release /etc/os-release
+
+## Configuration
+## Took from: https://github.com/kairos-io/kairos/blob/master/images/Dockerfile.ubuntu-20-lts
+# workaround https://github.com/kairos-io/kairos/issues/949
+>>>>>>> c5740fa (Updaed Dockerfiles for Fips)
 COPY dracut-broken-iscsi-ubuntu-20.patch /
 RUN cd /usr/lib/dracut/modules.d/95iscsi && patch < /dracut-broken-iscsi-ubuntu-20.patch && rm -rf /dracut-broken-iscsi-ubuntu-20.patch
 
