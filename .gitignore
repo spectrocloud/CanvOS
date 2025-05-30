@@ -26,3 +26,5 @@ spectro-luet-auth.yaml
 spc.tgz
 efi-size-check/target/
 */*pro-attach-config.yaml
+ubuntu-fips/22.04/pro-attach-config.yaml
+ubuntu-fips/20.04/pro-attach-config.yaml
