@@ -1,3 +1,0 @@
-ARG STYLUS_BASE
-ARG TARGETARCH
-FROM --platform=linux/${TARGETARCH} ${STYLUS_BASE} AS stylus-image
