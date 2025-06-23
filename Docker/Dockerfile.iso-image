@@ -1,0 +1,22 @@
+ARG ARCH
+ARG IS_UKI
+ARG IMAGE_TAG
+
+FROM base-image AS iso-image
+
+COPY --from=stylus-image / /
+
+RUN if [ "$IS_UKI" = "true" ]; then \
+        find /opt/spectrocloud/bin/. ! -name 'agent-provider-stylus' -type f -exec rm -f {} + && \
+        rm -f /usr/bin/luet; \
+    fi
+
+COPY overlay/files/ /
+
+RUN if [ -f /etc/logrotate.d/stylus.conf ]; then \
+        chmod 644 /etc/logrotate.d/stylus.conf; \
+    fi
+
+RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli && \
+    touch /etc/machine-id && \
+    chmod 444 /etc/machine-id

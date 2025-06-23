@@ -1,0 +1,16 @@
+ARG CLI_IMAGE
+ARG TARGETARCH
+FROM --platform=linux/${TARGETARCH} ${CLI_IMAGE} AS validate-user-data
+COPY . /tmp/context
+RUN if [ -f /tmp/context/user-data ]; then \
+        cp /tmp/context/user-data /user-data; \
+    else \
+        echo "user-data file does not exist (skipping copy)"; \
+    fi
+
+RUN chmod +x /usr/local/bin/palette-edge-cli
+RUN if [ -f /user-data ]; then \
+        /usr/local/bin/palette-edge-cli validate -f /user-data; \
+    else \
+        echo "user-data file does not exist."; \
+    fi

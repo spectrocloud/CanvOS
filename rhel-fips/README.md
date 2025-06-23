@@ -1,6 +1,24 @@
-# Kairos Fedora fips
+# Kairos RHEL 8 and RHEL 9 images
 
-- run `bash build.sh <username> <password> [<base image>]`
+## Build the image using Red Hat Subscription
+
+Follow steps below to execute the build process on the host with access to Red Hat Subscription Management system (redhat.com) and by using Red Hat username and password.
+
+To build the image provide username and password for Red Hat Subscription Manager to register the system and install packages during the build process.
+
+To build RHEL 8 Kairos Image, execute:
+```
+docker build -t <local-registry>/<image>:<image-tag> --build-arg USERNAME=<RHSM username> --build-arg PASSWORD='<RHSM password>' -f Dockerfile.rhel8.
+```
+
+To build RHEL 9 Kairos Image, execute:
+```
+docker build -t <local-registry>/<image>:<image-tag> --build-arg USERNAME=<RHSM username> --build-arg PASSWORD='<RHSM password>' -f Dockerfile.rhel9 .
+```
+
+**In case of any errors during package installation steps - these errors might be caused by previous build attempts. Execute `docker build` command again by providing argument `--no-cache` to build the image from scratch**
+
+
 - use the generated base image as input in installer generation with `earthly +iso`
 
 The system is not enabling FIPS by default in kernel space. 
