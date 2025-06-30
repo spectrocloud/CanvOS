@@ -1,0 +1,187 @@
+name: Build Kairos Init Base Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_os_image:
+        description: 'Base OS Image'
+        required: false
+        type: string
+        default: ''
+      kairos_init_image:
+        description: 'Kairos Init Image'
+        required: false
+        type: string
+        default: 'quay.io/kairos/kairos-init:v0.5.1'
+      arch:
+        description: 'Architecture'
+        required: false
+        type: choice
+        options:
+          - amd64
+          - arm64
+        default: 'amd64'
+      model:
+        description: 'Model'
+        required: false
+        type: string
+        default: 'generic'
+      kairos_version:
+        description: 'Kairos Version'
+        required: false
+        type: string
+        default: 'v3.4.2'
+      trusted_boot:
+        description: 'Trusted Boot'
+        required: false
+        type: boolean
+        default: false
+      registry_prefix:
+        description: 'Registry prefix for output images'
+        required: false
+        type: string
+        default: 'us-east1-docker.pkg.dev/spectro-images/dev/piyush-1/edge'
+
+jobs:
+  generate-matrix:
+    runs-on: Luet-BigRunner
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+
+          base_os_image = "${{ github.event.inputs.base_os_image }}"
+          registry_prefix = "${{ github.event.inputs.registry_prefix }}"
+          arch = "${{ github.event.inputs.arch }}"
+          model = "${{ github.event.inputs.model }}"
+          kairos_version = "${{ github.event.inputs.kairos_version }}"
+          trusted_boot = "${{ github.event.inputs.trusted_boot }}" == "true"
+          
+          matrix = []
+          
+          if base_os_image:
+              # Custom base OS image
+              simple_name = base_os_image.split('/')[-1].replace(':', '-')
+              tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{kairos_version}"
+              if trusted_boot:
+                  tag += "-uki"
+              
+              matrix.append({
+                  "base_os": base_os_image,
+                  "tag": tag
+              })
+          
+          elif trusted_boot:
+              # UKI builds - only Ubuntu 24.04
+              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
+              matrix.append({
+                  "base_os": "ubuntu:24.04",
+                  "tag": tag
+              })
+          
+          else:
+              # Standard builds - all combinations
+              combinations = [
+                  ("ubuntu:20.04", "kairos-ubuntu:20.04-core"),
+                  ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
+                  ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
+                  ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core")
+              ]
+              
+              for base_os, tag_prefix in combinations:
+                  tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
+                  matrix.append({
+                      "base_os": base_os,
+                      "tag": tag
+                  })
+
+          matrix_json = json.dumps(matrix)
+          print(f"Generated matrix: {matrix_json}")
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"matrix={matrix_json}\n")
+          EOF
+
+  kairosify:
+    needs: generate-matrix
+    runs-on: Luet-BigRunner
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry
+        run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
+
+      - name: Build and push kairosify image
+        uses: docker/bake-action@v6
+        with:
+          files: docker-bake-kairosify.hcl
+          targets: kairosify
+          push: true
+          set: |
+            kairosify.platform=linux/${{ github.event.inputs.arch }}
+            kairosify.args.BASE_OS_IMAGE=${{ matrix.base_os }}
+            kairosify.args.KAIROS_INIT_IMAGE=${{ github.event.inputs.kairos_init_image }}
+            kairosify.args.KAIROS_VERSION=${{ github.event.inputs.kairos_version }}
+            kairosify.args.TRUSTED_BOOT=${{ github.event.inputs.trusted_boot }}
+            kairosify.args.MODEL=${{ github.event.inputs.model }}
+            kairosify.tags=${{ matrix.tag }}
+        env:
+          DOCKER_BUILD_SUMMARY: false
+
+      - name: Save build result
+        run: |
+          mkdir -p /tmp/results
+          echo "${{ matrix.tag }}" >> /tmp/results/built_tags.txt
+
+      - name: Upload build results
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-result-${{ strategy.job-index }}-${{ hashFiles('**/matrix.*') }}
+          path: /tmp/results/built_tags.txt
+
+  collect-outputs:
+    needs: kairosify
+    runs-on: Luet-BigRunner
+    outputs:
+      built_tags: ${{ steps.combine-tags.outputs.tags }}
+    steps:
+      - name: Download all build results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-result-*
+          path: /tmp/results
+
+      - name: Combine all tags
+        id: combine-tags
+        run: |
+          ALL_TAGS=$(find /tmp/results -name "*.txt" -type f -exec cat {} \; | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "tags=$ALL_TAGS" >> $GITHUB_OUTPUT
+          echo "All built tags: $ALL_TAGS"
+
+      - name: Summary
+        run: |
+          echo "## Kairosify Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Input Parameters:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Base OS Image: ${{ github.event.inputs.base_os_image || 'Default combinations' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Kairos Init Image: ${{ github.event.inputs.kairos_init_image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Architecture: ${{ github.event.inputs.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Model: ${{ github.event.inputs.model }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Kairos Version: ${{ github.event.inputs.kairos_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Trusted Boot: ${{ github.event.inputs.trusted_boot }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Built Images:**" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.combine-tags.outputs.tags }}' | jq -r '.[] | "- " + .' >> $GITHUB_STEP_SUMMARY
