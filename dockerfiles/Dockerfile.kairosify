@@ -1,0 +1,66 @@
+ARG KAIROS_INIT_IMAGE
+
+FROM ${KAIROS_INIT_IMAGE} AS kairos-init
+
+ARG BASE_OS_IMAGE
+
+FROM ${BASE_OS_IMAGE} AS base-kairos
+
+ARG MODEL
+ARG IS_UKI
+ARG KAIROS_VERSION
+
+COPY --from=kairos-init /kairos-init /kairos-init
+RUN /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    gnupg \
+    software-properties-common \
+  && add-apt-repository ppa:oibaf/test \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    conntrack \
+    console-data \
+    cloud-guest-utils \
+    coreutils \
+    cryptsetup \
+    curl \
+    debianutils \
+    dosfstools \
+    dracut \
+    dracut-network \
+    e2fsprogs \
+    fdisk \
+    file \
+    gawk \
+    gdisk \
+    grub2-common \
+    haveged \
+    iproute2 \
+    iptables \
+    iputils-ping \
+    jq \
+    kbd \
+    krb5-locales \
+    less \
+    lldpd \
+    lvm2 \
+    nano \
+    nbd-client \
+    neovim \
+    open-iscsi \
+    open-vm-tools \
+    openssh-server \
+    parted \
+    rsync \
+    snmpd \
+    squashfs-tools \
+    sudo \
+    systemd \
+    systemd-timesyncd \
+    tar \
+    ubuntu-advantage-tools \
+    xz-utils \
+    zstd \
+    && apt-get remove -y unattended-upgrades && apt-get clean && rm -rf /var/lib/apt/lists/*
