@@ -108,14 +108,12 @@ variable "CIS_HARDENING" {
   default = false
 }
 
-variable UBUNTU_PRO_KEY {
-  default = ""
-}
+variable UBUNTU_PRO_KEY {}
 
 variable HTTP_PROXY {}
 variable HTTPS_PROXY {}
 variable NO_PROXY {}
-variable PROXY_CERT_PATH{}
+variable PROXY_CERT_PATH {}
 
 variable http_proxy {
   default = HTTP_PROXY
@@ -182,7 +180,7 @@ variable "GOLANG_VERSION" {
 }
 
 variable "BASE_IMAGE" {
-  default = "kpiyush17/kairos-base-dracut:v3.4.2"
+  default = ""
 }
 
 variable "IS_JETSON" {
@@ -214,6 +212,27 @@ variable "IMAGE_PATH" {
   default = "${IMAGE_REGISTRY}/${IMAGE_REPO}:${K8S_DISTRIBUTION}-${K8S_VERSION}-${IMAGE_TAG}"
 }
 
+# base image computed based on os distribution and version
+function "get_base_image" {
+  params = [base_image, os_distribution, os_version, is_uki]
+  result = base_image != "" ? base_image : (
+    
+    os_distribution == "ubuntu" && os_version == "20" ? 
+      "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
+
+    os_distribution == "ubuntu" && os_version == "22" && is_uki ? 
+      "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}-uki" :
+
+    os_distribution == "ubuntu" && os_version == "22" ? 
+      "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
+
+    os_distribution == "opensuse" && os_version == "15.6" ? 
+      "${SPECTRO_PUB_REPO}/edge/kairos-opensuse:leap-${OS_VERSION}-core-${ARCH}-generic-${KAIROS_VERSION}" :
+    
+    ""
+  )
+}
+
 target "stylus-image" {
   dockerfile = "dockerfiles/Dockerfile.stylus-image"
   target = "stylus-image"
@@ -227,7 +246,7 @@ target "stylus-image" {
 target "base" {
   dockerfile = "Dockerfile"
   args = {
-    BASE = BASE_IMAGE
+    BASE = get_base_image(BASE_IMAGE, OS_DISTRIBUTION, OS_VERSION, IS_UKI)
     OS_DISTRIBUTION = OS_DISTRIBUTION
     PROXY_CERT_PATH = PROXY_CERT_PATH
     HTTP_PROXY = HTTP_PROXY
