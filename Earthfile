@@ -500,7 +500,7 @@ provider-image:
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
-    IF [  "$UPDATE_KERNAL" = true ]
+    IF [  "$UPDATE_KERNEL" = true ]
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
