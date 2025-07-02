@@ -589,14 +589,14 @@ build-provider-trustedboot-image:
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
-    FROM --platform=linux/${ARCH} $STYLUS_BASE
+    FROM --platform=linux/${ARCH} --no-cache $STYLUS_BASE
     SAVE ARTIFACT --keep-own  ./*
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
 
 stylus-package-image:
-    FROM --platform=linux/${ARCH} $STYLUS_PACKAGE_BASE
+    FROM --platform=linux/${ARCH} --no-cache $STYLUS_PACKAGE_BASE
     SAVE ARTIFACT --keep-own  ./*
 
 kairos-provider-image:
