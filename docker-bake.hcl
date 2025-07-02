@@ -183,6 +183,8 @@ variable "BASE_IMAGE" {
   default = ""
 }
 
+variable "OSBUILDER_IMAGE" {}
+
 variable "IS_JETSON" {
   type = bool
   default = length(regexall("nvidia-jetson-agx-orin", BASE_IMAGE)) > 0
@@ -341,7 +343,6 @@ target "install-k8s" {
   platforms = ["linux/${ARCH}"]
   contexts = {
     third-party-luet = "target:third-party-luet"
-    base-alpine = "target:base-alpine"
   }
   args = {
     BASE_ALPINE_IMAGE = ALPINE_IMG
