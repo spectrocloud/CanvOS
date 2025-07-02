@@ -212,6 +212,11 @@ variable "IMAGE_PATH" {
   default = "${IMAGE_REGISTRY}/${IMAGE_REPO}:${K8S_DISTRIBUTION}-${K8S_VERSION}-${IMAGE_TAG}"
 }
 
+function "get_ubuntu_image" {
+  params = [fips_enabled, spectro_pub_repo]
+  result = fips_enabled ? "${spectro_pub_repo}/third-party/ubuntu-fips:22.04" : "${spectro_pub_repo}/third-party/ubuntu:22.04"
+}
+
 # base image computed based on os distribution and version
 function "get_base_image" {
   params = [base_image, os_distribution, os_version, is_uki]
@@ -380,6 +385,54 @@ target "provider-image" {
   }
   tags = [IMAGE_PATH]
   output = ["type=image,push=true"]
+}
+
+target "provider-image-uki" {
+  dockerfile = "dockerfiles/uki/Dockerfile.provider-image-uki"
+  target = "provider-image-uki"
+  platforms = ["linux/${ARCH}"]
+  contexts = {
+    third-party-luet = "target:third-party-luet"
+    kairos-agent = "target:kairos-agent"
+    trust-boot-unpack = "target:trust-boot-unpack"
+    install-k8s = "target:install-k8s"
+  }
+  args = {
+    UBUNTU_IMAGE = get_ubuntu_image(FIPS_ENABLED, SPECTRO_PUB_REPO)
+    EDGE_CUSTOM_CONFIG = EDGE_CUSTOM_CONFIG
+    IMAGE_PATH = IMAGE_PATH
+  }
+  tags = [IMAGE_PATH]
+  output = ["type=image,push=true"]
+}
+
+target "provider-image-rootfs" {
+  dockerfile = "dockerfiles/Dockerfile.provider-image-rootfs"
+  platforms = ["linux/${ARCH}"]
+  contexts = {
+    provider-image = "target:provider-image"
+  }
+}
+
+target "build-provider-trustedboot-image" {
+  dockerfile = "dockerfiles/uki/Dockerfile.build-provider-trustedboot-image"
+  platforms = ["linux/${ARCH}"]
+  contexts = {
+    provider-image-rootfs = "target:provider-image-rootfs"
+  }
+  args = {
+    OSBUILDER_IMAGE = OSBUILDER_IMAGE
+  }
+  output = ["type=local,dest=./trusted-boot/"]
+}
+
+target "trust-boot-unpack" {
+  dockerfile = "dockerfiles/uki/Dockerfile.trust-boot-unpack"
+  platforms = ["linux/${ARCH}"]
+  contexts = {
+    third-party-luet = "target:third-party-luet"
+    build-provider-trustedboot-image = "target:build-provider-trustedboot-image"
+  }
 }
 
 target "validate-user-data" {

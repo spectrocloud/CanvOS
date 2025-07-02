@@ -28,7 +28,7 @@ variable "TAG" {
 }
 
 target "kairosify" {
-  dockerfile = "dockerfiles/Dockerfile.kairosify"
+  dockerfile = "dockerfiles/kairosify/Dockerfile.kairosify"
   platforms = ["linux/${ARCH}"]
   args = {
     BASE_OS_IMAGE = BASE_OS_IMAGE
