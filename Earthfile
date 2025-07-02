@@ -20,7 +20,7 @@ ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.6.21
+ARG PE_VERSION=v5.0.0-250507
 ARG SPECTRO_LUET_VERSION=v4.7.0-rc.1
 ARG KAIROS_VERSION=v3.1.3
 ARG K3S_FLAVOR_TAG=k3s1
@@ -35,23 +35,23 @@ ARG NODEADM_PROVIDER_VERSION=v4.6.0
 ARG CANONICAL_PROVIDER_VERSION=v1.1.0-rc.1
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
-ARG OS_DISTRIBUTION
-ARG OS_VERSION
-ARG K8S_VERSION
-ARG IMAGE_REGISTRY
+ARG OS_DISTRIBUTION=ubuntu
+ARG OS_VERSION=22.04
+ARG K8S_VERSION=1.31.6
+ARG IMAGE_REGISTRY=us-east1-docker.pkg.dev/spectro-images/dev/chinmay
 ARG IMAGE_REPO=$OS_DISTRIBUTION
-ARG ISO_NAME=installer
-ARG K8S_DISTRIBUTION
+ARG ISO_NAME=airgap-daily-new
+ARG K8S_DISTRIBUTION=kubeadm
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
-ARG ARCH
+ARG ARCH=amd64
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
 ARG UBUNTU_PRO_KEY
 
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
+ARG HTTP_PROXY=
+ARG HTTPS_PROXY=
 ARG NO_PROXY
 ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
@@ -104,15 +104,15 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
-ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
-ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
+ARG STYLUS_BASE=us-east1-docker.pkg.dev/spectro-images/dev/edge/stylus-framework-linux-amd64:v0.0.0-948269a9
+ARG STYLUS_PACKAGE_BASE=us-east1-docker.pkg.dev/spectro-images/dev/edge/stylus-linux-amd64:v0.0.0-948269a9
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
     ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
+    ARG CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/chinmay/edge/palette-edge-cli-amd64:dev-test
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
