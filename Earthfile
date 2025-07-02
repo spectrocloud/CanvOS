@@ -603,7 +603,7 @@ kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/arun/provider-kubeadm:v0.0.0-3c6054c1-amd64
+        ARG PROVIDER_BASE=gcr.io/spectro-dev-public/arun/provider-kubeadm:v0.0.0-f9473f78-amd64
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
