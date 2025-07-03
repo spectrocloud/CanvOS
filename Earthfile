@@ -500,6 +500,18 @@ provider-image:
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
+    IF [  "$UPDATE_KERNEL" = true ]
+        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+            RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+            RUN zypper --non-interactive ref && kernel=$(uname -r) && rpm -q kernel-default-devel-$kernel >/dev/null 2>&1 || zypper --non-interactive install --no-recommends kernel-default-devel-$kernel
+        ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
+            RUN kernel=$(uname -r) && rpm -q kernel-devel-$kernel >/dev/null 2>&1 || yum install -y kernel-devel-$kernel
+        ELSE IF [ "$OS_DISTRIBUTION" = "sles" ]
+            RUN zypper --non-interactive ref && kernel=$(uname -r) && rpm -q kernel-default-devel-$kernel >/dev/null 2>&1 || zypper --non-interactive install --no-recommends kernel-default-devel-$kernel
+        END
+    END
+
 
     COPY --if-exists overlay/files/etc/ /etc/
     IF [ -f /etc/logrotate.d/stylus.conf ]
