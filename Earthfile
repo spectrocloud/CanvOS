@@ -504,7 +504,22 @@ provider-image:
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-            RUN zypper --non-interactive ref && kernel=$(ls /lib/modules | tail -n1) && version=${kernel%-default} && echo "kernel version: $version" && rpm -q kernel-default-devel-$version >/dev/null 2>&1 || zypper --non-interactive install --no-recommends kernel-default-devel-$version
+            RUN zypper --non-interactive ref && \
+                kernel=$(ls /lib/modules | tail -n1) && \
+                echo "kernel module: $kernel" && \
+                version=$(echo $kernel | sed 's/-default$//') && \
+                echo "kernel version: $version" && \
+                if ! zypper --non-interactive install --no-recommends kernel-default-devel-$version; then \
+                    echo "Exact kernel-default-devel-$version not found, searching for closest match..."; \
+                    match=$(zypper se -s kernel-default-devel | awk -F'|' '/kernel-default-devel/ && $3 ~ /^ *[0-9]/ {gsub(/^ +| +$/,"",$3); if (index($3,"'"$version"'")==1) print $3}' | sort -Vr | head -n1); \
+                    if [ -n "$match" ]; then \
+                        echo "Trying to install kernel-default-devel-$match"; \
+                        zypper --non-interactive install --no-recommends kernel-default-devel-$match || echo "Failed to install kernel-default-devel-$match"; \
+                    else \
+                        echo "No matching kernel-default-devel package found, trying generic kernel-devel"; \
+                        zypper --non-interactive install --no-recommends kernel-devel || echo "kernel development packages not available, continuing without them"; \
+                    fi \
+                fi
         ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && rpm -q kernel-devel-$kernel >/dev/null 2>&1 || yum install -y kernel-devel-$kernel
         ELSE IF [ "$OS_DISTRIBUTION" = "sles" ]
