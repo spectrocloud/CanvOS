@@ -521,7 +521,7 @@ provider-image:
                     fi \
                 fi
         ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
-            RUN kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && rpm -q kernel-devel-$kernel >/dev/null 2>&1 || yum install -y kernel-devel-$kernel
+            RUN yum clean all && yum makecache && kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && if ! yum install -y kernel-devel-$kernel; then echo "kernel-devel-$kernel not available, trying alternative packages" && yum install -y kernel-devel || echo "kernel development packages not available, continuing without them"; fi
         ELSE IF [ "$OS_DISTRIBUTION" = "sles" ]
             RUN zypper --non-interactive ref && kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && rpm -q kernel-default-devel-$kernel >/dev/null 2>&1 || zypper --non-interactive install --no-recommends kernel-default-devel-$kernel
         END
