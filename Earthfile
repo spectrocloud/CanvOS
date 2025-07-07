@@ -504,7 +504,7 @@ provider-image:
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-            RUN zypper --non-interactive ref && kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && rpm -q kernel-default-devel-$kernel >/dev/null 2>&1 || zypper --non-interactive install --no-recommends kernel-default-devel-$kernel
+            RUN zypper --non-interactive ref && kernel=$(ls /lib/modules | tail -n1) && version=${kernel%-default} && echo "kernel version: $version" && rpm -q kernel-default-devel-$version >/dev/null 2>&1 || zypper --non-interactive install --no-recommends kernel-default-devel-$version
         ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && rpm -q kernel-devel-$kernel >/dev/null 2>&1 || yum install -y kernel-devel-$kernel
         ELSE IF [ "$OS_DISTRIBUTION" = "sles" ]
