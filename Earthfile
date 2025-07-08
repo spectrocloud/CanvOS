@@ -521,7 +521,19 @@ provider-image:
                     fi \
                 fi
         ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
-            RUN yum clean all && yum makecache && kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && if ! yum install -y kernel-devel-$kernel; then echo "kernel-devel-$kernel not available, trying alternative packages" && yum install -y kernel-devel || echo "kernel development packages not available, continuing without them"; fi
+            RUN yum clean all && yum makecache && \
+                # Enable additional repositories that might contain kernel-devel packages
+                yum-config-manager --enable ubi-8-baseos-rpms ubi-8-appstream-rpms ubi-8-codeready-builder-rpms && \
+                # Try to add EPEL repository for additional packages
+                yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm || echo "EPEL repo not available" && \
+                yum makecache && \
+                kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && \
+                if ! yum install -y kernel-devel-$kernel; then \
+                    echo "kernel-devel-$kernel not available, trying alternative packages" && \
+                    yum install -y kernel-devel || \
+                    echo "Trying to install from different source..." && \
+                    yum install -y gcc make || echo "kernel development packages not available, continuing without them"; \
+                fi
         ELSE IF [ "$OS_DISTRIBUTION" = "sles" ]
             RUN zypper --non-interactive ref && kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && rpm -q kernel-default-devel-$kernel >/dev/null 2>&1 || zypper --non-interactive install --no-recommends kernel-default-devel-$kernel
         END
