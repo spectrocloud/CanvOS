@@ -503,7 +503,7 @@ provider-image:
     IF [  "$UPDATE_KERNEL" = true ]
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
-        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
             RUN zypper --non-interactive ref && \
                 kernel=$(ls /lib/modules | tail -n1) && \
                 echo "kernel module: $kernel" && \
@@ -534,8 +534,6 @@ provider-image:
                     echo "Trying to install from different source..." && \
                     yum install -y gcc make || echo "kernel development packages not available, continuing without them"; \
                 fi
-        ELSE IF [ "$OS_DISTRIBUTION" = "sles" ]
-            RUN zypper --non-interactive ref && kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && rpm -q kernel-default-devel-$kernel >/dev/null 2>&1 || zypper --non-interactive install --no-recommends kernel-default-devel-$kernel
         END
     END
 
