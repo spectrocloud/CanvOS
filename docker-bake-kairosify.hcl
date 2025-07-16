@@ -6,11 +6,11 @@ variable "ARCH" {
     default = "amd64"
 }
 
-variable BASE_OS_IMAGE {
+variable "BASE_OS_IMAGE" {
     default = "ubuntu:20.04"
 }
 
-variable MODEL {
+variable "MODEL" {
     default = "generic"
 }
 

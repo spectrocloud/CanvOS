@@ -8,14 +8,12 @@ IS_UKI ?= false
 
 build-all-images:
 	$(MAKE) build-provider-images
-
 	@if [ "$(ARCH)" = "arm64" ]; then \
 		docker buildx bake iso-image --set iso-image.platforms=linux/arm64; \
-	else [ "$(ARCH)" = "amd64" ]; then \
+	elif [ "$(ARCH)" = "amd64" ]; then \
 		docker buildx bake iso-image --set iso-image.platforms=linux/amd64; \
 	fi
-
-    $(MAKE) build-iso
+	$(MAKE) build-iso
 
 base-image:
 	docker buildx bake base-image
