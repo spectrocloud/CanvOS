@@ -1,7 +1,0 @@
-FROM alpine
-
-COPY --from=third-party-luet /usr/bin/luet /usr/bin/luet
-COPY --from=build-provider-trustedboot-image /output/ /image/
-
-RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
-    luet util unpack $FILE /trusted-boot

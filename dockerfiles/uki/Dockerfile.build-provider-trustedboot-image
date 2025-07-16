@@ -1,9 +1,0 @@
-ARG OSBUILDER_IMAGE
-FROM ${OSBUILDER_IMAGE}
-
-COPY --from=provider-image-rootfs / /build/image/
-COPY secure-boot/enrollment/ /keys/enrollment/
-COPY secure-boot/private-keys/ /keys/private-keys/
-COPY secure-boot/public-keys/ /keys/public-keys/
-
-RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"

@@ -1,7 +1,6 @@
 ARG ARCH
-ARG BASE_IMAGE
 
-FROM --platform=linux/${ARCH} ${BASE_IMAGE} AS provider-image
+FROM base-image AS provider-image
 
 ARG IMAGE_REPO
 ARG K8S_DISTRIBUTION
@@ -13,8 +12,9 @@ ARG EDGE_CUSTOM_CONFIG
 ARG TWO_NODE
 ARG KINE_VERSION
 ARG IMAGE_PATH
+ARG IS_UKI
+ARG ARCH
 
-# Set BASE_K8S_VERSION based on K8S_DISTRIBUTION
 RUN if [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]; then \
         BASE_K8S_VERSION="$K8S_VERSION"; \
         if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]; then \
@@ -44,7 +44,19 @@ RUN if [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
         cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
     fi
 
-COPY --from=install-k8s /output/ /
+COPY --from=install-k8s /output/ /tmp/k8s-output/
+COPY --from=internal-slink /slink /usr/bin/slink
+
+RUN if [ "$IS_UKI" = "true" ]; then \
+        mkdir -p /k8s && cp -r /tmp/k8s-output/* /k8s/ && \
+        slink --source /k8s/ --target /opt/k8s && \
+        rm -f /usr/bin/slink && \
+        rm -rf /k8s && \
+        ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus; \
+    else \
+        cp -r /tmp/k8s-output/* /; \
+    fi && \
+    rm -rf /tmp/k8s-output
 
 RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 

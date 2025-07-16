@@ -1,7 +1,6 @@
 ARG ARCH
 ARG BASE_ALPINE_IMAGE
 
-# install-k8s stage
 FROM --platform=linux/${ARCH} ${BASE_ALPINE_IMAGE} AS install-k8s
 
 ARG K8S_DISTRIBUTION
@@ -18,10 +17,8 @@ RUN [ -d "certs" ] && cp -r certs/. /etc/ssl/certs/ || true
 RUN update-ca-certificates
 RUN apk add curl
 
-# Copy luet binary from third-party target
 COPY --from=third-party-luet /WORKDIR/luet /usr/bin/luet
 
-# Set BASE_K8S_VERSION based on K8S_DISTRIBUTION
 RUN if [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ] || [ "$K8S_DISTRIBUTION" = "canonical" ]; then \
         BASE_K8S_VERSION="$K8S_VERSION"; \
     elif [ "$K8S_DISTRIBUTION" = "k3s" ]; then \
