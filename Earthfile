@@ -663,7 +663,7 @@ base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE \ 
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \ 
     --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
-    --build-arg NO_PROXY=$NO_PROXY .
+    --build-arg NO_PROXY=$NO_PROXY  --build-arg DRBD_VERSION=$DRBD_VERSION .
 
     IF [ "$IS_JETSON" = "true" ]
         COPY cloudconfigs/mount.yaml /system/oem/mount.yaml
