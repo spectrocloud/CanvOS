@@ -1,0 +1,20 @@
+#cloud-config
+stylus:
+  site:
+    # host for hubble api to register device.
+    paletteEndpoint: dev.spectrocloud.com
+
+    # newly added field to use for auto registration
+    edgeHostToken: MDg0ZDhhZjBkMGI3OTVmYWM3ZTgyODM4NTAyZjk5NTQ=
+    
+    # projectUid <Optional :need to provide if token is not generated using project id>
+    projectName: test
+    # tags which will be assigned to devices as labels.  These are examples
+    tags:
+      owner: devang
+
+    # name of the device, this may also be referred to as the edge id or edge host id.  If no edge host name is specified
+    # one will be generated from the device serial number.  If stylus cannot the device serial number a random id will
+    # be used instead. In the case of hardware that does not have a serial number is highly recommended to specify the
+    # device name as a random name is not deterministic and may lead to a device being registered twice under different 
+    # names.

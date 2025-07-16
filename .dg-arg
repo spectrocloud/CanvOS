@@ -1,0 +1,24 @@
+CUSTOM_TAG=demo
+IMAGE_REGISTRY=ttl.sh
+OS_DISTRIBUTION=ubuntu
+IMAGE_REPO=$OS_DISTRIBUTION
+OS_VERSION=22.04
+K8S_DISTRIBUTION=k3s
+ISO_NAME=palette-edge-installer
+ARCH=amd64
+HTTPS_PROXY=
+HTTP_PROXY=
+UPDATE_KERNEL=false
+CLUSTERCONFIG=spc.tgz
+CIS_HARDENING=false
+EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
+
+# If you have Ubuntu Pro, use the UBUNTU_PRO_KEY variable to activate it as part of the image build
+# UBUNTU_PRO_KEY=your-key
+
+# For enabling Secure Boot with Full Disk Encryption
+# IS_UKI=true
+# MY_ORG="ACME Corporation"
+# UKI_BRING_YOUR_OWN_KEYS=false         # See sb-private-ca/howto.md for instructions on bringing your own certificates
+# INCLUDE_MS_SECUREBOOT_KEYS=true       # Adds Microsoft Secure Boot certificates; if you export existing keys from a device, you typically won't need this
+# AUTO_ENROLL_SECUREBOOT_KEYS=false     # Set to true to automatically enroll certificates on devices in Setup Mode, useful for flashing devices without user interaction
