@@ -64,7 +64,7 @@ RUN rm -rf /certs
 
 ### To install the DRBD module package for Piraeus pack on Ubuntu  ###
 
-FROM ubuntu:noble
+FROM us-east1-docker.pkg.dev/spectro-images/dev/srini/piraeus/ubuntu:noble
 
 RUN apt-get update && \
     apt-get upgrade -y && \
