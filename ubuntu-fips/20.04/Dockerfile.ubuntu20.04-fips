@@ -46,6 +46,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     auditd \
     audispd-plugins \
     chrony \
+    cloud-guest-utils \
     conntrack \
     console-data \
     coreutils \
@@ -96,6 +97,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     qemu-guest-agent \
     rsync \
     shared-mime-info \
+    shim-signed \
     snmpd \
     squashfs-tools \
     sudo \
