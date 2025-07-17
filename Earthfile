@@ -205,7 +205,7 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
@@ -554,7 +554,7 @@ provider-image:
 
     IF [ "$IS_UKI" = "true" ]
         COPY +internal-slink/slink /usr/bin/slink
-        COPY +install-k8s/output/ /k8s
+        COPY --keep-ts +install-k8s/output/ /k8s
         RUN slink --source /k8s/ --target /opt/k8s
         RUN rm -f /usr/bin/slink
         RUN rm -rf /k8s
