@@ -205,7 +205,7 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
@@ -267,7 +267,7 @@ install-k8s:
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
 
     RUN rm -rf /output/var/cache/*
-    SAVE ARTIFACT /output/ .
+    SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
@@ -554,13 +554,13 @@ provider-image:
 
     IF [ "$IS_UKI" = "true" ]
         COPY +internal-slink/slink /usr/bin/slink
-        COPY +install-k8s/output/ /k8s
+        COPY --keep-ts +install-k8s/output/ /k8s
         RUN slink --source /k8s/ --target /opt/k8s
         RUN rm -f /usr/bin/slink
         RUN rm -rf /k8s
         RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
     ELSE
-        COPY +install-k8s/output/ /
+        COPY --keep-ts +install-k8s/output/ /
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
