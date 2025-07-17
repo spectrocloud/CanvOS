@@ -1,10 +1,6 @@
 name: Build Kairos Init Base Images
 
 on:
-  pull_request:
-  push:
-    branches:
-      - '**'
   workflow_dispatch:
     inputs:
       base_os_image:
