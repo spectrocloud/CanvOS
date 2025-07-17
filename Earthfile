@@ -267,7 +267,7 @@ install-k8s:
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
 
     RUN rm -rf /output/var/cache/*
-    SAVE ARTIFACT /output/ .
+    SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
@@ -560,7 +560,7 @@ provider-image:
         RUN rm -rf /k8s
         RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
     ELSE
-        COPY +install-k8s/output/ /
+        COPY --keep-ts +install-k8s/output/ /
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
