@@ -3,8 +3,7 @@
 FROM quay.io/kairos/framework:v2.11.7-fips AS kairos-fips
 
 # Base ubuntu image (focal)
-# FROM ubuntu:focal as base
-FROM 3pings/ubuntu-fips:jammy AS BASE
+FROM ubuntu:focal as base
 
 # Generate os-release file
 FROM quay.io/kairos/osbuilder-tools:v0.200.11 AS osbuilder
