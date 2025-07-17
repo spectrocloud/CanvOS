@@ -73,9 +73,7 @@ jobs:
             if [ "$TRUSTED_BOOT" = "true" ]; then
               MATRIX=$(jq -n '[{"base_os": "ubuntu:24.04", "tag": "'$REGISTRY_PREFIX'/kairos-ubuntu:24.04-core-'$ARCH'-'$MODEL'-'$VERSION'-uki"}]')
             else
-              MATRIX=$(jq -n '[
-                {"base_os": "ubuntu:20.04", "tag": "'$REGISTRY_PREFIX'/edge/kairos-ubuntu:20.04-core-'$ARCH'-'$MODEL'-'$VERSION'"},
-              ]')
+              MATRIX='[{"base_os": "ubuntu:20.04", "tag": "'$REGISTRY_PREFIX'/edge/piyush-1/kairos-ubuntu:20.04-core-'$ARCH'-'$MODEL'-'$VERSION'"}]'
             fi
           fi
           
