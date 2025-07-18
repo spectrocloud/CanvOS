@@ -502,7 +502,21 @@ provider-image:
     END
     IF [  "$UPDATE_KERNEL" = true ]
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-            RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            RUN kernel=$(ls /lib/modules | tail -n1) && \
+                kernel_base=$(echo $kernel | sed 's/-fips$//') && \
+                if ! ls /usr/src | grep linux-headers-$kernel; then \
+                    apt-get update && \
+                    if apt-get install -y "linux-headers-${kernel}"; then \
+                        echo "Successfully installed linux-headers-${kernel}"; \
+                    elif apt-get install -y "linux-headers-${kernel_base}"; then \
+                        echo "Successfully installed linux-headers-${kernel_base}"; \
+                    else \
+                        echo "linux-headers-${kernel} and linux-headers-${kernel_base} not available, trying generic headers..." && \
+                        apt-get install -y linux-headers-generic || \
+                        apt-get install -y linux-headers-$(uname -r) || \
+                        echo "Kernel headers not available, continuing without them"; \
+                    fi; \
+                fi
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
             RUN zypper --non-interactive ref && \
                 kernel=$(ls /lib/modules | tail -n1) && \
