@@ -101,6 +101,8 @@ RUN apt-get install -y --no-install-recommends \
     snmpd \
     squashfs-tools \
     sudo \
+    shim-signed \
+    cloud-guest-utils \
     systemd \
     systemd-timesyncd \
     thermald \
