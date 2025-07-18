@@ -37,8 +37,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y openssl libssl1.1 libssl1.1-hmac libgcrypt20 libgcrypt20-hmac strongswan strongswan-hmac openssh-client openssh-server linux-image-fips \
-    && pro detach --assume-yes
+    && apt-get install -y openssl libssl1.1 libssl1.1-hmac libgcrypt20 libgcrypt20-hmac strongswan strongswan-hmac openssh-client openssh-server linux-image-fips 
 
 
 ## Kairos setup
@@ -113,7 +112,8 @@ RUN apt-get install -y --no-install-recommends \
     zfsutils-linux \
     zstd \
     && apt-get remove -y unattended-upgrades && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pro detach --assume-yes
 
 # Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
 COPY --from=kairos-fips / /
