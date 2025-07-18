@@ -1,13 +1,13 @@
 
 # Kairos framework packages for ubuntu fips
 # FROM gcr.io/spectro-images-public/kairos/framework:v2.11.7-fips as kairos-fips
-FROM quay.io/kairos/framework:v2.11.7-fips as kairos-fips
+FROM quay.io/kairos/framework:v2.11.7-fips AS kairos-fips
 
 # Base ubuntu image (focal)
-FROM ubuntu:focal as base
+FROM ubuntu:focal AS base
 
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.200.11 as osbuilder
+FROM quay.io/kairos/osbuilder-tools:v0.200.11 AS osbuilder
 RUN zypper install -y gettext && zypper clean
 RUN mkdir /workspace
 COPY --from=base /etc/os-release /workspace/os-release
@@ -38,6 +38,19 @@ RUN --mount=type=secret,id=pro-attach-config \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
     && apt-get install -y openssl libssl1.1 libssl1.1-hmac libgcrypt20 libgcrypt20-hmac strongswan strongswan-hmac openssh-client openssh-server linux-image-fips \
+    && LATEST_VERSION=$(apt-cache search --names-only '^linux-image-[0-9].*-fips$' \
+    | awk '{print $1}' \
+    | grep -vE '(azure|aws|gcp)' \
+    | sort -V \
+    | tail -n1 \
+    | sed -E 's/^linux-image-([0-9][^ ]*)-fips$/\1/') && \
+    apt install -y --no-install-recommends \
+        "linux-image-${LATEST_VERSION}-fips" \
+        "linux-modules-${LATEST_VERSION}-fips" \
+        "linux-headers-${LATEST_VERSION}-fips" && \
+    apt-mark hold "linux-image-${LATEST_VERSION}-fips" "linux-modules-${LATEST_VERSION}-fips" && \
+    apt update && apt upgrade -y && \
+    apt install -y --no-install-recommends linux-headers-virtual \
     && pro detach --assume-yes
 
 
@@ -114,6 +127,13 @@ RUN apt-get install -y --no-install-recommends \
     zstd \
     && apt-get remove -y unattended-upgrades && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN fips_kernel=$(basename $(ls /lib/modules | grep -- '-fips$' | sort -V | tail -n1)) && \
+    echo "Detected FIPS kernel: $fips_kernel" && \
+    # Remove all other kernel module trees (e.g., -generic)
+    find /lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} + && \
+    find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} +
+
 
 # Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
 COPY --from=kairos-fips / /
