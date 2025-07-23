@@ -249,6 +249,9 @@ function "get_base_image" {
 
     os_distribution == "ubuntu" && os_version == "22" ? 
       "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
+    
+    os_distribution == "ubuntu" && os_version == "24" ? 
+      "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
 
     os_distribution == "ubuntu" && os_version == "24" && is_uki ? 
       "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}-uki" :
