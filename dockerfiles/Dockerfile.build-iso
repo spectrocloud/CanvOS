@@ -47,7 +47,7 @@ RUN if [ -f /tmp/build-context/local-ui.tar ]; then \
 
 RUN mkdir -p /output
 
-RUN sudo /usr/bin/auroraboot \
+RUN /usr/bin/auroraboot \
     --debug build-iso \
     --output /output \
     --override-name ${ISO_NAME} \
@@ -57,7 +57,6 @@ RUN sudo /usr/bin/auroraboot \
 
 RUN mkdir -p /iso && \
     cp /output/${ISO_NAME}.iso /iso/ && \
-    cp /output/config.yaml /iso/ && \
     cd /iso && \
     sha256sum "${ISO_NAME}.iso" > "${ISO_NAME}.iso.sha256"
 
