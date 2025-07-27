@@ -25,4 +25,4 @@ EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 # INCLUDE_MS_SECUREBOOT_KEYS=true       # Adds Microsoft Secure Boot certificates; if you export existing keys from a device, you typically won't need this
 # AUTO_ENROLL_SECUREBOOT_KEYS=false     # Set to true to automatically enroll certificates on devices in Setup Mode, useful for flashing devices without user interaction
 
-# DRBD_VERSION="9.2.13"  # This variable is required for Piraeus pack for drbd module installtion.
+# DRBD_VERSION=9.2.13  # This variable is required for Piraeus pack for drbd module installtion.
