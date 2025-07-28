@@ -135,7 +135,7 @@ else
 fi
 
 # Verify the command was successful
-if $? -ne 0 ; then
+if [ $? -ne 0 ]; then
     echo "An error occurred while running the command."
     exit 1
 fi
