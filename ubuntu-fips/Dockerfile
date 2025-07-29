@@ -48,6 +48,7 @@ RUN --mount=type=secret,id=pro-attach-config \
   openssh-client \
   openssh-server \
   linux-image-fips \
+  # linux-headers-fips \ # uncomment this if you need headers
   shim-signed \
   conntrack \
   console-data \
