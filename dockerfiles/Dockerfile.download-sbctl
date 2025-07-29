@@ -1,7 +1,0 @@
-ARG ALPINE_IMG
-FROM ${ALPINE_IMG}
-
-RUN apk add --no-cache curl tar
-
-RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && \
-    mv sbctl/sbctl /usr/bin/sbctl
