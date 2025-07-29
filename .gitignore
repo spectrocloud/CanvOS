@@ -7,9 +7,12 @@ variables.env.old
 config.yaml
 content-*/*
 *.arg
+*.arg.*
 .idea
+.secret
 .DS_Store
-
+*/user-data.yaml
+upload.sh
 hack/*.img
 test/.env
 two-node-create.json
@@ -25,3 +28,4 @@ sb-private-ca/*.req
 spectro-luet-auth.yaml
 spc.tgz
 efi-size-check/target/
+cloud-images/config/user-data.yaml
