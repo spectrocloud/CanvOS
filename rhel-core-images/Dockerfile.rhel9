@@ -1,8 +1,9 @@
-ARG BASE_IMAGE=registry.access.redhat.com/ubi9-init:9.4-6
+FROM quay.io/kairos/kairos-init:v0.5.1 AS kairos-init
+FROM registry.access.redhat.com/ubi9-init:9.4-6
 
-FROM $BASE_IMAGE 
 ARG USERNAME
 ARG PASSWORD
+ARG KAIROS_VERSION=v3.4.2
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
@@ -11,6 +12,10 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && subscription-manager attach --auto \
   && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
   && yum repolist
+
+COPY --from=kairos-init /kairos-init /kairos-init
+RUN /kairos-init -l debug -m "generic" -t "false" --version "${KAIROS_VERSION}" && rm /kairos-init
+
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \

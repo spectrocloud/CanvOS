@@ -21,72 +21,81 @@ RUN if [ "$IS_UKI" = "true" ]; then \
     fi
 
 RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
+        if [ ! -z "$UBUNTU_PRO_KEY" ]; then \
+            sed -i '/^[[:space:]]*$/d' /etc/os-release && \
+            apt update && apt-get install -y snapd && \
+            pro attach $UBUNTU_PRO_KEY; \
+        fi && \
+        \
         apt-get update && \
-        apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y; \
-    fi
-
-RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
+        apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y && \
+        \
+        APT_UPGRADE_FLAGS="-y" && \
         if [ "$UPDATE_KERNEL" = "false" ]; then \
-            if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null 2>&1; then \
+            if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then \
                 apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION"; \
             fi && \
-            if dpkg -l linux-image-generic > /dev/null 2>&1; then \
+            if dpkg -l linux-image-generic > /dev/null; then \
                 apt-mark hold linux-image-generic linux-headers-generic linux-generic; \
             fi; \
-        fi; \
-    fi
-
-RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "false" ]; then \
-        APT_UPGRADE_FLAGS="-y"; \
-        if [ "$UPDATE_KERNEL" != "false" ]; then \
+        else \
             APT_UPGRADE_FLAGS="-y --with-new-pkgs"; \
         fi && \
-        DEBIAN_FRONTEND=noninteractive apt-get update && \
-        apt-get upgrade $APT_UPGRADE_FLAGS && \
-        latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
-        apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
-        rm -rf /var/lib/apt/lists/*; \
-    fi
-
-RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "false" ]; then \
-        kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
-        ln -sf "${kernel#/boot/}" /boot/vmlinuz && \
-        kernel=$(ls /lib/modules | tail -n1); \
-        dracut -f "/boot/initrd-${kernel}" "${kernel}"; \
-        ln -sf "initrd-${kernel}" /boot/initrd && \
-        depmod -a "${kernel}" && \
-        if [ ! -f /usr/bin/grub2-editenv ]; then \
-            ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
+        \
+        if [ "$IS_UKI" = "false" ]; then \
+            DEBIAN_FRONTEND=noninteractive apt-get update && \
+            apt-get upgrade $APT_UPGRADE_FLAGS && \
+            latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
+            apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
+            apt-get autoremove -y && \
+            rm -rf /var/lib/apt/lists/* && \
+            \
+            kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
+            ln -sf "${kernel#/boot/}" /boot/vmlinuz && \
+            kernel=$(ls /lib/modules | tail -n1) && \
+            dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+            ln -sf "initrd-${kernel}" /boot/initrd && \
+            depmod -a "${kernel}" && \
+            \
+            if [ ! -f /usr/bin/grub2-editenv ]; then \
+                ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
+            fi; \
+        fi && \
+        \
+        if [ "$CIS_HARDENING" = "true" ]; then \
+            cp /tmp/build-context/cis-harden/harden.sh /tmp/harden.sh && \
+            /tmp/harden.sh && rm /tmp/harden.sh; \
+        fi && \
+        \
+        if [ ! -z "$UBUNTU_PRO_KEY" ]; then \
+            pro detach --assume-yes; \
         fi; \
-    fi
-
-RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$CIS_HARDENING" = "true" ]; then \
-        cp /tmp/build-context/cis-harden/harden.sh /tmp/harden.sh && \
-        /tmp/harden.sh && rm /tmp/harden.sh; \
-    fi
-
-RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ ! -z "$UBUNTU_PRO_KEY" ]; then \
-        pro detach --assume-yes; \
-    fi
-
-RUN if [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]; then \
-        if [ "$UPDATE_KERNEL" = "false" ]; then \
-            zypper al kernel-de*; \
-        fi && \
-        zypper refresh && zypper update -y && \
-        if [ -e "/usr/bin/dracut" ]; then \
-            kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}" && \
-            dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd; \
-        fi && \
-        zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
-        zypper cc && \
-        zypper clean; \
     fi
 
 RUN if [ "$OS_DISTRIBUTION" = "opensuse-leap" ]; then \
+        if [ "$ARCH" = "amd64" ]; then \
+            if [ "$UPDATE_KERNEL" = "false" ]; then \
+                zypper al kernel-de*; \
+            fi && \
+            \
+            zypper refresh && zypper update -y && \
+            \
+            if [ -e "/usr/bin/dracut" ]; then \
+                kernel=$(ls /lib/modules | tail -n1) && \
+                depmod -a "${kernel}" && \
+                dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+                ln -sf "initrd-${kernel}" /boot/initrd; \
+            fi && \
+            \
+            zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
+            zypper cc && \
+            zypper clean; \
+        fi && \
+        \
         zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate && \
         zypper cc && \
         zypper clean && \
+        \
         if [ ! -e /usr/bin/apparmor_parser ]; then \
             cp /sbin/apparmor_parser /usr/bin/apparmor_parser; \
         fi; \

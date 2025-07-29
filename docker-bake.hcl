@@ -44,7 +44,7 @@ variable "KAIROS_VERSION" {
 }
 
 variable AURORABOOT_IMAGE {
-  default = "quay.io/kairos/auroraboot:v0.8.7"
+  default = "quay.io/kairos/auroraboot:v0.10.0"
 }
 
 variable "K3S_PROVIDER_VERSION" {
@@ -520,20 +520,9 @@ target "uki-genkey" {
   output = ["type=local,dest=./secure-boot/"]
 }
 
-target "download-sbctl" {
-  dockerfile = "dockerfiles/Dockerfile.download-sbctl"
-  platforms = ["linux/${ARCH}"]
-  args = {
-    ALPINE_IMG = ALPINE_IMG
-  }
-}
-
 target "uki-byok" {
   dockerfile = "dockerfiles/Dockerfile.uki-byok"
   platforms = ["linux/${ARCH}"]
-  contexts = {
-    download-sbctl = "target:download-sbctl"
-  }
   args = {
     UBUNTU_IMAGE = get_ubuntu_image(FIPS_ENABLED, SPECTRO_PUB_REPO)
     INCLUDE_MS_SECUREBOOT_KEYS = INCLUDE_MS_SECUREBOOT_KEYS
