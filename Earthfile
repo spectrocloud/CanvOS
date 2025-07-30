@@ -698,8 +698,24 @@ base-image:
         IF [ "$IS_UKI" = "false" ]
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
+                apt-get install --no-install-recommends -y \
+                    util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
+                    parted \ # Used for creating and managing disk partitions.
+                    cloud-guest-utils \ # Includes utilities for cloud environments, such as resizing root partitions.
+                    gawk \ # Required for text processing and scripting in build scripts.
+                    fdisk \ # A partitioning tool for managing disk partitions.
+                    gdisk \ # GPT partitioning tool, complementing fdisk for modern systems.
+                    e2fsprogs \ # Provides tools for managing ext2/ext3/ext4 file systems.
+                    dosfstools \ # Utilities for creating and checking FAT file systems.
+                    rsync \ # Used for efficient file synchronization and transfer.
+                    cryptsetup-bin \ # Provides tools for setting up encrypted disks.
+                    udev && \ # Device manager for the Linux kernel, required for managing device nodes.
                 latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
-                apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
+                if [ "$FIPS_ENABLED" = "true" ]; then \
+                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
+                else \
+                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}"); \
+                fi && \
                 apt-get autoremove -y && \
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
