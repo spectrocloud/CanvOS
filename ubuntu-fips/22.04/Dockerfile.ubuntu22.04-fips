@@ -63,7 +63,7 @@ RUN --mount=type=secret,id=pro-attach-config \
         iptables isc-dhcp-common jq kbd krb5-locales lldpd lldpad lvm2 mdadm nano nbd-client \
         ncurses-term neovim networkd-dispatcher nfs-common nvme-cli open-iscsi openssh-server \
         open-vm-tools os-prober packagekit-tools parted patch policykit-1 publicsuffix qemu-guest-agent \
-        rng-tools rsync shared-mime-info snmpd squashfs-tools sudo systemd systemd-timesyncd thermald \
+        rng-tools rsync shared-mime-info shim-signed snmpd squashfs-tools sudo systemd systemd-timesyncd thermald \
         ubuntu-advantage-tools xdg-user-dirs xxd xz-utils zerofree zfsutils-linux zstd && \
     usg fix disa_stig && \
     apt-get remove -y unattended-upgrades && \

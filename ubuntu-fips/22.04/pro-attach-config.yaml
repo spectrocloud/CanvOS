@@ -1,1 +1,3 @@
 token: 
+enable_services:
+  - fips-updates
