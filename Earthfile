@@ -698,8 +698,13 @@ base-image:
         IF [ "$IS_UKI" = "false" ]
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
+                apt-get install --no-install-recommends -y util-linux parted cloud-guest-utils gawk fdisk gdisk e2fsprogs dosfstools rsync cryptsetup-bin udev && \
                 latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
-                apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
+                if [ "$FIPS_ENABLED" = "true" ]; then \
+                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
+                else \
+                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}"); \
+                fi && \
                 apt-get autoremove -y && \
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
