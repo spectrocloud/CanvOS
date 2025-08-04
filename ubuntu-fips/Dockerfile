@@ -1,12 +1,9 @@
 
 # Kairos init image
-FROM quay.io/kairos/kairos-init:v0.5.1 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.5.4 AS kairos-init
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base
-
-# Build the custom ubuntu image
-FROM base
 
 ARG KAIROS_VERSION=v3.4.2
 
