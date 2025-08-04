@@ -6,9 +6,15 @@ FROM ${AURORABOOT_IMAGE} AS builder
 
 COPY --from=provider-image-rootfs / /build/image/
 
-COPY secure-boot/enrollment/ /keys/
-COPY secure-boot/private-keys/ /keys/
-COPY secure-boot/public-keys/ /keys/
+RUN --mount=type=secret,id=enrollment,target=/tmp/enrollment \
+    mkdir -p /keys && \
+    cp -r /tmp/enrollment/* /keys/
+
+RUN --mount=type=secret,id=private-keys,target=/tmp/private-keys \
+    cp -r /tmp/private-keys/* /keys/
+
+RUN --mount=type=secret,id=public-keys,target=/tmp/public-keys \
+    cp -r /tmp/public-keys/* /keys/
 
 RUN mkdir -p /output
 

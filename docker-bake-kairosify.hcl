@@ -1,5 +1,5 @@
 variable "KAIROS_INIT_IMAGE" {
-    default = "quay.io/kairos/kairos-init:v0.5.1"
+    default = "quay.io/kairos/kairos-init:v0.5.4"
 }
 
 variable "ARCH" {
@@ -15,7 +15,7 @@ variable "MODEL" {
 }
 
 variable "KAIROS_VERSION" {
-  default = "v3.4.2"
+  default = "v3.5.0"
 }
 
 variable "TRUSTED_BOOT" {

@@ -412,6 +412,23 @@ target "trustedboot-image" {
   contexts = {
     provider-image = "target:provider-image"
   }
+  secret = [
+    {
+      type = "file"
+      id = "enrollment"
+      src = "secure-boot/enrollment/"
+    },
+    {
+      type = "file"
+      id = "private-keys"
+      src = "secure-boot/private-keys/"
+    },
+    {
+      type = "file"
+      id = "public-keys"
+      src = "secure-boot/public-keys/"
+    }
+  ]
   args = {
     AURORABOOT_IMAGE = AURORABOOT_IMAGE
   }
@@ -483,6 +500,23 @@ target "build-uki-iso" {
     CMDLINE = CMDLINE
     BRANDING = BRANDING
   }
+  secret = [
+    {
+      type = "file"
+      id = "enrollment"
+      src = "secure-boot/enrollment/"
+    },
+    {
+      type = "file"
+      id = "private-keys"
+      src = "secure-boot/private-keys/"
+    },
+    {
+      type = "file"
+      id = "public-keys"
+      src = "secure-boot/public-keys/"
+    }
+  ]
   output = ["type=local,dest=./iso-output/"]
 }
 
