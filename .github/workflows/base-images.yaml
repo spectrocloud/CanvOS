@@ -12,7 +12,7 @@ on:
         description: "Kairos Init Image"
         required: false
         type: string
-        default: "quay.io/kairos/kairos-init:v0.5.1"
+        default: "quay.io/kairos/kairos-init:v0.5.7"
       arch:
         description: "Architecture"
         required: false
@@ -40,7 +40,7 @@ on:
         description: "Registry prefix for output images"
         required: false
         type: string
-        default: "us-east1-docker.pkg.dev/spectro-images/dev/piyush-1/edge"
+        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-6616/edge"
 
 jobs:
   generate-matrix:
@@ -70,7 +70,7 @@ jobs:
               tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{kairos_version}"
               if trusted_boot:
                   tag += "-uki"
-              
+
               matrix.append({
                   "base_os": base_os_image,
                   "tag": tag
@@ -92,7 +92,7 @@ jobs:
                   ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
                   ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core")
               ]
-              
+
               for base_os, tag_prefix in combinations:
                   tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
                   matrix.append({
