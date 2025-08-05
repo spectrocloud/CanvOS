@@ -12,7 +12,7 @@ on:
         description: 'Kairos Init Image'
         required: false
         type: string
-        default: 'quay.io/kairos/kairos-init:v0.5.1'
+        default: 'quay.io/kairos/kairos-init:v0.5.7'
       arch:
         description: 'Architecture'
         required: false
@@ -40,7 +40,7 @@ on:
         description: 'Registry prefix for output images'
         required: false
         type: string
-        default: 'us-east1-docker.pkg.dev/spectro-images/dev/piyush-1/edge'
+        default: 'us-east1-docker.pkg.dev/spectro-images/dev/pe-6616/edge'
 
 jobs:
   generate-matrix:
@@ -61,21 +61,21 @@ jobs:
           model = "${{ github.event.inputs.model }}"
           kairos_version = "${{ github.event.inputs.kairos_version }}"
           trusted_boot = "${{ github.event.inputs.trusted_boot }}" == "true"
-          
+
           matrix = []
-          
+
           if base_os_image:
               # Custom base OS image
               simple_name = base_os_image.split('/')[-1].replace(':', '-')
               tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{kairos_version}"
               if trusted_boot:
                   tag += "-uki"
-              
+
               matrix.append({
                   "base_os": base_os_image,
                   "tag": tag
               })
-          
+
           elif trusted_boot:
               # UKI builds - only Ubuntu 24.04
               tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
@@ -83,7 +83,7 @@ jobs:
                   "base_os": "ubuntu:24.04",
                   "tag": tag
               })
-          
+
           else:
               # Standard builds - all combinations
               combinations = [
@@ -92,7 +92,7 @@ jobs:
                   ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
                   ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core")
               ]
-              
+
               for base_os, tag_prefix in combinations:
                   tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
                   matrix.append({
