@@ -71,8 +71,7 @@ RUN apt-get update && \
       kmod \
       gpg \
       make \
-      # Ubuntu has multiple kernel versions that may be using different gcc versions: use the dkms package to install them all
-      $(apt-get install -s dkms | awk '/^Inst gcc/{print $2}') \
+      gcc \
       patch \
       diffutils \
       perl \
