@@ -37,6 +37,10 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all
 
+# Ensure udev and disk tooling are present for partitioning/formatting and udev events
+RUN dnf install -y systemd-udev e2fsprogs dosfstools util-linux parted lvm2 mdadm \
+    && dnf clean all
+
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Disable SELinux
