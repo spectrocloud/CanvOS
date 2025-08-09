@@ -696,8 +696,24 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
+            # Block and remove HWE kernel meta packages on FIPS builds to avoid pulling non-FIPS HWE kernels
+            RUN if [ "$FIPS_ENABLED" = "true" ]; then \
+                    printf "Package: linux-generic-hwe-$OS_VERSION\nPin: release *\nPin-Priority: -1\n\n" \
+                        "Package: linux-image-generic-hwe-$OS_VERSION\nPin: release *\nPin-Priority: -1\n\n" \
+                        "Package: linux-headers-generic-hwe-$OS_VERSION\nPin: release *\nPin-Priority: -1\n\n" \
+                        "Package: linux-generic\nPin: release *\nPin-Priority: -1\n\n" \
+                        "Package: linux-image-generic\nPin: release *\nPin-Priority: -1\n\n" \
+                        "Package: linux-headers-generic\nPin: release *\nPin-Priority: -1\n" \
+                        > /etc/apt/preferences.d/no-hwe; \
+                    apt-mark unhold "linux-generic-hwe-$OS_VERSION" "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" \
+                        linux-generic linux-image-generic linux-headers-generic >/dev/null 2>&1 || true; \
+                    apt-get update && \
+                    apt-get purge -y "linux-generic-hwe-$OS_VERSION" "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" \
+                        linux-generic linux-image-generic linux-headers-generic || true; \
+                    apt-mark hold linux-image-fips linux-headers-fips >/dev/null 2>&1 || true; \
+                fi
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-                apt-get upgrade $APT_UPGRADE_FLAGS && \
+                if [ "$FIPS_ENABLED" = "true" ]; then echo "Skipping apt upgrade under FIPS"; else apt-get upgrade $APT_UPGRADE_FLAGS; fi && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
                     parted \ # Used for creating and managing disk partitions.
@@ -726,11 +742,11 @@ base-image:
             RUN kernel=$(ls /lib/modules | tail -n1) && \
            	depmod -a "${kernel}"
 
-            RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
-                ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
-            fi
+             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
+                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
+             fi
 
-        END
+         END
 
         IF [ "$CIS_HARDENING" = "true" ]
             COPY cis-harden/harden.sh /tmp/harden.sh
@@ -920,7 +936,7 @@ OS_RELEASE:
     ARG KAIROS_RELEASE=${OS_VERSION}
 
     COPY --if-exists overlay/files/usr/lib/os-release.tmpl /usr/lib/os-release.tmpl
-    
+
     # update OS-release file
     # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
     RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
