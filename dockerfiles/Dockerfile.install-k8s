@@ -1,0 +1,55 @@
+ARG ARCH
+ARG BASE_ALPINE_IMAGE
+
+FROM --platform=linux/${ARCH} ${BASE_ALPINE_IMAGE} AS install-k8s
+
+ARG K8S_DISTRIBUTION
+ARG K8S_VERSION
+ARG K3S_FLAVOR_TAG
+ARG RKE2_FLAVOR_TAG
+ARG LUET_PROJECT
+ARG SPECTRO_LUET_REPO
+ARG SPECTRO_LUET_VERSION
+ARG ARCH
+ARG LUET_REPO
+
+RUN [ -d "certs" ] && cp -r certs/. /etc/ssl/certs/ || true
+RUN update-ca-certificates
+RUN apk add curl
+
+COPY --from=third-party-luet /WORKDIR/luet /usr/bin/luet
+
+RUN if [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ] || [ "$K8S_DISTRIBUTION" = "canonical" ]; then \
+        BASE_K8S_VERSION="$K8S_VERSION"; \
+    elif [ "$K8S_DISTRIBUTION" = "k3s" ]; then \
+        K8S_DISTRIBUTION_TAG="$K3S_FLAVOR_TAG"; \
+        BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
+    elif [ "$K8S_DISTRIBUTION" = "rke2" ]; then \
+        K8S_DISTRIBUTION_TAG="$RKE2_FLAVOR_TAG"; \
+        BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
+    fi
+
+WORKDIR /output
+
+RUN mkdir -p /etc/luet/repos.conf.d && \
+    luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION --priority 1 -y
+
+COPY . /tmp/build-context/
+RUN if [ -f /tmp/build-context/spectro-luet-auth.yaml ]; then \
+        cp /tmp/build-context/spectro-luet-auth.yaml spectro-luet-auth.yaml && \
+        cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; \
+    fi
+
+RUN luet repo update
+
+RUN if [ "$K8S_DISTRIBUTION" = "kubeadm" ]; then \
+        luet install -y container-runtime/containerd --system-target /output; \
+    fi
+
+RUN if [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]; then \
+        luet install -y container-runtime/containerd-fips --system-target /output; \
+    fi
+
+RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
+
+RUN rm -rf /output/var/cache/*
