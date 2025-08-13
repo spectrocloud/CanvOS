@@ -1,49 +1,41 @@
 # Kairos init image
-FROM quay.io/kairos/kairos-init:v0.5.7 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.5.10 AS kairos-init
 
 FROM registry.access.redhat.com/ubi8/ubi-init:8.7-10 as base
 
 ARG USERNAME
 ARG PASSWORD
+ARG VERSION=v0.0.1
 
-# Generate os-release file
-ARG KAIROS_VERSION=v3.5.0
+# Install util-linux for disk partitioning and persistent storage setup
+RUN dnf install -y util-linux
 
-# Don't get asked while running apt commands
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm -y
-# Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
-RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
-  && yum repolist \
-  && subscription-manager attach --auto \
-  && subscription-manager repos --enable rhel-8-for-x86_64-appstream-rpms \
-  && yum repolist
-RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
-
-COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
-
-RUN mkdir -p /run/lock && \
-  touch /usr/libexec/.keep
-
-COPY overlay/rhel8 /
-
-COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+# Try to set up Red Hat subscription if credentials are provided, otherwise use UBI repos
+RUN if [ -n "${USERNAME}" ] && [ -n "${PASSWORD}" ]; then \
+        rm -f /etc/rhsm-host && \
+        subscription-manager register --username ${USERNAME} --password ${PASSWORD} && \
+        subscription-manager attach --auto && \
+        subscription-manager repos --enable rhel-8-for-x86_64-baseos-rpms --enable rhel-8-for-x86_64-appstream-rpms; \
+    else \
+        echo "No subscription credentials provided, using UBI repositories"; \
+    fi
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
+    /kairos-init -l debug -s install --fips --version "${VERSION}"
 
-RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
-    && dnf clean all
+# Install dracut packages after kairos-init to prevent them from being removed
+RUN dnf install -y dracut dracut-live dracut-network dracut-squash
 
-# Ensure udev and disk tooling are present for partitioning/formatting and udev events
-RUN dnf install -y systemd-udev e2fsprogs dosfstools util-linux parted lvm2 mdadm \
-    && dnf clean all
+# Copy the custom dracut config file which enables fips
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
+# Debug: Check what's available before init
+RUN ls -la /boot/ || true && \
+    ls -la /lib/modules/ || true && \
+    dracut --version || true
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --skip-step cleanup,initrd --version "${VERSION}"
+
+# Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
-
-# Disable SELinux
-RUN echo "SELINUX=disabled" > /etc/selinux/config
-
-RUN rm -rf /boot/initramfs-*
