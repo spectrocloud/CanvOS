@@ -712,7 +712,11 @@ base-image:
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
                 latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
                 if [ "$FIPS_ENABLED" = "true" ]; then \
-                    # Unhold all matching kernel packages EXCEPT latest and fips
+                    # When FIPS is enabled, we need to remove any non-FIPS kernel packages (e.g., 5.15 HWE) to avoid conflicts.
+                    # However, some kernel packages may be held (apt-mark hold), which causes `apt-get purge` to fail with:
+                    #   "E: Held packages were changed and -y was used without --allow-change-held-packages."
+                    # To fix this, we first unhold all matching non-FIPS and non-latest kernel packages before purging them.
+                    # This ensures a clean, FIPS-only environment without apt resolver errors.
                     for pkg in $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' \
                         | grep -v "$latest_kernel" | grep -v fips); do \
                         apt-mark unhold "$pkg" || true; \
