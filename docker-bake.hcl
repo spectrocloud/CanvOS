@@ -240,6 +240,21 @@ function "get_ubuntu_image" {
   result = fips_enabled ? "${spectro_pub_repo}/third-party/ubuntu-fips:22.04" : "${spectro_pub_repo}/third-party/ubuntu:22.04"
 }
 
+secret "enrollment" {
+  type = "file"
+  src = "secure-boot/enrollment/"
+}
+
+secret "private-keys" {
+  type = "file"
+  src = "secure-boot/private-keys/"
+}
+
+secret "public-keys" {
+  type = "file"
+  src = "secure-boot/public-keys/"
+}
+
 function "get_base_image" {
   params = [base_image, os_distribution, os_version, is_uki]
   result = base_image != "" ? base_image : (
@@ -412,23 +427,7 @@ target "trustedboot-image" {
   contexts = {
     provider-image = "target:provider-image"
   }
-  secret = [
-    {
-      type = "file"
-      id = "enrollment"
-      src = "secure-boot/enrollment/"
-    },
-    {
-      type = "file"
-      id = "private-keys"
-      src = "secure-boot/private-keys/"
-    },
-    {
-      type = "file"
-      id = "public-keys"
-      src = "secure-boot/public-keys/"
-    }
-  ]
+  secret = ["enrollment", "private-keys", "public-keys"]
   args = {
     AURORABOOT_IMAGE = AURORABOOT_IMAGE
   }
@@ -500,23 +499,7 @@ target "build-uki-iso" {
     CMDLINE = CMDLINE
     BRANDING = BRANDING
   }
-  secret = [
-    {
-      type = "file"
-      id = "enrollment"
-      src = "secure-boot/enrollment/"
-    },
-    {
-      type = "file"
-      id = "private-keys"
-      src = "secure-boot/private-keys/"
-    },
-    {
-      type = "file"
-      id = "public-keys"
-      src = "secure-boot/public-keys/"
-    }
-  ]
+  secret = ["enrollment", "private-keys", "public-keys"]
   output = ["type=local,dest=./iso-output/"]
 }
 
