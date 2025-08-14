@@ -712,7 +712,12 @@ base-image:
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
                 latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
                 if [ "$FIPS_ENABLED" = "true" ]; then \
-                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
+                    # Unhold all matching kernel packages EXCEPT latest and fips
+                    for pkg in $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' \
+                        | grep -v "$latest_kernel" | grep -v fips); do \
+                        apt-mark unhold "$pkg" || true; \
+                    done && \
+                    apt-get purge -y $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
                 else \
                     apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}"); \
                 fi && \
