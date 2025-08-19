@@ -8,7 +8,7 @@ FROM $BASE_IMAGE
 ARG ORGNAME
 ARG KEYNAME
 ARG SATHOSTNAME
-ARG KAIROS_VERSION=v3.4.2
+ARG KAIROS_VERSION=v3.5.0
 
 RUN dnf config-manager --disable ubi-9-appstream-rpms ubi-9-baseos-rpms ubi-9-codeready-builder-rpms
 RUN rm /etc/rhsm-host
@@ -62,10 +62,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     kernel kernel-modules kernel-modules-extra \
     rsync jq && dnf clean all
 
-COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -m "generic" -t "false" --version "${KAIROS_VERSION}" && rm /kairos-init
-
-COPY --from=quay.io/kairos/framework:v2.11.7 / /
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug -m "generic" -t "false" --version "${KAIROS_VERSION}"
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
