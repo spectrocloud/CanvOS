@@ -23,6 +23,8 @@ RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel8/ /
 
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
