@@ -21,15 +21,13 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && yum repolist
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
+COPY overlay/rhel8/ /
+
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
 RUN mkdir -p /run/lock && \
   touch /usr/libexec/.keep
-
-COPY overlay/rhel8/usr/lib/udev/rules.d/13-dm-disk.rules /usr/lib/udev/rules.d/
-COPY overlay/rhel8/usr/lib/udev/rules.d/60-persistent-storage.rules /usr/lib/udev/rules.d/
-COPY overlay/rhel8/system/ /system/
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
