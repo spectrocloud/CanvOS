@@ -1,3 +1,0 @@
-ARG STYLUS_BASE
-ARG ARCH
-FROM --platform=linux/${ARCH} ${STYLUS_BASE} AS stylus-image

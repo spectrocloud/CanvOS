@@ -928,12 +928,6 @@ OS_RELEASE:
     ARG ARTIFACT=kairos-core-${OS_DISTRIBUTION}-$OS_VERSION
     ARG KAIROS_RELEASE=${OS_VERSION}
 
-    COPY --if-exists overlay/files/usr/lib/os-release.tmpl /usr/lib/os-release.tmpl
-    
-    # update OS-release file
-    # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
-    RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
-
 download-third-party:
     ARG TARGETPLATFORM
     ARG binary
