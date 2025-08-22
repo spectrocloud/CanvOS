@@ -1,7 +1,9 @@
-# Kairos Fedora fips
+# Kairos RHEL8 FIPS
 
 - run `bash build.sh <username> <password> [<base image>]`
 - use the generated base image as input in installer generation with `earthly +iso`
+
+**Note**: Red Hat subscription credentials are required to build this image as RHEL8 FIPS packages are only available through Red Hat repositories.
 
 The system is not enabling FIPS by default in kernel space. 
 
@@ -19,9 +21,10 @@ install:
 ```
 
 Notes:
-- Most of the Dockerfile configuration are: packages being installed by fedora, and the framework files coming from Kairos containing FIPS-enabled packages
+- Most of the Dockerfile configuration are: packages being installed by RHEL8, and the framework files coming from Kairos containing FIPS-enabled packages
 - The LiveCD is not running in fips mode
 - You must add `selinux=0`. SELinux is not supported yet and must be explicitly disabled
+- Red Hat subscription is required for access to FIPS-compliant packages
 
 ## Verify FIPS is enabled
 

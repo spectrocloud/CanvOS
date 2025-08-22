@@ -28,6 +28,8 @@ COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
+COPY overlay/rhel8/ /
+
 RUN mkdir -p /run/lock && \
   touch /usr/libexec/.keep
 
@@ -39,9 +41,13 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all
 
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Disable SELinux
 RUN echo "SELINUX=disabled" > /etc/selinux/config
 
 RUN rm -rf /boot/initramfs-*
+
+COPY overlay/rhel8/ /
