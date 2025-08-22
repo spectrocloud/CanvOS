@@ -30,6 +30,9 @@ RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
 COPY overlay/rhel8/ /
 
+RUN systemctl unmask systemd-udevd
+RUN systemctl enable systemd-udevd
+
 RUN mkdir -p /run/lock && \
   touch /usr/libexec/.keep
 
