@@ -28,13 +28,72 @@ COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
-COPY overlay/rhel8/ /
+# Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+RUN uuidgen > /etc/machine-id && dnf install -y \
+    squashfs-tools \ 
+    dracut-live \
+    livecd-tools \
+    dracut-squash \
+    dracut-network \
+    efibootmgr \
+    dhclient \
+    audit \
+    sudo \
+    systemd \
+    systemd-networkd \
+    systemd-timesyncd \
+    parted \
+    dracut \
+    e2fsprogs \
+    dosfstools \
+    coreutils-single \
+    device-mapper \
+    grub2 \
+    which \
+    curl \
+    nano \
+    gawk \
+    haveged \
+    polkit \
+    ncurses \
+    tar \
+    kbd \
+    lvm2 \
+    zstd \
+    openssh-server \
+    openssh-clients \
+    shim-x64 \
+    grub2-pc \
+    grub2-efi-x64 \
+    grub2-efi-x64-modules \
+    open-vm-tools \
+    iscsi-initiator-utils \
+    iptables ethtool socat iproute-tc conntrack \
+    kernel kernel-modules kernel-modules-extra \
+    rsync jq && dnf clean all
 
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
+
+# Configure the box. The ubi image masks services for containers, we unmask them 
+RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
+RUN systemctl enable getty@tty1.service
+RUN systemctl enable getty@tty2.service
+RUN systemctl enable getty@tty3.service
+RUN systemctl enable systemd-networkd
+RUN systemctl enable systemd-resolved
+RUN systemctl enable sshd
+RUN systemctl disable selinux-autorelabel-mark.service 
 RUN systemctl unmask systemd-udevd
 RUN systemctl enable systemd-udevd
+RUN systemctl unmask systemd-logind.service
+RUN systemctl enable systemd-logind.service
 
-RUN mkdir -p /run/lock && \
-  touch /usr/libexec/.keep
+COPY overlay/rhel8/ /
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
