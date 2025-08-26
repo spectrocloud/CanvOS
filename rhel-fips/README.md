@@ -1,9 +1,14 @@
-# Kairos RHEL8 FIPS
+# Kairos RHEL8 and RHEL9 FIPS
 
-- run `bash build.sh <username> <password> [<base image>]`
+## Build RHEL 8 FIPS Image
+- run `bash build.sh.rhel8 <username> <password> [<base image>]`
 - use the generated base image as input in installer generation with `earthly +iso`
 
-**Note**: Red Hat subscription credentials are required to build this image as RHEL8 FIPS packages are only available through Red Hat repositories.
+## Build RHEL 9 FIPS Image
+- run `bash build.sh.rhel9 <username> <password> [<base image>]`
+- use the generated base image as input in installer generation with `earthly +iso`
+
+**Note**: Red Hat subscription credentials are required to build these images as RHEL8/RHEL9 FIPS packages are only available through Red Hat repositories.
 
 The system is not enabling FIPS by default in kernel space. 
 
@@ -21,7 +26,7 @@ install:
 ```
 
 Notes:
-- Most of the Dockerfile configuration are: packages being installed by RHEL8, and the framework files coming from Kairos containing FIPS-enabled packages
+- Most of the Dockerfile configuration are: packages being installed by RHEL8/RHEL9, and the framework files coming from Kairos containing FIPS-enabled packages
 - The LiveCD is not running in fips mode
 - You must add `selinux=0`. SELinux is not supported yet and must be explicitly disabled
 - Red Hat subscription is required for access to FIPS-compliant packages
