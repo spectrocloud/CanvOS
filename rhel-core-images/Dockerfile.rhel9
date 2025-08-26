@@ -13,7 +13,7 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
   && yum repolist
 
-RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug -m "generic" -t "false" --version "${KAIROS_VERSION}"
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug --version "${KAIROS_VERSION}" -m "generic" -t "false" 
 
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
