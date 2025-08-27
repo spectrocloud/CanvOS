@@ -16,7 +16,7 @@ IF [ "$FIPS_ENABLED" = "true" ] && [ "$SPECTRO_PUB_REPO" = "us-docker.pkg.dev/pa
 END
 
 ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
-ARG KAIROS_BASE_IMAGE_URL=quay.io/kairos
+ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
