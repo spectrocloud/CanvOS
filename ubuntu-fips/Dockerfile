@@ -1,6 +1,6 @@
 
 # Kairos init image
-FROM quay.io/kairos/kairos-init:v0.5.14 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.5.17 AS kairos-init
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal as base
