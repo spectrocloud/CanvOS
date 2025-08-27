@@ -20,8 +20,8 @@ ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.7.2
-ARG SPECTRO_LUET_VERSION=v4.7.0
+ARG PE_VERSION=v4.7.11
+ARG SPECTRO_LUET_VERSION=v4.7.1
 ARG KAIROS_VERSION=v3.5.0
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -207,6 +207,7 @@ uki-provider-image:
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
+    COPY --if-exists +stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -548,6 +549,7 @@ provider-image:
 
     COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
+    COPY --if-exists +stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
