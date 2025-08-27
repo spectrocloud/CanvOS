@@ -208,7 +208,6 @@ uki-provider-image:
     COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml
-    COPY --if-exists +stylus-image/system/oem/80_stylus_agent_mode.yaml /system/oem/80_stylus_agent_mode.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -551,7 +550,6 @@ provider-image:
     COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY --if-exists +stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml
-    COPY --if-exists +stylus-image/system/oem/80_stylus_agent_mode.yaml /system/oem/80_stylus_agent_mode.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
