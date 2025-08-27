@@ -24,4 +24,6 @@ RUN zypper -n in \
   qemu-guest-agent strace systemd systemd-network timezone tmux vim which tpm* nethogs patch shim iw \
   grub2-i386-pc grub2-x86_64-efi kernel-firmware-all dracut squashfs dhcp-client
 
-  RUN /kairos-init -l debug -m "generic" -t false --version "${KAIROS_VERSION}" --skip-step installPackages && rm /kairos-init
+RUN systemctl disable NetworkManager.service NetworkManager-wait-online.service
+
+RUN /kairos-init -l debug -m "generic" -t false --version "${KAIROS_VERSION}" --skip-step installPackages && rm /kairos-init
