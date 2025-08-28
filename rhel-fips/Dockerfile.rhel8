@@ -1,5 +1,5 @@
 # Kairos init image
-FROM quay.io/kairos/kairos-init:v0.5.17 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.5.14 AS kairos-init
 
 FROM registry.access.redhat.com/ubi8/ubi-init:8.7-10 as base
 
@@ -7,7 +7,7 @@ ARG USERNAME
 ARG PASSWORD
 
 # Generate os-release file
-ARG KAIROS_VERSION=v3.5.1
+ARG KAIROS_VERSION=v3.5.0
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
@@ -30,7 +30,7 @@ RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
-    squashfs-tools \ 
+    squashfs-tools \
     dracut-live \
     livecd-tools \
     dracut-squash \
@@ -79,7 +79,7 @@ RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
 RUN mkdir -p /run/lock
 RUN touch /usr/libexec/.keep
 
-# Configure the box. The ubi image masks services for containers, we unmask them 
+# Configure the box. The ubi image masks services for containers, we unmask them
 RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
 RUN systemctl enable getty@tty1.service
 RUN systemctl enable getty@tty2.service
@@ -87,7 +87,7 @@ RUN systemctl enable getty@tty3.service
 RUN systemctl enable systemd-networkd
 RUN systemctl enable systemd-resolved
 RUN systemctl enable sshd
-RUN systemctl disable selinux-autorelabel-mark.service 
+RUN systemctl disable selinux-autorelabel-mark.service
 RUN systemctl unmask systemd-udevd
 RUN systemctl enable systemd-udevd
 RUN systemctl unmask systemd-logind.service

@@ -1,4 +1,4 @@
-FROM quay.io/kairos/kairos-init:v0.5.17 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.5.14 AS kairos-init
 
 FROM registry.suse.com/suse/sle-micro-rancher/5.4:latest
 
@@ -9,7 +9,7 @@ RUN zypper --gpg-auto-import-keys ref
 ADD repos/opensuse* /etc/zypp/repos.d/
 RUN zypper --gpg-auto-import-keys ref
 
-ARG KAIROS_VERSION=v3.5.1
+ARG KAIROS_VERSION=v3.5.0
 
 COPY --from=kairos-init /kairos-init /kairos-init
 
