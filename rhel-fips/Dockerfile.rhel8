@@ -1,28 +1,16 @@
-ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.7-10
+# Kairos init image
+FROM quay.io/kairos/kairos-init:v0.5.18 AS kairos-init
 
-FROM $BASE_IMAGE as base
+FROM registry.access.redhat.com/ubi8/ubi-init:8.7-10 as base
 
 ARG USERNAME
 ARG PASSWORD
 
 # Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.7.11 as osbuilder
-RUN zypper install -y gettext && zypper clean
-RUN mkdir /workspace
-COPY --from=base /etc/os-release /workspace/os-release
-# You should change the following values according to your own versioning and other details
-RUN OS_NAME=kairos-core-rhel-fips \
-  OS_VERSION=v3.1.3 \
-  OS_ID="kairos" \
-  BUG_REPORT_URL="https://github.com/spectrocloud/pxke-samples/issues" \
-  HOME_URL="https://github.com/spectrocloud/pxke-samples" \
-  OS_LABEL="latest" \
-  GITHUB_REPO="spectrocloud/pxke-samples" \
-  VARIANT="fips" \
-  FLAVOR="rhel" \
-  /update-os-release.sh
+ARG KAIROS_VERSION=v3.5.1
 
-FROM base
+# Don't get asked while running apt commands
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm -y
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
@@ -32,9 +20,17 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && subscription-manager repos --enable rhel-8-for-x86_64-appstream-rpms \
   && yum repolist
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
+COPY overlay/rhel8/ /
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+COPY --from=kairos-init /kairos-init /kairos-init
+RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
+
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
-    squashfs-tools \ 
+    squashfs-tools \
     dracut-live \
     livecd-tools \
     dracut-squash \
@@ -76,22 +72,14 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     kernel kernel-modules kernel-modules-extra \
     rsync jq && dnf clean all
 
-RUN mkdir -p /run/lock && \
-  touch /usr/libexec/.keep
-
-# Copy the os-release file to identify the OS
-COPY --from=osbuilder /workspace/os-release /etc/os-release
-
-# COPY --from=gcr.io/spectro-images-public/kairos/framework:v2.11.7-fips / /
-COPY --from=quay.io/kairos/framework:v2.11.7-fips / /
-
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
 
-COPY overlay/rhel8 /
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
 
-# Configure the box. The ubi image masks services for containers, we unmask them 
+# Configure the box. The ubi image masks services for containers, we unmask them
 RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
 RUN systemctl enable getty@tty1.service
 RUN systemctl enable getty@tty2.service
@@ -99,24 +87,29 @@ RUN systemctl enable getty@tty3.service
 RUN systemctl enable systemd-networkd
 RUN systemctl enable systemd-resolved
 RUN systemctl enable sshd
-RUN systemctl disable selinux-autorelabel-mark.service 
-#RUN systemctl enable tmp.mount
+RUN systemctl disable selinux-autorelabel-mark.service
+RUN systemctl unmask systemd-udevd
+RUN systemctl enable systemd-udevd
+RUN systemctl unmask systemd-logind.service
+RUN systemctl enable systemd-logind.service
 
-# Copy the custom dracut config file
+COPY overlay/rhel8/ /
+
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
-## Generate initrd
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz
-RUN kernel=$(ls /lib/modules | head -n1) && \
-            dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
-            ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
 
-# Symlink kernel HMAC
+RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
+    && dnf clean all
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Disable SELinux
 RUN echo "SELINUX=disabled" > /etc/selinux/config
 
 RUN rm -rf /boot/initramfs-*
+
+COPY overlay/rhel8/ /

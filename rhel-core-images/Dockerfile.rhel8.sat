@@ -1,14 +1,14 @@
 ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.7-10
-ARG KAIROS_FRAMEWORK_IMAGE=quay.io/kairos/framework:v2.7.41
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.5.18
 
-FROM $KAIROS_FRAMEWORK_IMAGE as kairosframework
+FROM $KAIROS_INIT_IMAGE as kairos-init
 
-FROM $BASE_IMAGE 
+FROM $BASE_IMAGE
 
-ARG KAIROS_FRAMEWORK_IMAGE
 ARG ORGNAME
 ARG KEYNAME
 ARG SATHOSTNAME
+ARG KAIROS_VERSION=v3.5.1
 
 RUN dnf config-manager --disable ubi-8-appstream-rpms ubi-8-baseos-rpms ubi-8-codeready-builder-rpms
 RUN rm /etc/rhsm-host
@@ -16,9 +16,10 @@ RUN rpm -Uvh http://${SATHOSTNAME}/pub/katello-ca-consumer-latest.noarch.rpm
 RUN subscription-manager register --org=${ORGNAME} --activationkey=${KEYNAME}
 
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
-    squashfs-tools \ 
+    squashfs-tools \
     dracut-live \
     livecd-tools \
     dracut-squash \
@@ -60,8 +61,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     kernel kernel-modules kernel-modules-extra \
     rsync jq && dnf clean all
 
-
-COPY --from=kairosframework / /
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug -m "generic" -t "false" --version "${KAIROS_VERSION}"
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
@@ -70,8 +70,7 @@ RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
 RUN mkdir -p /run/lock
 RUN touch /usr/libexec/.keep
 
-
-# Configure the box. The ubi image masks services for containers, we unmask them 
+# Configure the box. The ubi image masks services for containers, we unmask them
 RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
 RUN systemctl enable getty@tty1.service
 RUN systemctl enable getty@tty2.service
@@ -79,8 +78,7 @@ RUN systemctl enable getty@tty3.service
 RUN systemctl enable systemd-networkd
 RUN systemctl enable systemd-resolved
 RUN systemctl enable sshd
-RUN systemctl disable selinux-autorelabel-mark.service 
-#RUN systemctl enable tmp.mount
+RUN systemctl disable selinux-autorelabel-mark.service
 
 COPY overlay/rhel8/ /
 
@@ -91,10 +89,8 @@ RUN kernel=$(ls /lib/modules | head -n1) && \
             ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
 RUN rm -rf /boot/initramfs-*
 
-RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
 RUN mkdir -p /etc/luet/repos.conf.d
 ## Clear cache
 RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
-
 
 RUN subscription-manager unregister

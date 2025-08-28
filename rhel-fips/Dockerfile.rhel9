@@ -1,9 +1,16 @@
+# Kairos init image
 FROM quay.io/kairos/kairos-init:v0.5.18 AS kairos-init
-FROM registry.access.redhat.com/ubi9-init:9.4-6
+
+FROM registry.access.redhat.com/ubi9-init:9.4-6 as base
 
 ARG USERNAME
 ARG PASSWORD
+
+# Generate os-release file
 ARG KAIROS_VERSION=v3.5.1
+
+# Don't get asked while running apt commands
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
@@ -12,10 +19,14 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && subscription-manager attach --auto \
   && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
   && yum repolist
-
-RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug --version "${KAIROS_VERSION}" -m "generic" -t "false"
-
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
+COPY overlay/rhel9/ /
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+COPY --from=kairos-init /kairos-init /kairos-init
+RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
@@ -77,18 +88,28 @@ RUN systemctl enable systemd-networkd
 RUN systemctl enable systemd-resolved
 RUN systemctl enable sshd
 RUN systemctl disable selinux-autorelabel-mark.service
+RUN systemctl unmask systemd-udevd
+RUN systemctl enable systemd-udevd
+RUN systemctl unmask systemd-logind.service
+RUN systemctl enable systemd-logind.service
 
 COPY overlay/rhel9/ /
 
-RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz
-RUN kernel=$(ls /lib/modules | head -n1) && \
-            dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
-            ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
+
+RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
+    && dnf clean all
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+# Disable SELinux
+RUN echo "SELINUX=disabled" > /etc/selinux/config
+
 RUN rm -rf /boot/initramfs-*
 
-RUN mkdir -p /etc/luet/repos.conf.d
-## Clear cache
-RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
-
-RUN subscription-manager unregister
+COPY overlay/rhel9/ /

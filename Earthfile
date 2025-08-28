@@ -22,11 +22,11 @@ ARG LUET_PROJECT=luet-repo
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.7.11
 ARG SPECTRO_LUET_VERSION=v4.7.1
-ARG KAIROS_VERSION=v3.1.3
+ARG KAIROS_VERSION=v3.5.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.300.4
+ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.6.0
 ARG KUBEADM_PROVIDER_VERSION=v4.7.0
@@ -217,7 +217,7 @@ trust-boot-unpack:
         luet util unpack $FILE /trusted-boot
     SAVE ARTIFACT /trusted-boot/*
 
-stylus-image-pack:  
+stylus-image-pack:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
@@ -277,7 +277,7 @@ build-uki-iso:
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
- 
+
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
@@ -286,7 +286,7 @@ build-uki-iso:
         done; \
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
-    
+
     #check if clusterconfig is passed in
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
@@ -366,11 +366,11 @@ build-iso:
         tar -xf /build/image/opt/spectrocloud/local-ui.tar -C /build/image/opt/spectrocloud && \
         rm -f /build/image/opt/spectrocloud/local-ui.tar; \
     fi
-    
+
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD 
+                $CMD
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch x86_64" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
@@ -454,7 +454,7 @@ uki-byok:
     RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl || true
     RUN [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true
     RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
-    
+
     WORKDIR /output
     RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  PK  PK.esl  PK.auth
     RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  KEK KEK.esl KEK.auth
@@ -662,8 +662,8 @@ kairos-provider-image:
 
 # base build image used to create the base image for all other image types
 base-image:
-    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE \ 
-    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \ 
+    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE \
+    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \
     --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
     --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION .
 
@@ -696,7 +696,7 @@ base-image:
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
-        
+
         IF [ "$IS_UKI" = "false" ]
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
@@ -714,7 +714,16 @@ base-image:
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
                 latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
                 if [ "$FIPS_ENABLED" = "true" ]; then \
-                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
+                    # When FIPS is enabled, we need to remove any non-FIPS kernel packages (e.g., 5.15 HWE) to avoid conflicts.
+                    # However, some kernel packages may be held (apt-mark hold), which causes `apt-get purge` to fail with:
+                    #   "E: Held packages were changed and -y was used without --allow-change-held-packages."
+                    # To fix this, we first unhold all matching non-FIPS and non-latest kernel packages before purging them.
+                    # This ensures a clean, FIPS-only environment without apt resolver errors.
+                    for pkg in $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' \
+                        | grep -v "$latest_kernel" | grep -v fips); do \
+                        apt-mark unhold "$pkg" || true; \
+                    done && \
+                    apt-get purge -y $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
                 else \
                     apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}"); \
                 fi && \
@@ -783,7 +792,7 @@ base-image:
         journalctl --vacuum-size=1K && \
         rm -rf /etc/machine-id && \
         rm -rf /var/lib/dbus/machine-id
-    RUN touch /etc/machine-id && \ 
+    RUN touch /etc/machine-id && \
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
@@ -808,7 +817,7 @@ iso-image:
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
-    
+
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
@@ -837,7 +846,7 @@ BUILD_GOLANG:
     ARG GOARCH
     ARG VERSION=dev
 
-    ENV GOOS=$GOOS 
+    ENV GOOS=$GOOS
     ENV GOARCH=$GOARCH
     ENV GO_LDFLAGS=" -X github.com/spectrocloud/stylus/pkg/version.Version=${VERSION} -w -s"
 
@@ -855,7 +864,7 @@ internal-slink:
 
     ARG BUILD_DIR=/build/internal
     WORKDIR $BUILD_DIR
-    
+
     DO +BUILD_GOLANG --BIN=slink --SRC=cmd/slink/slink.go --WORKDIR=$BUILD_DIR
 
     SAVE ARTIFACT slink
@@ -920,10 +929,6 @@ OS_RELEASE:
     ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}
     ARG ARTIFACT=kairos-core-${OS_DISTRIBUTION}-$OS_VERSION
     ARG KAIROS_RELEASE=${OS_VERSION}
-
-    # update OS-release file
-    # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
-    RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
 
 download-third-party:
     ARG TARGETPLATFORM
