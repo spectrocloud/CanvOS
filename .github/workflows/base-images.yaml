@@ -4,43 +4,43 @@ on:
   workflow_dispatch:
     inputs:
       base_os_image:
-        description: 'Base OS Image'
+        description: "Base OS Image"
         required: false
         type: string
-        default: ''
+        default: ""
       kairos_init_image:
-        description: 'Kairos Init Image'
+        description: "Kairos Init Image"
         required: false
         type: string
-        default: 'quay.io/kairos/kairos-init:v0.5.7'
+        default: "quay.io/kairos/kairos-init:v0.5.17"
       arch:
-        description: 'Architecture'
+        description: "Architecture"
         required: false
         type: choice
         options:
           - amd64
           - arm64
-        default: 'amd64'
+        default: "amd64"
       model:
-        description: 'Model'
+        description: "Model"
         required: false
         type: string
-        default: 'generic'
+        default: "generic"
       kairos_version:
-        description: 'Kairos Version'
+        description: "Kairos Version"
         required: false
         type: string
-        default: 'v3.5.0'
+        default: "v3.5.1"
       trusted_boot:
-        description: 'Trusted Boot'
+        description: "Trusted Boot"
         required: false
         type: boolean
         default: false
       registry_prefix:
-        description: 'Registry prefix for output images'
+        description: "Registry prefix for output images"
         required: false
         type: string
-        default: 'us-east1-docker.pkg.dev/spectro-images/dev/pe-6616/edge'
+        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-6616/edge"
 
 jobs:
   generate-matrix:
