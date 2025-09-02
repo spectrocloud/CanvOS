@@ -98,7 +98,7 @@ IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
+ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ] || [ "$OS_DISTRIBUTION" = "slem" ]
     # Check for default value for rhel
     ARG BASE_IMAGE
 END
@@ -507,7 +507,7 @@ provider-image:
     IF [  "$UPDATE_KERNEL" = true ]
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
             RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
-        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
+        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ] || [ "$OS_DISTRIBUTION" = "slem" ]
             RUN zypper --non-interactive ref && \
                 kernel=$(ls /lib/modules | tail -n1) && \
                 echo "kernel module: $kernel" && \
@@ -782,11 +782,15 @@ base-image:
         RUN yum install -y openssl rsyslog logrotate
     END
 
-    IF [ "$OS_DISTRIBUTION" = "sles" ]
+    IF [ "$OS_DISTRIBUTION" = "sles" ] || [ "$OS_DISTRIBUTION" = "slem" ]
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
+
+    IF [ "$OS_DISTRIBUTION" = "slem" ]
+        DO +SLEM_OS_RELEASE --OS_VERSION=$OS_VERSION
+    END
 
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
@@ -801,6 +805,15 @@ base-image:
         RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
             if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
     END
+
+SLEM_OS_RELEASE:
+    COMMAND
+    ARG OS_VERSION
+    RUN if [ -f /etc/kairos-release ]; then \
+            sed -i 's/^KAIROS_NAME=.*/KAIROS_NAME="kairos-core-slem-'"$OS_VERSION"'"/' /etc/kairos-release; \
+        else \
+            echo 'KAIROS_NAME="kairos-core-slem-'"$OS_VERSION"'"' >> /etc/kairos-release; \
+        fi
 
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
