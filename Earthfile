@@ -191,7 +191,7 @@ iso-image-rootfs:
 uki-iso:
     WORKDIR /build
     COPY --platform=linux/${ARCH} +build-uki-iso/ .
-    SAVE ARTIFACT /build/* AS LOCAL ./build/
+    SAVE ARTIFACT --keep-ts /build/* AS LOCAL ./build/
 
 uki-provider-image:
     FROM --platform=linux/${ARCH} +ubuntu
@@ -316,7 +316,7 @@ build-uki-iso:
     END
     WORKDIR /iso
     RUN mv /iso/*.iso $ISO_NAME.iso
-    SAVE ARTIFACT /iso/*
+    SAVE ARTIFACT --keep-ts /iso/*
 
 iso:
     WORKDIR /build
@@ -325,7 +325,7 @@ iso:
     ELSE
         COPY --platform=linux/${ARCH} +build-iso/ .
     END
-    SAVE ARTIFACT /build/* AS LOCAL ./build/
+    SAVE ARTIFACT --keep-ts /build/* AS LOCAL ./build/
 
 validate-user-data:
     FROM --platform=linux/${TARGETARCH} $CLI_IMAGE
@@ -378,7 +378,7 @@ build-iso:
     END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
-    SAVE ARTIFACT /iso/*
+    SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
 ## Generate UKI keys
@@ -413,17 +413,17 @@ uki-genkey:
         COPY +uki-byok/ /keys
     END
 
-    SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
+    SAVE ARTIFACT --if-exists --keep-ts /keys AS LOCAL ./secure-boot/enrollment
     IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "false" ]
-        SAVE ARTIFACT --if-exists /private-keys AS LOCAL ./secure-boot/private-keys
-        SAVE ARTIFACT --if-exists /public-keys AS LOCAL ./secure-boot/public-keys
+        SAVE ARTIFACT --if-exists --keep-ts /private-keys AS LOCAL ./secure-boot/private-keys
+        SAVE ARTIFACT --if-exists --keep-ts /public-keys AS LOCAL ./secure-boot/public-keys
     END
 
 download-sbctl:
     FROM $ALPINE_IMG
     DO +BASE_ALPINE
     RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
-    SAVE ARTIFACT /usr/bin/sbctl
+    SAVE ARTIFACT --keep-ts /usr/bin/sbctl
 
 uki-byok:
     FROM +ubuntu
@@ -469,7 +469,7 @@ uki-byok:
     RUN cp KEK-0.der KEK.der 2>/dev/null
     RUN cp db-0.der  db.der  2>/dev/null
 
-    SAVE ARTIFACT /output/*
+    SAVE ARTIFACT --keep-ts /output/*
 
 secure-boot-dirs:
     FROM --platform=linux/${ARCH} ubuntu:latest
@@ -628,7 +628,7 @@ build-provider-trustedboot-image:
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
     COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
     RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
-    SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
+    SAVE ARTIFACT --keep-ts /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
     FROM --platform=linux/${ARCH} $STYLUS_BASE
@@ -658,7 +658,7 @@ kairos-provider-image:
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-canonical:$CANONICAL_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
-    SAVE ARTIFACT ./*
+    SAVE ARTIFACT --keep-ts ./*
 
 # base build image used to create the base image for all other image types
 base-image:
@@ -854,7 +854,7 @@ BUILD_GOLANG:
     RUN go mod download
     RUN go-build-static.sh -a -o ${BIN} ./${SRC}
 
-    SAVE ARTIFACT ${BIN} ${BIN} AS LOCAL build/${BIN}
+    SAVE ARTIFACT --keep-ts ${BIN} ${BIN} AS LOCAL build/${BIN}
 
 internal-slink:
     FROM +go-deps
@@ -867,7 +867,7 @@ internal-slink:
 
     DO +BUILD_GOLANG --BIN=slink --SRC=cmd/slink/slink.go --WORKDIR=$BUILD_DIR
 
-    SAVE ARTIFACT slink
+    SAVE ARTIFACT --keep-ts slink
 
 rust-deps:
     FROM rust:1.78-bookworm
@@ -883,7 +883,7 @@ build-efi-size-check:
     WORKDIR /build/efi-size-check
     RUN cargo build --target x86_64-unknown-uefi
 
-    SAVE ARTIFACT target/x86_64-unknown-uefi/debug/efi-size-check.efi
+    SAVE ARTIFACT --keep-ts target/x86_64-unknown-uefi/debug/efi-size-check.efi
 
 iso-efi-size-check:
     FROM +ubuntu
@@ -906,7 +906,7 @@ iso-efi-size-check:
     RUN cp fat.img iso
     RUN xorriso -as mkisofs -e fat.img -no-emul-boot -o efi-size-check.iso iso
 
-    SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
+    SAVE ARTIFACT --keep-ts efi-size-check.iso AS LOCAL ./build/
 
 ubuntu:
     IF [ "$FIPS_ENABLED" = "true" ]
@@ -935,8 +935,8 @@ download-third-party:
     ARG binary
     FROM --platform=$TARGETPLATFORM ${SPECTRO_THIRD_PARTY_IMAGE}
     ARG TARGETARCH
-    SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
-    SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
+    SAVE ARTIFACT --keep-ts /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary} ${binary}
+    SAVE ARTIFACT --keep-ts /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
 
 third-party:
     FROM $ALPINE_IMG
@@ -948,8 +948,8 @@ third-party:
 
     DO +UPX --bin=/WORKDIR/${binary}
 
-    SAVE ARTIFACT /WORKDIR/${binary} ${binary}
-    SAVE ARTIFACT /WORKDIR/${binary}.version ${binary}.version
+    SAVE ARTIFACT --keep-ts /WORKDIR/${binary} ${binary}
+    SAVE ARTIFACT --keep-ts /WORKDIR/${binary}.version ${binary}.version
 
 UPX:
     COMMAND
