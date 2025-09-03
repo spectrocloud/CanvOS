@@ -779,6 +779,8 @@ base-image:
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
 
+    DO +KAIROS_RELEASE --OS_VERSION=$OS_VERSION --OS_DISTRIBUTION=$OS_DISTRIBUTION
+
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm -rf /etc/machine-id && \
@@ -792,6 +794,16 @@ base-image:
         RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
             if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
     END
+
+KAIROS_RELEASE:
+    COMMAND
+    ARG OS_VERSION
+    ARG OS_DISTRIBUTION
+    RUN if [ -f /etc/kairos-release ]; then \
+            sed -i 's/^KAIROS_NAME=.*/KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"/' /etc/kairos-release; \
+        else \
+            echo 'KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"' >> /etc/kairos-release; \
+        fi
 
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
