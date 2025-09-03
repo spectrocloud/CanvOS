@@ -21,7 +21,6 @@ ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.7.11
-ARG SPECTRO_LUET_VERSION=v4.7.1
 ARG KAIROS_VERSION=v3.5.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -252,18 +251,10 @@ install-k8s:
     END
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y
+        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO  --priority 1 -y
     COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
     RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
     RUN --no-cache luet repo update
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        RUN luet install -y container-runtime/containerd --system-target /output
-    END
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       RUN luet install -y container-runtime/containerd-fips --system-target /output
-    END
 
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
 
