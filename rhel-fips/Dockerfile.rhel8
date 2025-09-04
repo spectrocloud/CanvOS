@@ -113,3 +113,5 @@ RUN echo "SELINUX=disabled" > /etc/selinux/config
 RUN rm -rf /boot/initramfs-*
 
 COPY overlay/rhel8/ /
+
+RUN if [ ! -f /boot/efi/EFI/redhat/shim.efi ]; then cp /boot/efi/EFI/redhat/shimx64.efi /boot/efi/EFI/redhat/shim.efi; fi

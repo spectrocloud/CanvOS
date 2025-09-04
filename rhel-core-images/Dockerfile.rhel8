@@ -92,3 +92,5 @@ RUN mkdir -p /etc/luet/repos.conf.d
 RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
 
 RUN subscription-manager unregister
+
+RUN if [ ! -f /boot/efi/EFI/redhat/shim.efi ]; then cp /boot/efi/EFI/redhat/shimx64.efi /boot/efi/EFI/redhat/shim.efi; fi
