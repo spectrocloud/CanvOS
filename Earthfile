@@ -17,7 +17,6 @@ END
 
 ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
-ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.7.11
@@ -245,9 +244,9 @@ install-k8s:
     WORKDIR /output
 
     IF [ "$ARCH" = "arm64" ]
-        LET LUET_REPO=$LUET_PROJECT-arm
+        LET LUET_REPO=luet-repo-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        LET LUET_REPO=$LUET_PROJECT
+        LET LUET_REPO=luet-repo-amd
     END
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
