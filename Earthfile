@@ -581,7 +581,7 @@ provider-image:
     IF $TWO_NODE
         # Install postgresql 16
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-            RUN apt install -y ca-certificates curl && \
+            RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt install -y ca-certificates curl && \
                 install -d /usr/share/postgresql-common/pgdg && \
                 curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
                 echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
