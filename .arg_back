@@ -1,0 +1,17 @@
+CUSTOM_TAG=u24-dev
+IMAGE_REGISTRY=us-east1-docker.pkg.dev/spectro-images/dev/santhosh
+OS_DISTRIBUTION=ubuntu
+IMAGE_REPO=ubuntu
+OS_VERSION=24.04
+K8S_DISTRIBUTION=rke2
+ISO_NAME=ub-rke2-sec
+ARCH=amd64
+PE_VERSION=v0.0.0-daeffd6d
+FIPS_ENABLED=false
+K8S_VERSION=1.32.3
+#SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
+#SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
+STYLUS_BASE=us-east1-docker.pkg.dev/spectro-images/dev/santhosh/edge/stylus-framework-linux-amd64:v0.0.0-daeffd6d
+STYLUS_PACKAGE_BASE=us-east1-docker.pkg.dev/spectro-images/dev/santhosh/edge/stylus-linux-amd64:v0.0.0-daeffd6d
+CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/santhosh/edge/palette-edge-cli-amd64:v0.0.0-daeffd6d
+IS_UKI=true
