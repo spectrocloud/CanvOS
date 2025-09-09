@@ -60,7 +60,10 @@ RUN rm -rf /certs
 #    apt-get install iputils-ping -y && \
 #    mkdir /var/lib/wpa
 
-
+# Ubuntu / Debian
+#RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
+#      apt-get install -y qemu-guest-agent; \
+#    fi
 
 ### To install the DRBD module package for Piraeus pack on Ubuntu  ###
 
