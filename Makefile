@@ -27,7 +27,7 @@ iso:
 
 
 iso-disk-image:
-	docker buildx bake iso-disk-image
+	earthly.sh --push +iso-disk-image
 
 
 build-provider-images:
