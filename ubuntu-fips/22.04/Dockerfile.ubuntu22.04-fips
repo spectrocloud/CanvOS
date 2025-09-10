@@ -102,9 +102,14 @@ RUN rm -Rf /boot/vmlinuz.img # symlink
 RUN rm -Rf /boot/initrd.img.old # symlink to wrong initrd (no immucore, no kairos-agent)
 RUN rm -Rf /boot/initrd.img # symlink to wrong initrd (no immucore, no kairos-agent)
 RUN rm -Rf /boot/initrd.img-* # wrong initrd (no immucore, no kairos-agent)
+RUN rm -f /boot/vmlinuz* /boot/initrd*
+
 ## Generate initrd
-RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz
+RUN kernel=$(ls /lib/modules | head -n1) && \
+    dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
+    ln -sf "initrd-${kernel}" /boot/initrd && \
+    ln -sf "vmlinuz-${kernel}" /boot/vmlinuz && \
+    depmod -a "${kernel}"
 RUN kernel=$(ls /lib/modules | head -n1) && \
     dracut -v -N \
       -f "/boot/initrd-${kernel}" "${kernel}" && \
