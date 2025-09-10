@@ -586,3 +586,13 @@ target "third-party-etcdctl" {
     TARGETPLATFORM = "linux/${ARCH}"
   }
 }
+
+target "iso-disk-image" {
+  dockerfile = "dockerfiles/Dockerfile.iso-disk-image"
+  platforms = ["linux/${ARCH}"]
+  contexts = {
+    build-iso = IS_UKI ? "target:build-uki-iso" : "target:build-iso"
+  }
+  tags = ["${IMAGE_REGISTRY}/${IMAGE_REPO}/${ISO_NAME}:${IMAGE_TAG}"]
+  output = ["type=image,push=true"]
+}

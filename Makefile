@@ -1,7 +1,7 @@
 -include .arg
 export
 
-.PHONY: base-image build-iso build-provider-images
+.PHONY: base-image build-iso build-provider-images iso-disk-image
 
 PUSH ?= true
 IS_UKI ?= false
@@ -16,7 +16,7 @@ build-all-images:
 	$(MAKE) build-iso
 
 base-image:
-	docker buildx bake base-image
+	docker buildx bake base-image 
 
 iso:
 	@if [ "$(IS_UKI)" = "true" ]; then \
@@ -24,6 +24,11 @@ iso:
     else \
         docker buildx bake build-iso; \
     fi
+
+
+iso-disk-image:
+	docker buildx bake iso-disk-image
+
 
 build-provider-images:
 	@if [ -z "$(K8S_DISTRIBUTION)" ]; then \
