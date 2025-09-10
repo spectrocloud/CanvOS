@@ -32,5 +32,7 @@ After install, you can verify that fips is enabled by running:
 kairos@localhost:~$ cat /proc/sys/crypto/fips_enabled
 1
 kairos@localhost:~$ uname -a
-Linux localhost 5.4.0-1007-fips #8-Ubuntu SMP Wed Jul 29 21:42:48 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
+Linux localhost 5.15.0-1007-fips #8-Ubuntu SMP Wed Jul 29 21:42:48 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
 ```
+## DISA_STIG
+https://ubuntu.com/blog/disa-stig-ubuntu-22-04-usg
