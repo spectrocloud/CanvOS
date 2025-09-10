@@ -26,7 +26,9 @@ iso:
     fi
 
 iso-disk-image:
-	./earthly.sh --push +iso-disk-image
+	# ./earthly.sh --push +iso-disk-image
+	# docker buildx bake --print iso-disk-image
+	docker buildx bake  iso-disk-image
 
 
 build-provider-images:

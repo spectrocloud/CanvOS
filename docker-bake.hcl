@@ -240,20 +240,20 @@ function "get_ubuntu_image" {
   result = fips_enabled ? "${spectro_pub_repo}/third-party/ubuntu-fips:22.04" : "${spectro_pub_repo}/third-party/ubuntu:22.04"
 }
 
-secret "enrollment" {
-  type = "file"
-  src = "secure-boot/enrollment/"
-}
+# secret "enrollment" {
+#   type = "file"
+#   src = "secure-boot/enrollment/"
+# }
 
-secret "private-keys" {
-  type = "file"
-  src = "secure-boot/private-keys/"
-}
+# secret "private-keys" {
+#   type = "file"
+#   src = "secure-boot/private-keys/"
+# }
 
-secret "public-keys" {
-  type = "file"
-  src = "secure-boot/public-keys/"
-}
+# secret "public-keys" {
+#   type = "file"
+#   src = "secure-boot/public-keys/"
+# }
 
 function "get_base_image" {
   params = [base_image, os_distribution, os_version, is_uki]
@@ -427,7 +427,24 @@ target "trustedboot-image" {
   contexts = {
     provider-image = "target:provider-image"
   }
-  secret = ["enrollment", "private-keys", "public-keys"]
+  # secret = ["enrollment", "private-keys", "public-keys"]
+  secret = [
+    {
+      type = "file"
+      src = "secure-boot/enrollment/"
+      id = "enrollment"
+    },
+    {
+      type = "file"
+      src = "secure-boot/private-keys/"
+      id = "private-keys"
+    },
+    {
+      type = "file"
+      src = "secure-boot/public-keys/"
+      id = "public-keys"
+    }
+  ]
   args = {
     AURORABOOT_IMAGE = AURORABOOT_IMAGE
   }
@@ -499,7 +516,24 @@ target "build-uki-iso" {
     CMDLINE = CMDLINE
     BRANDING = BRANDING
   }
-  secret = ["enrollment", "private-keys", "public-keys"]
+  # secret = ["enrollment", "private-keys", "public-keys"]
+  secret = [
+    {
+      type = "file"
+      src = "secure-boot/enrollment/"
+      id = "enrollment"
+    },
+    {
+      type = "file"
+      src = "secure-boot/private-keys/"
+      id = "private-keys"
+    },
+    {
+      type = "file"
+      src = "secure-boot/public-keys/"
+      id = "public-keys"
+    }
+  ]
   output = ["type=local,dest=./iso-output/"]
 }
 
@@ -592,6 +626,7 @@ target "iso-disk-image" {
   platforms = ["linux/${ARCH}"]
   contexts = {
     build-iso = IS_UKI ? "target:build-uki-iso" : "target:build-iso"
+    # build-iso = "target:build-iso"
   }
   tags = ["${IMAGE_REGISTRY}/${IMAGE_REPO}/${ISO_NAME}:${IMAGE_TAG}"]
   output = ["type=image,push=true"]
