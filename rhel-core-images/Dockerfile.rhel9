@@ -3,7 +3,7 @@ FROM registry.access.redhat.com/ubi9-init:9.4-6
 
 ARG USERNAME
 ARG PASSWORD
-ARG KAIROS_VERSION=v3.5.1
+ARG KAIROS_VERSION=v3.5.2
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
