@@ -8,7 +8,7 @@ FROM $BASE_IMAGE
 ARG ORGNAME
 ARG KEYNAME
 ARG SATHOSTNAME
-ARG KAIROS_VERSION=v3.5.1
+ARG KAIROS_VERSION=v3.5.2
 
 RUN dnf config-manager --disable ubi-9-appstream-rpms ubi-9-baseos-rpms ubi-9-codeready-builder-rpms
 RUN rm /etc/rhsm-host
@@ -84,10 +84,10 @@ RUN systemctl disable selinux-autorelabel-mark.service
 COPY overlay/rhel9/ /
 
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz
+    ln -sf "${kernel#/boot/}" /boot/vmlinuz
 RUN kernel=$(ls /lib/modules | head -n1) && \
-            dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
-            ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+    dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
+    ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
 RUN rm -rf /boot/initramfs-*
 
 RUN mkdir -p /etc/luet/repos.conf.d
