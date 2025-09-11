@@ -665,6 +665,8 @@ base-image:
     END
 
     IF [ "$IS_UKI" = "true" ]
+        # create empty boot directory to support services like longhorn which require /boot
+        RUN mkdir -p /boot
         COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
     END
 
