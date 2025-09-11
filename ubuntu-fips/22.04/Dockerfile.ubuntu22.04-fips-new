@@ -31,100 +31,80 @@ RUN --mount=type=secret,id=pro-attach-config \
     linux-headers-fips \
     shim-signed \
     conntrack \
+    console-data \
     coreutils \
     cryptsetup \
     curl \
+    debianutils \
     dmsetup \
     dosfstools \
+    dracut \
+    dracut-network \
     e2fsprogs \
     efibootmgr \
+    file \
+    fuse \
+    gawk \
+    gdisk \
     grub2 \
     grub2-common \
     grub-efi-amd64-bin \
     grub-efi-amd64-signed \
     grub-pc-bin \
+    haveged \
     iproute2 \
     iptables \
     isc-dhcp-common \
     jq \
+    kbd \
+    krb5-locales \
+    lldpd \
     lvm2 \
     mdadm \
     nano \
+    nbd-client \
+    ncurses-term \
+    neovim \
+    networkd-dispatcher \
     nfs-common \
     open-iscsi \
+    openssh-server \
+    open-vm-tools \
+    os-prober \
+    packagekit-tools \
     parted \
+    patch \
+    policykit-1 \
+    publicsuffix \
+    qemu-guest-agent \
+    rsync \
+    shared-mime-info \
+    snmpd \
+    squashfs-tools \
     sudo \
     systemd \
     systemd-timesyncd \
-    rsync \
-    squashfs-tools \
+    thermald \
+    ubuntu-advantage-tools \
+    xdg-user-dirs \
+    xxd \
     xz-utils \
-    dracut \
-    dracut-live \
-    dracut-network \
-    network-manager \
+    zerofree \
+    zfsutils-linux \
+    zstd \
+    cloud-guest-utils \
     && apt-get remove -y unattended-upgrades && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && pro detach --assume-yes
 
-# Determine the installed FIPS kernel version and clean up other kernels
-RUN fips_kernel=$(basename $(ls /lib/modules | grep -- '-fips$' | sort -V | tail -n1)) && \
-    echo "Detected FIPS kernel: $fips_kernel" && \
-    # Remove all other kernel module trees (e.g., -generic)
-    find /lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} + && \
-    find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} +
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
-# Copy the Kairos framework files
-COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
 
-# Install additional packages after kernel cleanup
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    isc-dhcp-client \
-    cloud-guest-utils \
+RUN apt-get update && apt-get install -y --no-install-recommends dracut dracut-network isc-dhcp-common isc-dhcp-client cloud-guest-utils \
     && apt-get remove -y unattended-upgrades && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy configuration files
-COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
-COPY openssl-sslv3.cnf /etc/ssl/openssl.cnf
-
-# Configure OpenSSL FIPS
-RUN openssl fipsinstall \
-      -out /usr/lib/ssl/fipsmodule.cnf \
-      -module /usr/lib/x86_64-linux-gnu/ossl-modules-3/fips.so \
-      -provider_name fips
-
-# CLEANUP - Remove default boot files that we don't want
-RUN rm -Rf /boot/vmlinuz.old \
-    && rm -Rf /boot/vmlinuz.img.old \
-    && rm -Rf /boot/vmlinuz.img \
-    && rm -Rf /boot/initrd.img.old \
-    && rm -Rf /boot/initrd.img \
-    && rm -Rf /boot/initrd.img-*
-
-# Copy FIPS modules configuration
-COPY modules.fips /tmp/modules.fips
-RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
-
-# Generate initrd
-RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
-    ln -sf "${kernel#/boot/}" /boot/vmlinuz
-RUN kernel=$(ls /lib/modules | head -n1) && \
-    dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
-    ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
-
-# Fixup sudo permissions
-RUN chown root:root /usr/bin/sudo && chmod 4755 /usr/bin/sudo
-
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
-
-# Create grub2 symlinks for compatibility
-RUN ln -sf /usr/sbin/grub-install /usr/sbin/grub2-install
-RUN ln -sf /usr/bin/grub-editenv /usr/bin/grub2-editenv
-
-# Clear cache and cleanup
-RUN pro detach --assume-yes && rm -rf /var/cache/* /tmp/* /var/tmp/* && \
-    journalctl --vacuum-size=1K || true && \
-    rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
