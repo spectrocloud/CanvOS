@@ -1,5 +1,5 @@
 # Kairos init image
-FROM quay.io/kairos/kairos-init:v0.5.18 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.5.20 AS kairos-init
 
 FROM registry.access.redhat.com/ubi8/ubi-init:8.7-10 as base
 
@@ -7,7 +7,7 @@ ARG USERNAME
 ARG PASSWORD
 
 # Generate os-release file
-ARG KAIROS_VERSION=v3.5.2
+ARG KAIROS_VERSION=v3.5.3
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
