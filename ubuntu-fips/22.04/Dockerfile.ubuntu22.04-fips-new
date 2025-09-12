@@ -10,7 +10,7 @@ ARG KAIROS_VERSION=v3.5.2
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s install --version "${KAIROS_VERSION}"
+    /kairos-init -l debug -s install --version "${KAIROS_VERSION}" 
 
 ## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
 ## I've just added "linux-image-fips" in the package list
@@ -40,6 +40,8 @@ RUN --mount=type=secret,id=pro-attach-config \
     dosfstools \
     dracut \
     dracut-network \
+    dracut-live \
+    dracut-squash \
     e2fsprogs \
     efibootmgr \
     file \
@@ -98,58 +100,14 @@ RUN --mount=type=secret,id=pro-attach-config \
     && pro detach --assume-yes
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
-COPY openssl-sslv3.cnf /etc/ssl/openssl.cnf
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
 
-RUN apt-get update && apt-get install -y --no-install-recommends dracut dracut-network isc-dhcp-common isc-dhcp-client cloud-guest-utils \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      dracut dracut-network dracut-live dracut-squash isc-dhcp-common isc-dhcp-client cloud-guest-utils \
     && apt-get remove -y unattended-upgrades && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure OpenSSL FIPS
-RUN openssl fipsinstall \
-      -out /usr/lib/ssl/fipsmodule.cnf \
-      -module /usr/lib/x86_64-linux-gnu/ossl-modules-3/fips.so \
-      -provider_name fips
-
-# CLEANUP - Remove default boot files that we don't want
-RUN rm -Rf /boot/vmlinuz.old \
-    && rm -Rf /boot/vmlinuz.img.old \
-    && rm -Rf /boot/vmlinuz.img \
-    && rm -Rf /boot/initrd.img.old \
-    && rm -Rf /boot/initrd.img \
-    && rm -Rf /boot/initrd.img-*
-
-# Copy FIPS modules configuration
-COPY modules.fips /tmp/modules.fips
-RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
-
-# Generate initrd
-RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
-    ln -sf "${kernel#/boot/}" /boot/vmlinuz
-RUN kernel=$(ls /lib/modules | head -n1) && \
-    dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
-    ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
-
-# Determine the installed FIPS kernel version and clean up other kernels (AFTER initramfs generation)
-RUN fips_kernel=$(basename $(ls /lib/modules | grep -- '-fips$' | sort -V | tail -n1)) && \
-    echo "Detected FIPS kernel: $fips_kernel" && \
-    # Remove all other kernel module trees (e.g., -generic)
-    find /lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} + && \
-    find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} +
-
-# Fixup sudo permissions
-RUN chown root:root /usr/bin/sudo && chmod 4755 /usr/bin/sudo
-
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
-
-# Create grub2 symlinks for compatibility
-RUN ln -sf /usr/sbin/grub-install /usr/sbin/grub2-install
-RUN ln -sf /usr/bin/grub-editenv /usr/bin/grub2-editenv
-
-# Clear cache and cleanup
-RUN pro detach --assume-yes && rm -rf /var/cache/* /tmp/* /var/tmp/* && \
-    journalctl --vacuum-size=1K || true && \
-    rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
