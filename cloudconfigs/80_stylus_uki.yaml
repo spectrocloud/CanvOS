@@ -1,5 +1,10 @@
 #cloud-config
 stages:
+  rootfs:
+    - name: "custom mounts"
+      environment_file: /run/cos/cos-layout.env
+      environment:
+        CUSTOM_BIND_MOUNTS: "/boot"
   initramfs:
     - if: '[ -e "/run/cos/uki_boot_mode" ] && [ ! -f "/run/cos/live_mode" ]'
       name: link agent provider stylus
