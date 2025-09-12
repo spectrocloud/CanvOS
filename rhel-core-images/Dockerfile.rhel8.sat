@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.7-10
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.5.18
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.5.20
 
 FROM $KAIROS_INIT_IMAGE as kairos-init
 
@@ -8,7 +8,7 @@ FROM $BASE_IMAGE
 ARG ORGNAME
 ARG KEYNAME
 ARG SATHOSTNAME
-ARG KAIROS_VERSION=v3.5.2
+ARG KAIROS_VERSION=v3.5.3
 
 RUN dnf config-manager --disable ubi-8-appstream-rpms ubi-8-baseos-rpms ubi-8-codeready-builder-rpms
 RUN rm /etc/rhsm-host
