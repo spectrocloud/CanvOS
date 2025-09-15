@@ -1,46 +1,19 @@
-# Kairos framework packages for ubuntu fips
+FROM quay.io/kairos/kairos-init:v0.5.17 AS kairos-init
 
-FROM quay.io/kairos/framework:v2.11.7-fips AS kairos-fips
+FROM ubuntu:22.04
+ARG VERSION=v3.5.2
 
-# Base ubuntu image (jammy)
-FROM ubuntu:jammy AS base
-
-# Generate os-release file
-FROM quay.io/kairos/osbuilder-tools:v0.200.11 AS osbuilder
-RUN zypper install -y gettext && zypper clean
-RUN mkdir /workspace
-COPY --from=base /etc/os-release /workspace/os-release
-# You should change the following values according to your own versioning and other details
-RUN OS_NAME=kairos-core-ubuntu-fips \
-  OS_VERSION=v3.1.3 \
-  OS_ID="ubuntu" \
-  BUG_REPORT_URL="https://github.com/spectrocloud/ubuntu-fips-edge/issues" \
-  HOME_URL="https://github.com/spectrocloud/ubuntu-fips-edge" \
-  OS_REPO="gcr.io/spectro-images-public/ubuntu-jammy-fips" \
-  OS_LABEL="22.04" \
-  GITHUB_REPO="https://github.com/spectrocloud/ubuntu-fips-edge" \
-  VARIANT="fips" \
-  FLAVOR="ubuntu" \
-  /update-os-release.sh
-
-# Build the custom ubuntu image
-FROM base
-
-# Don't get asked while running apt commands
-ENV DEBIAN_FRONTEND=noninteractive
-
-## Kairos setup
-## From documentation: https://kairos.io/docs/reference/build-from-scratch/
-RUN mkdir -p /run/lock
-RUN mkdir -p /usr/libexec
-RUN touch /usr/libexec/.keep
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s install --version "${VERSION}"
+# Remove default kernel that Kairos-init installs
+RUN apt-get remove -y linux-base linux-image-generic-hwe-22.04 && apt-get autoremove -y
 RUN --mount=type=secret,id=pro-attach-config \
     apt update && \
     apt install --no-install-recommends -y apt-utils ubuntu-advantage-tools ca-certificates util-linux && \
     pro attach --attach-config /run/secrets/pro-attach-config && \
     pro enable usg && \
     apt install -y usg && \
-    apt update && apt install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips && \
+    apt update && apt install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips shim-signed && \
     LATEST_VERSION=$(apt-cache search --names-only '^linux-image-[0-9].*-fips$' \
     | awk '{print $1}' \
     | grep -vE '(azure|aws|gcp)' \
@@ -63,9 +36,8 @@ RUN --mount=type=secret,id=pro-attach-config \
         iptables isc-dhcp-common jq kbd krb5-locales lldpd lldpad lvm2 mdadm nano nbd-client \
         ncurses-term neovim networkd-dispatcher nfs-common nvme-cli open-iscsi openssh-server \
         open-vm-tools os-prober packagekit-tools parted patch policykit-1 publicsuffix qemu-guest-agent \
-        rng-tools rsync shared-mime-info shim-signed snmpd squashfs-tools sudo systemd systemd-timesyncd thermald \
+        rng-tools rsync shared-mime-info shim-signed snmpd squashfs-tools sudo systemd thermald \
         ubuntu-advantage-tools xdg-user-dirs xxd xz-utils zerofree zfsutils-linux zstd && \
-    usg fix disa_stig && \
     apt-get remove -y unattended-upgrades && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
     # Determine the installed FIPS kernel version
@@ -75,52 +47,19 @@ RUN fips_kernel=$(basename $(ls /lib/modules | grep -- '-fips$' | sort -V | tail
     find /lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} + && \
     find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d ! -name "$fips_kernel" -exec rm -rf {} +
 
-# Copy the Kairos framework files. We use master builds here for fedora. See https://quay.io/repository/kairos/framework?tab=tags for a list
-COPY --from=kairos-fips / /
-
-RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
-RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
-RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
-
-# Copy the os-release file to identify the OS
-COPY --from=osbuilder /workspace/os-release /etc/os-release
-
-## Configuration
-COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
-COPY openssl-sslv3.cnf /etc/ssl/openssl.cnf
-RUN openssl fipsinstall \
-      -out /usr/lib/ssl/fipsmodule.cnf \
-      -module /usr/lib/x86_64-linux-gnu/ossl-modules-3/fips.so \
-      -provider_name fips
-# CLEANUP
-# Installing dracut and fips creates this default packages and symlinks and we dont want that
-# We want to fully rebuild and link our initrd
-RUN rm -Rf /boot/vmlinuz.old # symlink
-RUN rm -Rf /boot/vmlinuz.img.old # symlink
-RUN rm -Rf /boot/vmlinuz.img # symlink
-RUN rm -Rf /boot/initrd.img.old # symlink to wrong initrd (no immucore, no kairos-agent)
-RUN rm -Rf /boot/initrd.img # symlink to wrong initrd (no immucore, no kairos-agent)
-RUN rm -Rf /boot/initrd.img-* # wrong initrd (no immucore, no kairos-agent)
-
+# Copy the custom dracut modules.fips that includes 2 missing modules
 COPY modules.fips /tmp/modules.fips
 RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
-## Generate initrd
-RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz
-RUN kernel=$(ls /lib/modules | head -n1) && \
-            dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
-            ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
-# Fixup sudo perms
-RUN chown root:root /usr/bin/sudo && chmod 4755 /usr/bin/sudo
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --version "${VERSION}"
 
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
-# RUN rm -f /boot/vmlinuz* /boot/initrd*
-RUN ln -s /usr/sbin/grub-install /usr/sbin/grub2-install
-RUN ln -s /usr/bin/grub-editenv /usr/bin/grub2-editenv
 
 
 # Clear cache
-RUN pro detach --assume-yes && rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+RUN usg fix disa_stig && \
+    pro detach --assume-yes && rm -rf /var/cache/* /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
