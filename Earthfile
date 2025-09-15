@@ -726,9 +726,6 @@ base-image:
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
             RUN kernel=$(ls /lib/modules | tail -n1) && \
-            	dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-            	ln -sf "initrd-${kernel}" /boot/initrd
-            RUN kernel=$(ls /lib/modules | tail -n1) && \
            	depmod -a "${kernel}"
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
