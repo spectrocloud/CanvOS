@@ -5,7 +5,7 @@ ARG TARGETARCH
 # Default image repositories used in the builds.
 ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 ARG SPECTRO_THIRD_PARTY_IMAGE=us-east1-docker.pkg.dev/spectro-images/third-party/spectro-third-party:4.6
-ARG ALPINE_TAG=3.20
+ARG ALPINE_TAG=3.22
 ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 FROM $ALPINE_IMG
 
@@ -180,7 +180,6 @@ BASE_ALPINE:
     COMMAND
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
-    RUN apk add curl
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
