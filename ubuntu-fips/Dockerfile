@@ -3,7 +3,7 @@
 FROM quay.io/kairos/kairos-init:v0.5.20 AS kairos-init
 
 # Base ubuntu image (focal)
-FROM ubuntu:focal as base
+FROM ubuntu:focal AS base
 
 ARG KAIROS_VERSION=v3.5.3
 
@@ -12,6 +12,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s install --version "${KAIROS_VERSION}"
+
+RUN apt-get remove -y linux-base linux-image-generic-hwe-20.04 && apt-get autoremove -y
 
 ## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
 ## I've just added "linux-image-fips" in the package list
@@ -58,6 +60,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     iproute2 \
     iptables \
     isc-dhcp-common \
+    isc-dhcp-client \
     jq \
     kbd \
     krb5-locales \
@@ -107,10 +110,6 @@ COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
-
-RUN apt-get update && apt-get install -y --no-install-recommends dracut dracut-network isc-dhcp-common isc-dhcp-client cloud-guest-utils \
-    && apt-get remove -y unattended-upgrades && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
 
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
