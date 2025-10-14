@@ -677,8 +677,8 @@ base-image:
             pro attach $UBUNTU_PRO_KEY
         END
 
-        RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-            apt-get install --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+        RUN apt-get update && \
+            DEBIAN_FRONTEND=noninteractive  apt-get install --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
