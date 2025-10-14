@@ -678,7 +678,7 @@ base-image:
         END
 
         RUN apt-get update && \
-            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+            apt-get install --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
