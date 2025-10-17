@@ -12,8 +12,10 @@ UPDATE_KERNEL=false
 CLUSTERCONFIG=spc.tgz
 CIS_HARDENING=false
 EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
+FORCE_INTERACTIVE_INSTALL=false
 
-
+# Interactive Install Configuration
+# FORCE_INTERACTIVE_INSTALL=true    # Set to true to choose interactive install as the default boot option and launch the Interactive Install TUI
 
 # If you have Ubuntu Pro, use the UBUNTU_PRO_KEY variable to activate it as part of the image build
 # UBUNTU_PRO_KEY=your-key
