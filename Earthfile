@@ -19,18 +19,18 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.7.11
+ARG PE_VERSION=v4.7.16
 ARG KAIROS_VERSION=v3.5.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v4.6.0
-ARG KUBEADM_PROVIDER_VERSION=v4.7.0
-ARG RKE2_PROVIDER_VERSION=v4.6.0
+ARG K3S_PROVIDER_VERSION=v4.7.1
+ARG KUBEADM_PROVIDER_VERSION=v4.7.3
+ARG RKE2_PROVIDER_VERSION=v4.7.1
 ARG NODEADM_PROVIDER_VERSION=v4.6.0
-ARG CANONICAL_PROVIDER_VERSION=v1.1.0
+ARG CANONICAL_PROVIDER_VERSION=v1.2.1
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -180,7 +180,6 @@ BASE_ALPINE:
     COMMAND
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
-    RUN apk add curl
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
@@ -485,7 +484,7 @@ provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-            RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
         END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -494,12 +493,12 @@ provider-image:
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
-    IF [  "$UPDATE_KERNEL" = true ]
+    IF [ "$UPDATE_KERNEL" = true ]
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-            RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
             RUN zypper --non-interactive ref && \
-                kernel=$(ls /lib/modules | tail -n1) && \
+                kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
                 echo "kernel module: $kernel" && \
                 version=$(echo $kernel | sed 's/-default$//') && \
                 echo "kernel version: $version" && \
@@ -521,7 +520,7 @@ provider-image:
                 # Try to add EPEL repository for additional packages
                 yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm || echo "EPEL repo not available" && \
                 yum makecache && \
-                kernel=$(ls /lib/modules | tail -n1) && echo "kernel version: $kernel" && \
+                kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && echo "kernel version: $kernel" && \
                 if ! yum install -y kernel-devel-$kernel; then \
                     echo "kernel-devel-$kernel not available, trying alternative packages" && \
                     yum install -y kernel-devel || \
@@ -686,6 +685,8 @@ base-image:
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
+            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+                apt-get install -y linux-image-generic-hwe-$OS_VERSION
         END
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
@@ -706,7 +707,7 @@ base-image:
                     rsync \ # Used for efficient file synchronization and transfer.
                     cryptsetup-bin \ # Provides tools for setting up encrypted disks.
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
-                latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
+                latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
                 if [ "$FIPS_ENABLED" = "true" ]; then \
                     # When FIPS is enabled, we need to remove any non-FIPS kernel packages (e.g., 5.15 HWE) to avoid conflicts.
                     # However, some kernel packages may be held (apt-mark hold), which causes `apt-get purge` to fail with:
@@ -725,13 +726,15 @@ base-image:
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
-            RUN kernel=$(ls /lib/modules | tail -n1) && \
+            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+            	dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+            	ln -sf "initrd-${kernel}" /boot/initrd
+            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
            	depmod -a "${kernel}"
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
-
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
@@ -753,8 +756,8 @@ base-image:
         RUN zypper refresh && zypper update -y
 
         IF [ -e "/usr/bin/dracut" ]
-            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
-            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
+            RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && depmod -a "${kernel}"
+            RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
         END
 
         RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
