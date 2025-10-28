@@ -41,20 +41,18 @@ RUN if [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]; then \
     fi
 
 # Calculate BASE_K8S_VERSION based on K8S_DISTRIBUTION
-RUN echo "Debug: K8S_DISTRIBUTION=$K8S_DISTRIBUTION, K8S_VERSION=$K8S_VERSION" && \
-    if [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ] || [ "$K8S_DISTRIBUTION" = "canonical" ]; then \
-    BASE_K8S_VERSION="$K8S_VERSION"; \
-    echo "Set BASE_K8S_VERSION=$BASE_K8S_VERSION for $K8S_DISTRIBUTION"; \
+RUN if [ "$K8S_DISTRIBUTION" = "kubeadm" ] || \
+    [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || \
+    [ "$K8S_DISTRIBUTION" = "nodeadm" ] || \
+    [ "$K8S_DISTRIBUTION" = "canonical" ]; then \
+        BASE_K8S_VERSION="$K8S_VERSION"; \
     elif [ "$K8S_DISTRIBUTION" = "k3s" ]; then \
-    K8S_DISTRIBUTION_TAG="$K3S_FLAVOR_TAG"; \
-    BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
-    echo "Set BASE_K8S_VERSION=$BASE_K8S_VERSION for $K8S_DISTRIBUTION with tag $K8S_DISTRIBUTION_TAG"; \
+        K8S_DISTRIBUTION_TAG="$K3S_FLAVOR_TAG"; \
+        BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
     elif [ "$K8S_DISTRIBUTION" = "rke2" ]; then \
-    K8S_DISTRIBUTION_TAG="$RKE2_FLAVOR_TAG"; \
-    BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
-    echo "Set BASE_K8S_VERSION=$BASE_K8S_VERSION for $K8S_DISTRIBUTION with tag $K8S_DISTRIBUTION_TAG"; \
+        K8S_DISTRIBUTION_TAG="$RKE2_FLAVOR_TAG"; \
+        BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
     fi && \
-    echo "Final BASE_K8S_VERSION=$BASE_K8S_VERSION" && \
     echo "Installing k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION for K8S_VERSION=$K8S_VERSION" && \
     luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
 
