@@ -1,5 +1,5 @@
 variable "KAIROS_INIT_IMAGE" {
-    default = "quay.io/kairos/kairos-init:v0.5.4"
+    default = "quay.io/kairos/kairos-init:v0.5.20"
 }
 
 variable "ARCH" {
