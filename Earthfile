@@ -496,7 +496,6 @@ provider-image:
                     perl \
                     elfutils \
                     libc-dev \
-                    coccinelle \
                     curl && \
                 apt-get clean
             ARG DRBD_VERSION
