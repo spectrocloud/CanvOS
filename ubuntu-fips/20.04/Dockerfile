@@ -113,3 +113,32 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+
+
+### To install the DRBD module package for Piraeus pack on Ubuntu  ###
+
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install --no-install-recommends -y \
+      ca-certificates \
+      kmod \
+      gpg \
+      make \
+      # Ubuntu has multiple kernel versions that may be using different gcc versions: use the dkms package to install them all
+      $(apt-get install -s dkms | awk '/^Inst gcc/{print $2}') \
+      patch \
+      diffutils \
+      perl \
+      elfutils \
+      libc-dev \
+      coccinelle \
+      curl && \
+    apt-get clean
+
+ARG DRBD_VERSION
+ADD https://pkg.linbit.com/downloads/drbd/9/drbd-${DRBD_VERSION}.tar.gz /drbd.tar.gz
+ADD --chmod=0755 https://raw.githubusercontent.com/LINBIT/drbd/master/docker/entry.sh /entry.sh
+
+ENV LB_HOW compile
+ENTRYPOINT /entry.sh
