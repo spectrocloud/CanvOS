@@ -30,7 +30,7 @@ on:
         description: "Kairos Version"
         required: false
         type: string
-        default: "v3.5.1"
+        default: "v3.5.3"
       trusted_boot:
         description: "Trusted Boot"
         required: false

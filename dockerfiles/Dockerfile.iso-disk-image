@@ -2,5 +2,4 @@ FROM scratch
 
 COPY --from=build-iso /*.iso /disk/
 
-# Set metadata labels
-LABEL org.opencontainers.image.title="CanvOS ISO Disk Image"
+LABEL org.opencontainers.image.title="CanvOS Installer Disk Image"

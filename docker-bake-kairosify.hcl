@@ -15,7 +15,7 @@ variable "MODEL" {
 }
 
 variable "KAIROS_VERSION" {
-  default = "v3.5.0"
+  default = "v3.5.3"
 }
 
 variable "TRUSTED_BOOT" {

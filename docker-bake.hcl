@@ -259,16 +259,16 @@ function "get_base_image" {
   params = [base_image, os_distribution, os_version, is_uki]
   result = base_image != "" ? base_image : (
     
-    os_distribution == "ubuntu" && os_version == "20" ? 
+    os_distribution == "ubuntu" && ( os_version == "20" || os_version == "20.04" ) ? 
     "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
 
-    os_distribution == "ubuntu" && os_version == "22" ? 
+    os_distribution == "ubuntu" && ( os_version == "22" || os_version == "22.04" ) ? 
       "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
     
-    os_distribution == "ubuntu" && os_version == "24" ? 
+    os_distribution == "ubuntu" && ( os_version == "24" || os_version == "24.04" ) ? 
       "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
 
-    os_distribution == "ubuntu" && os_version == "24" && is_uki ? 
+    os_distribution == "ubuntu" && ( os_version == "24" || os_version == "24.04" ) && is_uki ? 
       "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}-uki" :
 
     os_distribution == "opensuse" && os_version == "15.6" ? 
