@@ -40,8 +40,6 @@ iso:
 
 iso-disk-image:
 	docker buildx bake iso-disk-image
-k8s:
-	@echo k8s: $(ALL_K8S_VERSIONS)
 
 build-provider-images: check-k8s-distribution check-versions $(addprefix build-provider-image-,$(strip $(ALL_K8S_VERSIONS)))
 	@echo "All provider images built successfully"
