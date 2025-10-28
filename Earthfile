@@ -484,29 +484,8 @@ provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] 
-            RUN apt-get update && \
-                apt-get install --no-install-recommends -y \
-                    ca-certificates \
-                    kmod \
-                    gpg \
-                    make \
-                    build-essential \
-                    patch \
-                    diffutils \
-                    perl \
-                    elfutils \
-                    libc-dev \
-                    curl && \
-                apt-get clean
-            ARG DRBD_VERSION
-            RUN curl -L https://pkg.linbit.com/downloads/drbd/9/drbd-${DRBD_VERSION}.tar.gz -o /drbd.tar.gz && \
-                curl -L https://raw.githubusercontent.com/LINBIT/drbd/master/docker/entry.sh -o /entry.sh && \
-                chmod +x /entry.sh
-            ENV LB_HOW compile
-            RUN /entry.sh && \
-                echo "== DRBD installation completed ==" && \
-                echo "== Module info =="; modinfo drbd | grep version || true
-            # RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y linux-image-5.4.0-1024-fips; fi
+            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y --no-install-recommends "linux-headers-${kernel}" build-essential dkms && ls -l "/lib/modules/${kernel}/build/Makefile"; fi
+            # RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y 'linux-headers-${kernel}'; fi
         END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
