@@ -315,7 +315,7 @@ iso:
     IF [ "$IS_UKI" = "true" ]
         COPY --platform=linux/${ARCH} +build-uki-iso/ .
     ELSE IF [ "$IS_MAAS" = "true" ]
-        COPY --platform=linux/${ARCH} +maas-image/ .
+        COPY --platform=linux/${ARCH} +maas-composite-image/ .
     ELSE
         COPY --platform=linux/${ARCH} +build-iso/ .
     END
@@ -673,6 +673,10 @@ base-image:
         COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
     END
 
+    IF [ "$IS_MAAS" = "true" ]
+        COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
+    END
+
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
@@ -821,7 +825,6 @@ KAIROS_RELEASE:
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
-    ARG IS_MAAS_IMAGE=false
     ARG IMAGE_REGISTRY
     ARG IMAGE_TAG
 
@@ -833,10 +836,6 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
-    IF [ "$IS_MAAS_IMAGE" = "true" ]
-        RUN mkdir /curtin
-        COPY cloudconfigs/curtin-hooks /curtin/
-    END
 
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
@@ -863,7 +862,7 @@ maas-image:
 
     WITH DOCKER \
         --pull quay.io/kairos/auroraboot:v0.6.4 \
-        --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_MAAS_IMAGE=true)
+        --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
         RUN mkdir -p /output && \
             docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
@@ -879,6 +878,43 @@ maas-image:
                 --set "state_dir=/aurora"
     END
     SAVE ARTIFACT /output/* AS LOCAL ./build/
+
+maas-composite-image:
+    FROM --platform=linux/amd64 ubuntu:22.04
+    
+    # Install required tools for the script
+    RUN apt-get update && apt-get install -y \
+        wget \
+        tar \
+        kpartx \
+        qemu-utils \
+        parted \
+        e2fsprogs \
+        dosfstools \
+        rsync \
+        util-linux \
+        grub-common \
+        && rm -rf /var/lib/apt/lists/*
+    
+    # Copy the build script and curtin hooks
+    COPY cloudconfigs/build-kairos-maas.sh /usr/local/bin/build-kairos-maas.sh
+    COPY --if-exists cloudconfigs/curtin-hooks /curtin-hooks
+    RUN chmod +x /usr/local/bin/build-kairos-maas.sh
+    
+    # Copy the raw image from maas-image step
+    COPY --from=+maas-image /output/*.raw /input/
+    
+    # Find the raw image file and execute the script
+    RUN RAW_IMG=$(find /input -name "*.raw" | head -n1) && \
+        if [ -z "$RAW_IMG" ]; then \
+            echo "Error: No raw image found in /input"; \
+            exit 1; \
+        fi && \
+        echo "Using raw image: $RAW_IMG" && \
+        /usr/local/bin/build-kairos-maas.sh "$RAW_IMG"
+    
+    # Save the final composite image
+    SAVE ARTIFACT /kairos-ubuntu-maas.raw AS LOCAL ./build/
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine
