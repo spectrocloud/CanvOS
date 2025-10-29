@@ -32,7 +32,7 @@ variable "LUET_PROJECT" {
 }
 
 variable "PE_VERSION" {
-  default = "v4.6.21"
+  default = "v4.7.16"
 }
 
 variable "SPECTRO_LUET_VERSION" {
@@ -40,7 +40,7 @@ variable "SPECTRO_LUET_VERSION" {
 }
 
 variable "KAIROS_VERSION" {
-  default = "v3.4.2"
+  default = "v3.5.3"
 }
 
 variable AURORABOOT_IMAGE {
@@ -48,15 +48,15 @@ variable AURORABOOT_IMAGE {
 }
 
 variable "K3S_PROVIDER_VERSION" {
-  default = "v4.6.0"
+  default = "v4.7.1"
 }
 
 variable "KUBEADM_PROVIDER_VERSION" {
-  default = "v4.6.3"
+  default = "v4.7.3"
 }
 
 variable "RKE2_PROVIDER_VERSION" {
-  default = "v4.6.0"
+  default = "v4.7.1"
 }
 
 variable "NODEADM_PROVIDER_VERSION" {
@@ -64,7 +64,7 @@ variable "NODEADM_PROVIDER_VERSION" {
 }
 
 variable "CANONICAL_PROVIDER_VERSION" {
-  default = "v1.1.0-rc.1"
+  default = "v1.2.2"
 }
 
 variable "K3S_FLAVOR_TAG" {
@@ -178,14 +178,6 @@ variable "MY_ORG" {
 
 variable "EXPIRATION_IN_DAYS" {
   default = 5475
-}
-
-variable "CMDLINE" {
-  default = "stylus.registration"
-}
-
-variable "BRANDING" {
-  default = "Palette eXtended Kubernetes Edge"
 }
 
 variable "EFI_MAX_SIZE" {
