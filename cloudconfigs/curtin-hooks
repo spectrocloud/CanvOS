@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+# curtin-hooks - Custom Curtin installation hooks
+#
+# Copyright (C) 2022 Canonical
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import os
+import shutil
+
+from curtin.commands.curthooks import handle_cloudconfig
+from curtin.config import load_command_config
+from curtin.util import load_command_environment
+from curtin import paths
+
+
+def cleanup():
+    """Remove curtin-hooks so its as if we were never here."""
+    curtin_dir = os.path.dirname(__file__)
+    print(f"Cleaning up curtin directory: {curtin_dir}")
+    shutil.rmtree(curtin_dir)
+    print("Cleanup completed")
+
+
+def main():
+    print("Starting custom curtin hook")
+    
+    try:
+        print("Loading command environment")
+        state = load_command_environment()
+        print(f"Command environment loaded: {list(state.keys())}")
+        
+        print("Loading command config")
+        config = load_command_config(None, state)
+        print("Command config loaded successfully")
+        
+        target = state['target']
+        print(f"Target directory: {target}")
+        
+        print("Calling handle_cloudconfig")
+        if config.get('cloudconfig'):
+            print("Found cloudconfig in config, processing...")
+            print(f"Cloud config content: {config['cloudconfig']}")
+            handle_cloudconfig(
+                config['cloudconfig'],
+                base_dir=paths.target_path(target, 'etc/cloud/cloud.cfg.d')
+            )
+            print("handle_cloudconfig completed successfully")
+        else:
+            print("No cloudconfig found in config, skipping handle_cloudconfig")
+        
+        print("Starting cleanup")
+        cleanup()
+        print("Custom curtin hook completed successfully")
+        
+    except Exception as e:
+        print(f"Error in custom curtin hook: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+if __name__ == "__main__":
+    main()
+

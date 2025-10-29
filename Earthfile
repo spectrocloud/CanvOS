@@ -65,6 +65,9 @@ ARG ETCD_VERSION="v3.5.13"
 ARG TWO_NODE=false
 ARG KINE_VERSION=0.11.4
 
+# MAAS Variables
+ARG IS_MAAS=false
+
 # UKI Variables
 ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
@@ -311,6 +314,8 @@ iso:
     WORKDIR /build
     IF [ "$IS_UKI" = "true" ]
         COPY --platform=linux/${ARCH} +build-uki-iso/ .
+    ELSE IF [ "$IS_MAAS" = "true" ]
+        COPY --platform=linux/${ARCH} +maas-image/ .
     ELSE
         COPY --platform=linux/${ARCH} +build-iso/ .
     END
@@ -814,6 +819,10 @@ KAIROS_RELEASE:
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
+    ARG IS_MAAS_IMAGE=false
+    ARG IMAGE_REGISTRY
+    ARG IMAGE_TAG
+
     IF [ "$IS_UKI" = "false" ]
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
@@ -822,6 +831,10 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+    IF [ "$IS_MAAS_IMAGE" = "true" ]
+        RUN mkdir /curtin
+        COPY cloudconfigs/curtin-hooks /curtin/
+    END
 
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
@@ -831,13 +844,42 @@ iso-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    SAVE IMAGE palette-installer-image:$IMAGE_TAG
+    SAVE IMAGE --push $IMAGE_REGISTRY/palette-installer-image:$IMAGE_TAG
 
 iso-disk-image:
     FROM scratch
 
     COPY +iso/*.iso /disk/
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
+
+maas-image:
+    ARG IS_MAAS_IMAGE=true
+
+    FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    # Copy the config file first
+    COPY cloud-images/config/user-data.yaml /config.yaml
+    WORKDIR /output
+
+    WITH DOCKER \
+        --pull quay.io/kairos/auroraboot:v0.6.4 \
+        --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_MAAS_IMAGE=true)
+        RUN mkdir -p /output && \
+            docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /config.yaml:/config.yaml:ro \
+                -v /output:/aurora \
+                --net host \
+                --privileged \
+                quay.io/kairos/auroraboot:v0.6.4 \
+                --debug \
+                --set "disable_http_server=true" \
+                --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
+                --set "disable_netboot=true" \
+                --set "disk.raw=true" \
+                --set "state_dir=/aurora" \
+                --cloud-config /config.yaml
+    END
+    SAVE ARTIFACT /output/* AS LOCAL ./build/
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine
