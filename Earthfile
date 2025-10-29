@@ -874,7 +874,7 @@ maas-image:
                 --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
                 --set "disable_netboot=true" \
                 --set "disk.raw=true" \
-                --set "state_dir=/aurora" \
+                --set "state_dir=/aurora"
     END
     SAVE ARTIFACT /output/* AS LOCAL ./build/
 
