@@ -857,7 +857,6 @@ maas-image:
 
     FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
     # Copy the config file first
-    COPY cloud-images/config/user-data.yaml /config.yaml
     WORKDIR /output
 
     WITH DOCKER \
@@ -866,7 +865,6 @@ maas-image:
         RUN mkdir -p /output && \
             docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /config.yaml:/config.yaml:ro \
                 -v /output:/aurora \
                 --net host \
                 --privileged \
@@ -877,7 +875,6 @@ maas-image:
                 --set "disable_netboot=true" \
                 --set "disk.raw=true" \
                 --set "state_dir=/aurora" \
-                --cloud-config /config.yaml
     END
     SAVE ARTIFACT /output/* AS LOCAL ./build/
 
