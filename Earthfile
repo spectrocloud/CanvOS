@@ -812,8 +812,10 @@ KAIROS_RELEASE:
     ARG OS_DISTRIBUTION
     RUN if [ -f /etc/kairos-release ]; then \
             sed -i 's/^KAIROS_NAME=.*/KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"/' /etc/kairos-release; \
+            echo 'KAIROS_IMAGE_LABEL="22.04-standard-amd64-generic-maas"' >> /etc/kairos-release; \
         else \
             echo 'KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"' >> /etc/kairos-release; \
+            echo 'KAIROS_IMAGE_LABEL="22.04-standard-amd64-generic-maas"' >> /etc/kairos-release; \
         fi
 
 # Used to build the installer image. The installer ISO will be created from this.
@@ -873,7 +875,7 @@ maas-image:
                 --set "disable_http_server=true" \
                 --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
                 --set "disable_netboot=true" \
-                --set "disk.raw=true" \
+                --set "disk.efi=true" \
                 --set "state_dir=/aurora"
     END
     SAVE ARTIFACT /output/* AS LOCAL ./build/
