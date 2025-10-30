@@ -878,6 +878,7 @@ maas-image:
                 --set "state_dir=/aurora"
     END
     SAVE ARTIFACT /output/* AS LOCAL ./build/
+    SAVE ARTIFACT /output/*.raw /output/
 
 maas-composite-image:
     FROM --platform=linux/amd64 ubuntu:22.04
@@ -902,7 +903,7 @@ maas-composite-image:
     RUN chmod +x /usr/local/bin/build-kairos-maas.sh
     
     # Copy the raw image from maas-image step
-    COPY --from=+maas-image /output/*.raw /input/
+    COPY +maas-image/output/ /input/
     
     # Find the raw image file and execute the script
     RUN RAW_IMG=$(find /input -name "*.raw" | head -n1) && \
