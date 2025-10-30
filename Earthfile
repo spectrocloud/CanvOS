@@ -898,7 +898,7 @@ maas-composite-image:
         && rm -rf /var/lib/apt/lists/*
     
     # Copy the build script and curtin hooks
-    COPY cloudconfigs/build-kairos-maas.sh /usr/local/bin/build-kairos-maas.sh
+    COPY cloudconfigs/build-kairos-maas-container.sh /usr/local/bin/build-kairos-maas.sh
     COPY --if-exists cloudconfigs/curtin-hooks /curtin-hooks
     RUN chmod +x /usr/local/bin/build-kairos-maas.sh
     
