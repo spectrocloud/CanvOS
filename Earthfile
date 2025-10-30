@@ -315,7 +315,7 @@ iso:
     IF [ "$IS_UKI" = "true" ]
         COPY --platform=linux/${ARCH} +build-uki-iso/ .
     ELSE IF [ "$IS_MAAS" = "true" ]
-        COPY --platform=linux/${ARCH} +maas-composite-image/ .
+        COPY --platform=linux/${ARCH} +maas-image/ .
     ELSE
         COPY --platform=linux/${ARCH} +build-iso/ .
     END
@@ -854,19 +854,38 @@ iso-disk-image:
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
 
 maas-image:
-    ARG IS_MAAS_IMAGE=true
-
-    FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
-    # Copy the config file first
-    WORKDIR /output
-
+    FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    
+    # Install required tools
+    RUN apk add --no-cache \
+        wget \
+        tar \
+        qemu-img \
+        parted \
+        e2fsprogs \
+        dosfstools \
+        rsync \
+        util-linux \
+        coreutils \
+        grub-efi \
+        bash
+    
+    # Copy the build script and curtin hooks
+    COPY cloudconfigs/build-kairos-maas-container.sh /usr/local/bin/build-kairos-maas.sh
+    COPY --if-exists cloudconfigs/curtin-hooks /curtin-hooks
+    RUN chmod +x /usr/local/bin/build-kairos-maas.sh
+    
+    # Use Docker-in-Docker to convert iso-image to raw and then create composite
     WITH DOCKER \
-        --pull quay.io/kairos/auroraboot:v0.6.4 \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
-        RUN mkdir -p /output && \
+        RUN mkdir -p /workdir && \
+            cd /workdir && \
+            # Copy curtin-hooks to workdir where the build script expects it
+            cp /curtin-hooks /workdir/curtin-hooks && \
+            # First, convert the container image to raw using auroraboot
             docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /output:/aurora \
+                -v /workdir:/aurora \
                 --net host \
                 --privileged \
                 quay.io/kairos/auroraboot:v0.6.4 \
@@ -875,44 +894,18 @@ maas-image:
                 --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
-                --set "state_dir=/aurora"
+                --set "state_dir=/aurora" && \
+            # Then create the composite image
+            RAW_IMG=$(find /workdir -name "*.raw" | head -n1) && \
+            if [ -z "$RAW_IMG" ]; then \
+                echo "Error: No raw image found"; \
+                exit 1; \
+            fi && \
+            echo "Using raw image: $RAW_IMG" && \
+            /usr/local/bin/build-kairos-maas.sh "$RAW_IMG" && \
+            # Copy the final composite image to the container
+            cp kairos-ubuntu-maas.raw /kairos-ubuntu-maas.raw
     END
-    SAVE ARTIFACT /output/* AS LOCAL ./build/
-    SAVE ARTIFACT /output/*.raw /output/
-
-maas-composite-image:
-    FROM --platform=linux/amd64 --allow-privileged ubuntu:22.04
-    
-    # Install required tools for the script
-    RUN apt-get update && apt-get install -y \
-        wget \
-        tar \
-        kpartx \
-        qemu-utils \
-        parted \
-        e2fsprogs \
-        dosfstools \
-        rsync \
-        util-linux \
-        grub-common \
-        && rm -rf /var/lib/apt/lists/*
-    
-    # Copy the build script and curtin hooks
-    COPY cloudconfigs/build-kairos-maas-container.sh /usr/local/bin/build-kairos-maas.sh
-    COPY --if-exists cloudconfigs/curtin-hooks /curtin-hooks
-    RUN chmod +x /usr/local/bin/build-kairos-maas.sh
-    
-    # Copy the raw image from maas-image step
-    COPY +maas-image/output/ /input/
-    
-    # Find the raw image file and execute the script
-    RUN RAW_IMG=$(find /input -name "*.raw" | head -n1) && \
-        if [ -z "$RAW_IMG" ]; then \
-            echo "Error: No raw image found in /input"; \
-            exit 1; \
-        fi && \
-        echo "Using raw image: $RAW_IMG" && \
-        /usr/local/bin/build-kairos-maas.sh "$RAW_IMG"
     
     # Save the final composite image
     SAVE ARTIFACT /kairos-ubuntu-maas.raw AS LOCAL ./build/

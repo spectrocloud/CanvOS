@@ -52,11 +52,9 @@ fi
 # --- Temp workspace ---
 WORKDIR=$(mktemp -d)
 UBUNTU_LOOP_DEV="" # Initialize for the trap
-INPUT_LOOP_DEV="" # Initialize for the trap
 trap 'echo "Cleaning up..."; \
       umount -l "$WORKDIR"/* &>/dev/null; \
       if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" &>/dev/null; fi; \
-      if [ -n "$INPUT_LOOP_DEV" ]; then losetup -d "$INPUT_LOOP_DEV" &>/dev/null; fi; \
       rm -rf "$WORKDIR"; exit' EXIT
 cd "$WORKDIR"
 
@@ -111,21 +109,33 @@ parted -s "$FINAL_IMG" -- \
   mkpart oem ext2 "$UBUNTU_END" "$COS_OEM_END" \
   mkpart recovery ext2 "$COS_OEM_END" "$COS_RECOVERY_END"
 
-# --- Loop setup for device mapping ---
-echo "--- Setting up loop devices ---"
-# Use losetup to attach the images
-INPUT_LOOP_DEV=$(losetup -f --show "$INPUT_IMG")
-echo "Attached input image to $INPUT_LOOP_DEV"
+# --- Create temporary files for partitions ---
+echo "--- Creating temporary partition files ---"
+# Extract partitions using dd
+INPUT_EFI_FILE="input_efi.img"
+INPUT_OEM_FILE="input_oem.img"
+INPUT_RECOVERY_FILE="input_recovery.img"
 
-UBUNTU_LOOP_DEV=$(losetup -f --show "$UBUNTU_IMG")
-echo "Attached Ubuntu image to $UBUNTU_LOOP_DEV"
+# Calculate partition sizes in MB for dd
+COS_GRUB_SIZE_MB=$((COS_GRUB_SIZE / 1048576))
+COS_OEM_SIZE_MB=$((COS_OEM_SIZE / 1048576))
+COS_RECOVERY_SIZE_MB=$((COS_RECOVERY_SIZE / 1048576))
 
-# Calculate partition offsets for mounting
-INPUT_EFI_OFFSET=$(($COS_GRUB_START / 512))
-INPUT_OEM_OFFSET=$(($COS_OEM_START / 512))
-INPUT_RECOVERY_OFFSET=$(($COS_RECOVERY_START / 512))
+# Calculate skip values in MB
+COS_GRUB_SKIP_MB=$((COS_GRUB_START / 1048576))
+COS_OEM_SKIP_MB=$((COS_OEM_START / 1048576))
+COS_RECOVERY_SKIP_MB=$((COS_RECOVERY_START / 1048576))
 
-# Mount the input partitions using offset
+# Extract partitions using dd
+echo "--- Extracting partitions from input image ---"
+echo "Extracting EFI partition (skip=$COS_GRUB_SKIP_MB, count=$COS_GRUB_SIZE_MB)"
+dd if="$INPUT_IMG" of="$INPUT_EFI_FILE" bs=1M skip=$COS_GRUB_SKIP_MB count=$COS_GRUB_SIZE_MB || { echo "Failed to extract EFI partition"; exit 1; }
+echo "Extracting OEM partition (skip=$COS_OEM_SKIP_MB, count=$COS_OEM_SIZE_MB)"
+dd if="$INPUT_IMG" of="$INPUT_OEM_FILE" bs=1M skip=$COS_OEM_SKIP_MB count=$COS_OEM_SIZE_MB || { echo "Failed to extract OEM partition"; exit 1; }
+echo "Extracting Recovery partition (skip=$COS_RECOVERY_SKIP_MB, count=$COS_RECOVERY_SIZE_MB)"
+dd if="$INPUT_IMG" of="$INPUT_RECOVERY_FILE" bs=1M skip=$COS_RECOVERY_SKIP_MB count=$COS_RECOVERY_SIZE_MB || { echo "Failed to extract Recovery partition"; exit 1; }
+
+# Create mount points
 MNT_INPUT_EFI=$(mktemp -d)
 MNT_INPUT_OEM=$(mktemp -d)
 MNT_INPUT_RECOVERY=$(mktemp -d)
@@ -136,30 +146,56 @@ MNT_FINAL_UBUNTU_ROOTFS=$(mktemp -d)
 MNT_FINAL_OEM=$(mktemp -d)
 MNT_FINAL_RECOVERY=$(mktemp -d)
 
-# Mount input partitions
-mount -o loop,offset=$INPUT_EFI_OFFSET -t vfat "$INPUT_LOOP_DEV" "$MNT_INPUT_EFI"
-mount -o loop,offset=$INPUT_OEM_OFFSET -t ext2 "$INPUT_LOOP_DEV" "$MNT_INPUT_OEM"
-mount -o loop,offset=$INPUT_RECOVERY_OFFSET -t ext2 "$INPUT_LOOP_DEV" "$MNT_INPUT_RECOVERY"
-mount "$UBUNTU_LOOP_DEV" "$MNT_UBUNTU_ROOT_IMG"
+# Mount input partitions using the extracted files instead of losetup with offset
+# This avoids issues with large partitions and losetup sizelimit
+UBUNTU_LOOP_DEV=$(losetup -f --show "$UBUNTU_IMG")
+echo "Attached Ubuntu image to $UBUNTU_LOOP_DEV"
 
 # --- Format and Mount Final Filesystems ---
 echo "--- Formatting and Mounting Final Partitions ---"
-# Use mkfs to apply the desired labels to the newly created partitions.
-mkfs.vfat -n "COS_GRUB" -F 32 -C "$FINAL_IMG" 67108864
-mkfs.ext4 -L UBUNTU_ROOTFS -F "$FINAL_IMG" 5368709120
-mkfs.ext2 -L COS_OEM -F "$FINAL_IMG" 67108864
-mkfs.ext2 -L COS_RECOVERY -F "$FINAL_IMG" 6645874688
+# Create temporary files for final partitions
+FINAL_EFI_FILE="final_efi.img"
+FINAL_UBUNTU_FILE="final_ubuntu.img"
+FINAL_OEM_FILE="final_oem.img"
+FINAL_RECOVERY_FILE="final_recovery.img"
 
-# Mount final partitions using offset
-FINAL_EFI_OFFSET=$((1048576 / 512))  # 1MiB
-FINAL_UBUNTU_OFFSET=$((67108864 / 512))  # 64MiB
-FINAL_OEM_OFFSET=$((5368709120 / 512))  # 5GiB
-FINAL_RECOVERY_OFFSET=$((5435817984 / 512))  # 5GiB + 64MiB
+# Create partition files with proper sizes
+echo "--- Creating final partition files ---"
+echo "Creating final EFI file (size: $COS_GRUB_SIZE_MB MB)"
+dd if=/dev/zero of="$FINAL_EFI_FILE" bs=1M count=$COS_GRUB_SIZE_MB || { echo "Failed to create final EFI file"; exit 1; }
+echo "Creating final Ubuntu file (size: $((UBUNTU_ROOT_SIZE_BYTES / 1048576)) MB)"
+dd if=/dev/zero of="$FINAL_UBUNTU_FILE" bs=1M count=$((UBUNTU_ROOT_SIZE_BYTES / 1048576)) || { echo "Failed to create final Ubuntu file"; exit 1; }
+echo "Creating final OEM file (size: $COS_OEM_SIZE_MB MB)"
+dd if=/dev/zero of="$FINAL_OEM_FILE" bs=1M count=$COS_OEM_SIZE_MB || { echo "Failed to create final OEM file"; exit 1; }
+echo "Creating final Recovery file (size: $COS_RECOVERY_SIZE_MB MB)"
+dd if=/dev/zero of="$FINAL_RECOVERY_FILE" bs=1M count=$COS_RECOVERY_SIZE_MB || { echo "Failed to create final Recovery file"; exit 1; }
 
-mount -o loop,offset=$FINAL_EFI_OFFSET -t vfat "$FINAL_IMG" "$MNT_FINAL_EFI"
-mount -o loop,offset=$FINAL_UBUNTU_OFFSET -t ext4 "$FINAL_IMG" "$MNT_FINAL_UBUNTU_ROOTFS"
-mount -o loop,offset=$FINAL_OEM_OFFSET -t ext2 "$FINAL_IMG" "$MNT_FINAL_OEM"
-mount -o loop,offset=$FINAL_RECOVERY_OFFSET -t ext2 "$FINAL_IMG" "$MNT_FINAL_RECOVERY"
+# Format the partition files
+mkfs.vfat -n "COS_GRUB" -F 32 "$FINAL_EFI_FILE"
+mkfs.ext4 -L UBUNTU_ROOTFS "$FINAL_UBUNTU_FILE"
+mkfs.ext2 -L COS_OEM "$FINAL_OEM_FILE"
+mkfs.ext2 -L COS_RECOVERY "$FINAL_RECOVERY_FILE"
+
+# Mount partitions using the extracted files
+echo "--- Mounting input partitions ---"
+echo "Mounting EFI partition: $INPUT_EFI_FILE"
+mount -o loop -t vfat "$INPUT_EFI_FILE" "$MNT_INPUT_EFI" || { echo "Failed to mount EFI partition"; exit 1; }
+echo "Mounting OEM partition: $INPUT_OEM_FILE"
+mount -o loop -t ext2 "$INPUT_OEM_FILE" "$MNT_INPUT_OEM" || { echo "Failed to mount OEM partition"; exit 1; }
+echo "Mounting Recovery partition: $INPUT_RECOVERY_FILE"
+mount -o loop -t ext2 "$INPUT_RECOVERY_FILE" "$MNT_INPUT_RECOVERY" || { echo "Failed to mount Recovery partition"; exit 1; }
+echo "Mounting Ubuntu image: $UBUNTU_LOOP_DEV"
+mount "$UBUNTU_LOOP_DEV" "$MNT_UBUNTU_ROOT_IMG" || { echo "Failed to mount Ubuntu image"; exit 1; }
+
+echo "--- Mounting final partitions ---"
+echo "Mounting final EFI partition: $FINAL_EFI_FILE"
+mount -t vfat "$FINAL_EFI_FILE" "$MNT_FINAL_EFI" || { echo "Failed to mount final EFI partition"; exit 1; }
+echo "Mounting final Ubuntu partition: $FINAL_UBUNTU_FILE"
+mount -t ext4 "$FINAL_UBUNTU_FILE" "$MNT_FINAL_UBUNTU_ROOTFS" || { echo "Failed to mount final Ubuntu partition"; exit 1; }
+echo "Mounting final OEM partition: $FINAL_OEM_FILE"
+mount -t ext2 "$FINAL_OEM_FILE" "$MNT_FINAL_OEM" || { echo "Failed to mount final OEM partition"; exit 1; }
+echo "Mounting final Recovery partition: $FINAL_RECOVERY_FILE"
+mount -t ext2 "$FINAL_RECOVERY_FILE" "$MNT_FINAL_RECOVERY" || { echo "Failed to mount final Recovery partition"; exit 1; }
 
 # --- Copy Filesystems ---
 echo "--- Copying Filesystem Data ---"
@@ -257,6 +293,14 @@ else
   echo "Warning: $GRUB_ENV_PATH not found, skipping grubenv patch." >&2
 fi
 
+# --- Assemble Final Image ---
+echo "--- Assembling final image ---"
+# Write the partition files back to the final image at the correct offsets
+dd if="$FINAL_EFI_FILE" of="$FINAL_IMG" bs=1M seek=$COS_GRUB_SKIP_MB conv=notrunc
+dd if="$FINAL_UBUNTU_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB)) conv=notrunc
+dd if="$FINAL_OEM_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576)) conv=notrunc
+dd if="$FINAL_RECOVERY_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576 + COS_OEM_SIZE_MB)) conv=notrunc
+
 # --- Finalize ---
 echo "--- Unmounting all mount points and cleaning up loop devices and temp directory ---"
 umount -l "$MNT_INPUT_EFI" || true
@@ -269,7 +313,6 @@ umount -l "$MNT_FINAL_OEM" || true
 umount -l "$MNT_FINAL_RECOVERY" || true
 
 if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" || true; fi
-if [ -n "$INPUT_LOOP_DEV" ]; then losetup -d "$INPUT_LOOP_DEV" || true; fi
 echo "--- Copying final image to original directory... ---"
 cp "$FINAL_IMG" "$ORIG_DIR/"
 
