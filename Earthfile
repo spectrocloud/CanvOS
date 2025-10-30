@@ -881,7 +881,7 @@ maas-image:
     SAVE ARTIFACT /output/*.raw /output/
 
 maas-composite-image:
-    FROM --platform=linux/amd64 ubuntu:22.04
+    FROM --platform=linux/amd64 --allow-privileged ubuntu:22.04
     
     # Install required tools for the script
     RUN apt-get update && apt-get install -y \
