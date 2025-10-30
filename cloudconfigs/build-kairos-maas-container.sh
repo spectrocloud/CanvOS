@@ -52,10 +52,13 @@ fi
 # --- Temp workspace ---
 WORKDIR=$(mktemp -d)
 UBUNTU_LOOP_DEV="" # Initialize for the trap
-trap 'echo "Cleaning up..."; \
-      umount -l "$WORKDIR"/* &>/dev/null; \
-      if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" &>/dev/null; fi; \
-      rm -rf "$WORKDIR"; exit' EXIT
+CLEANUP_DONE=false
+trap 'if [ "$CLEANUP_DONE" = "false" ]; then \
+      echo "Cleaning up..."; \
+      umount -l "$WORKDIR"/* 2>/dev/null || true; \
+      if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" 2>/dev/null || true; fi; \
+      rm -rf "$WORKDIR" 2>/dev/null || true; \
+      fi; exit' EXIT
 cd "$WORKDIR"
 
 # --- Download & Extract Ubuntu Image ---
@@ -199,10 +202,49 @@ mount -t ext2 "$FINAL_RECOVERY_FILE" "$MNT_FINAL_RECOVERY" || { echo "Failed to 
 
 # --- Copy Filesystems ---
 echo "--- Copying Filesystem Data ---"
-rsync -aHAX --info=progress2 "$MNT_INPUT_EFI/" "$MNT_FINAL_EFI/"
-rsync -aHAX --info=progress2 "$MNT_UBUNTU_ROOT_IMG/" "$MNT_FINAL_UBUNTU_ROOTFS/"
-rsync -aHAX --info=progress2 "$MNT_INPUT_OEM/" "$MNT_FINAL_OEM/"
-rsync -aHAX --info=progress2 "$MNT_INPUT_RECOVERY/" "$MNT_FINAL_RECOVERY/"
+echo "Copying EFI partition..."
+rsync -aHAX --info=progress2 "$MNT_INPUT_EFI/" "$MNT_FINAL_EFI/" || { echo "Failed to copy EFI partition"; exit 1; }
+echo "EFI partition copied successfully"
+
+echo "Copying Ubuntu root filesystem..."
+# Use cp instead of rsync for better performance in container environment
+echo "Starting Ubuntu filesystem copy (this may take a few minutes)..."
+# Show progress by monitoring the destination directory size
+(
+    while true; do
+        if [ -d "$MNT_FINAL_UBUNTU_ROOTFS" ]; then
+            SIZE=$(du -sm "$MNT_FINAL_UBUNTU_ROOTFS" 2>/dev/null | cut -f1 || echo "0")
+            echo "Ubuntu copy progress: ${SIZE}MB copied..."
+        fi
+        sleep 10
+    done
+) &
+PROGRESS_PID=$!
+cp -a "$MNT_UBUNTU_ROOT_IMG/." "$MNT_FINAL_UBUNTU_ROOTFS/" || { kill $PROGRESS_PID 2>/dev/null; echo "Failed to copy Ubuntu root filesystem"; exit 1; }
+kill $PROGRESS_PID 2>/dev/null
+echo "Ubuntu root filesystem copied successfully"
+
+echo "Copying OEM partition..."
+rsync -aHAX --info=progress2 "$MNT_INPUT_OEM/" "$MNT_FINAL_OEM/" || { echo "Failed to copy OEM partition"; exit 1; }
+echo "OEM partition copied successfully"
+
+echo "Copying Recovery partition..."
+# Use cp instead of rsync for better performance in container environment
+echo "Starting Recovery partition copy (this may take a few minutes)..."
+# Show progress by monitoring the destination directory size
+(
+    while true; do
+        if [ -d "$MNT_FINAL_RECOVERY" ]; then
+            SIZE=$(du -sm "$MNT_FINAL_RECOVERY" 2>/dev/null | cut -f1 || echo "0")
+            echo "Recovery copy progress: ${SIZE}MB copied..."
+        fi
+        sleep 10
+    done
+) &
+PROGRESS_PID=$!
+cp -a "$MNT_INPUT_RECOVERY/." "$MNT_FINAL_RECOVERY/" || { kill $PROGRESS_PID 2>/dev/null; echo "Failed to copy Recovery partition"; exit 1; }
+kill $PROGRESS_PID 2>/dev/null
+echo "Recovery partition copied successfully"
 
 # --- Install curtin hooks ---
 echo "--- Installing curtin hooks script ---"
@@ -295,11 +337,21 @@ fi
 
 # --- Assemble Final Image ---
 echo "--- Assembling final image ---"
-# Write the partition files back to the final image at the correct offsets
-dd if="$FINAL_EFI_FILE" of="$FINAL_IMG" bs=1M seek=$COS_GRUB_SKIP_MB conv=notrunc
-dd if="$FINAL_UBUNTU_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB)) conv=notrunc
-dd if="$FINAL_OEM_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576)) conv=notrunc
-dd if="$FINAL_RECOVERY_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576 + COS_OEM_SIZE_MB)) conv=notrunc
+echo "Writing EFI partition to final image..."
+dd if="$FINAL_EFI_FILE" of="$FINAL_IMG" bs=1M seek=$COS_GRUB_SKIP_MB conv=notrunc || { echo "Failed to write EFI partition"; exit 1; }
+echo "EFI partition written successfully"
+
+echo "Writing Ubuntu partition to final image..."
+dd if="$FINAL_UBUNTU_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB)) conv=notrunc || { echo "Failed to write Ubuntu partition"; exit 1; }
+echo "Ubuntu partition written successfully"
+
+echo "Writing OEM partition to final image..."
+dd if="$FINAL_OEM_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576)) conv=notrunc || { echo "Failed to write OEM partition"; exit 1; }
+echo "OEM partition written successfully"
+
+echo "Writing Recovery partition to final image..."
+dd if="$FINAL_RECOVERY_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576 + COS_OEM_SIZE_MB)) conv=notrunc || { echo "Failed to write Recovery partition"; exit 1; }
+echo "Recovery partition written successfully"
 
 # --- Finalize ---
 echo "--- Unmounting all mount points and cleaning up loop devices and temp directory ---"
@@ -314,14 +366,28 @@ umount -l "$MNT_FINAL_RECOVERY" || true
 
 if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" || true; fi
 echo "--- Copying final image to original directory... ---"
-cp "$FINAL_IMG" "$ORIG_DIR/"
+cp "$FINAL_IMG" "$ORIG_DIR/" || { echo "Failed to copy final image"; exit 1; }
+echo "Final image copied successfully"
 
-rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY" "$WORKDIR"
+# Check final image size
+FINAL_SIZE=$(du -h "$ORIG_DIR/$FINAL_IMG" | cut -f1)
+echo "Final image size: $FINAL_SIZE"
 
-echo "\n✅ Composite image created successfully: $ORIG_DIR/$FINAL_IMG"
+# Cleanup mount points (but keep WORKDIR until after file copy)
+rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY"
+
+echo ""
+echo "✅ Composite image created successfully: $ORIG_DIR/$FINAL_IMG"
+echo "Final image location: $ORIG_DIR/$FINAL_IMG"
 echo "You can now upload this raw image to your deployment system."
 echo "📋 Cloud-init userdata processing script has been integrated - it will:"
 echo "   • Run once after cloud-init processes userdata"
 echo "   • Copy userdata to COS_OEM partition as userdata.yaml" 
 echo "   • Set grubenv to boot recovery mode"
 echo "   • Reboot the system"
+
+# Mark cleanup as done and exit cleanly
+CLEANUP_DONE=true
+rm -rf "$WORKDIR"
+exit 0
+
