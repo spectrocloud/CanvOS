@@ -8,7 +8,12 @@ variable "ARCH" {
 }
 
 variable "SPECTRO_PUB_REPO" {
-  default = FIPS_ENABLED ? "us-east1-docker.pkg.dev/spectro-images-fips/dev/piyush" : "us-east1-docker.pkg.dev/spectro-images/dev/piyush"
+  # default = FIPS_ENABLED ? "us-east1-docker.pkg.dev/spectro-images-fips/dev/piyush" : "us-east1-docker.pkg.dev/spectro-images/dev/piyush"
+  default = FIPS_ENABLED ? "us-east1-docker.pkg.dev/spectro-images/dev-fips/arun" : "us-east1-docker.pkg.dev/spectro-images/dev/arun"
+}
+
+variable "KAIROS_BASE_IMAGE_URL" {
+  default = "${SPECTRO_PUB_REPO}/edge"
 }
 
 variable "SPECTRO_THIRD_PARTY_IMAGE" {
@@ -232,39 +237,30 @@ function "get_ubuntu_image" {
   result = fips_enabled ? "${spectro_pub_repo}/third-party/ubuntu-fips:22.04" : "${spectro_pub_repo}/third-party/ubuntu:22.04"
 }
 
-# secret "enrollment" {
-#   type = "file"
-#   src = "secure-boot/enrollment/"
-# }
+secret "enrollment" {
+  type = "file"
+  src = "secure-boot/enrollment/"
+}
 
-# secret "private-keys" {
-#   type = "file"
-#   src = "secure-boot/private-keys/"
-# }
+secret "private-keys" {
+  type = "file"
+  src = "secure-boot/private-keys/"
+}
 
-# secret "public-keys" {
-#   type = "file"
-#   src = "secure-boot/public-keys/"
-# }
+secret "public-keys" {
+  type = "file"
+  src = "secure-boot/public-keys/"
+}
 
 function "get_base_image" {
   params = [base_image, os_distribution, os_version, is_uki]
   result = base_image != "" ? base_image : (
-    
-    os_distribution == "ubuntu" && ( os_version == "20" || os_version == "20.04" ) ? 
-    "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
-
-    os_distribution == "ubuntu" && ( os_version == "22" || os_version == "22.04" ) ? 
-      "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
-    
-    os_distribution == "ubuntu" && ( os_version == "24" || os_version == "24.04" ) ? 
-      "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}" :
-
-    os_distribution == "ubuntu" && ( os_version == "24" || os_version == "24.04" ) && is_uki ? 
-      "${SPECTRO_PUB_REPO}/edge/kairos-${OS_DISTRIBUTION}:${OS_VERSION}.04-core-${ARCH}-generic-${KAIROS_VERSION}-uki" :
+    # Format version: add .04 if not present, then build image URL
+    os_distribution == "ubuntu" && length(regexall("^(20|22|24)(\\.04)?$", os_version)) > 0 ? 
+      "${KAIROS_BASE_IMAGE_URL}/kairos-${OS_DISTRIBUTION}:${length(regexall("\\.04", os_version)) > 0 ? os_version : os_version + ".04"}-core-${ARCH}-generic-${KAIROS_VERSION}${is_uki && length(regexall("^24", os_version)) > 0 ? "-uki" : ""}" :
 
     os_distribution == "opensuse" && os_version == "15.6" ? 
-      "${SPECTRO_PUB_REPO}/edge/kairos-opensuse:leap-${OS_VERSION}-core-${ARCH}-generic-${KAIROS_VERSION}" :
+      "${KAIROS_BASE_IMAGE_URL}/kairos-opensuse:leap-${OS_VERSION}-core-${ARCH}-generic-${KAIROS_VERSION}" :
     
     ""
   )
@@ -419,7 +415,6 @@ target "trustedboot-image" {
   contexts = {
     provider-image = "target:provider-image"
   }
-  # secret = ["enrollment", "private-keys", "public-keys"]
   secret = [
     {
       type = "file"
@@ -508,7 +503,6 @@ target "build-uki-iso" {
     CMDLINE = CMDLINE
     BRANDING = BRANDING
   }
-  # secret = ["enrollment", "private-keys", "public-keys"]
   secret = [
     {
       type = "file"
