@@ -720,11 +720,13 @@ base-image:
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
+            IF [ "$FIPS_ENABLED" = "false" ]
+                RUN kernel=$(ls /lib/modules | tail -n1) && \
+                        dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+                        ln -sf "initrd-${kernel}" /boot/initrd
+            END
             RUN kernel=$(ls /lib/modules | tail -n1) && \
-            	dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-            	ln -sf "initrd-${kernel}" /boot/initrd
-            RUN kernel=$(ls /lib/modules | tail -n1) && \
-           	depmod -a "${kernel}"
+               	depmod -a "${kernel}"
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
