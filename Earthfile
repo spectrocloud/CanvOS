@@ -726,11 +726,13 @@ base-image:
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
+            IF [ "$FIPS_ENABLED" = "false" ]
+                RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                    dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+                    ln -sf "initrd-${kernel}" /boot/initrd
+            END
             RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-            	dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-            	ln -sf "initrd-${kernel}" /boot/initrd
-            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-           	depmod -a "${kernel}"
+            depmod -a "${kernel}"
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
