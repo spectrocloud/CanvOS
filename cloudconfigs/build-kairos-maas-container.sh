@@ -17,8 +17,8 @@ set -euo pipefail
 
 # --- Configuration ---
 # The path to your input Kairos OS raw image.
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <path_to_kairos_raw_image>" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    echo "Usage: $0 <path_to_kairos_raw_image> [path_to_curtin_hooks]" >&2
     exit 1
 fi
 # Convert the input path to an absolute path to avoid "No such file or directory" error
@@ -32,8 +32,30 @@ UBUNTU_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-
 FINAL_IMG="kairos-ubuntu-maas.raw"
 # The size of the new Ubuntu rootfs partition.
 UBUNTU_ROOT_SIZE="5G"
-# Path to the curtin hooks script (relative to the original directory)
-CURTIN_HOOKS_SCRIPT="$ORIG_DIR/curtin-hooks"
+
+# Determine the path to the curtin hooks script
+# Priority: 1) explicit parameter, 2) current directory, 3) ORIG_DIR, 4) script directory
+if [ "$#" -eq 2 ]; then
+    # Use explicit path if provided
+    CURTIN_HOOKS_SCRIPT="$2"
+    if [ ! -f "$CURTIN_HOOKS_SCRIPT" ]; then
+        CURTIN_HOOKS_SCRIPT=$(readlink -f "$2" 2>/dev/null || echo "$2")
+    fi
+elif [ -f "./curtin-hooks" ]; then
+    # Check current directory
+    CURTIN_HOOKS_SCRIPT=$(readlink -f "./curtin-hooks" 2>/dev/null || echo "$(pwd)/curtin-hooks")
+elif [ -f "$ORIG_DIR/curtin-hooks" ]; then
+    # Check original directory
+    CURTIN_HOOKS_SCRIPT="$ORIG_DIR/curtin-hooks"
+else
+    # Check script directory as last resort
+    SCRIPT_DIR=$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")
+    if [ -f "$SCRIPT_DIR/curtin-hooks" ]; then
+        CURTIN_HOOKS_SCRIPT="$SCRIPT_DIR/curtin-hooks"
+    else
+        CURTIN_HOOKS_SCRIPT="$ORIG_DIR/curtin-hooks"
+    fi
+fi
 
 # --- Tools check ---
 for tool in wget tar losetup grub-editenv qemu-img parted mkfs.ext2 mkfs.vfat mkfs.ext4 rsync blkid; do
@@ -46,19 +68,26 @@ done
 # Check if curtin hooks script exists
 if [ ! -f "$CURTIN_HOOKS_SCRIPT" ]; then
     echo "Error: Curtin hooks script not found at $CURTIN_HOOKS_SCRIPT" >&2
+    echo "Searched in: current directory, $ORIG_DIR, and script directory" >&2
     exit 1
 fi
+
+# Convert to absolute path for reliability
+CURTIN_HOOKS_SCRIPT=$(readlink -f "$CURTIN_HOOKS_SCRIPT" 2>/dev/null || echo "$CURTIN_HOOKS_SCRIPT")
+echo "Using curtin-hooks at: $CURTIN_HOOKS_SCRIPT"
 
 # --- Temp workspace ---
 WORKDIR=$(mktemp -d)
 UBUNTU_LOOP_DEV="" # Initialize for the trap
+PROGRESS_PIDS="" # Track background progress monitoring processes
 CLEANUP_DONE=false
 trap 'if [ "$CLEANUP_DONE" = "false" ]; then \
       echo "Cleaning up..."; \
+      for pid in $PROGRESS_PIDS; do kill $pid 2>/dev/null || true; done; \
       umount -l "$WORKDIR"/* 2>/dev/null || true; \
       if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" 2>/dev/null || true; fi; \
       rm -rf "$WORKDIR" 2>/dev/null || true; \
-      fi; exit' EXIT
+      fi' EXIT
 cd "$WORKDIR"
 
 # --- Download & Extract Ubuntu Image ---
@@ -220,8 +249,10 @@ echo "Starting Ubuntu filesystem copy (this may take a few minutes)..."
     done
 ) &
 PROGRESS_PID=$!
+PROGRESS_PIDS="$PROGRESS_PIDS $PROGRESS_PID"
 cp -a "$MNT_UBUNTU_ROOT_IMG/." "$MNT_FINAL_UBUNTU_ROOTFS/" || { kill $PROGRESS_PID 2>/dev/null; echo "Failed to copy Ubuntu root filesystem"; exit 1; }
 kill $PROGRESS_PID 2>/dev/null
+wait $PROGRESS_PID 2>/dev/null || true
 echo "Ubuntu root filesystem copied successfully"
 
 echo "Copying OEM partition..."
@@ -242,8 +273,10 @@ echo "Starting Recovery partition copy (this may take a few minutes)..."
     done
 ) &
 PROGRESS_PID=$!
+PROGRESS_PIDS="$PROGRESS_PIDS $PROGRESS_PID"
 cp -a "$MNT_INPUT_RECOVERY/." "$MNT_FINAL_RECOVERY/" || { kill $PROGRESS_PID 2>/dev/null; echo "Failed to copy Recovery partition"; exit 1; }
 kill $PROGRESS_PID 2>/dev/null
+wait $PROGRESS_PID 2>/dev/null || true
 echo "Recovery partition copied successfully"
 
 # --- Install curtin hooks ---
@@ -387,7 +420,12 @@ echo "   • Set grubenv to boot recovery mode"
 echo "   • Reboot the system"
 
 # Mark cleanup as done and exit cleanly
+# Kill any remaining background progress monitoring processes
+for pid in $PROGRESS_PIDS; do
+    kill $pid 2>/dev/null || true
+    wait $pid 2>/dev/null || true
+done
+
 CLEANUP_DONE=true
 rm -rf "$WORKDIR"
 exit 0
-

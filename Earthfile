@@ -902,7 +902,7 @@ maas-image:
                 exit 1; \
             fi && \
             echo "Using raw image: $RAW_IMG" && \
-            /usr/local/bin/build-kairos-maas.sh "$RAW_IMG" && \
+            /usr/local/bin/build-kairos-maas.sh "$RAW_IMG" /workdir/curtin-hooks && \
             # Copy the final composite image to the container
             cp kairos-ubuntu-maas.raw /kairos-ubuntu-maas.raw
     END
