@@ -40,10 +40,6 @@ variable "PE_VERSION" {
   default = "v4.7.16"
 }
 
-variable "SPECTRO_LUET_VERSION" {
-  default = "v4.7.1"
-}
-
 variable "KAIROS_VERSION" {
   default = "v3.5.3"
 }
@@ -352,9 +348,8 @@ target "install-k8s" {
     K3S_FLAVOR_TAG = K3S_FLAVOR_TAG
     RKE2_FLAVOR_TAG = RKE2_FLAVOR_TAG
     LUET_PROJECT = LUET_PROJECT
-    LUET_REPO = ARCH == "arm64" ? "${LUET_PROJECT}-arm" : LUET_PROJECT
+    LUET_REPO = ARCH == "arm64" ? "${LUET_PROJECT}-arm" : "${LUET_PROJECT}-amd"
     SPECTRO_LUET_REPO = SPECTRO_LUET_REPO
-    SPECTRO_LUET_VERSION = SPECTRO_LUET_VERSION
   }
 }
 
