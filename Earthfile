@@ -853,6 +853,8 @@ iso-disk-image:
     COPY +iso/*.iso /disk/
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
 
+# NOTE: This target requires privileged mode. Run with: earthly -P +maas-image
+# or: earthly -P +iso --IS_MAAS=true
 maas-image:
     FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
     
@@ -878,11 +880,17 @@ maas-image:
     # Use Docker-in-Docker to convert iso-image to raw and then create composite
     WITH DOCKER \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
-        RUN mkdir -p /workdir && \
+        RUN set -e && \
+            echo "=== Setting up workdir ===" && \
+            mkdir -p /workdir && \
             cd /workdir && \
-            # Copy curtin-hooks to workdir where the build script expects it
+            echo "=== Copying curtin-hooks ===" && \
+            if [ ! -f /curtin-hooks ]; then \
+                echo "Error: curtin-hooks not found at /curtin-hooks"; \
+                exit 1; \
+            fi && \
             cp /curtin-hooks /workdir/curtin-hooks && \
-            # First, convert the container image to raw using auroraboot
+            echo "=== Running auroraboot to convert image ===" && \
             docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v /workdir:/aurora \
@@ -894,17 +902,37 @@ maas-image:
                 --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
-                --set "state_dir=/aurora" && \
-            # Then create the composite image
-            RAW_IMG=$(find /workdir -name "*.raw" | head -n1) && \
+                --set "state_dir=/aurora" || { \
+                echo "Error: auroraboot failed"; \
+                echo "Contents of /workdir:"; \
+                ls -la /workdir || true; \
+                exit 1; \
+            } && \
+            echo "=== Finding raw image ===" && \
+            RAW_IMG=$(find /workdir -name "*.raw" -type f | head -n1) && \
             if [ -z "$RAW_IMG" ]; then \
-                echo "Error: No raw image found"; \
+                echo "Error: No raw image found in /workdir"; \
+                echo "Contents of /workdir:"; \
+                ls -la /workdir || true; \
+                echo "Searching recursively:"; \
+                find /workdir -type f || true; \
                 exit 1; \
             fi && \
             echo "Using raw image: $RAW_IMG" && \
-            /usr/local/bin/build-kairos-maas.sh "$RAW_IMG" /workdir/curtin-hooks && \
-            # Copy the final composite image to the container
-            cp kairos-ubuntu-maas.raw /kairos-ubuntu-maas.raw
+            echo "=== Running build-kairos-maas.sh ===" && \
+            /usr/local/bin/build-kairos-maas.sh "$RAW_IMG" /workdir/curtin-hooks || { \
+                echo "Error: build-kairos-maas.sh failed with exit code $?"; \
+                exit 1; \
+            } && \
+            echo "=== Copying final image ===" && \
+            if [ ! -f /workdir/kairos-ubuntu-maas.raw ]; then \
+                echo "Error: Final image not found at /workdir/kairos-ubuntu-maas.raw"; \
+                echo "Contents of /workdir:"; \
+                ls -la /workdir || true; \
+                exit 1; \
+            fi && \
+            cp /workdir/kairos-ubuntu-maas.raw /kairos-ubuntu-maas.raw && \
+            echo "=== Successfully created composite image ==="
     END
     
     # Save the final composite image
