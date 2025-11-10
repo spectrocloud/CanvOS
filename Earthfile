@@ -880,8 +880,7 @@ maas-image:
     # Use Docker-in-Docker to convert iso-image to raw and then create composite
     WITH DOCKER \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
-        RUN set -e && \
-            echo "=== Setting up workdir ===" && \
+        RUN echo "=== Setting up workdir ===" && \
             mkdir -p /workdir && \
             cd /workdir && \
             echo "=== Copying curtin-hooks ===" && \
@@ -890,7 +889,16 @@ maas-image:
                 exit 1; \
             fi && \
             cp /curtin-hooks /workdir/curtin-hooks && \
+            echo "=== Verifying Docker image is available ===" && \
+            docker images | grep palette-installer-image || echo "Warning: palette-installer-image not found in docker images" && \
+            if ! docker inspect index.docker.io/library/palette-installer-image:latest >/dev/null 2>&1; then \
+                echo "Error: Image index.docker.io/library/palette-installer-image:latest not found"; \
+                echo "Available images:"; \
+                docker images || true; \
+                exit 1; \
+            fi && \
             echo "=== Running auroraboot to convert image ===" && \
+            echo "Using full registry path with docker:// prefix" && \
             docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v /workdir:/aurora \
@@ -902,22 +910,24 @@ maas-image:
                 --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
-                --set "state_dir=/aurora" || { \
-                echo "Error: auroraboot failed"; \
-                echo "Contents of /workdir:"; \
-                ls -la /workdir || true; \
-                exit 1; \
-            } && \
+                --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
+            AURORABOOT_EXIT=$?; \
             echo "=== Finding raw image ===" && \
-            RAW_IMG=$(find /workdir -name "*.raw" -type f | head -n1) && \
+            RAW_IMG=$(find /workdir -name "*.raw" -type f | head -n1); \
             if [ -z "$RAW_IMG" ]; then \
                 echo "Error: No raw image found in /workdir"; \
+                echo "Auroraboot exit code: $AURORABOOT_EXIT"; \
+                echo "Auroraboot log (last 50 lines):"; \
+                tail -50 /workdir/auroraboot.log 2>/dev/null || echo "No log file found"; \
                 echo "Contents of /workdir:"; \
                 ls -la /workdir || true; \
-                echo "Searching recursively:"; \
+                echo "Searching recursively for .raw files:"; \
+                find /workdir -name "*.raw" -type f || echo "No .raw files found"; \
+                echo "All files in /workdir:"; \
                 find /workdir -type f || true; \
                 exit 1; \
             fi && \
+            echo "Auroraboot completed (exit code: $AURORABOOT_EXIT)" && \
             echo "Using raw image: $RAW_IMG" && \
             echo "=== Running build-kairos-maas.sh ===" && \
             /usr/local/bin/build-kairos-maas.sh "$RAW_IMG" /workdir/curtin-hooks || { \

@@ -79,12 +79,26 @@ echo "Using curtin-hooks at: $CURTIN_HOOKS_SCRIPT"
 # --- Temp workspace ---
 WORKDIR=$(mktemp -d)
 UBUNTU_LOOP_DEV="" # Initialize for the trap
+INPUT_EFI_LOOP="" # Initialize for the trap
+INPUT_OEM_LOOP="" # Initialize for the trap
+INPUT_RECOVERY_LOOP="" # Initialize for the trap
+FINAL_EFI_LOOP="" # Initialize for the trap
+FINAL_UBUNTU_LOOP="" # Initialize for the trap
+FINAL_OEM_LOOP="" # Initialize for the trap
+FINAL_RECOVERY_LOOP="" # Initialize for the trap
 PROGRESS_PIDS="" # Track background progress monitoring processes
 CLEANUP_DONE=false
 trap 'if [ "$CLEANUP_DONE" = "false" ]; then \
       echo "Cleaning up..."; \
       for pid in $PROGRESS_PIDS; do kill $pid 2>/dev/null || true; done; \
       umount -l "$WORKDIR"/* 2>/dev/null || true; \
+      if [ -n "$INPUT_EFI_LOOP" ]; then losetup -d "$INPUT_EFI_LOOP" 2>/dev/null || true; fi; \
+      if [ -n "$INPUT_OEM_LOOP" ]; then losetup -d "$INPUT_OEM_LOOP" 2>/dev/null || true; fi; \
+      if [ -n "$INPUT_RECOVERY_LOOP" ]; then losetup -d "$INPUT_RECOVERY_LOOP" 2>/dev/null || true; fi; \
+      if [ -n "$FINAL_EFI_LOOP" ]; then losetup -d "$FINAL_EFI_LOOP" 2>/dev/null || true; fi; \
+      if [ -n "$FINAL_UBUNTU_LOOP" ]; then losetup -d "$FINAL_UBUNTU_LOOP" 2>/dev/null || true; fi; \
+      if [ -n "$FINAL_OEM_LOOP" ]; then losetup -d "$FINAL_OEM_LOOP" 2>/dev/null || true; fi; \
+      if [ -n "$FINAL_RECOVERY_LOOP" ]; then losetup -d "$FINAL_RECOVERY_LOOP" 2>/dev/null || true; fi; \
       if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" 2>/dev/null || true; fi; \
       rm -rf "$WORKDIR" 2>/dev/null || true; \
       fi' EXIT
@@ -209,25 +223,120 @@ mkfs.ext2 -L COS_OEM "$FINAL_OEM_FILE"
 mkfs.ext2 -L COS_RECOVERY "$FINAL_RECOVERY_FILE"
 
 # Mount partitions using the extracted files
+# Use losetup to create loop devices explicitly (mount -o loop doesn't work in this container)
+# Ensure loop module is loaded
+modprobe loop 2>/dev/null || true
+
+# Convert all file paths to absolute paths
+INPUT_EFI_FILE_ABS=$(readlink -f "$INPUT_EFI_FILE" 2>/dev/null || echo "$WORKDIR/$INPUT_EFI_FILE")
+INPUT_OEM_FILE_ABS=$(readlink -f "$INPUT_OEM_FILE" 2>/dev/null || echo "$WORKDIR/$INPUT_OEM_FILE")
+INPUT_RECOVERY_FILE_ABS=$(readlink -f "$INPUT_RECOVERY_FILE" 2>/dev/null || echo "$WORKDIR/$INPUT_RECOVERY_FILE")
+FINAL_EFI_FILE_ABS=$(readlink -f "$FINAL_EFI_FILE" 2>/dev/null || echo "$WORKDIR/$FINAL_EFI_FILE")
+FINAL_UBUNTU_FILE_ABS=$(readlink -f "$FINAL_UBUNTU_FILE" 2>/dev/null || echo "$WORKDIR/$FINAL_UBUNTU_FILE")
+FINAL_OEM_FILE_ABS=$(readlink -f "$FINAL_OEM_FILE" 2>/dev/null || echo "$WORKDIR/$FINAL_OEM_FILE")
+FINAL_RECOVERY_FILE_ABS=$(readlink -f "$FINAL_RECOVERY_FILE" 2>/dev/null || echo "$WORKDIR/$FINAL_RECOVERY_FILE")
+
+# Helper function to find and use an available loop device
+find_loop_device() {
+    local file="$1"
+    # First, try losetup -f which should work (it worked for Ubuntu image)
+    local loop_dev
+    loop_dev=$(losetup -f --show "$file" 2>&1)
+    local losetup_exit=$?
+    if [ $losetup_exit -eq 0 ] && [ -n "$loop_dev" ] && [ -e "$loop_dev" ]; then
+        echo "$loop_dev"
+        return 0
+    else
+        # Log the error for debugging (but don't include it in the return value)
+        echo "losetup -f failed (exit $losetup_exit): $loop_dev" >&2
+    fi
+    # If that fails, try explicit loop devices (try higher numbers first to avoid conflicts)
+    for i in {16..31} {0..15}; do
+        local loop_dev="/dev/loop$i"
+        # Create loop device if it doesn't exist
+        if [ ! -e "$loop_dev" ]; then
+            if ! mknod -m 0660 "$loop_dev" b 7 "$i" 2>/dev/null; then
+                continue
+            fi
+        fi
+        # Check if loop device is available (losetup without file returns non-zero if not in use)
+        if losetup "$loop_dev" >/dev/null 2>&1; then
+            # Device is in use, try next
+            continue
+        fi
+        # Try to set up the loop device
+        if losetup "$loop_dev" "$file" 2>/dev/null; then
+            echo "$loop_dev"
+            return 0
+        fi
+    done
+    echo "Error: Could not find or create an available loop device for $file" >&2
+    echo "Currently used loop devices:" >&2
+    losetup -a >&2 || true
+    return 1
+}
+
 echo "--- Mounting input partitions ---"
-echo "Mounting EFI partition: $INPUT_EFI_FILE"
-mount -o loop -t vfat "$INPUT_EFI_FILE" "$MNT_INPUT_EFI" || { echo "Failed to mount EFI partition"; exit 1; }
-echo "Mounting OEM partition: $INPUT_OEM_FILE"
-mount -o loop -t ext2 "$INPUT_OEM_FILE" "$MNT_INPUT_OEM" || { echo "Failed to mount OEM partition"; exit 1; }
-echo "Mounting Recovery partition: $INPUT_RECOVERY_FILE"
-mount -o loop -t ext2 "$INPUT_RECOVERY_FILE" "$MNT_INPUT_RECOVERY" || { echo "Failed to mount Recovery partition"; exit 1; }
+echo "Mounting EFI partition: $INPUT_EFI_FILE_ABS"
+if [ ! -f "$INPUT_EFI_FILE_ABS" ]; then
+    echo "Error: File not found: $INPUT_EFI_FILE_ABS"
+    ls -la "$WORKDIR" || true
+    exit 1
+fi
+INPUT_EFI_LOOP=$(find_loop_device "$INPUT_EFI_FILE_ABS") || { echo "Failed to create loop device for EFI partition"; exit 1; }
+mount -t vfat "$INPUT_EFI_LOOP" "$MNT_INPUT_EFI" || { echo "Failed to mount EFI partition"; losetup -d "$INPUT_EFI_LOOP" 2>/dev/null || true; exit 1; }
+
+echo "Mounting OEM partition: $INPUT_OEM_FILE_ABS"
+if [ ! -f "$INPUT_OEM_FILE_ABS" ]; then
+    echo "Error: File not found: $INPUT_OEM_FILE_ABS"
+    exit 1
+fi
+INPUT_OEM_LOOP=$(find_loop_device "$INPUT_OEM_FILE_ABS") || { echo "Failed to create loop device for OEM partition"; exit 1; }
+mount -t ext2 "$INPUT_OEM_LOOP" "$MNT_INPUT_OEM" || { echo "Failed to mount OEM partition"; losetup -d "$INPUT_OEM_LOOP" 2>/dev/null || true; exit 1; }
+
+echo "Mounting Recovery partition: $INPUT_RECOVERY_FILE_ABS"
+if [ ! -f "$INPUT_RECOVERY_FILE_ABS" ]; then
+    echo "Error: File not found: $INPUT_RECOVERY_FILE_ABS"
+    exit 1
+fi
+INPUT_RECOVERY_LOOP=$(find_loop_device "$INPUT_RECOVERY_FILE_ABS") || { echo "Failed to create loop device for Recovery partition"; exit 1; }
+mount -t ext2 "$INPUT_RECOVERY_LOOP" "$MNT_INPUT_RECOVERY" || { echo "Failed to mount Recovery partition"; losetup -d "$INPUT_RECOVERY_LOOP" 2>/dev/null || true; exit 1; }
+
 echo "Mounting Ubuntu image: $UBUNTU_LOOP_DEV"
 mount "$UBUNTU_LOOP_DEV" "$MNT_UBUNTU_ROOT_IMG" || { echo "Failed to mount Ubuntu image"; exit 1; }
 
 echo "--- Mounting final partitions ---"
-echo "Mounting final EFI partition: $FINAL_EFI_FILE"
-mount -t vfat "$FINAL_EFI_FILE" "$MNT_FINAL_EFI" || { echo "Failed to mount final EFI partition"; exit 1; }
-echo "Mounting final Ubuntu partition: $FINAL_UBUNTU_FILE"
-mount -t ext4 "$FINAL_UBUNTU_FILE" "$MNT_FINAL_UBUNTU_ROOTFS" || { echo "Failed to mount final Ubuntu partition"; exit 1; }
-echo "Mounting final OEM partition: $FINAL_OEM_FILE"
-mount -t ext2 "$FINAL_OEM_FILE" "$MNT_FINAL_OEM" || { echo "Failed to mount final OEM partition"; exit 1; }
-echo "Mounting final Recovery partition: $FINAL_RECOVERY_FILE"
-mount -t ext2 "$FINAL_RECOVERY_FILE" "$MNT_FINAL_RECOVERY" || { echo "Failed to mount final Recovery partition"; exit 1; }
+echo "Mounting final EFI partition: $FINAL_EFI_FILE_ABS"
+if [ ! -f "$FINAL_EFI_FILE_ABS" ]; then
+    echo "Error: File not found: $FINAL_EFI_FILE_ABS"
+    exit 1
+fi
+FINAL_EFI_LOOP=$(find_loop_device "$FINAL_EFI_FILE_ABS") || { echo "Failed to create loop device for final EFI partition"; exit 1; }
+mount -t vfat "$FINAL_EFI_LOOP" "$MNT_FINAL_EFI" || { echo "Failed to mount final EFI partition"; losetup -d "$FINAL_EFI_LOOP" 2>/dev/null || true; exit 1; }
+
+echo "Mounting final Ubuntu partition: $FINAL_UBUNTU_FILE_ABS"
+if [ ! -f "$FINAL_UBUNTU_FILE_ABS" ]; then
+    echo "Error: File not found: $FINAL_UBUNTU_FILE_ABS"
+    exit 1
+fi
+FINAL_UBUNTU_LOOP=$(find_loop_device "$FINAL_UBUNTU_FILE_ABS") || { echo "Failed to create loop device for final Ubuntu partition"; exit 1; }
+mount -t ext4 "$FINAL_UBUNTU_LOOP" "$MNT_FINAL_UBUNTU_ROOTFS" || { echo "Failed to mount final Ubuntu partition"; losetup -d "$FINAL_UBUNTU_LOOP" 2>/dev/null || true; exit 1; }
+
+echo "Mounting final OEM partition: $FINAL_OEM_FILE_ABS"
+if [ ! -f "$FINAL_OEM_FILE_ABS" ]; then
+    echo "Error: File not found: $FINAL_OEM_FILE_ABS"
+    exit 1
+fi
+FINAL_OEM_LOOP=$(find_loop_device "$FINAL_OEM_FILE_ABS") || { echo "Failed to create loop device for final OEM partition"; exit 1; }
+mount -t ext2 "$FINAL_OEM_LOOP" "$MNT_FINAL_OEM" || { echo "Failed to mount final OEM partition"; losetup -d "$FINAL_OEM_LOOP" 2>/dev/null || true; exit 1; }
+
+echo "Mounting final Recovery partition: $FINAL_RECOVERY_FILE_ABS"
+if [ ! -f "$FINAL_RECOVERY_FILE_ABS" ]; then
+    echo "Error: File not found: $FINAL_RECOVERY_FILE_ABS"
+    exit 1
+fi
+FINAL_RECOVERY_LOOP=$(find_loop_device "$FINAL_RECOVERY_FILE_ABS") || { echo "Failed to create loop device for final Recovery partition"; exit 1; }
+mount -t ext2 "$FINAL_RECOVERY_LOOP" "$MNT_FINAL_RECOVERY" || { echo "Failed to mount final Recovery partition"; losetup -d "$FINAL_RECOVERY_LOOP" 2>/dev/null || true; exit 1; }
 
 # --- Copy Filesystems ---
 echo "--- Copying Filesystem Data ---"
@@ -397,6 +506,14 @@ umount -l "$MNT_FINAL_UBUNTU_ROOTFS" || true
 umount -l "$MNT_FINAL_OEM" || true
 umount -l "$MNT_FINAL_RECOVERY" || true
 
+# Detach all loop devices
+if [ -n "$INPUT_EFI_LOOP" ]; then losetup -d "$INPUT_EFI_LOOP" || true; fi
+if [ -n "$INPUT_OEM_LOOP" ]; then losetup -d "$INPUT_OEM_LOOP" || true; fi
+if [ -n "$INPUT_RECOVERY_LOOP" ]; then losetup -d "$INPUT_RECOVERY_LOOP" || true; fi
+if [ -n "$FINAL_EFI_LOOP" ]; then losetup -d "$FINAL_EFI_LOOP" || true; fi
+if [ -n "$FINAL_UBUNTU_LOOP" ]; then losetup -d "$FINAL_UBUNTU_LOOP" || true; fi
+if [ -n "$FINAL_OEM_LOOP" ]; then losetup -d "$FINAL_OEM_LOOP" || true; fi
+if [ -n "$FINAL_RECOVERY_LOOP" ]; then losetup -d "$FINAL_RECOVERY_LOOP" || true; fi
 if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" || true; fi
 echo "--- Copying final image to original directory... ---"
 cp "$FINAL_IMG" "$ORIG_DIR/" || { echo "Failed to copy final image"; exit 1; }
