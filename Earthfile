@@ -20,7 +20,7 @@ ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.7.14
-ARG KAIROS_VERSION=v3.5.3
+ARG KAIROS_VERSION=v3.5.7
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -205,7 +205,7 @@ uki-provider-image:
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
-    COPY --if-exists +stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml
+    COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -548,7 +548,7 @@ provider-image:
 
     COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
-    COPY --if-exists +stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml
+    COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
@@ -670,12 +670,12 @@ base-image:
     --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION .
 
     IF [ "$IS_JETSON" = "true" ]
-        COPY cloudconfigs/mount.yaml /system/oem/mount.yaml
+        COPY cloudconfigs/mount.yaml /etc/kairos/mount.yaml
     END
 
     IF [ "$IS_UKI" = "true" ]
         # create empty boot directory to support services like longhorn which require /boot
-        COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
+        COPY cloudconfigs/80_stylus_uki.yaml /etc/kairos/80_stylus_uki.yaml
     END
 
     # OS == Ubuntu
