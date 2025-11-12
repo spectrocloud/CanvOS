@@ -870,7 +870,8 @@ maas-image:
         util-linux \
         coreutils \
         grub-efi \
-        bash
+        bash \
+        multipath-tools
     
     # Copy the build script and curtin hooks
     COPY cloudconfigs/build-kairos-maas-container.sh /usr/local/bin/build-kairos-maas.sh
@@ -1073,3 +1074,4 @@ UPX:
     COMMAND
     ARG bin
     RUN upx -1 $bin
+

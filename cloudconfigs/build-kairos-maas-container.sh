@@ -395,6 +395,38 @@ cp "$CURTIN_HOOKS_SCRIPT" "$MNT_FINAL_UBUNTU_ROOTFS/curtin/"
 chmod 750 "$MNT_FINAL_UBUNTU_ROOTFS/curtin/curtin-hooks"
 echo "Curtin hooks script installed at /curtin/curtin-hooks with 750 permissions"
 
+# Ensure curtin can detect this as a valid root filesystem
+# Create marker files/directories that curtin looks for
+echo "--- Creating curtin detection markers ---"
+# Ensure /curtin directory exists and is visible with a file
+if [ ! -f "$MNT_FINAL_UBUNTU_ROOTFS/curtin/.curtin-install-cache" ]; then
+    touch "$MNT_FINAL_UBUNTU_ROOTFS/curtin/.curtin-install-cache"
+fi
+
+# Ensure standard Ubuntu structure exists (for snapd detection)
+# Standard Ubuntu server images should have this, but ensure it exists
+if [ ! -d "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/snapd" ]; then
+    mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/snapd"
+    echo "Created /var/lib/snapd directory for curtin detection"
+fi
+
+# Create a snaps directory if it doesn't exist (some curtin versions look for this)
+if [ ! -d "$MNT_FINAL_UBUNTU_ROOTFS/snaps" ]; then
+    mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/snaps"
+    echo "Created /snaps directory for curtin detection"
+fi
+
+# Verify the structure is correct
+echo "--- Verifying Ubuntu rootfs structure ---"
+echo "Checking for curtin directory:"
+ls -la "$MNT_FINAL_UBUNTU_ROOTFS/curtin/" || echo "Warning: /curtin directory not accessible"
+echo "Checking for var/lib/snapd:"
+ls -ld "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/snapd" 2>/dev/null || echo "Warning: /var/lib/snapd not found"
+echo "Root directory contents (first 20 items):"
+ls -la "$MNT_FINAL_UBUNTU_ROOTFS/" | head -20 || true
+
+echo "Curtin detection markers created and verified"
+
 # --- Install cloud-init userdata processing script ---
 echo "--- Installing cloud-init userdata processing script ---"
 # Create the cloud-init per-instance scripts directory
@@ -477,23 +509,86 @@ else
   echo "Warning: $GRUB_ENV_PATH not found, skipping grubenv patch." >&2
 fi
 
+# --- Sync filesystems before unmounting ---
+echo "--- Syncing filesystems ---"
+sync
+echo "Syncing Ubuntu rootfs..."
+sync "$MNT_FINAL_UBUNTU_ROOTFS" || true
+echo "Syncing EFI partition..."
+sync "$MNT_FINAL_EFI" || true
+echo "Syncing OEM partition..."
+sync "$MNT_FINAL_OEM" || true
+echo "Syncing Recovery partition..."
+sync "$MNT_FINAL_RECOVERY" || true
+sync
+
 # --- Assemble Final Image ---
 echo "--- Assembling final image ---"
 echo "Writing EFI partition to final image..."
 dd if="$FINAL_EFI_FILE" of="$FINAL_IMG" bs=1M seek=$COS_GRUB_SKIP_MB conv=notrunc || { echo "Failed to write EFI partition"; exit 1; }
+sync
 echo "EFI partition written successfully"
 
 echo "Writing Ubuntu partition to final image..."
 dd if="$FINAL_UBUNTU_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB)) conv=notrunc || { echo "Failed to write Ubuntu partition"; exit 1; }
+sync
 echo "Ubuntu partition written successfully"
 
 echo "Writing OEM partition to final image..."
 dd if="$FINAL_OEM_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576)) conv=notrunc || { echo "Failed to write OEM partition"; exit 1; }
+sync
 echo "OEM partition written successfully"
 
 echo "Writing Recovery partition to final image..."
 dd if="$FINAL_RECOVERY_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576 + COS_OEM_SIZE_MB)) conv=notrunc || { echo "Failed to write Recovery partition"; exit 1; }
+sync
 echo "Recovery partition written successfully"
+
+# Verify and potentially fix partition table after writing data
+echo "--- Verifying partition table and filesystems ---"
+parted -s "$FINAL_IMG" print || { echo "Warning: Could not verify partition table"; }
+
+# Try to verify filesystems can be read and mounted
+echo "--- Verifying filesystems can be read ---"
+# Create a loop device for the final image to test mounting
+FINAL_IMG_LOOP=$(losetup -f --show "$FINAL_IMG" 2>/dev/null || echo "")
+if [ -n "$FINAL_IMG_LOOP" ]; then
+    echo "Testing partition access on $FINAL_IMG_LOOP..."
+    # Determine partition device naming (p2 for newer kernels, 2 for older)
+    UBUNTU_PART=""
+    if [ -e "${FINAL_IMG_LOOP}p2" ]; then
+        UBUNTU_PART="${FINAL_IMG_LOOP}p2"
+    elif [ -e "${FINAL_IMG_LOOP}2" ]; then
+        UBUNTU_PART="${FINAL_IMG_LOOP}2"
+    fi
+    
+    if [ -n "$UBUNTU_PART" ]; then
+        echo "Testing ubuntu_rootfs partition ($UBUNTU_PART)..."
+        PART_TYPE=$(file -s "$UBUNTU_PART" 2>/dev/null | grep -o "ext[0-9]" || echo "")
+        PART_LABEL=$(blkid -L UBUNTU_ROOTFS 2>/dev/null || blkid -o value -s LABEL "$UBUNTU_PART" 2>/dev/null || echo "")
+        echo "Partition type: $PART_TYPE"
+        echo "Partition label: $PART_LABEL"
+        
+        # Try to mount it to verify it works
+        TEST_MOUNT=$(mktemp -d)
+        if mount -t ext4 "$UBUNTU_PART" "$TEST_MOUNT" 2>/dev/null; then
+            echo "Successfully mounted ubuntu_rootfs partition"
+            echo "Checking for curtin directory:"
+            ls -la "$TEST_MOUNT/curtin/" 2>/dev/null || echo "Warning: /curtin not found in mounted partition"
+            echo "Checking for var/lib/snapd:"
+            ls -ld "$TEST_MOUNT/var/lib/snapd" 2>/dev/null || echo "Warning: /var/lib/snapd not found"
+            umount "$TEST_MOUNT" 2>/dev/null || true
+            rmdir "$TEST_MOUNT" 2>/dev/null || true
+        else
+            echo "Warning: Could not mount ubuntu_rootfs partition - this may cause curtin issues"
+            rmdir "$TEST_MOUNT" 2>/dev/null || true
+        fi
+    else
+        echo "Warning: Could not find ubuntu_rootfs partition device"
+    fi
+    losetup -d "$FINAL_IMG_LOOP" 2>/dev/null || true
+fi
+echo "Verification complete"
 
 # --- Finalize ---
 echo "--- Unmounting all mount points and cleaning up loop devices and temp directory ---"
@@ -546,3 +641,4 @@ done
 CLEANUP_DONE=true
 rm -rf "$WORKDIR"
 exit 0
+
