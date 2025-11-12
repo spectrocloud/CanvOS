@@ -19,7 +19,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.7.14
+ARG PE_VERSION=v4.7.16
 ARG KAIROS_VERSION=v3.5.7
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -30,7 +30,7 @@ ARG K3S_PROVIDER_VERSION=v4.7.1
 ARG KUBEADM_PROVIDER_VERSION=v4.7.3
 ARG RKE2_PROVIDER_VERSION=v4.7.1
 ARG NODEADM_PROVIDER_VERSION=v4.6.0
-ARG CANONICAL_PROVIDER_VERSION=v1.2.1
+ARG CANONICAL_PROVIDER_VERSION=v1.2.2
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -687,7 +687,7 @@ base-image:
         END
 
         RUN apt-get update && \
-            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -736,9 +736,12 @@ base-image:
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
-            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-            	dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-            	ln -sf "initrd-${kernel}" /boot/initrd
+            # Skip dracut when FIPS is enabled - the Dockerfile will include custom dracut modules.fips
+            IF [ "$FIPS_ENABLED" = "false" ]
+                RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                   dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+                   ln -sf "initrd-${kernel}" /boot/initrd
+            END
             RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
            	depmod -a "${kernel}"
 
