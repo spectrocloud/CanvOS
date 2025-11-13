@@ -255,7 +255,7 @@ function "get_base_image" {
     os_distribution == "ubuntu" && length(regexall("^(20|22|24)(\\.04)?$", os_version)) > 0 ? 
       "${KAIROS_BASE_IMAGE_URL}/kairos-${OS_DISTRIBUTION}:${length(regexall("\\.04", os_version)) > 0 ? os_version : os_version + ".04"}-core-${ARCH}-generic-${KAIROS_VERSION}${is_uki && length(regexall("^24", os_version)) > 0 ? "-uki" : ""}" :
 
-    os_distribution == "opensuse" && os_version == "15.6" ? 
+    os_distribution == "opensuse-leap" && os_version == "15.6" ? 
       "${KAIROS_BASE_IMAGE_URL}/kairos-opensuse:leap-${OS_VERSION}-core-${ARCH}-generic-${KAIROS_VERSION}" :
     
     ""
