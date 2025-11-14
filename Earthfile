@@ -943,11 +943,22 @@ maas-image:
                 exit 1; \
             fi && \
             cp /workdir/kairos-ubuntu-maas.raw /kairos-ubuntu-maas.raw && \
+            echo "=== Checking for tar.gz archive ===" && \
+            if [ -f /workdir/kairos-ubuntu-maas.tar.gz ]; then \
+                echo "Found tar.gz archive, copying it..." && \
+                cp /workdir/kairos-ubuntu-maas.tar.gz /kairos-ubuntu-maas.tar.gz && \
+                echo "✅ tar.gz archive copied successfully"; \
+            else \
+                echo "⚠️  Warning: tar.gz archive not found at /workdir/kairos-ubuntu-maas.tar.gz"; \
+                echo "Contents of /workdir:"; \
+                ls -la /workdir || true; \
+            fi && \
             echo "=== Successfully created composite image ==="
     END
     
-    # Save the final composite image
+    # Save the final composite image and compressed archive
     SAVE ARTIFACT /kairos-ubuntu-maas.raw AS LOCAL ./build/
+    SAVE ARTIFACT --if-exists /kairos-ubuntu-maas.tar.gz AS LOCAL ./build/
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine

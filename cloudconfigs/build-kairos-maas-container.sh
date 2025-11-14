@@ -30,6 +30,7 @@ ORIG_DIR=$(pwd)
 UBUNTU_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.tar.gz"
 # The name of the final output image.
 FINAL_IMG="kairos-ubuntu-maas.raw"
+FINAL_IMG_TAR_GZ="kairos-ubuntu-maas.tar.gz"
 # The size of the new Ubuntu rootfs partition.
 UBUNTU_ROOT_SIZE="5G"
 
@@ -58,7 +59,7 @@ else
 fi
 
 # --- Tools check ---
-for tool in wget tar losetup grub-editenv qemu-img parted mkfs.ext2 mkfs.vfat mkfs.ext4 rsync blkid; do
+for tool in wget tar gzip losetup grub-editenv qemu-img parted mkfs.ext2 mkfs.vfat mkfs.ext4 rsync blkid e2fsck; do
     if ! command -v $tool &> /dev/null; then
         echo "Error: Required tool '$tool' is not installed." >&2
         exit 1
@@ -416,6 +417,47 @@ if [ ! -d "$MNT_FINAL_UBUNTU_ROOTFS/snaps" ]; then
     echo "Created /snaps directory for curtin detection"
 fi
 
+# Ensure /etc/os-release exists with required ID field (critical for curtin)
+echo "--- Ensuring /etc/os-release exists with required fields ---"
+OS_RELEASE_FILE="$MNT_FINAL_UBUNTU_ROOTFS/etc/os-release"
+if [ ! -f "$OS_RELEASE_FILE" ]; then
+    echo "Creating /etc/os-release file..."
+    mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/etc"
+fi
+
+# Check if ID field exists, if not create/update the file
+if [ -f "$OS_RELEASE_FILE" ]; then
+    if ! grep -q "^ID=" "$OS_RELEASE_FILE"; then
+        echo "Adding ID field to existing /etc/os-release..."
+        # Prepend ID field if file exists but doesn't have it
+        echo "ID=ubuntu" | cat - "$OS_RELEASE_FILE" > "$OS_RELEASE_FILE.tmp" && mv "$OS_RELEASE_FILE.tmp" "$OS_RELEASE_FILE"
+    fi
+else
+    echo "Creating new /etc/os-release file..."
+    cat > "$OS_RELEASE_FILE" << 'EOF'
+ID=ubuntu
+ID_LIKE=debian
+PRETTY_NAME="Ubuntu 22.04 LTS"
+NAME="Ubuntu"
+VERSION_ID="22.04"
+VERSION="22.04 LTS (Jammy Jellyfish)"
+VERSION_CODENAME=jammy
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=jammy
+EOF
+fi
+
+# Verify the file has the ID field
+if grep -q "^ID=" "$OS_RELEASE_FILE"; then
+    echo "✅ /etc/os-release verified with ID field: $(grep '^ID=' "$OS_RELEASE_FILE")"
+else
+    echo "❌ ERROR: /etc/os-release still missing ID field after fix attempt"
+    exit 1
+fi
+
 # Verify the structure is correct
 echo "--- Verifying Ubuntu rootfs structure ---"
 echo "Checking for curtin directory:"
@@ -544,16 +586,30 @@ dd if="$FINAL_RECOVERY_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + CO
 sync
 echo "Recovery partition written successfully"
 
+# Final sync to ensure all data is written
+echo "--- Final sync to ensure all data is written ---"
+sync
+sleep 1
+
 # Verify and potentially fix partition table after writing data
 echo "--- Verifying partition table and filesystems ---"
 parted -s "$FINAL_IMG" print || { echo "Warning: Could not verify partition table"; }
 
+# Ensure partition table is properly written and re-read
+echo "--- Ensuring partition table is properly written ---"
+partprobe 2>/dev/null || true
+sleep 1
+
 # Try to verify filesystems can be read and mounted
-echo "--- Verifying filesystems can be read ---"
+echo "--- Verifying filesystems can be read and curtin directory exists ---"
 # Create a loop device for the final image to test mounting
 FINAL_IMG_LOOP=$(losetup -f --show "$FINAL_IMG" 2>/dev/null || echo "")
 if [ -n "$FINAL_IMG_LOOP" ]; then
     echo "Testing partition access on $FINAL_IMG_LOOP..."
+    # Force kernel to re-read partition table
+    partprobe "$FINAL_IMG_LOOP" 2>/dev/null || true
+    sleep 2
+    
     # Determine partition device naming (p2 for newer kernels, 2 for older)
     UBUNTU_PART=""
     if [ -e "${FINAL_IMG_LOOP}p2" ]; then
@@ -569,22 +625,63 @@ if [ -n "$FINAL_IMG_LOOP" ]; then
         echo "Partition type: $PART_TYPE"
         echo "Partition label: $PART_LABEL"
         
-        # Try to mount it to verify it works
+        # Try to mount it to verify it works and check for curtin
         TEST_MOUNT=$(mktemp -d)
         if mount -t ext4 "$UBUNTU_PART" "$TEST_MOUNT" 2>/dev/null; then
             echo "Successfully mounted ubuntu_rootfs partition"
             echo "Checking for curtin directory:"
-            ls -la "$TEST_MOUNT/curtin/" 2>/dev/null || echo "Warning: /curtin not found in mounted partition"
+            if [ -d "$TEST_MOUNT/curtin" ]; then
+                echo "✅ /curtin directory found"
+                ls -la "$TEST_MOUNT/curtin/" || true
+                if [ -f "$TEST_MOUNT/curtin/curtin-hooks" ]; then
+                    echo "✅ curtin-hooks file found"
+                else
+                    echo "❌ ERROR: curtin-hooks file NOT found in /curtin/"
+                fi
+            else
+                echo "❌ ERROR: /curtin directory NOT found - this will cause curtin detection to fail"
+            fi
             echo "Checking for var/lib/snapd:"
-            ls -ld "$TEST_MOUNT/var/lib/snapd" 2>/dev/null || echo "Warning: /var/lib/snapd not found"
+            if [ -d "$TEST_MOUNT/var/lib/snapd" ]; then
+                echo "✅ /var/lib/snapd directory found"
+            else
+                echo "⚠️  Warning: /var/lib/snapd not found (creating it now)"
+                mkdir -p "$TEST_MOUNT/var/lib/snapd"
+            fi
+            echo "Checking for /snaps directory:"
+            if [ -d "$TEST_MOUNT/snaps" ]; then
+                echo "✅ /snaps directory found"
+            else
+                echo "⚠️  Warning: /snaps not found (creating it now)"
+                mkdir -p "$TEST_MOUNT/snaps"
+            fi
+            sync "$TEST_MOUNT"
             umount "$TEST_MOUNT" 2>/dev/null || true
             rmdir "$TEST_MOUNT" 2>/dev/null || true
         else
-            echo "Warning: Could not mount ubuntu_rootfs partition - this may cause curtin issues"
+            echo "❌ ERROR: Could not mount ubuntu_rootfs partition - this will cause curtin detection to fail"
+            echo "Attempting to repair filesystem..."
+            e2fsck -f -y "$UBUNTU_PART" 2>/dev/null || true
+            if mount -t ext4 "$UBUNTU_PART" "$TEST_MOUNT" 2>/dev/null; then
+                echo "✅ Successfully mounted after repair"
+                # Ensure curtin directory exists
+                mkdir -p "$TEST_MOUNT/curtin"
+                if [ ! -f "$TEST_MOUNT/curtin/curtin-hooks" ] && [ -f "$CURTIN_HOOKS_SCRIPT" ]; then
+                    echo "Re-installing curtin-hooks..."
+                    cp "$CURTIN_HOOKS_SCRIPT" "$TEST_MOUNT/curtin/"
+                    chmod 750 "$TEST_MOUNT/curtin/curtin-hooks"
+                fi
+                mkdir -p "$TEST_MOUNT/var/lib/snapd"
+                mkdir -p "$TEST_MOUNT/snaps"
+                sync "$TEST_MOUNT"
+                umount "$TEST_MOUNT" 2>/dev/null || true
+            fi
             rmdir "$TEST_MOUNT" 2>/dev/null || true
         fi
     else
-        echo "Warning: Could not find ubuntu_rootfs partition device"
+        echo "❌ ERROR: Could not find ubuntu_rootfs partition device"
+        echo "Partition devices available:"
+        ls -la "${FINAL_IMG_LOOP}"* 2>/dev/null || true
     fi
     losetup -d "$FINAL_IMG_LOOP" 2>/dev/null || true
 fi
@@ -618,13 +715,59 @@ echo "Final image copied successfully"
 FINAL_SIZE=$(du -h "$ORIG_DIR/$FINAL_IMG" | cut -f1)
 echo "Final image size: $FINAL_SIZE"
 
+# Create compressed tar.gz for MAAS (smaller and easier to transfer)
+# Note: For filetype='tgz', MAAS expects a tar.gz of the raw disk image
+# The raw image will be written directly to disk, then curtin extracts the rootfs
+echo "--- Creating compressed tar.gz archive for MAAS ---"
+echo "Current directory: $(pwd)"
+echo "ORIG_DIR: $ORIG_DIR"
+echo "Final image path: $ORIG_DIR/$FINAL_IMG"
+cd "$ORIG_DIR"
+if [ ! -f "$FINAL_IMG" ]; then
+    echo "❌ ERROR: Final image not found at $ORIG_DIR/$FINAL_IMG"
+    echo "Contents of $ORIG_DIR:"
+    ls -la "$ORIG_DIR" || true
+    exit 1
+fi
+echo "Creating tar.gz archive: $FINAL_IMG_TAR_GZ"
+# Create tar.gz with the raw image file (MAAS will extract and write to disk)
+tar -czf "$FINAL_IMG_TAR_GZ" "$FINAL_IMG" || { echo "Failed to create tar.gz archive"; exit 1; }
+if [ ! -f "$FINAL_IMG_TAR_GZ" ]; then
+    echo "❌ ERROR: tar.gz archive was not created at $ORIG_DIR/$FINAL_IMG_TAR_GZ"
+    echo "Contents of $ORIG_DIR:"
+    ls -la "$ORIG_DIR" || true
+    exit 1
+fi
+TAR_SIZE=$(du -h "$FINAL_IMG_TAR_GZ" | cut -f1)
+echo "✅ Compressed archive created: $ORIG_DIR/$FINAL_IMG_TAR_GZ"
+echo "   Archive size: $TAR_SIZE (vs raw image: $FINAL_SIZE)"
+echo "Verifying files exist:"
+ls -lh "$ORIG_DIR/$FINAL_IMG" "$ORIG_DIR/$FINAL_IMG_TAR_GZ" || true
+echo ""
+echo "📝 Note: For MAAS upload with filetype='tgz', use:"
+echo "   maas admin boot-resources create \\"
+echo "     name='custom/CanvOSubuntu-22.04' \\"
+echo "     title='CanvOS Ubuntu 22.04 Custom' \\"
+echo "     architecture='amd64/generic' \\"
+echo "     filetype='tgz' \\"
+echo "     content@=$ORIG_DIR/$FINAL_IMG_TAR_GZ"
+
 # Cleanup mount points (but keep WORKDIR until after file copy)
 rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY"
 
 echo ""
-echo "✅ Composite image created successfully: $ORIG_DIR/$FINAL_IMG"
-echo "Final image location: $ORIG_DIR/$FINAL_IMG"
-echo "You can now upload this raw image to your deployment system."
+echo "✅ Composite image created successfully!"
+echo "📦 Raw image: $ORIG_DIR/$FINAL_IMG ($FINAL_SIZE)"
+echo "📦 Compressed archive: $ORIG_DIR/$FINAL_IMG_TAR_GZ ($TAR_SIZE)"
+echo ""
+echo "For MAAS upload, use the tar.gz file:"
+echo "   maas admin boot-resources create \\"
+echo "     name='custom/CanvOSubuntu-22.04' \\"
+echo "     title='CanvOS Ubuntu 22.04 Custom' \\"
+echo "     architecture='amd64/generic' \\"
+echo "     filetype='tgz' \\"
+echo "     content@=$ORIG_DIR/$FINAL_IMG_TAR_GZ"
+echo ""
 echo "📋 Cloud-init userdata processing script has been integrated - it will:"
 echo "   • Run once after cloud-init processes userdata"
 echo "   • Copy userdata to COS_OEM partition as userdata.yaml" 
