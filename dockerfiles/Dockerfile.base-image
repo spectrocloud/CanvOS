@@ -11,6 +11,7 @@ ARG CIS_HARDENING
 ARG KAIROS_VERSION
 ARG DISABLE_SELINUX
 ARG ARCH
+ARG FIPS_ENABLED
 
 COPY . /tmp/build-context
 RUN if [ "$IS_JETSON" = "true" ]; then \
@@ -49,12 +50,14 @@ RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
             apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
             apt-get autoremove -y && \
             rm -rf /var/lib/apt/lists/* && \
-            \
             kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
             ln -sf "${kernel#/boot/}" /boot/vmlinuz && \
-            kernel=$(ls /lib/modules | tail -n1) && \
-            dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-            ln -sf "initrd-${kernel}" /boot/initrd && \
+            if [ "$FIPS_ENABLED" = "false" ]; then \
+                kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+                ln -sf "initrd-${kernel}" /boot/initrd; \
+            fi && \
+            kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
             depmod -a "${kernel}" && \
             \
             if [ ! -f /usr/bin/grub2-editenv ]; then \
