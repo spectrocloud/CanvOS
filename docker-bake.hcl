@@ -21,7 +21,7 @@ variable "SPECTRO_THIRD_PARTY_IMAGE" {
 }
 
 variable "ALPINE_TAG" {
-  default = "3.20"
+  default = "3.22"
 }
 
 variable "ALPINE_IMG" {
@@ -195,6 +195,10 @@ variable "GOLANG_VERSION" {
 
 variable "BASE_IMAGE" {
   default = ""
+}
+
+variable "ALPINE_BASE_IMAGE" {
+  default = FIPS_ENABLED ? "us-docker.pkg.dev/palette-images-fips/third-party/alpine:${ALPINE_TAG}-fips" : "us-docker.pkg.dev/palette-images/third-party/alpine:${ALPINE_TAG}"
 }
 
 variable "OSBUILDER_IMAGE" {}
@@ -607,8 +611,17 @@ target "iso-disk-image" {
   platforms = ["linux/${ARCH}"]
   contexts = {
     build-iso = IS_UKI ? "target:build-uki-iso" : "target:build-iso"
-    # build-iso = "target:build-iso"
   }
   tags = ["${IMAGE_REGISTRY}/${IMAGE_REPO}/${ISO_NAME}:${IMAGE_TAG}"]
+  output = ["type=image,push=true"]
+}
+
+target "alpine-all" {
+  dockerfile = "dockerfiles/Dockerfile.alpine"
+  platforms = ["linux/amd64", "linux/arm64"]
+  args = {
+    ALPINE_BASE_IMAGE = ALPINE_BASE_IMAGE
+  }
+  tags = [ALPINE_IMG]
   output = ["type=image,push=true"]
 }
