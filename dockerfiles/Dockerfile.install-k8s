@@ -7,7 +7,6 @@ ARG K8S_DISTRIBUTION
 ARG K8S_VERSION
 ARG K3S_FLAVOR_TAG
 ARG RKE2_FLAVOR_TAG
-ARG LUET_PROJECT
 ARG SPECTRO_LUET_REPO
 ARG ARCH
 ARG LUET_REPO
@@ -20,12 +19,13 @@ COPY --from=third-party-luet /WORKDIR/luet /usr/bin/luet
 
 WORKDIR /output
 
+COPY . /tmp/build-context/
+
 RUN mkdir -p /etc/luet/repos.conf.d && \
     luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y
-COPY . /tmp/build-context/
+
 RUN if [ -f /tmp/build-context/spectro-luet-auth.yaml ]; then \
-    cp /tmp/build-context/spectro-luet-auth.yaml spectro-luet-auth.yaml && \
-    cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; \
+    cat /tmp/build-context/spectro-luet-auth.yaml  >> /etc/luet/repos.conf.d/spectro.yaml; \
     fi
 
 RUN luet repo update

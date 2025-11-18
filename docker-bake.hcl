@@ -32,9 +32,6 @@ variable "SPECTRO_LUET_REPO" {
   default = "us-docker.pkg.dev/palette-images/edge"
 }
 
-variable "LUET_PROJECT" {
-  default = "luet-repo"
-}
 
 variable "PE_VERSION" {
   default = "v4.7.16"
@@ -237,21 +234,6 @@ function "get_ubuntu_image" {
   result = fips_enabled ? "${spectro_pub_repo}/third-party/ubuntu-fips:22.04" : "${spectro_pub_repo}/third-party/ubuntu:22.04"
 }
 
-secret "enrollment" {
-  type = "file"
-  src = "secure-boot/enrollment/"
-}
-
-secret "private-keys" {
-  type = "file"
-  src = "secure-boot/private-keys/"
-}
-
-secret "public-keys" {
-  type = "file"
-  src = "secure-boot/public-keys/"
-}
-
 function "get_base_image" {
   params = [base_image, os_distribution, os_version, is_uki]
   result = base_image != "" ? base_image : (
@@ -352,8 +334,7 @@ target "install-k8s" {
     K8S_VERSION = K8S_VERSION
     K3S_FLAVOR_TAG = K3S_FLAVOR_TAG
     RKE2_FLAVOR_TAG = RKE2_FLAVOR_TAG
-    LUET_PROJECT = LUET_PROJECT
-    LUET_REPO = ARCH == "arm64" ? "${LUET_PROJECT}-arm" : "${LUET_PROJECT}-amd"
+    LUET_REPO = ARCH == "arm64" ? "luet-repo-arm" : "luet-repo-amd"
     SPECTRO_LUET_REPO = SPECTRO_LUET_REPO
   }
 }

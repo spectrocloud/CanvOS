@@ -24,12 +24,13 @@ RUN if [ "$IS_UKI" = "true" ]; then \
 RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
         if [ ! -z "$UBUNTU_PRO_KEY" ]; then \
             sed -i '/^[[:space:]]*$/d' /etc/os-release && \
-            apt update && apt-get install -y snapd && \
+            apt update && \
+            apt-get install -y snapd && \
             pro attach $UBUNTU_PRO_KEY; \
         fi && \
         \
-        apt-get update && \
-        apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y && \
+        DEBIAN_FRONTEND=noninteractive apt-get update && \
+        DEBIAN_FRONTEND=noninteractive UCF_FORCE_CONFFOLD=1 apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y && \
         \
         APT_UPGRADE_FLAGS="-y" && \
         if [ "$UPDATE_KERNEL" = "false" ]; then \
@@ -40,18 +41,37 @@ RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
                 apt-mark hold linux-image-generic linux-headers-generic linux-generic; \
             fi; \
         else \
-            APT_UPGRADE_FLAGS="-y --with-new-pkgs"; \
+            APT_UPGRADE_FLAGS="-y --with-new-pkgs" && \
+            DEBIAN_FRONTEND=noninteractive apt-get update && \
+            apt-get install -y linux-image-generic-hwe-$OS_VERSION; \
         fi && \
         \
         if [ "$IS_UKI" = "false" ]; then \
             DEBIAN_FRONTEND=noninteractive apt-get update && \
             apt-get upgrade $APT_UPGRADE_FLAGS && \
-            latest_kernel=$(ls /lib/modules | tail -n1 | awk -F '-' '{print $1"-"$2}') && \
-            apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y cloud-guest-utils && \
+            \
+            latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
+            if [ "$FIPS_ENABLED" = "true" ]; then \
+                # When FIPS is enabled, we need to remove any non-FIPS kernel packages (e.g., 5.15 HWE) to avoid conflicts.
+                # However, some kernel packages may be held (apt-mark hold), which causes `apt-get purge` to fail with:
+                #   "E: Held packages were changed and -y was used without --allow-change-held-packages."
+                # To fix this, we first unhold all matching non-FIPS and non-latest kernel packages before purging them.
+                # This ensures a clean, FIPS-only environment without apt resolver errors.
+                for pkg in $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' \
+                    | grep -v "$latest_kernel" | grep -v fips); do \
+                    apt-mark unhold "$pkg" || true; \
+                done && \
+                apt-get purge -y $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
+            else \
+                apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}"); \
+            fi && \
             apt-get autoremove -y && \
             rm -rf /var/lib/apt/lists/* && \
-            kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz && \
+            kernel=$(ls /boot/vmlinuz-* 2>/dev/null | tail -n1) && \
+            # if [ -n "$kernel" ]; then \
+                ln -sf "${kernel#/boot/}" /boot/vmlinuz; \
+            # fi && \
             if [ "$FIPS_ENABLED" = "false" ]; then \
                 kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
                 dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
@@ -124,7 +144,7 @@ RUN export OS_ID=${OS_DISTRIBUTION} && \
     export OS_REPO=spectrocloud/CanvOS && \
     export OS_NAME=${kairos-core-${OS_DISTRIBUTION}} && \
     export ARTIFACT=${kairos-core-${OS_DISTRIBUTION}-${OS_VERSION}} && \
-    export KAIROS_RELEASE=${OS_VERSION} && \
+    export KAIROS_RELEASE=${KAIROS_VERSION} && \
     envsubst >>/etc/os-release < /tmp/build-context/overlay/files/usr/lib/os-release.tmpl
 
 RUN rm -rf /var/cache/* && \

@@ -3,21 +3,14 @@ ARG TARGETPLATFORM
 ARG ALPINE_IMG
 
 FROM --platform=${TARGETPLATFORM} ${SPECTRO_THIRD_PARTY_IMAGE} AS source
-FROM --platform=${TARGETPLATFORM} ${ALPINE_IMG} AS download-third-party
+
+FROM --platform=${TARGETPLATFORM} ${ALPINE_IMG} AS third-party
 
 ARG ARCH
 ARG BIN_TYPE
 ARG binary
 
-COPY --from=source /binaries/${binary}/latest/${BIN_TYPE}/${ARCH}/${binary} /artifacts/${binary}
-COPY --from=source /binaries/${binary}/latest/${BIN_TYPE}/${ARCH}/${binary}.version /artifacts/${binary}.version
-
-FROM ${ALPINE_IMG} AS third-party
-
-ARG ARCH
-ARG binary
-
 WORKDIR /WORKDIR
-COPY --from=download-third-party /artifacts/${binary} /WORKDIR/${binary}
-COPY --from=download-third-party /artifacts/${binary}.version /WORKDIR/${binary}.version
+COPY --from=source /binaries/${binary}/latest/${BIN_TYPE}/${ARCH}/${binary} /WORKDIR/${binary}
+COPY --from=source /binaries/${binary}/latest/${BIN_TYPE}/${ARCH}/${binary}.version /WORKDIR/${binary}.version
 RUN upx -1 /WORKDIR/${binary}

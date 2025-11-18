@@ -1,5 +1,6 @@
 ARG ARCH
 ARG IS_UKI
+ARG IS_CLOUD_IMAGE=false
 
 FROM base-image AS iso-image
 
@@ -16,6 +17,14 @@ RUN if [ -f /etc/logrotate.d/stylus.conf ]; then \
         chmod 644 /etc/logrotate.d/stylus.conf; \
     fi
 
+COPY cloud-images/workaround/ /tmp/cloud-images/workaround/
+
+RUN if [ "$IS_CLOUD_IMAGE" = "true" ]; then \
+        cp /tmp/cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg && \
+        cp /tmp/cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml; \
+    fi
+
 RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli && \
     touch /etc/machine-id && \
-    chmod 444 /etc/machine-id
+    chmod 444 /etc/machine-id && \
+    rm -rf /tmp/cloud-images
