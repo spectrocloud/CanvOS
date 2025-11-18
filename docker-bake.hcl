@@ -42,7 +42,7 @@ variable "KAIROS_VERSION" {
 }
 
 variable AURORABOOT_IMAGE {
-  default = "quay.io/kairos/auroraboot:v0.10.0"
+  default = "quay.io/kairos/auroraboot:v0.8.7"
 }
 
 variable "K3S_PROVIDER_VERSION" {
@@ -396,23 +396,6 @@ target "trustedboot-image" {
   contexts = {
     provider-image = "target:provider-image"
   }
-  secret = [
-    {
-      type = "file"
-      src = "secure-boot/enrollment/"
-      id = "enrollment"
-    },
-    {
-      type = "file"
-      src = "secure-boot/private-keys/"
-      id = "private-keys"
-    },
-    {
-      type = "file"
-      src = "secure-boot/public-keys/"
-      id = "public-keys"
-    }
-  ]
   args = {
     AURORABOOT_IMAGE = AURORABOOT_IMAGE
   }
@@ -484,24 +467,7 @@ target "build-uki-iso" {
     CMDLINE = CMDLINE
     BRANDING = BRANDING
   }
-  secret = [
-    {
-      type = "file"
-      src = "secure-boot/enrollment/"
-      id = "enrollment"
-    },
-    {
-      type = "file"
-      src = "secure-boot/private-keys/"
-      id = "private-keys"
-    },
-    {
-      type = "file"
-      src = "secure-boot/public-keys/"
-      id = "public-keys"
-    }
-  ]
-  output = ["type=local,dest=./iso-output/"]
+  output = ["type=local,dest=./build/"]
 }
 
 target "stylus-image-pack" {

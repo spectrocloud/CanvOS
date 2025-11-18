@@ -58,7 +58,7 @@ RUN if [ "$UKI_BRING_YOUR_OWN_KEYS" != "true" ]; then \
         fi; \
     fi
 
-FROM scratch as output
+FROM scratch AS output
 
 COPY --from=builder /keys/ /enrollment/
 COPY --from=builder /private-keys/ /private-keys/

@@ -1,4 +1,5 @@
 ARG AURORABOOT_IMAGE
+ARG DEBUG=false
 
 FROM provider-image AS provider-image-rootfs
 
@@ -6,19 +7,11 @@ FROM ${AURORABOOT_IMAGE} AS builder
 
 COPY --from=provider-image-rootfs / /build/image/
 
-RUN --mount=type=secret,id=enrollment,target=/tmp/enrollment \
-    mkdir -p /keys && \
-    cp -r /tmp/enrollment/* /keys/
-
-RUN --mount=type=secret,id=private-keys,target=/tmp/private-keys \
-    cp -r /tmp/private-keys/* /keys/
-
-RUN --mount=type=secret,id=public-keys,target=/tmp/public-keys \
-    cp -r /tmp/public-keys/* /keys/
+COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys/
 
 RUN mkdir -p /output
 
-RUN /usr/bin/auroraboot build-uki \
+RUN /usr/bin/auroraboot --debug build-uki \
     --output-dir /output \
     --keys /keys \
     --output-type container \

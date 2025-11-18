@@ -6,7 +6,7 @@ ARG ISO_NAME
 ARG CLUSTERCONFIG
 ARG EDGE_CUSTOM_CONFIG
 ARG AUTO_ENROLL_SECUREBOOT_KEYS
-ARG DEBUG
+ARG DEBUG=false
 ARG CMDLINE
 ARG BRANDING="Palette eXtended Kubernetes Edge"
 
@@ -50,19 +50,13 @@ WORKDIR /build
 
 COPY --from=iso-image / /iso-source/
 
-RUN --mount=type=secret,id=enrollment,target=/tmp/enrollment \
-    mkdir -p /keys && \
-    cp -r /tmp/enrollment/* /keys/
-
-RUN --mount=type=secret,id=private-keys,target=/tmp/private-keys \
-    cp -r /tmp/private-keys/* /keys/
-
-RUN --mount=type=secret,id=public-keys,target=/tmp/public-keys \
-    cp -r /tmp/public-keys/* /keys/
+COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys/
 
 RUN if [ "$ARCH" = "amd64" ]; then \
         mkdir -p /iso && \
-        /usr/bin/auroraboot build-uki \
+        /usr/bin/auroraboot \
+            $([ "$DEBUG" = "true" ] && echo "--debug") \
+            build-uki \
             --output-type iso \
             --name "${ISO_NAME}" \
             --output-dir /iso \
@@ -70,10 +64,12 @@ RUN if [ "$ARCH" = "amd64" ]; then \
             --keys /keys \
             --boot-branding "${BRANDING}" \
             $([ -n "$CMDLINE" ] && echo "--extend-cmdline \"$CMDLINE\"") \
-            $([ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ] && echo "--secure-boot-enroll") \
-            $([ "$DEBUG" = "true" ] && echo "--debug") \
+            $([ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ] && echo "--secure-boot-enroll force") \
             dir:/iso-source; \
     fi
+
+RUN cd /iso && \
+    sha256sum "${ISO_NAME}.iso" > "${ISO_NAME}.iso.sha256"
 
 FROM scratch as output
 COPY --from=builder /iso/ /
