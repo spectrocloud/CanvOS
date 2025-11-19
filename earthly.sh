@@ -128,6 +128,84 @@ if ! docker run --rm --privileged "$ALPINE_IMG" sh -c 'echo "Privileged containe
     echo "Privileged containers are not allowed for the current user."
     exit 1
 fi
+
+# Special handling for MAAS image build: build kairos-raw-image first, then run build-kairos-maas.sh locally
+if [[ "$1" == "+maas-image" ]]; then
+    echo "=== Building MAAS image: Step 1 - Generating Kairos raw image ==="
+    # Build the kairos-raw-image target first
+    if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY" ] && [ -z "$(find certs -type f ! -name '.*' -print -quit)" ]; then
+        build_without_proxy "+kairos-raw-image"
+        BUILD_EXIT=$?
+    else
+        build_with_proxy "+kairos-raw-image"
+        BUILD_EXIT=$?
+    fi
+    
+    if [ $BUILD_EXIT -ne 0 ]; then
+        echo "Error: Failed to build kairos-raw-image"
+        exit 1
+    fi
+    
+    # Verify the raw image was created
+    KAIROS_RAW_IMAGE="build/kairos.raw"
+    if [ ! -f "$KAIROS_RAW_IMAGE" ]; then
+        echo "Error: Kairos raw image not found at $KAIROS_RAW_IMAGE"
+        exit 1
+    fi
+    
+    echo "=== Building MAAS image: Step 2 - Creating composite image with build-kairos-maas.sh ==="
+    # Verify build-kairos-maas.sh exists
+    BUILD_SCRIPT="cloudconfigs/build-kairos-maas.sh"
+    if [ ! -f "$BUILD_SCRIPT" ]; then
+        echo "Error: build-kairos-maas.sh not found at $BUILD_SCRIPT"
+        exit 1
+    fi
+    
+    # Verify curtin-hooks exists
+    CURTIN_HOOKS="cloudconfigs/curtin-hooks"
+    if [ ! -f "$CURTIN_HOOKS" ]; then
+        echo "Error: curtin-hooks not found at $CURTIN_HOOKS"
+        exit 1
+    fi
+    
+    # Run the original build-kairos-maas.sh script locally
+    # The script expects curtin-hooks to be in ORIG_DIR (the directory where the script is invoked from)
+    # Copy curtin-hooks to the repo root (current directory) so the script can find it
+    cp "$CURTIN_HOOKS" ./curtin-hooks
+    
+    # Run the build script from the repo root
+    # The script will look for curtin-hooks in ORIG_DIR (which will be the repo root)
+    bash "$BUILD_SCRIPT" "$KAIROS_RAW_IMAGE"
+    BUILD_EXIT=$?
+    
+    if [ $BUILD_EXIT -ne 0 ]; then
+        echo "Error: build-kairos-maas.sh failed with exit code $BUILD_EXIT"
+        exit 1
+    fi
+    
+    # Verify the composite image was created (script outputs compressed .raw.gz to ORIG_DIR, which is repo root)
+    COMPOSITE_IMAGE="kairos-ubuntu-maas.raw.gz"
+    if [ ! -f "$COMPOSITE_IMAGE" ]; then
+        echo "Error: Composite image not found at $COMPOSITE_IMAGE"
+        exit 1
+    fi
+    
+    # Move the compressed composite image to build directory for consistency
+    mkdir -p build
+    mv "$COMPOSITE_IMAGE" "build/$COMPOSITE_IMAGE"
+    
+    # Clean up temporary curtin-hooks file from repo root
+    rm -f ./curtin-hooks
+    
+    # Show final image size
+    FINAL_SIZE=$(du -h "build/$COMPOSITE_IMAGE" | cut -f1)
+    echo "✅ MAAS composite image created and compressed successfully: build/$COMPOSITE_IMAGE"
+    echo "   Final size: $FINAL_SIZE"
+    echo "   MAAS will automatically decompress this image during upload."
+    exit 0
+fi
+
+# Normal build flow for other targets
 if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY" ] && [ -z "$(find certs -type f ! -name '.*' -print -quit)" ]; then
     build_without_proxy "$@"
 else

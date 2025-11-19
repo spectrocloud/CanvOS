@@ -853,43 +853,17 @@ iso-disk-image:
     COPY +iso/*.iso /disk/
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
 
-# NOTE: This target requires privileged mode. Run with: earthly -P +maas-image
-# or: earthly -P +iso --IS_MAAS=true
-maas-image:
+# Generate just the Kairos raw image from the iso-image
+# This target converts the installer image to a raw disk image using auroraboot
+kairos-raw-image:
     FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
     
-    # Install required tools
-    RUN apk add --no-cache \
-        wget \
-        tar \
-        qemu-img \
-        parted \
-        e2fsprogs \
-        dosfstools \
-        rsync \
-        util-linux \
-        coreutils \
-        grub-efi \
-        bash \
-        multipath-tools
-    
-    # Copy the build script and curtin hooks
-    COPY cloudconfigs/build-kairos-maas-container.sh /usr/local/bin/build-kairos-maas.sh
-    COPY --if-exists cloudconfigs/curtin-hooks /curtin-hooks
-    RUN chmod +x /usr/local/bin/build-kairos-maas.sh
-    
-    # Use Docker-in-Docker to convert iso-image to raw and then create composite
+    # Use Docker-in-Docker to convert iso-image to raw
     WITH DOCKER \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
         RUN echo "=== Setting up workdir ===" && \
             mkdir -p /workdir && \
             cd /workdir && \
-            echo "=== Copying curtin-hooks ===" && \
-            if [ ! -f /curtin-hooks ]; then \
-                echo "Error: curtin-hooks not found at /curtin-hooks"; \
-                exit 1; \
-            fi && \
-            cp /curtin-hooks /workdir/curtin-hooks && \
             echo "=== Verifying Docker image is available ===" && \
             docker images | grep palette-installer-image || echo "Warning: palette-installer-image not found in docker images" && \
             if ! docker inspect index.docker.io/library/palette-installer-image:latest >/dev/null 2>&1; then \
@@ -899,7 +873,7 @@ maas-image:
                 exit 1; \
             fi && \
             echo "=== Running auroraboot to convert image ===" && \
-            echo "Using full registry path with docker:// prefix" && \
+            echo "Using local docker image (no docker:// prefix)" && \
             docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v /workdir:/aurora \
@@ -908,57 +882,106 @@ maas-image:
                 quay.io/kairos/auroraboot:v0.6.4 \
                 --debug \
                 --set "disable_http_server=true" \
-                --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
+                --set "container_image=index.docker.io/library/palette-installer-image:latest" \
                 --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
             AURORABOOT_EXIT=$?; \
+            echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
+            echo "=== Full auroraboot log ===" && \
+            cat /workdir/auroraboot.log || echo "Could not read log file" && \
             echo "=== Finding raw image ===" && \
-            RAW_IMG=$(find /workdir -name "*.raw" -type f | head -n1); \
+            echo "Searching in /workdir and all subdirectories..." && \
+            find /workdir -type f -name "*.raw" -o -name "*.img" | head -20 && \
+            RAW_IMG=$(find /workdir -type f \( -name "*.raw" -o -name "*.img" \) | head -n1); \
             if [ -z "$RAW_IMG" ]; then \
-                echo "Error: No raw image found in /workdir"; \
+                echo "❌ Error: No raw image found in /workdir"; \
                 echo "Auroraboot exit code: $AURORABOOT_EXIT"; \
-                echo "Auroraboot log (last 50 lines):"; \
-                tail -50 /workdir/auroraboot.log 2>/dev/null || echo "No log file found"; \
-                echo "Contents of /workdir:"; \
-                ls -la /workdir || true; \
-                echo "Searching recursively for .raw files:"; \
-                find /workdir -name "*.raw" -type f || echo "No .raw files found"; \
-                echo "All files in /workdir:"; \
-                find /workdir -type f || true; \
+                echo "=== Auroraboot log (checking for errors) ==="; \
+                grep -i "error\|fail\|panic" /workdir/auroraboot.log 2>/dev/null || echo "No obvious errors in log"; \
+                echo "=== Contents of /workdir ==="; \
+                ls -laR /workdir || true; \
+                echo "=== Checking auroraboot state directory ==="; \
+                if [ -d /workdir/temp-rootfs ]; then \
+                    echo "temp-rootfs directory exists, size: $(du -sh /workdir/temp-rootfs 2>/dev/null || echo 'unknown')"; \
+                    find /workdir/temp-rootfs -type f | head -10 || true; \
+                fi; \
                 exit 1; \
             fi && \
-            echo "Auroraboot completed (exit code: $AURORABOOT_EXIT)" && \
-            echo "Using raw image: $RAW_IMG" && \
-            echo "=== Running build-kairos-maas.sh ===" && \
-            /usr/local/bin/build-kairos-maas.sh "$RAW_IMG" /workdir/curtin-hooks || { \
-                echo "Error: build-kairos-maas.sh failed with exit code $?"; \
-                exit 1; \
-            } && \
-            echo "=== Copying final image ===" && \
-            if [ ! -f /workdir/kairos-ubuntu-maas.raw ]; then \
-                echo "Error: Final image not found at /workdir/kairos-ubuntu-maas.raw"; \
-                echo "Contents of /workdir:"; \
-                ls -la /workdir || true; \
-                exit 1; \
-            fi && \
-            cp /workdir/kairos-ubuntu-maas.raw /kairos-ubuntu-maas.raw && \
-            echo "=== Checking for tar.gz archive ===" && \
-            if [ -f /workdir/kairos-ubuntu-maas.tar.gz ]; then \
-                echo "Found tar.gz archive, copying it..." && \
-                cp /workdir/kairos-ubuntu-maas.tar.gz /kairos-ubuntu-maas.tar.gz && \
-                echo "✅ tar.gz archive copied successfully"; \
-            else \
-                echo "⚠️  Warning: tar.gz archive not found at /workdir/kairos-ubuntu-maas.tar.gz"; \
-                echo "Contents of /workdir:"; \
-                ls -la /workdir || true; \
-            fi && \
-            echo "=== Successfully created composite image ==="
+            echo "✅ Found raw image: $RAW_IMG" && \
+            echo "Raw image size: $(du -h "$RAW_IMG" | cut -f1)" && \
+            cp "$RAW_IMG" /kairos.raw && \
+            echo "✅ Kairos raw image created: /kairos.raw"
     END
     
-    # Save the final composite image and compressed archive
-    SAVE ARTIFACT /kairos-ubuntu-maas.raw AS LOCAL ./build/
-    SAVE ARTIFACT --if-exists /kairos-ubuntu-maas.tar.gz AS LOCAL ./build/
+    SAVE ARTIFACT /kairos.raw AS LOCAL ./build/
+
+# NOTE: This target requires privileged mode. Run with: earthly -P +maas-image
+# or: earthly -P +iso --IS_MAAS=true
+# This target builds the MAAS composite image by:
+# 1. Generating the Kairos raw image
+# 2. Calling the original build-kairos-maas.sh script to create the composite image
+maas-image:
+    # Use Ubuntu base image since the original script was designed for Ubuntu-like systems
+    # and requires kpartx which is more reliably available in Ubuntu
+    FROM --platform=linux/amd64 --allow-privileged ubuntu:22.04
+    
+    # Install required tools for the original build-kairos-maas.sh script
+    RUN apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        wget \
+        tar \
+        qemu-utils \
+        parted \
+        e2fsprogs \
+        dosfstools \
+        rsync \
+        util-linux \
+        grub-efi \
+        bash \
+        kpartx \
+        device-mapper \
+        && rm -rf /var/lib/apt/lists/*
+    
+    # Copy the original build script and curtin hooks
+    COPY cloudconfigs/build-kairos-maas.sh /usr/local/bin/build-kairos-maas.sh
+    COPY --if-exists cloudconfigs/curtin-hooks /curtin-hooks
+    RUN chmod +x /usr/local/bin/build-kairos-maas.sh
+    
+    # Copy the Kairos raw image from the kairos-raw-image target
+    COPY +kairos-raw-image/kairos.raw /kairos.raw
+    
+    # Run the original build-kairos-maas.sh script
+    # The script expects curtin-hooks to be in the current working directory
+    WORKDIR /workdir
+    RUN cp /kairos.raw /workdir/kairos.raw && \
+        if [ -f /curtin-hooks ]; then \
+            cp /curtin-hooks /workdir/curtin-hooks; \
+        else \
+            echo "Error: curtin-hooks not found at /curtin-hooks"; \
+            exit 1; \
+        fi && \
+        echo "=== Running original build-kairos-maas.sh ===" && \
+        /usr/local/bin/build-kairos-maas.sh /workdir/kairos.raw || { \
+            echo "Error: build-kairos-maas.sh failed with exit code $?"; \
+            exit 1; \
+        } && \
+        echo "=== Checking for output ===" && \
+        if [ -f /workdir/kairos-ubuntu-maas.raw ]; then \
+            cp /workdir/kairos-ubuntu-maas.raw /kairos-ubuntu-maas.raw && \
+            echo "✅ Composite image created: kairos-ubuntu-maas.raw"; \
+        else \
+            echo "❌ ERROR: Composite image not found in /workdir"; \
+            ls -la /workdir || true; \
+            exit 1; \
+        fi
+    
+    # Save raw composite image
+    # The raw image contains the full composite image with all partitions (EFI, Ubuntu rootfs, OEM, Recovery)
+    # Note: The earthly.sh script handles compression for the +maas-image target
+    RUN mkdir -p /output && \
+        if [ -f /kairos-ubuntu-maas.raw ]; then cp /kairos-ubuntu-maas.raw /output/kairos-ubuntu-maas.raw; fi
+    SAVE ARTIFACT /output/ AS LOCAL ./build/
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine

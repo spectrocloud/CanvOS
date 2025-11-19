@@ -52,12 +52,18 @@ fi
 # --- Temp workspace ---
 WORKDIR=$(mktemp -d)
 UBUNTU_LOOP_DEV="" # Initialize for the trap
-trap 'echo "Cleaning up..."; \
-      umount -l "$WORKDIR"/* &>/dev/null; \
-      if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" &>/dev/null; fi; \
-      kpartx -d "$FINAL_IMG" &>/dev/null; \
-      kpartx -d "$INPUT_IMG" &>/dev/null; \
-      rm -rf "$WORKDIR"; exit' EXIT
+CLEANUP_DONE=false
+trap 'EXIT_CODE=$?; \
+      if [ "$CLEANUP_DONE" = "false" ]; then \
+          echo "Cleaning up..."; \
+          umount -l "$WORKDIR"/* &>/dev/null || true; \
+          if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" &>/dev/null || true; fi; \
+          if [ -n "$FINAL_IMG" ]; then kpartx -d "$FINAL_IMG" &>/dev/null || true; fi; \
+          if [ -n "$INPUT_IMG" ]; then kpartx -d "$INPUT_IMG" &>/dev/null || true; fi; \
+          rm -rf "$WORKDIR" || true; \
+          CLEANUP_DONE=true; \
+      fi; \
+      exit $EXIT_CODE' EXIT
 cd "$WORKDIR"
 
 # --- Download & Extract Ubuntu Image ---
@@ -273,10 +279,30 @@ cp "$FINAL_IMG" "$ORIG_DIR/"
 
 rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY" "$WORKDIR"
 
-echo "\n✅ Composite image created successfully: $ORIG_DIR/$FINAL_IMG"
-echo "You can now upload this raw image to your deployment system."
+# Mark cleanup as done so trap doesn't try again
+CLEANUP_DONE=true
+
+echo ""
+echo "--- Compressing final image (this may take a few minutes) ---"
+FINAL_IMG_PATH="$ORIG_DIR/$FINAL_IMG"
+COMPRESSED_IMG="${FINAL_IMG_PATH}.gz"
+ORIG_SIZE=$(du -h "$FINAL_IMG_PATH" | cut -f1)
+echo "Original size: $ORIG_SIZE"
+echo "Compressing to $COMPRESSED_IMG..."
+gzip -c "$FINAL_IMG_PATH" > "$COMPRESSED_IMG" || { echo "Error: Failed to compress image"; exit 1; }
+COMP_SIZE=$(du -h "$COMPRESSED_IMG" | cut -f1)
+echo "Compressed size: $COMP_SIZE"
+echo "Removing uncompressed image to save space..."
+rm -f "$FINAL_IMG_PATH"
+
+echo ""
+echo "✅ Composite image created and compressed successfully: $COMPRESSED_IMG"
+echo "You can now upload this compressed raw image to MAAS (MAAS will automatically decompress it)."
 echo "📋 Cloud-init userdata processing script has been integrated - it will:"
 echo "   • Run once after cloud-init processes userdata"
 echo "   • Copy userdata to COS_OEM partition as userdata.yaml" 
 echo "   • Set grubenv to boot recovery mode"
 echo "   • Reboot the system"
+
+# Exit with success code
+exit 0

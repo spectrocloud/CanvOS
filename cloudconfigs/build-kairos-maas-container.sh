@@ -1,7 +1,7 @@
 #!/bin/bash -x
 #
 # This script creates a composite raw disk image for MAAS deployment,
-# starting with a Kairos OS base image. Modified to work in container environments.
+# starting with a Kairos OS base image.
 #
 # The final image will have the following partition layout, with names matching
 # the source image but with custom labels for ease of identification:
@@ -12,6 +12,8 @@
 #
 # The script adds a custom GRUB menu entry to the oem partition
 # and modifies grubenv to boot this new Ubuntu entry on the first boot.
+#
+# Modified for container environments: uses losetup instead of kpartx
 
 set -euo pipefail
 
@@ -23,14 +25,13 @@ if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
 fi
 # Convert the input path to an absolute path to avoid "No such file or directory" error
 # after changing to the temporary work directory.
-INPUT_IMG=$(readlink -f "$1")
+INPUT_IMG=$(readlink -f "$1" 2>/dev/null || echo "$1")
 # Store the original directory so we can copy the final image back there.
 ORIG_DIR=$(pwd)
 # The URL for the Ubuntu cloud image.
 UBUNTU_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.tar.gz"
 # The name of the final output image.
 FINAL_IMG="kairos-ubuntu-maas.raw"
-FINAL_IMG_TAR_GZ="kairos-ubuntu-maas.tar.gz"
 # The size of the new Ubuntu rootfs partition.
 UBUNTU_ROOT_SIZE="5G"
 
@@ -49,17 +50,13 @@ elif [ -f "$ORIG_DIR/curtin-hooks" ]; then
     # Check original directory
     CURTIN_HOOKS_SCRIPT="$ORIG_DIR/curtin-hooks"
 else
-    # Check script directory as last resort
+    # Check script directory
     SCRIPT_DIR=$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")
-    if [ -f "$SCRIPT_DIR/curtin-hooks" ]; then
-        CURTIN_HOOKS_SCRIPT="$SCRIPT_DIR/curtin-hooks"
-    else
-        CURTIN_HOOKS_SCRIPT="$ORIG_DIR/curtin-hooks"
-    fi
+    CURTIN_HOOKS_SCRIPT="$SCRIPT_DIR/curtin-hooks"
 fi
 
 # --- Tools check ---
-for tool in wget tar gzip losetup grub-editenv qemu-img parted mkfs.ext2 mkfs.vfat mkfs.ext4 rsync blkid e2fsck; do
+for tool in wget tar losetup grub-editenv qemu-img parted mkfs.ext2 mkfs.vfat mkfs.ext4 rsync blkid partprobe; do
     if ! command -v $tool &> /dev/null; then
         echo "Error: Required tool '$tool' is not installed." >&2
         exit 1
@@ -69,40 +66,20 @@ done
 # Check if curtin hooks script exists
 if [ ! -f "$CURTIN_HOOKS_SCRIPT" ]; then
     echo "Error: Curtin hooks script not found at $CURTIN_HOOKS_SCRIPT" >&2
-    echo "Searched in: current directory, $ORIG_DIR, and script directory" >&2
     exit 1
 fi
-
-# Convert to absolute path for reliability
-CURTIN_HOOKS_SCRIPT=$(readlink -f "$CURTIN_HOOKS_SCRIPT" 2>/dev/null || echo "$CURTIN_HOOKS_SCRIPT")
-echo "Using curtin-hooks at: $CURTIN_HOOKS_SCRIPT"
 
 # --- Temp workspace ---
 WORKDIR=$(mktemp -d)
 UBUNTU_LOOP_DEV="" # Initialize for the trap
-INPUT_EFI_LOOP="" # Initialize for the trap
-INPUT_OEM_LOOP="" # Initialize for the trap
-INPUT_RECOVERY_LOOP="" # Initialize for the trap
-FINAL_EFI_LOOP="" # Initialize for the trap
-FINAL_UBUNTU_LOOP="" # Initialize for the trap
-FINAL_OEM_LOOP="" # Initialize for the trap
-FINAL_RECOVERY_LOOP="" # Initialize for the trap
-PROGRESS_PIDS="" # Track background progress monitoring processes
-CLEANUP_DONE=false
-trap 'if [ "$CLEANUP_DONE" = "false" ]; then \
-      echo "Cleaning up..."; \
-      for pid in $PROGRESS_PIDS; do kill $pid 2>/dev/null || true; done; \
-      umount -l "$WORKDIR"/* 2>/dev/null || true; \
-      if [ -n "$INPUT_EFI_LOOP" ]; then losetup -d "$INPUT_EFI_LOOP" 2>/dev/null || true; fi; \
-      if [ -n "$INPUT_OEM_LOOP" ]; then losetup -d "$INPUT_OEM_LOOP" 2>/dev/null || true; fi; \
-      if [ -n "$INPUT_RECOVERY_LOOP" ]; then losetup -d "$INPUT_RECOVERY_LOOP" 2>/dev/null || true; fi; \
-      if [ -n "$FINAL_EFI_LOOP" ]; then losetup -d "$FINAL_EFI_LOOP" 2>/dev/null || true; fi; \
-      if [ -n "$FINAL_UBUNTU_LOOP" ]; then losetup -d "$FINAL_UBUNTU_LOOP" 2>/dev/null || true; fi; \
-      if [ -n "$FINAL_OEM_LOOP" ]; then losetup -d "$FINAL_OEM_LOOP" 2>/dev/null || true; fi; \
-      if [ -n "$FINAL_RECOVERY_LOOP" ]; then losetup -d "$FINAL_RECOVERY_LOOP" 2>/dev/null || true; fi; \
-      if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" 2>/dev/null || true; fi; \
-      rm -rf "$WORKDIR" 2>/dev/null || true; \
-      fi' EXIT
+INPUT_LOOP_DEV=""
+FINAL_LOOP_DEV=""
+trap 'echo "Cleaning up..."; \
+      umount -l "$WORKDIR"/* &>/dev/null; \
+      if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" &>/dev/null; fi; \
+      if [ -n "$INPUT_LOOP_DEV" ]; then losetup -d "$INPUT_LOOP_DEV" &>/dev/null; fi; \
+      if [ -n "$FINAL_LOOP_DEV" ]; then losetup -d "$FINAL_LOOP_DEV" &>/dev/null; fi; \
+      rm -rf "$WORKDIR"; exit' EXIT
 cd "$WORKDIR"
 
 # --- Download & Extract Ubuntu Image ---
@@ -156,33 +133,62 @@ parted -s "$FINAL_IMG" -- \
   mkpart oem ext2 "$UBUNTU_END" "$COS_OEM_END" \
   mkpart recovery ext2 "$COS_OEM_END" "$COS_RECOVERY_END"
 
-# --- Create temporary files for partitions ---
-echo "--- Creating temporary partition files ---"
-# Extract partitions using dd
-INPUT_EFI_FILE="input_efi.img"
-INPUT_OEM_FILE="input_oem.img"
-INPUT_RECOVERY_FILE="input_recovery.img"
 
-# Calculate partition sizes in MB for dd
-COS_GRUB_SIZE_MB=$((COS_GRUB_SIZE / 1048576))
-COS_OEM_SIZE_MB=$((COS_OEM_SIZE / 1048576))
-COS_RECOVERY_SIZE_MB=$((COS_RECOVERY_SIZE / 1048576))
+# --- Loop setup for device mapping (container-friendly: use losetup instead of kpartx) ---
+echo "--- Setting up loop devices ---"
+# Create loop devices for input and final images
+INPUT_LOOP_DEV=$(losetup -f --show "$INPUT_IMG")
+FINAL_LOOP_DEV=$(losetup -f --show "$FINAL_IMG")
+UBUNTU_LOOP_DEV=$(losetup -f --show "$UBUNTU_IMG")
 
-# Calculate skip values in MB
-COS_GRUB_SKIP_MB=$((COS_GRUB_START / 1048576))
-COS_OEM_SKIP_MB=$((COS_OEM_START / 1048576))
-COS_RECOVERY_SKIP_MB=$((COS_RECOVERY_START / 1048576))
+echo "Input image loop device: $INPUT_LOOP_DEV"
+echo "Final image loop device: $FINAL_LOOP_DEV"
+echo "Ubuntu image loop device: $UBUNTU_LOOP_DEV"
 
-# Extract partitions using dd
-echo "--- Extracting partitions from input image ---"
-echo "Extracting EFI partition (skip=$COS_GRUB_SKIP_MB, count=$COS_GRUB_SIZE_MB)"
-dd if="$INPUT_IMG" of="$INPUT_EFI_FILE" bs=1M skip=$COS_GRUB_SKIP_MB count=$COS_GRUB_SIZE_MB || { echo "Failed to extract EFI partition"; exit 1; }
-echo "Extracting OEM partition (skip=$COS_OEM_SKIP_MB, count=$COS_OEM_SIZE_MB)"
-dd if="$INPUT_IMG" of="$INPUT_OEM_FILE" bs=1M skip=$COS_OEM_SKIP_MB count=$COS_OEM_SIZE_MB || { echo "Failed to extract OEM partition"; exit 1; }
-echo "Extracting Recovery partition (skip=$COS_RECOVERY_SKIP_MB, count=$COS_RECOVERY_SIZE_MB)"
-dd if="$INPUT_IMG" of="$INPUT_RECOVERY_FILE" bs=1M skip=$COS_RECOVERY_SKIP_MB count=$COS_RECOVERY_SIZE_MB || { echo "Failed to extract Recovery partition"; exit 1; }
+# Force kernel to re-read partition tables
+partprobe "$INPUT_LOOP_DEV" 2>/dev/null || true
+partprobe "$FINAL_LOOP_DEV" 2>/dev/null || true
+sleep 2
 
-# Create mount points
+# Determine partition device naming (p1, p2, etc. for newer kernels, or 1, 2, etc. for older)
+if [ -e "${INPUT_LOOP_DEV}p1" ]; then
+    INPUT_EFI_DEV="${INPUT_LOOP_DEV}p1"
+    INPUT_OEM_DEV="${INPUT_LOOP_DEV}p2"
+    INPUT_RECOVERY_DEV="${INPUT_LOOP_DEV}p3"
+elif [ -e "${INPUT_LOOP_DEV}1" ]; then
+    INPUT_EFI_DEV="${INPUT_LOOP_DEV}1"
+    INPUT_OEM_DEV="${INPUT_LOOP_DEV}2"
+    INPUT_RECOVERY_DEV="${INPUT_LOOP_DEV}3"
+else
+    echo "Error: Could not find partition devices for input image" >&2
+    exit 1
+fi
+
+if [ -e "${FINAL_LOOP_DEV}p1" ]; then
+    FINAL_EFI_DEV="${FINAL_LOOP_DEV}p1"
+    FINAL_UBUNTU_ROOTFS_DEV="${FINAL_LOOP_DEV}p2"
+    FINAL_OEM_DEV="${FINAL_LOOP_DEV}p3"
+    FINAL_RECOVERY_DEV="${FINAL_LOOP_DEV}p4"
+elif [ -e "${FINAL_LOOP_DEV}1" ]; then
+    FINAL_EFI_DEV="${FINAL_LOOP_DEV}1"
+    FINAL_UBUNTU_ROOTFS_DEV="${FINAL_LOOP_DEV}2"
+    FINAL_OEM_DEV="${FINAL_LOOP_DEV}3"
+    FINAL_RECOVERY_DEV="${FINAL_LOOP_DEV}4"
+else
+    echo "Error: Could not find partition devices for final image" >&2
+    exit 1
+fi
+
+sleep 2
+
+# --- Format and Mount Filesystems ---
+echo "--- Formatting and Mounting Partitions ---"
+# Use mkfs to apply the desired labels to the newly created partitions.
+mkfs.vfat -n "COS_GRUB" "$FINAL_EFI_DEV"
+mkfs.ext4 -L UBUNTU_ROOTFS "$FINAL_UBUNTU_ROOTFS_DEV"
+mkfs.ext2 -L COS_OEM "$FINAL_OEM_DEV"
+mkfs.ext2 -L COS_RECOVERY "$FINAL_RECOVERY_DEV"
+
 MNT_INPUT_EFI=$(mktemp -d)
 MNT_INPUT_OEM=$(mktemp -d)
 MNT_INPUT_RECOVERY=$(mktemp -d)
@@ -193,201 +199,22 @@ MNT_FINAL_UBUNTU_ROOTFS=$(mktemp -d)
 MNT_FINAL_OEM=$(mktemp -d)
 MNT_FINAL_RECOVERY=$(mktemp -d)
 
-# Mount input partitions using the extracted files instead of losetup with offset
-# This avoids issues with large partitions and losetup sizelimit
-UBUNTU_LOOP_DEV=$(losetup -f --show "$UBUNTU_IMG")
-echo "Attached Ubuntu image to $UBUNTU_LOOP_DEV"
+mount -t vfat "$INPUT_EFI_DEV" "$MNT_INPUT_EFI"
+mount -t ext2 "$INPUT_OEM_DEV" "$MNT_INPUT_OEM"
+mount -t ext2 "$INPUT_RECOVERY_DEV" "$MNT_INPUT_RECOVERY"
+mount "$UBUNTU_LOOP_DEV" "$MNT_UBUNTU_ROOT_IMG"
 
-# --- Format and Mount Final Filesystems ---
-echo "--- Formatting and Mounting Final Partitions ---"
-# Create temporary files for final partitions
-FINAL_EFI_FILE="final_efi.img"
-FINAL_UBUNTU_FILE="final_ubuntu.img"
-FINAL_OEM_FILE="final_oem.img"
-FINAL_RECOVERY_FILE="final_recovery.img"
-
-# Create partition files with proper sizes
-echo "--- Creating final partition files ---"
-echo "Creating final EFI file (size: $COS_GRUB_SIZE_MB MB)"
-dd if=/dev/zero of="$FINAL_EFI_FILE" bs=1M count=$COS_GRUB_SIZE_MB || { echo "Failed to create final EFI file"; exit 1; }
-echo "Creating final Ubuntu file (size: $((UBUNTU_ROOT_SIZE_BYTES / 1048576)) MB)"
-dd if=/dev/zero of="$FINAL_UBUNTU_FILE" bs=1M count=$((UBUNTU_ROOT_SIZE_BYTES / 1048576)) || { echo "Failed to create final Ubuntu file"; exit 1; }
-echo "Creating final OEM file (size: $COS_OEM_SIZE_MB MB)"
-dd if=/dev/zero of="$FINAL_OEM_FILE" bs=1M count=$COS_OEM_SIZE_MB || { echo "Failed to create final OEM file"; exit 1; }
-echo "Creating final Recovery file (size: $COS_RECOVERY_SIZE_MB MB)"
-dd if=/dev/zero of="$FINAL_RECOVERY_FILE" bs=1M count=$COS_RECOVERY_SIZE_MB || { echo "Failed to create final Recovery file"; exit 1; }
-
-# Format the partition files
-mkfs.vfat -n "COS_GRUB" -F 32 "$FINAL_EFI_FILE"
-mkfs.ext4 -L UBUNTU_ROOTFS "$FINAL_UBUNTU_FILE"
-mkfs.ext2 -L COS_OEM "$FINAL_OEM_FILE"
-mkfs.ext2 -L COS_RECOVERY "$FINAL_RECOVERY_FILE"
-
-# Mount partitions using the extracted files
-# Use losetup to create loop devices explicitly (mount -o loop doesn't work in this container)
-# Ensure loop module is loaded
-modprobe loop 2>/dev/null || true
-
-# Convert all file paths to absolute paths
-INPUT_EFI_FILE_ABS=$(readlink -f "$INPUT_EFI_FILE" 2>/dev/null || echo "$WORKDIR/$INPUT_EFI_FILE")
-INPUT_OEM_FILE_ABS=$(readlink -f "$INPUT_OEM_FILE" 2>/dev/null || echo "$WORKDIR/$INPUT_OEM_FILE")
-INPUT_RECOVERY_FILE_ABS=$(readlink -f "$INPUT_RECOVERY_FILE" 2>/dev/null || echo "$WORKDIR/$INPUT_RECOVERY_FILE")
-FINAL_EFI_FILE_ABS=$(readlink -f "$FINAL_EFI_FILE" 2>/dev/null || echo "$WORKDIR/$FINAL_EFI_FILE")
-FINAL_UBUNTU_FILE_ABS=$(readlink -f "$FINAL_UBUNTU_FILE" 2>/dev/null || echo "$WORKDIR/$FINAL_UBUNTU_FILE")
-FINAL_OEM_FILE_ABS=$(readlink -f "$FINAL_OEM_FILE" 2>/dev/null || echo "$WORKDIR/$FINAL_OEM_FILE")
-FINAL_RECOVERY_FILE_ABS=$(readlink -f "$FINAL_RECOVERY_FILE" 2>/dev/null || echo "$WORKDIR/$FINAL_RECOVERY_FILE")
-
-# Helper function to find and use an available loop device
-find_loop_device() {
-    local file="$1"
-    # First, try losetup -f which should work (it worked for Ubuntu image)
-    local loop_dev
-    loop_dev=$(losetup -f --show "$file" 2>&1)
-    local losetup_exit=$?
-    if [ $losetup_exit -eq 0 ] && [ -n "$loop_dev" ] && [ -e "$loop_dev" ]; then
-        echo "$loop_dev"
-        return 0
-    else
-        # Log the error for debugging (but don't include it in the return value)
-        echo "losetup -f failed (exit $losetup_exit): $loop_dev" >&2
-    fi
-    # If that fails, try explicit loop devices (try higher numbers first to avoid conflicts)
-    for i in {16..31} {0..15}; do
-        local loop_dev="/dev/loop$i"
-        # Create loop device if it doesn't exist
-        if [ ! -e "$loop_dev" ]; then
-            if ! mknod -m 0660 "$loop_dev" b 7 "$i" 2>/dev/null; then
-                continue
-            fi
-        fi
-        # Check if loop device is available (losetup without file returns non-zero if not in use)
-        if losetup "$loop_dev" >/dev/null 2>&1; then
-            # Device is in use, try next
-            continue
-        fi
-        # Try to set up the loop device
-        if losetup "$loop_dev" "$file" 2>/dev/null; then
-            echo "$loop_dev"
-            return 0
-        fi
-    done
-    echo "Error: Could not find or create an available loop device for $file" >&2
-    echo "Currently used loop devices:" >&2
-    losetup -a >&2 || true
-    return 1
-}
-
-echo "--- Mounting input partitions ---"
-echo "Mounting EFI partition: $INPUT_EFI_FILE_ABS"
-if [ ! -f "$INPUT_EFI_FILE_ABS" ]; then
-    echo "Error: File not found: $INPUT_EFI_FILE_ABS"
-    ls -la "$WORKDIR" || true
-    exit 1
-fi
-INPUT_EFI_LOOP=$(find_loop_device "$INPUT_EFI_FILE_ABS") || { echo "Failed to create loop device for EFI partition"; exit 1; }
-mount -t vfat "$INPUT_EFI_LOOP" "$MNT_INPUT_EFI" || { echo "Failed to mount EFI partition"; losetup -d "$INPUT_EFI_LOOP" 2>/dev/null || true; exit 1; }
-
-echo "Mounting OEM partition: $INPUT_OEM_FILE_ABS"
-if [ ! -f "$INPUT_OEM_FILE_ABS" ]; then
-    echo "Error: File not found: $INPUT_OEM_FILE_ABS"
-    exit 1
-fi
-INPUT_OEM_LOOP=$(find_loop_device "$INPUT_OEM_FILE_ABS") || { echo "Failed to create loop device for OEM partition"; exit 1; }
-mount -t ext2 "$INPUT_OEM_LOOP" "$MNT_INPUT_OEM" || { echo "Failed to mount OEM partition"; losetup -d "$INPUT_OEM_LOOP" 2>/dev/null || true; exit 1; }
-
-echo "Mounting Recovery partition: $INPUT_RECOVERY_FILE_ABS"
-if [ ! -f "$INPUT_RECOVERY_FILE_ABS" ]; then
-    echo "Error: File not found: $INPUT_RECOVERY_FILE_ABS"
-    exit 1
-fi
-INPUT_RECOVERY_LOOP=$(find_loop_device "$INPUT_RECOVERY_FILE_ABS") || { echo "Failed to create loop device for Recovery partition"; exit 1; }
-mount -t ext2 "$INPUT_RECOVERY_LOOP" "$MNT_INPUT_RECOVERY" || { echo "Failed to mount Recovery partition"; losetup -d "$INPUT_RECOVERY_LOOP" 2>/dev/null || true; exit 1; }
-
-echo "Mounting Ubuntu image: $UBUNTU_LOOP_DEV"
-mount "$UBUNTU_LOOP_DEV" "$MNT_UBUNTU_ROOT_IMG" || { echo "Failed to mount Ubuntu image"; exit 1; }
-
-echo "--- Mounting final partitions ---"
-echo "Mounting final EFI partition: $FINAL_EFI_FILE_ABS"
-if [ ! -f "$FINAL_EFI_FILE_ABS" ]; then
-    echo "Error: File not found: $FINAL_EFI_FILE_ABS"
-    exit 1
-fi
-FINAL_EFI_LOOP=$(find_loop_device "$FINAL_EFI_FILE_ABS") || { echo "Failed to create loop device for final EFI partition"; exit 1; }
-mount -t vfat "$FINAL_EFI_LOOP" "$MNT_FINAL_EFI" || { echo "Failed to mount final EFI partition"; losetup -d "$FINAL_EFI_LOOP" 2>/dev/null || true; exit 1; }
-
-echo "Mounting final Ubuntu partition: $FINAL_UBUNTU_FILE_ABS"
-if [ ! -f "$FINAL_UBUNTU_FILE_ABS" ]; then
-    echo "Error: File not found: $FINAL_UBUNTU_FILE_ABS"
-    exit 1
-fi
-FINAL_UBUNTU_LOOP=$(find_loop_device "$FINAL_UBUNTU_FILE_ABS") || { echo "Failed to create loop device for final Ubuntu partition"; exit 1; }
-mount -t ext4 "$FINAL_UBUNTU_LOOP" "$MNT_FINAL_UBUNTU_ROOTFS" || { echo "Failed to mount final Ubuntu partition"; losetup -d "$FINAL_UBUNTU_LOOP" 2>/dev/null || true; exit 1; }
-
-echo "Mounting final OEM partition: $FINAL_OEM_FILE_ABS"
-if [ ! -f "$FINAL_OEM_FILE_ABS" ]; then
-    echo "Error: File not found: $FINAL_OEM_FILE_ABS"
-    exit 1
-fi
-FINAL_OEM_LOOP=$(find_loop_device "$FINAL_OEM_FILE_ABS") || { echo "Failed to create loop device for final OEM partition"; exit 1; }
-mount -t ext2 "$FINAL_OEM_LOOP" "$MNT_FINAL_OEM" || { echo "Failed to mount final OEM partition"; losetup -d "$FINAL_OEM_LOOP" 2>/dev/null || true; exit 1; }
-
-echo "Mounting final Recovery partition: $FINAL_RECOVERY_FILE_ABS"
-if [ ! -f "$FINAL_RECOVERY_FILE_ABS" ]; then
-    echo "Error: File not found: $FINAL_RECOVERY_FILE_ABS"
-    exit 1
-fi
-FINAL_RECOVERY_LOOP=$(find_loop_device "$FINAL_RECOVERY_FILE_ABS") || { echo "Failed to create loop device for final Recovery partition"; exit 1; }
-mount -t ext2 "$FINAL_RECOVERY_LOOP" "$MNT_FINAL_RECOVERY" || { echo "Failed to mount final Recovery partition"; losetup -d "$FINAL_RECOVERY_LOOP" 2>/dev/null || true; exit 1; }
+mount -t vfat "$FINAL_EFI_DEV" "$MNT_FINAL_EFI"
+mount "$FINAL_UBUNTU_ROOTFS_DEV" "$MNT_FINAL_UBUNTU_ROOTFS"
+mount -t ext2 "$FINAL_OEM_DEV" "$MNT_FINAL_OEM"
+mount -t ext2 "$FINAL_RECOVERY_DEV" "$MNT_FINAL_RECOVERY"
 
 # --- Copy Filesystems ---
 echo "--- Copying Filesystem Data ---"
-echo "Copying EFI partition..."
-rsync -aHAX --info=progress2 "$MNT_INPUT_EFI/" "$MNT_FINAL_EFI/" || { echo "Failed to copy EFI partition"; exit 1; }
-echo "EFI partition copied successfully"
-
-echo "Copying Ubuntu root filesystem..."
-# Use cp instead of rsync for better performance in container environment
-echo "Starting Ubuntu filesystem copy (this may take a few minutes)..."
-# Show progress by monitoring the destination directory size
-(
-    while true; do
-        if [ -d "$MNT_FINAL_UBUNTU_ROOTFS" ]; then
-            SIZE=$(du -sm "$MNT_FINAL_UBUNTU_ROOTFS" 2>/dev/null | cut -f1 || echo "0")
-            echo "Ubuntu copy progress: ${SIZE}MB copied..."
-        fi
-        sleep 10
-    done
-) &
-PROGRESS_PID=$!
-PROGRESS_PIDS="$PROGRESS_PIDS $PROGRESS_PID"
-cp -a "$MNT_UBUNTU_ROOT_IMG/." "$MNT_FINAL_UBUNTU_ROOTFS/" || { kill $PROGRESS_PID 2>/dev/null; echo "Failed to copy Ubuntu root filesystem"; exit 1; }
-kill $PROGRESS_PID 2>/dev/null
-wait $PROGRESS_PID 2>/dev/null || true
-echo "Ubuntu root filesystem copied successfully"
-
-echo "Copying OEM partition..."
-rsync -aHAX --info=progress2 "$MNT_INPUT_OEM/" "$MNT_FINAL_OEM/" || { echo "Failed to copy OEM partition"; exit 1; }
-echo "OEM partition copied successfully"
-
-echo "Copying Recovery partition..."
-# Use cp instead of rsync for better performance in container environment
-echo "Starting Recovery partition copy (this may take a few minutes)..."
-# Show progress by monitoring the destination directory size
-(
-    while true; do
-        if [ -d "$MNT_FINAL_RECOVERY" ]; then
-            SIZE=$(du -sm "$MNT_FINAL_RECOVERY" 2>/dev/null | cut -f1 || echo "0")
-            echo "Recovery copy progress: ${SIZE}MB copied..."
-        fi
-        sleep 10
-    done
-) &
-PROGRESS_PID=$!
-PROGRESS_PIDS="$PROGRESS_PIDS $PROGRESS_PID"
-cp -a "$MNT_INPUT_RECOVERY/." "$MNT_FINAL_RECOVERY/" || { kill $PROGRESS_PID 2>/dev/null; echo "Failed to copy Recovery partition"; exit 1; }
-kill $PROGRESS_PID 2>/dev/null
-wait $PROGRESS_PID 2>/dev/null || true
-echo "Recovery partition copied successfully"
+rsync -aHAX --info=progress2 "$MNT_INPUT_EFI/" "$MNT_FINAL_EFI/"
+rsync -aHAX --info=progress2 "$MNT_UBUNTU_ROOT_IMG/" "$MNT_FINAL_UBUNTU_ROOTFS/"
+rsync -aHAX --info=progress2 "$MNT_INPUT_OEM/" "$MNT_FINAL_OEM/"
+rsync -aHAX --info=progress2 "$MNT_INPUT_RECOVERY/" "$MNT_FINAL_RECOVERY/"
 
 # --- Install curtin hooks ---
 echo "--- Installing curtin hooks script ---"
@@ -395,79 +222,6 @@ mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/curtin"
 cp "$CURTIN_HOOKS_SCRIPT" "$MNT_FINAL_UBUNTU_ROOTFS/curtin/"
 chmod 750 "$MNT_FINAL_UBUNTU_ROOTFS/curtin/curtin-hooks"
 echo "Curtin hooks script installed at /curtin/curtin-hooks with 750 permissions"
-
-# Ensure curtin can detect this as a valid root filesystem
-# Create marker files/directories that curtin looks for
-echo "--- Creating curtin detection markers ---"
-# Ensure /curtin directory exists and is visible with a file
-if [ ! -f "$MNT_FINAL_UBUNTU_ROOTFS/curtin/.curtin-install-cache" ]; then
-    touch "$MNT_FINAL_UBUNTU_ROOTFS/curtin/.curtin-install-cache"
-fi
-
-# Ensure standard Ubuntu structure exists (for snapd detection)
-# Standard Ubuntu server images should have this, but ensure it exists
-if [ ! -d "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/snapd" ]; then
-    mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/snapd"
-    echo "Created /var/lib/snapd directory for curtin detection"
-fi
-
-# Create a snaps directory if it doesn't exist (some curtin versions look for this)
-if [ ! -d "$MNT_FINAL_UBUNTU_ROOTFS/snaps" ]; then
-    mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/snaps"
-    echo "Created /snaps directory for curtin detection"
-fi
-
-# Ensure /etc/os-release exists with required ID field (critical for curtin)
-echo "--- Ensuring /etc/os-release exists with required fields ---"
-OS_RELEASE_FILE="$MNT_FINAL_UBUNTU_ROOTFS/etc/os-release"
-if [ ! -f "$OS_RELEASE_FILE" ]; then
-    echo "Creating /etc/os-release file..."
-    mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/etc"
-fi
-
-# Check if ID field exists, if not create/update the file
-if [ -f "$OS_RELEASE_FILE" ]; then
-    if ! grep -q "^ID=" "$OS_RELEASE_FILE"; then
-        echo "Adding ID field to existing /etc/os-release..."
-        # Prepend ID field if file exists but doesn't have it
-        echo "ID=ubuntu" | cat - "$OS_RELEASE_FILE" > "$OS_RELEASE_FILE.tmp" && mv "$OS_RELEASE_FILE.tmp" "$OS_RELEASE_FILE"
-    fi
-else
-    echo "Creating new /etc/os-release file..."
-    cat > "$OS_RELEASE_FILE" << 'EOF'
-ID=ubuntu
-ID_LIKE=debian
-PRETTY_NAME="Ubuntu 22.04 LTS"
-NAME="Ubuntu"
-VERSION_ID="22.04"
-VERSION="22.04 LTS (Jammy Jellyfish)"
-VERSION_CODENAME=jammy
-HOME_URL="https://www.ubuntu.com/"
-SUPPORT_URL="https://help.ubuntu.com/"
-BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
-PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
-UBUNTU_CODENAME=jammy
-EOF
-fi
-
-# Verify the file has the ID field
-if grep -q "^ID=" "$OS_RELEASE_FILE"; then
-    echo "✅ /etc/os-release verified with ID field: $(grep '^ID=' "$OS_RELEASE_FILE")"
-else
-    echo "❌ ERROR: /etc/os-release still missing ID field after fix attempt"
-    exit 1
-fi
-
-# Verify the structure is correct
-echo "--- Verifying Ubuntu rootfs structure ---"
-echo "Checking for curtin directory:"
-ls -la "$MNT_FINAL_UBUNTU_ROOTFS/curtin/" || echo "Warning: /curtin directory not accessible"
-echo "Checking for var/lib/snapd:"
-ls -ld "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/snapd" 2>/dev/null || echo "Warning: /var/lib/snapd not found"
-echo "Root directory contents (first 20 items):"
-ls -la "$MNT_FINAL_UBUNTU_ROOTFS/" | head -20 || true
-
-echo "Curtin detection markers created and verified"
 
 # --- Install cloud-init userdata processing script ---
 echo "--- Installing cloud-init userdata processing script ---"
@@ -550,143 +304,6 @@ if [ -f "$GRUB_ENV_PATH" ]; then
 else
   echo "Warning: $GRUB_ENV_PATH not found, skipping grubenv patch." >&2
 fi
-
-# --- Sync filesystems before unmounting ---
-echo "--- Syncing filesystems ---"
-sync
-echo "Syncing Ubuntu rootfs..."
-sync "$MNT_FINAL_UBUNTU_ROOTFS" || true
-echo "Syncing EFI partition..."
-sync "$MNT_FINAL_EFI" || true
-echo "Syncing OEM partition..."
-sync "$MNT_FINAL_OEM" || true
-echo "Syncing Recovery partition..."
-sync "$MNT_FINAL_RECOVERY" || true
-sync
-
-# --- Assemble Final Image ---
-echo "--- Assembling final image ---"
-echo "Writing EFI partition to final image..."
-dd if="$FINAL_EFI_FILE" of="$FINAL_IMG" bs=1M seek=$COS_GRUB_SKIP_MB conv=notrunc || { echo "Failed to write EFI partition"; exit 1; }
-sync
-echo "EFI partition written successfully"
-
-echo "Writing Ubuntu partition to final image..."
-dd if="$FINAL_UBUNTU_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB)) conv=notrunc || { echo "Failed to write Ubuntu partition"; exit 1; }
-sync
-echo "Ubuntu partition written successfully"
-
-echo "Writing OEM partition to final image..."
-dd if="$FINAL_OEM_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576)) conv=notrunc || { echo "Failed to write OEM partition"; exit 1; }
-sync
-echo "OEM partition written successfully"
-
-echo "Writing Recovery partition to final image..."
-dd if="$FINAL_RECOVERY_FILE" of="$FINAL_IMG" bs=1M seek=$((COS_GRUB_SKIP_MB + COS_GRUB_SIZE_MB + UBUNTU_ROOT_SIZE_BYTES / 1048576 + COS_OEM_SIZE_MB)) conv=notrunc || { echo "Failed to write Recovery partition"; exit 1; }
-sync
-echo "Recovery partition written successfully"
-
-# Final sync to ensure all data is written
-echo "--- Final sync to ensure all data is written ---"
-sync
-sleep 1
-
-# Verify and potentially fix partition table after writing data
-echo "--- Verifying partition table and filesystems ---"
-parted -s "$FINAL_IMG" print || { echo "Warning: Could not verify partition table"; }
-
-# Ensure partition table is properly written and re-read
-echo "--- Ensuring partition table is properly written ---"
-partprobe 2>/dev/null || true
-sleep 1
-
-# Try to verify filesystems can be read and mounted
-echo "--- Verifying filesystems can be read and curtin directory exists ---"
-# Create a loop device for the final image to test mounting
-FINAL_IMG_LOOP=$(losetup -f --show "$FINAL_IMG" 2>/dev/null || echo "")
-if [ -n "$FINAL_IMG_LOOP" ]; then
-    echo "Testing partition access on $FINAL_IMG_LOOP..."
-    # Force kernel to re-read partition table
-    partprobe "$FINAL_IMG_LOOP" 2>/dev/null || true
-    sleep 2
-    
-    # Determine partition device naming (p2 for newer kernels, 2 for older)
-    UBUNTU_PART=""
-    if [ -e "${FINAL_IMG_LOOP}p2" ]; then
-        UBUNTU_PART="${FINAL_IMG_LOOP}p2"
-    elif [ -e "${FINAL_IMG_LOOP}2" ]; then
-        UBUNTU_PART="${FINAL_IMG_LOOP}2"
-    fi
-    
-    if [ -n "$UBUNTU_PART" ]; then
-        echo "Testing ubuntu_rootfs partition ($UBUNTU_PART)..."
-        PART_TYPE=$(file -s "$UBUNTU_PART" 2>/dev/null | grep -o "ext[0-9]" || echo "")
-        PART_LABEL=$(blkid -L UBUNTU_ROOTFS 2>/dev/null || blkid -o value -s LABEL "$UBUNTU_PART" 2>/dev/null || echo "")
-        echo "Partition type: $PART_TYPE"
-        echo "Partition label: $PART_LABEL"
-        
-        # Try to mount it to verify it works and check for curtin
-        TEST_MOUNT=$(mktemp -d)
-        if mount -t ext4 "$UBUNTU_PART" "$TEST_MOUNT" 2>/dev/null; then
-            echo "Successfully mounted ubuntu_rootfs partition"
-            echo "Checking for curtin directory:"
-            if [ -d "$TEST_MOUNT/curtin" ]; then
-                echo "✅ /curtin directory found"
-                ls -la "$TEST_MOUNT/curtin/" || true
-                if [ -f "$TEST_MOUNT/curtin/curtin-hooks" ]; then
-                    echo "✅ curtin-hooks file found"
-                else
-                    echo "❌ ERROR: curtin-hooks file NOT found in /curtin/"
-                fi
-            else
-                echo "❌ ERROR: /curtin directory NOT found - this will cause curtin detection to fail"
-            fi
-            echo "Checking for var/lib/snapd:"
-            if [ -d "$TEST_MOUNT/var/lib/snapd" ]; then
-                echo "✅ /var/lib/snapd directory found"
-            else
-                echo "⚠️  Warning: /var/lib/snapd not found (creating it now)"
-                mkdir -p "$TEST_MOUNT/var/lib/snapd"
-            fi
-            echo "Checking for /snaps directory:"
-            if [ -d "$TEST_MOUNT/snaps" ]; then
-                echo "✅ /snaps directory found"
-            else
-                echo "⚠️  Warning: /snaps not found (creating it now)"
-                mkdir -p "$TEST_MOUNT/snaps"
-            fi
-            sync "$TEST_MOUNT"
-            umount "$TEST_MOUNT" 2>/dev/null || true
-            rmdir "$TEST_MOUNT" 2>/dev/null || true
-        else
-            echo "❌ ERROR: Could not mount ubuntu_rootfs partition - this will cause curtin detection to fail"
-            echo "Attempting to repair filesystem..."
-            e2fsck -f -y "$UBUNTU_PART" 2>/dev/null || true
-            if mount -t ext4 "$UBUNTU_PART" "$TEST_MOUNT" 2>/dev/null; then
-                echo "✅ Successfully mounted after repair"
-                # Ensure curtin directory exists
-                mkdir -p "$TEST_MOUNT/curtin"
-                if [ ! -f "$TEST_MOUNT/curtin/curtin-hooks" ] && [ -f "$CURTIN_HOOKS_SCRIPT" ]; then
-                    echo "Re-installing curtin-hooks..."
-                    cp "$CURTIN_HOOKS_SCRIPT" "$TEST_MOUNT/curtin/"
-                    chmod 750 "$TEST_MOUNT/curtin/curtin-hooks"
-                fi
-                mkdir -p "$TEST_MOUNT/var/lib/snapd"
-                mkdir -p "$TEST_MOUNT/snaps"
-                sync "$TEST_MOUNT"
-                umount "$TEST_MOUNT" 2>/dev/null || true
-            fi
-            rmdir "$TEST_MOUNT" 2>/dev/null || true
-        fi
-    else
-        echo "❌ ERROR: Could not find ubuntu_rootfs partition device"
-        echo "Partition devices available:"
-        ls -la "${FINAL_IMG_LOOP}"* 2>/dev/null || true
-    fi
-    losetup -d "$FINAL_IMG_LOOP" 2>/dev/null || true
-fi
-echo "Verification complete"
-
 # --- Finalize ---
 echo "--- Unmounting all mount points and cleaning up loop devices and temp directory ---"
 umount -l "$MNT_INPUT_EFI" || true
@@ -698,90 +315,18 @@ umount -l "$MNT_FINAL_UBUNTU_ROOTFS" || true
 umount -l "$MNT_FINAL_OEM" || true
 umount -l "$MNT_FINAL_RECOVERY" || true
 
-# Detach all loop devices
-if [ -n "$INPUT_EFI_LOOP" ]; then losetup -d "$INPUT_EFI_LOOP" || true; fi
-if [ -n "$INPUT_OEM_LOOP" ]; then losetup -d "$INPUT_OEM_LOOP" || true; fi
-if [ -n "$INPUT_RECOVERY_LOOP" ]; then losetup -d "$INPUT_RECOVERY_LOOP" || true; fi
-if [ -n "$FINAL_EFI_LOOP" ]; then losetup -d "$FINAL_EFI_LOOP" || true; fi
-if [ -n "$FINAL_UBUNTU_LOOP" ]; then losetup -d "$FINAL_UBUNTU_LOOP" || true; fi
-if [ -n "$FINAL_OEM_LOOP" ]; then losetup -d "$FINAL_OEM_LOOP" || true; fi
-if [ -n "$FINAL_RECOVERY_LOOP" ]; then losetup -d "$FINAL_RECOVERY_LOOP" || true; fi
 if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" || true; fi
+if [ -n "$INPUT_LOOP_DEV" ]; then losetup -d "$INPUT_LOOP_DEV" || true; fi
+if [ -n "$FINAL_LOOP_DEV" ]; then losetup -d "$FINAL_LOOP_DEV" || true; fi
 echo "--- Copying final image to original directory... ---"
-cp "$FINAL_IMG" "$ORIG_DIR/" || { echo "Failed to copy final image"; exit 1; }
-echo "Final image copied successfully"
+cp "$FINAL_IMG" "$ORIG_DIR/"
 
-# Check final image size
-FINAL_SIZE=$(du -h "$ORIG_DIR/$FINAL_IMG" | cut -f1)
-echo "Final image size: $FINAL_SIZE"
+rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY" "$WORKDIR"
 
-# Create compressed tar.gz for MAAS (smaller and easier to transfer)
-# Note: For filetype='tgz', MAAS expects a tar.gz of the raw disk image
-# The raw image will be written directly to disk, then curtin extracts the rootfs
-echo "--- Creating compressed tar.gz archive for MAAS ---"
-echo "Current directory: $(pwd)"
-echo "ORIG_DIR: $ORIG_DIR"
-echo "Final image path: $ORIG_DIR/$FINAL_IMG"
-cd "$ORIG_DIR"
-if [ ! -f "$FINAL_IMG" ]; then
-    echo "❌ ERROR: Final image not found at $ORIG_DIR/$FINAL_IMG"
-    echo "Contents of $ORIG_DIR:"
-    ls -la "$ORIG_DIR" || true
-    exit 1
-fi
-echo "Creating tar.gz archive: $FINAL_IMG_TAR_GZ"
-# Create tar.gz with the raw image file (MAAS will extract and write to disk)
-tar -czf "$FINAL_IMG_TAR_GZ" "$FINAL_IMG" || { echo "Failed to create tar.gz archive"; exit 1; }
-if [ ! -f "$FINAL_IMG_TAR_GZ" ]; then
-    echo "❌ ERROR: tar.gz archive was not created at $ORIG_DIR/$FINAL_IMG_TAR_GZ"
-    echo "Contents of $ORIG_DIR:"
-    ls -la "$ORIG_DIR" || true
-    exit 1
-fi
-TAR_SIZE=$(du -h "$FINAL_IMG_TAR_GZ" | cut -f1)
-echo "✅ Compressed archive created: $ORIG_DIR/$FINAL_IMG_TAR_GZ"
-echo "   Archive size: $TAR_SIZE (vs raw image: $FINAL_SIZE)"
-echo "Verifying files exist:"
-ls -lh "$ORIG_DIR/$FINAL_IMG" "$ORIG_DIR/$FINAL_IMG_TAR_GZ" || true
-echo ""
-echo "📝 Note: For MAAS upload with filetype='tgz', use:"
-echo "   maas admin boot-resources create \\"
-echo "     name='custom/CanvOSubuntu-22.04' \\"
-echo "     title='CanvOS Ubuntu 22.04 Custom' \\"
-echo "     architecture='amd64/generic' \\"
-echo "     filetype='tgz' \\"
-echo "     content@=$ORIG_DIR/$FINAL_IMG_TAR_GZ"
-
-# Cleanup mount points (but keep WORKDIR until after file copy)
-rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY"
-
-echo ""
-echo "✅ Composite image created successfully!"
-echo "📦 Raw image: $ORIG_DIR/$FINAL_IMG ($FINAL_SIZE)"
-echo "📦 Compressed archive: $ORIG_DIR/$FINAL_IMG_TAR_GZ ($TAR_SIZE)"
-echo ""
-echo "For MAAS upload, use the tar.gz file:"
-echo "   maas admin boot-resources create \\"
-echo "     name='custom/CanvOSubuntu-22.04' \\"
-echo "     title='CanvOS Ubuntu 22.04 Custom' \\"
-echo "     architecture='amd64/generic' \\"
-echo "     filetype='tgz' \\"
-echo "     content@=$ORIG_DIR/$FINAL_IMG_TAR_GZ"
-echo ""
+echo "\n✅ Composite image created successfully: $ORIG_DIR/$FINAL_IMG"
+echo "You can now upload this raw image to your deployment system."
 echo "📋 Cloud-init userdata processing script has been integrated - it will:"
 echo "   • Run once after cloud-init processes userdata"
 echo "   • Copy userdata to COS_OEM partition as userdata.yaml" 
 echo "   • Set grubenv to boot recovery mode"
 echo "   • Reboot the system"
-
-# Mark cleanup as done and exit cleanly
-# Kill any remaining background progress monitoring processes
-for pid in $PROGRESS_PIDS; do
-    kill $pid 2>/dev/null || true
-    wait $pid 2>/dev/null || true
-done
-
-CLEANUP_DONE=true
-rm -rf "$WORKDIR"
-exit 0
-
