@@ -2,7 +2,7 @@
 export
 
 # ==============================================================================
-# PHONY TARGETS
+# TARGETS
 # ==============================================================================
 .PHONY: build build-all-images base-image iso build-provider-images iso-disk-image \
 	uki-genkey alpine-all validate-user-data help
@@ -42,7 +42,7 @@ ALL_K8S_VERSIONS = $(if $(strip $(K8S_VERSION)),\
 	$(shell jq -r --arg key "$(K8S_DISTRIBUTION)" 'if .[$$key] then .[$$key][] else empty end' k8s_version.json))
 
 # Common BAKE_ARGS for pushing images
-PUSH_ARGS = $(if $(filter true,$(PUSH)),--set *.output=type=image,push=$(PUSH),)
+PUSH_ARGS = $(if $(filter true,$(PUSH)),--set *.output=type=image$(comma)push=$(PUSH),)
 
 # ==============================================================================
 # CORE BUILD TARGET

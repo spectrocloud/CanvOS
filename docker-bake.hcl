@@ -398,6 +398,7 @@ target "trustedboot-image" {
   }
   args = {
     AURORABOOT_IMAGE = AURORABOOT_IMAGE
+    DEBUG = DEBUG
   }
   output = ["type=local,dest=./trusted-boot/"]
 }

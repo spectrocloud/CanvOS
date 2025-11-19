@@ -11,7 +11,9 @@ COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ 
 
 RUN mkdir -p /output
 
-RUN /usr/bin/auroraboot --debug build-uki \
+RUN /usr/bin/auroraboot \
+    $([ "$DEBUG" = "true" ] && echo "--debug") \
+    build-uki \
     --output-dir /output \
     --keys /keys \
     --output-type container \
