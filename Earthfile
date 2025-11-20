@@ -873,26 +873,34 @@ kairos-raw-image:
                 exit 1; \
             fi && \
             echo "=== Running auroraboot to convert image ===" && \
-            echo "Using local docker image (no docker:// prefix)" && \
-            docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /workdir:/aurora \
-                --net host \
-                --privileged \
-                quay.io/kairos/auroraboot:v0.6.4 \
+            echo "Using auroraboot v0.6.4 (known working version)" && \
+            docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
                 --debug \
                 --set "disable_http_server=true" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
-                --set "container_image=index.docker.io/library/palette-installer-image:latest" \
+                --set "container_image=index.docker.io/library/palette-installer-image:latest"  \
                 --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
             AURORABOOT_EXIT=$?; \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
+            echo "=== Auroraboot log size: $(wc -l < /workdir/auroraboot.log 2>/dev/null || echo '0') lines ===" && \
             echo "=== Full auroraboot log ===" && \
-            cat /workdir/auroraboot.log || echo "Could not read log file" && \
+            cat /workdir/auroraboot.log 2>/dev/null || echo "Could not read log file" && \
+            echo "" && \
+            echo "=== Checking for errors/warnings in log ===" && \
+            grep -i "error\|fail\|panic\|warn" /workdir/auroraboot.log 2>/dev/null | head -20 || echo "No errors/warnings found" && \
+            echo "" && \
+            echo "=== Checking temp-rootfs contents ===" && \
+            if [ -d /workdir/temp-rootfs ]; then \
+                echo "temp-rootfs directory size: $(du -sh /workdir/temp-rootfs 2>/dev/null || echo 'unknown')"; \
+                echo "temp-rootfs file count: $(find /workdir/temp-rootfs -type f 2>/dev/null | wc -l || echo '0')"; \
+                find /workdir/temp-rootfs -type f 2>/dev/null | head -10 || echo "No files found in temp-rootfs"; \
+            fi && \
+            echo "" && \
             echo "=== Finding raw image ===" && \
             echo "Searching in /workdir and all subdirectories..." && \
-            find /workdir -type f -name "*.raw" -o -name "*.img" | head -20 && \
+            find /workdir -type f \( -name "*.raw" -o -name "*.img" \) 2>/dev/null | head -20 && \
             RAW_IMG=$(find /workdir -type f \( -name "*.raw" -o -name "*.img" \) | head -n1); \
             if [ -z "$RAW_IMG" ]; then \
                 echo "❌ Error: No raw image found in /workdir"; \

@@ -80,6 +80,15 @@ fi
 # --- Get original partition sizes and start points ---
 echo "--- Analyzing input image partitions... ---"
 INPUT_PARTS_INFO=$(parted -s "$INPUT_IMG" unit B print)
+echo "Input image partition table:"
+echo "$INPUT_PARTS_INFO"
+echo ""
+
+# Get input image size for reference
+INPUT_IMG_SIZE=$(du -h "$INPUT_IMG" | cut -f1)
+echo "Input Kairos raw image size: $INPUT_IMG_SIZE"
+echo ""
+
 # Correctly extract partition sizes based on names found in parted output (efi, oem, recovery)
 COS_GRUB_START=$(echo "$INPUT_PARTS_INFO" | grep "efi" | awk '{print $2}' | tr -d 'B')
 COS_GRUB_SIZE=$(echo "$INPUT_PARTS_INFO" | grep "efi" | awk '{print $4}' | tr -d 'B')
@@ -87,6 +96,13 @@ COS_OEM_START=$(echo "$INPUT_PARTS_INFO" | grep "oem" | awk '{print $2}' | tr -d
 COS_OEM_SIZE=$(echo "$INPUT_PARTS_INFO" | grep "oem" | awk '{print $4}' | tr -d 'B')
 COS_RECOVERY_START=$(echo "$INPUT_PARTS_INFO" | grep "recovery" | awk '{print $2}' | tr -d 'B')
 COS_RECOVERY_SIZE=$(echo "$INPUT_PARTS_INFO" | grep "recovery" | awk '{print $4}' | tr -d 'B')
+
+# Display partition sizes in human-readable format
+echo "Partition sizes:"
+echo "  EFI (COS_GRUB): $(numfmt --to=iec $COS_GRUB_SIZE) ($COS_GRUB_SIZE bytes)"
+echo "  OEM: $(numfmt --to=iec $COS_OEM_SIZE) ($COS_OEM_SIZE bytes)"
+echo "  Recovery: $(numfmt --to=iec $COS_RECOVERY_SIZE) ($COS_RECOVERY_SIZE bytes)"
+echo ""
 
 UBUNTU_ROOT_SIZE_BYTES=$(numfmt --from=iec "$UBUNTU_ROOT_SIZE")
 FINAL_IMG_SIZE_BYTES=$(($COS_GRUB_SIZE + $UBUNTU_ROOT_SIZE_BYTES + $COS_OEM_SIZE + $COS_RECOVERY_SIZE + 1024*1024 )) 
@@ -167,10 +183,25 @@ mount -t ext2 "$FINAL_RECOVERY_DEV" "$MNT_FINAL_RECOVERY"
 
 # --- Copy Filesystems ---
 echo "--- Copying Filesystem Data ---"
-rsync -aHAX --info=progress2 "$MNT_INPUT_EFI/" "$MNT_FINAL_EFI/"
-rsync -aHAX --info=progress2 "$MNT_UBUNTU_ROOT_IMG/" "$MNT_FINAL_UBUNTU_ROOTFS/"
-rsync -aHAX --info=progress2 "$MNT_INPUT_OEM/" "$MNT_FINAL_OEM/"
-rsync -aHAX --info=progress2 "$MNT_INPUT_RECOVERY/" "$MNT_FINAL_RECOVERY/"
+echo "Copying EFI partition..."
+rsync -aHAX --info=progress2 "$MNT_INPUT_EFI/" "$MNT_FINAL_EFI/" || { echo "Error: Failed to copy EFI partition"; exit 1; }
+echo "Copying Ubuntu root filesystem..."
+rsync -aHAX --info=progress2 "$MNT_UBUNTU_ROOT_IMG/" "$MNT_FINAL_UBUNTU_ROOTFS/" || { echo "Error: Failed to copy Ubuntu root filesystem"; exit 1; }
+echo "Copying OEM partition..."
+rsync -aHAX --info=progress2 "$MNT_INPUT_OEM/" "$MNT_FINAL_OEM/" || { echo "Error: Failed to copy OEM partition"; exit 1; }
+echo "Copying Recovery partition (size: $(numfmt --to=iec $COS_RECOVERY_SIZE))..."
+rsync -aHAX --info=progress2 "$MNT_INPUT_RECOVERY/" "$MNT_FINAL_RECOVERY/" || { echo "Error: Failed to copy Recovery partition"; exit 1; }
+
+# Verify recovery partition was copied correctly
+echo "Verifying recovery partition copy..."
+RECOVERY_IN_SIZE=$(du -sb "$MNT_INPUT_RECOVERY" 2>/dev/null | cut -f1 || echo "0")
+RECOVERY_OUT_SIZE=$(du -sb "$MNT_FINAL_RECOVERY" 2>/dev/null | cut -f1 || echo "0")
+echo "  Input recovery size: $(numfmt --to=iec $RECOVERY_IN_SIZE)"
+echo "  Output recovery size: $(numfmt --to=iec $RECOVERY_OUT_SIZE)"
+
+# Sync all filesystems to ensure data is written
+echo "Syncing filesystems..."
+sync
 
 # --- Install curtin hooks ---
 echo "--- Installing curtin hooks script ---"
@@ -261,6 +292,22 @@ else
   echo "Warning: $GRUB_ENV_PATH not found, skipping grubenv patch." >&2
 fi
 # --- Finalize ---
+echo "--- Verifying final image before unmounting ---"
+# Verify partition table
+echo "Final image partition table:"
+parted -s "$FINAL_IMG" print
+echo ""
+
+# Verify filesystem labels
+echo "Filesystem labels:"
+blkid "$FINAL_EFI_DEV" "$FINAL_UBUNTU_ROOTFS_DEV" "$FINAL_OEM_DEV" "$FINAL_RECOVERY_DEV" 2>/dev/null || true
+echo ""
+
+# Check recovery partition filesystem
+echo "Checking recovery partition filesystem integrity..."
+e2fsck -n "$FINAL_RECOVERY_DEV" 2>&1 | head -20 || echo "Note: e2fsck check completed"
+echo ""
+
 echo "--- Unmounting all mount points and cleaning up loop devices and temp directory ---"
 umount -l "$MNT_INPUT_EFI" || true
 umount -l "$MNT_INPUT_OEM" || true
@@ -276,6 +323,14 @@ kpartx -d "$FINAL_IMG" || true
 kpartx -d "$INPUT_IMG" || true
 echo "--- Copying final image to original directory... ---"
 cp "$FINAL_IMG" "$ORIG_DIR/"
+
+# Report final image information
+FINAL_IMG_PATH="$ORIG_DIR/$FINAL_IMG"
+FINAL_IMG_SIZE=$(du -h "$FINAL_IMG_PATH" | cut -f1)
+echo "Final composite image created: $FINAL_IMG_PATH"
+echo "Final image size: $FINAL_IMG_SIZE"
+echo "Expected size: ~$(numfmt --to=iec $FINAL_IMG_SIZE_BYTES)"
+echo ""
 
 rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY" "$WORKDIR"
 
