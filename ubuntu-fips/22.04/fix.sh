@@ -121,6 +121,43 @@ else
 echo "/usr/sbin/augenrules p+i+n+u+g+s+b+acl+xattrs+sha512" >> /etc/aide/aide.conf
 fi
 
+# Needed for default system path
+if grep -i '^.*/sbin/auditctl.*$' /etc/aide/aide.conf; then
+sed -i "s#.*/sbin/auditctl.*#/sbin/auditctl p+i+n+u+g+s+b+acl+xattrs+sha512#" /etc/aide/aide.conf
+else
+echo "/sbin/auditctl p+i+n+u+g+s+b+acl+xattrs+sha512" >> /etc/aide/aide.conf
+fi
+
+if grep -i '^.*/sbin/auditd.*$' /etc/aide/aide.conf; then
+sed -i "s#.*/sbin/auditd.*#/sbin/auditd p+i+n+u+g+s+b+acl+xattrs+sha512#" /etc/aide/aide.conf
+else
+echo "/sbin/auditd p+i+n+u+g+s+b+acl+xattrs+sha512" >> /etc/aide/aide.conf
+fi
+
+if grep -i '^.*/sbin/ausearch.*$' /etc/aide/aide.conf; then
+sed -i "s#.*/sbin/ausearch.*#/sbin/ausearch p+i+n+u+g+s+b+acl+xattrs+sha512#" /etc/aide/aide.conf
+else
+echo "/sbin/ausearch p+i+n+u+g+s+b+acl+xattrs+sha512" >> /etc/aide/aide.conf
+fi
+
+if grep -i '^.*/sbin/aureport.*$' /etc/aide/aide.conf; then
+sed -i "s#.*/sbin/aureport.*#/sbin/aureport p+i+n+u+g+s+b+acl+xattrs+sha512#" /etc/aide/aide.conf
+else
+echo "/sbin/aureport p+i+n+u+g+s+b+acl+xattrs+sha512" >> /etc/aide/aide.conf
+fi
+
+if grep -i '^.*/sbin/autrace.*$' /etc/aide/aide.conf; then
+sed -i "s#.*/sbin/autrace.*#/sbin/autrace p+i+n+u+g+s+b+acl+xattrs+sha512#" /etc/aide/aide.conf
+else
+echo "/sbin/autrace p+i+n+u+g+s+b+acl+xattrs+sha512" >> /etc/aide/aide.conf
+fi
+
+if grep -i '^.*/sbin/augenrules.*$' /etc/aide/aide.conf; then
+sed -i "s#.*/sbin/augenrules.*#/sbin/augenrules p+i+n+u+g+s+b+acl+xattrs+sha512#" /etc/aide/aide.conf
+else
+echo "/sbin/augenrules p+i+n+u+g+s+b+acl+xattrs+sha512" >> /etc/aide/aide.conf
+fi
+
 else
     >&2 echo 'Remediation is not applicable, nothing was done'
 fi
@@ -2584,11 +2621,11 @@ fi
 
 # Check to see if auth exists
 if ! grep -Erq "^auth\.\*,authpriv\.\*" /etc/rsyslog.*; then
-    echo "auth.*,authpriv.* /var/log/secure" >> /etc/rsyslog.d/50-default.conf
+    echo "auth.*,authpriv.* /var/log/auth.log" >> /etc/rsyslog.d/50-default.conf
 fi
 
 if ! grep -Erq "^daemon\.\*" /etc/rsyslog.*; then
-    echo "daemon.* /var/log/messages" >> /etc/rsyslog.d/50-default.conf
+    echo "daemon.* /var/log/syslog" >> /etc/rsyslog.d/50-default.conf
 fi
 
 systemctl restart rsyslog.service
@@ -4034,6 +4071,7 @@ if [ -z "$line_number" ]; then
 else
     head -n "$(( line_number - 1 ))" "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf.bak" > "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
     printf '%s\n' "Ciphers $sshd_approved_ciphers" >> "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
+    printf '%s\n' "Ciphers $sshd_approved_ciphers" >> "/etc/ssh/sshd_config"
     tail -n "+$(( line_number ))" "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf.bak" >> "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
 fi
 # Clean up after ourselves.
@@ -4122,6 +4160,7 @@ if [ -z "$line_number" ]; then
 else
     head -n "$(( line_number - 1 ))" "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf.bak" > "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
     printf '%s\n' "MACs $sshd_approved_macs" >> "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
+    printf '%s\n' "MACs $sshd_approved_macs" >> "/etc/ssh/sshd_config"
     tail -n "+$(( line_number ))" "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf.bak" >> "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
 fi
 # Clean up after ourselves.
@@ -4278,6 +4317,15 @@ if grep -q '^GRUB_CMDLINE_LINUX=.*audit=.*"'  '/etc/default/grub' ; then
 else
        # no audit=arg is present, append it
        sed -i "s/\(^GRUB_CMDLINE_LINUX=\".*\)\"/\1 audit=1\"/"  '/etc/default/grub'
+fi
+
+# Correct the form of default kernel command line in GRUB for GRUB_CMDLINE_LINUX_DEFAULT
+if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=.*audit=.*"'  '/etc/default/grub' ; then
+       # modify the GRUB command-line if an audit= arg already exists
+       sed -i "s/\(^GRUB_CMDLINE_LINUX_DEFAULT=\".*\)audit=[^[:space:]]\+\(.*\"\)/\1audit=1\2/"  '/etc/default/grub'
+else
+       # no audit=arg is present, append it
+       sed -i "s/\(^GRUB_CMDLINE_LINUX_DEFAULT=\".*\)\"/\1 audit=1\"/"  '/etc/default/grub'
 fi
 update-grub
 
@@ -4493,6 +4541,7 @@ do
         # with proper key
 
         echo "-w /run/utmp -p wa -k session" >> "$audit_rules_file"
+        echo "-w /var/run/utmp -p wa -k session" >> "$audit_rules_file"
     fi
 done
 # Create a list of audit *.rules files that should be inspected for presence and correctness
@@ -6466,7 +6515,7 @@ do
         # Rule isn't present yet. Append it at the end of $audit_rules_file file
         # with proper key
 
-        echo "-w /var/log/journal/ -p wa -k audit_rules_var_log_journal" >> "$audit_rules_file"
+        echo "-w /var/log/journal/ -p wa -k systemd_journal" >> "$audit_rules_file"
     fi
 done
 # Create a list of audit *.rules files that should be inspected for presence and correctness
@@ -22672,6 +22721,7 @@ do
         # with proper key
 
         echo "-w /sbin/fdisk -p x -k modules" >> "$audit_rules_file"
+        echo "-w /usr/sbin/fdisk -p x -k modules" >> "$audit_rules_file"
     fi
 done
 # Create a list of audit *.rules files that should be inspected for presence and correctness
@@ -22749,6 +22799,7 @@ do
         # with proper key
 
         echo "-w /sbin/fdisk -p x -k modules" >> "$audit_rules_file"
+        echo "-w /usr/sbin/fdisk -p x -k modules" >> "$audit_rules_file"
     fi
 done
 
@@ -23084,6 +23135,7 @@ else
 fi
 # END fix for 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_gpasswd'
 
+
 ###############################################################################
 # BEGIN fix (194 / 214) for 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_kmod'
 ###############################################################################
@@ -23092,7 +23144,7 @@ fi
 if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}\n' 'auditd' 2>/dev/null | grep -q '^installed'; then
 
 ACTION_ARCH_FILTERS="-a always,exit"
-OTHER_FILTERS="-F path=/usr/bin/kmod -F perm=x"
+OTHER_FILTERS="-F path=/bin/kmod -F perm=x"
 AUID_FILTERS="-F auid>=1000 -F auid!=unset"
 SYSCALL=""
 KEY="privileged"
@@ -25527,6 +25579,333 @@ fi
 if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}\n' 'auditd' 2>/dev/null | grep -q '^installed'; then
 
 ACTION_ARCH_FILTERS="-a always,exit"
+OTHER_FILTERS="-F path=/bin/su -F perm=x"
+AUID_FILTERS="-F auid>=1000 -F auid!=unset"
+SYSCALL=""
+KEY="privileged"
+SYSCALL_GROUPING=""
+# Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
+unset syscall_a
+unset syscall_grouping
+unset syscall_string
+unset syscall
+unset file_to_edit
+unset rule_to_edit
+unset rule_syscalls_to_edit
+unset other_string
+unset auid_string
+unset full_rule
+
+# Load macro arguments into arrays
+read -a syscall_a <<< $SYSCALL
+read -a syscall_grouping <<< $SYSCALL_GROUPING
+
+# Create a list of audit *.rules files that should be inspected for presence and correctness
+# of a particular audit rule. The scheme is as follows:
+#
+# -----------------------------------------------------------------------------------------
+#  Tool used to load audit rules | Rule already defined  |  Audit rules file to inspect    |
+# -----------------------------------------------------------------------------------------
+#        auditctl                |     Doesn't matter    |  /etc/audit/audit.rules         |
+# -----------------------------------------------------------------------------------------
+#        augenrules              |          Yes          |  /etc/audit/rules.d/*.rules     |
+#        augenrules              |          No           |  /etc/audit/rules.d/$key.rules  |
+# -----------------------------------------------------------------------------------------
+#
+files_to_inspect=()
+
+
+# If audit tool is 'augenrules', then check if the audit rule is defined
+# If rule is defined, add '/etc/audit/rules.d/*.rules' to the list for inspection
+# If rule isn't defined yet, add '/etc/audit/rules.d/$key.rules' to the list for inspection
+default_file="/etc/audit/rules.d/$KEY.rules"
+# As other_filters may include paths, lets use a different delimiter for it
+# The "F" script expression tells sed to print the filenames where the expressions matched
+readarray -t files_to_inspect < <(sed -s -n -e "/^$ACTION_ARCH_FILTERS/!d" -e "\#$OTHER_FILTERS#!d" -e "/$AUID_FILTERS/!d" -e "F" /etc/audit/rules.d/*.rules)
+# Case when particular rule isn't defined in /etc/audit/rules.d/*.rules yet
+if [ ${#files_to_inspect[@]} -eq "0" ]
+then
+    file_to_inspect="/etc/audit/rules.d/$KEY.rules"
+    files_to_inspect=("$file_to_inspect")
+    if [ ! -e "$file_to_inspect" ]
+    then
+        touch "$file_to_inspect"
+        chmod 0640 "$file_to_inspect"
+    fi
+fi
+
+# After converting to jinja, we cannot return; therefore we skip the rest of the macro if needed instead
+skip=1
+
+for audit_file in "${files_to_inspect[@]}"
+do
+    # Filter existing $audit_file rules' definitions to select those that satisfy the rule pattern,
+    # i.e, collect rules that match:
+    # * the action, list and arch, (2-nd argument)
+    # * the other filters, (3-rd argument)
+    # * the auid filters, (4-rd argument)
+    readarray -t similar_rules < <(sed -e "/^$ACTION_ARCH_FILTERS/!d"  -e "\#$OTHER_FILTERS#!d" -e "/$AUID_FILTERS/!d" "$audit_file")
+
+    candidate_rules=()
+    # Filter out rules that have more fields then required. This will remove rules more specific than the required scope
+    for s_rule in "${similar_rules[@]}"
+    do
+        # Strip all the options and fields we know of,
+        # than check if there was any field left over
+        extra_fields=$(sed -E -e "s/^$ACTION_ARCH_FILTERS//"  -e "s#$OTHER_FILTERS##" -e "s/$AUID_FILTERS//" -e "s/((:?-S [[:alnum:],]+)+)//g" -e "s/-F key=\w+|-k \w+//"<<< "$s_rule")
+        grep -q -- "-F" <<< "$extra_fields" || candidate_rules+=("$s_rule")
+    done
+
+    if [[ ${#syscall_a[@]} -ge 1 ]]
+    then
+        # Check if the syscall we want is present in any of the similar existing rules
+        for rule in "${candidate_rules[@]}"
+        do
+            rule_syscalls=$(echo "$rule" | grep -o -P '(-S [\w,]+)+' | xargs)
+            all_syscalls_found=0
+            for syscall in "${syscall_a[@]}"
+            do
+                grep -q -- "\b${syscall}\b" <<< "$rule_syscalls" || {
+                   # A syscall was not found in the candidate rule
+                   all_syscalls_found=1
+                   }
+            done
+            if [[ $all_syscalls_found -eq 0 ]]
+            then
+                # We found a rule with all the syscall(s) we want; skip rest of macro
+                skip=0
+                break
+            fi
+
+            # Check if this rule can be grouped with our target syscall and keep track of it
+            for syscall_g in "${syscall_grouping[@]}"
+            do
+                if grep -q -- "\b${syscall_g}\b" <<< "$rule_syscalls"
+                then
+                    file_to_edit=${audit_file}
+                    rule_to_edit=${rule}
+                    rule_syscalls_to_edit=${rule_syscalls}
+                fi
+            done
+        done
+    else
+        # If there is any candidate rule, it is compliant; skip rest of macro
+        if [ "${#candidate_rules[@]}" -gt 0 ]
+        then
+            skip=0
+        fi
+    fi
+
+    if [ "$skip" -eq 0 ]; then
+        break
+    fi
+done
+
+if [ "$skip" -ne 0 ]; then
+    # We checked all rules that matched the expected resemblance pattern (action, arch & auid)
+    # At this point we know if we need to either append the $full_rule or group
+    # the syscall together with an exsiting rule
+
+    # Append the full_rule if it cannot be grouped to any other rule
+    if [ -z ${rule_to_edit+x} ]
+    then
+        # Build full_rule while avoid adding double spaces when other_filters is empty
+        if [ "${#syscall_a[@]}" -gt 0 ]
+        then
+            syscall_string=""
+            for syscall in "${syscall_a[@]}"
+            do
+                syscall_string+=" -S $syscall"
+            done
+        fi
+        other_string=$([[ $OTHER_FILTERS ]] && echo " $OTHER_FILTERS") || /bin/true
+        auid_string=$([[ $AUID_FILTERS ]] && echo " $AUID_FILTERS") || /bin/true
+        full_rule="$ACTION_ARCH_FILTERS${syscall_string}${other_string}${auid_string} -F key=$KEY" || /bin/true
+        echo "$full_rule" >> "$default_file"
+        chmod o-rwx ${default_file}
+    else
+        # Check if the syscalls are declared as a comma separated list or
+        # as multiple -S parameters
+        if grep -q -- "," <<< "${rule_syscalls_to_edit}"
+        then
+            delimiter=","
+        else
+            delimiter=" -S "
+        fi
+        new_grouped_syscalls="${rule_syscalls_to_edit}"
+        for syscall in "${syscall_a[@]}"
+        do
+            grep -q -- "\b${syscall}\b" <<< "${rule_syscalls_to_edit}" || {
+               # A syscall was not found in the candidate rule
+               new_grouped_syscalls+="${delimiter}${syscall}"
+               }
+        done
+
+        # Group the syscall in the rule
+        sed -i -e "\#${rule_to_edit}#s#${rule_syscalls_to_edit}#${new_grouped_syscalls}#" "$file_to_edit"
+    fi
+fi
+unset syscall_a
+unset syscall_grouping
+unset syscall_string
+unset syscall
+unset file_to_edit
+unset rule_to_edit
+unset rule_syscalls_to_edit
+unset other_string
+unset auid_string
+unset full_rule
+
+# Load macro arguments into arrays
+read -a syscall_a <<< $SYSCALL
+read -a syscall_grouping <<< $SYSCALL_GROUPING
+
+# Create a list of audit *.rules files that should be inspected for presence and correctness
+# of a particular audit rule. The scheme is as follows:
+#
+# -----------------------------------------------------------------------------------------
+#  Tool used to load audit rules | Rule already defined  |  Audit rules file to inspect    |
+# -----------------------------------------------------------------------------------------
+#        auditctl                |     Doesn't matter    |  /etc/audit/audit.rules         |
+# -----------------------------------------------------------------------------------------
+#        augenrules              |          Yes          |  /etc/audit/rules.d/*.rules     |
+#        augenrules              |          No           |  /etc/audit/rules.d/$key.rules  |
+# -----------------------------------------------------------------------------------------
+#
+files_to_inspect=()
+
+
+
+# If audit tool is 'auditctl', then add '/etc/audit/audit.rules'
+# file to the list of files to be inspected
+default_file="/etc/audit/audit.rules"
+files_to_inspect+=('/etc/audit/audit.rules' )
+
+# After converting to jinja, we cannot return; therefore we skip the rest of the macro if needed instead
+skip=1
+
+for audit_file in "${files_to_inspect[@]}"
+do
+    # Filter existing $audit_file rules' definitions to select those that satisfy the rule pattern,
+    # i.e, collect rules that match:
+    # * the action, list and arch, (2-nd argument)
+    # * the other filters, (3-rd argument)
+    # * the auid filters, (4-rd argument)
+    readarray -t similar_rules < <(sed -e "/^$ACTION_ARCH_FILTERS/!d"  -e "\#$OTHER_FILTERS#!d" -e "/$AUID_FILTERS/!d" "$audit_file")
+
+    candidate_rules=()
+    # Filter out rules that have more fields then required. This will remove rules more specific than the required scope
+    for s_rule in "${similar_rules[@]}"
+    do
+        # Strip all the options and fields we know of,
+        # than check if there was any field left over
+        extra_fields=$(sed -E -e "s/^$ACTION_ARCH_FILTERS//"  -e "s#$OTHER_FILTERS##" -e "s/$AUID_FILTERS//" -e "s/((:?-S [[:alnum:],]+)+)//g" -e "s/-F key=\w+|-k \w+//"<<< "$s_rule")
+        grep -q -- "-F" <<< "$extra_fields" || candidate_rules+=("$s_rule")
+    done
+
+    if [[ ${#syscall_a[@]} -ge 1 ]]
+    then
+        # Check if the syscall we want is present in any of the similar existing rules
+        for rule in "${candidate_rules[@]}"
+        do
+            rule_syscalls=$(echo "$rule" | grep -o -P '(-S [\w,]+)+' | xargs)
+            all_syscalls_found=0
+            for syscall in "${syscall_a[@]}"
+            do
+                grep -q -- "\b${syscall}\b" <<< "$rule_syscalls" || {
+                   # A syscall was not found in the candidate rule
+                   all_syscalls_found=1
+                   }
+            done
+            if [[ $all_syscalls_found -eq 0 ]]
+            then
+                # We found a rule with all the syscall(s) we want; skip rest of macro
+                skip=0
+                break
+            fi
+
+            # Check if this rule can be grouped with our target syscall and keep track of it
+            for syscall_g in "${syscall_grouping[@]}"
+            do
+                if grep -q -- "\b${syscall_g}\b" <<< "$rule_syscalls"
+                then
+                    file_to_edit=${audit_file}
+                    rule_to_edit=${rule}
+                    rule_syscalls_to_edit=${rule_syscalls}
+                fi
+            done
+        done
+    else
+        # If there is any candidate rule, it is compliant; skip rest of macro
+        if [ "${#candidate_rules[@]}" -gt 0 ]
+        then
+            skip=0
+        fi
+    fi
+
+    if [ "$skip" -eq 0 ]; then
+        break
+    fi
+done
+
+if [ "$skip" -ne 0 ]; then
+    # We checked all rules that matched the expected resemblance pattern (action, arch & auid)
+    # At this point we know if we need to either append the $full_rule or group
+    # the syscall together with an exsiting rule
+
+    # Append the full_rule if it cannot be grouped to any other rule
+    if [ -z ${rule_to_edit+x} ]
+    then
+        # Build full_rule while avoid adding double spaces when other_filters is empty
+        if [ "${#syscall_a[@]}" -gt 0 ]
+        then
+            syscall_string=""
+            for syscall in "${syscall_a[@]}"
+            do
+                syscall_string+=" -S $syscall"
+            done
+        fi
+        other_string=$([[ $OTHER_FILTERS ]] && echo " $OTHER_FILTERS") || /bin/true
+        auid_string=$([[ $AUID_FILTERS ]] && echo " $AUID_FILTERS") || /bin/true
+        full_rule="$ACTION_ARCH_FILTERS${syscall_string}${other_string}${auid_string} -F key=$KEY" || /bin/true
+        echo "$full_rule" >> "$default_file"
+        chmod o-rwx ${default_file}
+    else
+        # Check if the syscalls are declared as a comma separated list or
+        # as multiple -S parameters
+        if grep -q -- "," <<< "${rule_syscalls_to_edit}"
+        then
+            delimiter=","
+        else
+            delimiter=" -S "
+        fi
+        new_grouped_syscalls="${rule_syscalls_to_edit}"
+        for syscall in "${syscall_a[@]}"
+        do
+            grep -q -- "\b${syscall}\b" <<< "${rule_syscalls_to_edit}" || {
+               # A syscall was not found in the candidate rule
+               new_grouped_syscalls+="${delimiter}${syscall}"
+               }
+        done
+
+        # Group the syscall in the rule
+        sed -i -e "\#${rule_to_edit}#s#${rule_syscalls_to_edit}#${new_grouped_syscalls}#" "$file_to_edit"
+    fi
+fi
+
+else
+    >&2 echo 'Remediation is not applicable, nothing was done'
+fi
+# END fix for 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_su'
+
+###############################################################################
+# BEGIN fix (202 / 214) for 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_su'
+###############################################################################
+(>&2 echo "Remediating rule 202/214: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_su'")
+# Remediation is applicable only in certain platforms
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}\n' 'auditd' 2>/dev/null | grep -q '^installed'; then
+
+ACTION_ARCH_FILTERS="-a always,exit"
 OTHER_FILTERS="-F path=/usr/bin/su -F perm=x"
 AUID_FILTERS="-F auid>=1000 -F auid!=unset"
 SYSCALL=""
@@ -26838,7 +27217,334 @@ ACTION_ARCH_FILTERS="-a always,exit"
 OTHER_FILTERS="-F path=/usr/sbin/unix_update -F perm=x"
 AUID_FILTERS="-F auid>=1000 -F auid!=unset"
 SYSCALL=""
-KEY="privileged"
+KEY="privileged-unix-update"
+SYSCALL_GROUPING=""
+# Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
+unset syscall_a
+unset syscall_grouping
+unset syscall_string
+unset syscall
+unset file_to_edit
+unset rule_to_edit
+unset rule_syscalls_to_edit
+unset other_string
+unset auid_string
+unset full_rule
+
+# Load macro arguments into arrays
+read -a syscall_a <<< $SYSCALL
+read -a syscall_grouping <<< $SYSCALL_GROUPING
+
+# Create a list of audit *.rules files that should be inspected for presence and correctness
+# of a particular audit rule. The scheme is as follows:
+#
+# -----------------------------------------------------------------------------------------
+#  Tool used to load audit rules | Rule already defined  |  Audit rules file to inspect    |
+# -----------------------------------------------------------------------------------------
+#        auditctl                |     Doesn't matter    |  /etc/audit/audit.rules         |
+# -----------------------------------------------------------------------------------------
+#        augenrules              |          Yes          |  /etc/audit/rules.d/*.rules     |
+#        augenrules              |          No           |  /etc/audit/rules.d/$key.rules  |
+# -----------------------------------------------------------------------------------------
+#
+files_to_inspect=()
+
+
+# If audit tool is 'augenrules', then check if the audit rule is defined
+# If rule is defined, add '/etc/audit/rules.d/*.rules' to the list for inspection
+# If rule isn't defined yet, add '/etc/audit/rules.d/$key.rules' to the list for inspection
+default_file="/etc/audit/rules.d/$KEY.rules"
+# As other_filters may include paths, lets use a different delimiter for it
+# The "F" script expression tells sed to print the filenames where the expressions matched
+readarray -t files_to_inspect < <(sed -s -n -e "/^$ACTION_ARCH_FILTERS/!d" -e "\#$OTHER_FILTERS#!d" -e "/$AUID_FILTERS/!d" -e "F" /etc/audit/rules.d/*.rules)
+# Case when particular rule isn't defined in /etc/audit/rules.d/*.rules yet
+if [ ${#files_to_inspect[@]} -eq "0" ]
+then
+    file_to_inspect="/etc/audit/rules.d/$KEY.rules"
+    files_to_inspect=("$file_to_inspect")
+    if [ ! -e "$file_to_inspect" ]
+    then
+        touch "$file_to_inspect"
+        chmod 0640 "$file_to_inspect"
+    fi
+fi
+
+# After converting to jinja, we cannot return; therefore we skip the rest of the macro if needed instead
+skip=1
+
+for audit_file in "${files_to_inspect[@]}"
+do
+    # Filter existing $audit_file rules' definitions to select those that satisfy the rule pattern,
+    # i.e, collect rules that match:
+    # * the action, list and arch, (2-nd argument)
+    # * the other filters, (3-rd argument)
+    # * the auid filters, (4-rd argument)
+    readarray -t similar_rules < <(sed -e "/^$ACTION_ARCH_FILTERS/!d"  -e "\#$OTHER_FILTERS#!d" -e "/$AUID_FILTERS/!d" "$audit_file")
+
+    candidate_rules=()
+    # Filter out rules that have more fields then required. This will remove rules more specific than the required scope
+    for s_rule in "${similar_rules[@]}"
+    do
+        # Strip all the options and fields we know of,
+        # than check if there was any field left over
+        extra_fields=$(sed -E -e "s/^$ACTION_ARCH_FILTERS//"  -e "s#$OTHER_FILTERS##" -e "s/$AUID_FILTERS//" -e "s/((:?-S [[:alnum:],]+)+)//g" -e "s/-F key=\w+|-k \w+//"<<< "$s_rule")
+        grep -q -- "-F" <<< "$extra_fields" || candidate_rules+=("$s_rule")
+    done
+
+    if [[ ${#syscall_a[@]} -ge 1 ]]
+    then
+        # Check if the syscall we want is present in any of the similar existing rules
+        for rule in "${candidate_rules[@]}"
+        do
+            rule_syscalls=$(echo "$rule" | grep -o -P '(-S [\w,]+)+' | xargs)
+            all_syscalls_found=0
+            for syscall in "${syscall_a[@]}"
+            do
+                grep -q -- "\b${syscall}\b" <<< "$rule_syscalls" || {
+                   # A syscall was not found in the candidate rule
+                   all_syscalls_found=1
+                   }
+            done
+            if [[ $all_syscalls_found -eq 0 ]]
+            then
+                # We found a rule with all the syscall(s) we want; skip rest of macro
+                skip=0
+                break
+            fi
+
+            # Check if this rule can be grouped with our target syscall and keep track of it
+            for syscall_g in "${syscall_grouping[@]}"
+            do
+                if grep -q -- "\b${syscall_g}\b" <<< "$rule_syscalls"
+                then
+                    file_to_edit=${audit_file}
+                    rule_to_edit=${rule}
+                    rule_syscalls_to_edit=${rule_syscalls}
+                fi
+            done
+        done
+    else
+        # If there is any candidate rule, it is compliant; skip rest of macro
+        if [ "${#candidate_rules[@]}" -gt 0 ]
+        then
+            skip=0
+        fi
+    fi
+
+    if [ "$skip" -eq 0 ]; then
+        break
+    fi
+done
+
+if [ "$skip" -ne 0 ]; then
+    # We checked all rules that matched the expected resemblance pattern (action, arch & auid)
+    # At this point we know if we need to either append the $full_rule or group
+    # the syscall together with an exsiting rule
+
+    # Append the full_rule if it cannot be grouped to any other rule
+    if [ -z ${rule_to_edit+x} ]
+    then
+        # Build full_rule while avoid adding double spaces when other_filters is empty
+        if [ "${#syscall_a[@]}" -gt 0 ]
+        then
+            syscall_string=""
+            for syscall in "${syscall_a[@]}"
+            do
+                syscall_string+=" -S $syscall"
+            done
+        fi
+        other_string=$([[ $OTHER_FILTERS ]] && echo " $OTHER_FILTERS") || /bin/true
+        auid_string=$([[ $AUID_FILTERS ]] && echo " $AUID_FILTERS") || /bin/true
+        full_rule="$ACTION_ARCH_FILTERS${syscall_string}${other_string}${auid_string} -F key=$KEY" || /bin/true
+        echo "$full_rule" >> "$default_file"
+        chmod o-rwx ${default_file}
+    else
+        # Check if the syscalls are declared as a comma separated list or
+        # as multiple -S parameters
+        if grep -q -- "," <<< "${rule_syscalls_to_edit}"
+        then
+            delimiter=","
+        else
+            delimiter=" -S "
+        fi
+        new_grouped_syscalls="${rule_syscalls_to_edit}"
+        for syscall in "${syscall_a[@]}"
+        do
+            grep -q -- "\b${syscall}\b" <<< "${rule_syscalls_to_edit}" || {
+               # A syscall was not found in the candidate rule
+               new_grouped_syscalls+="${delimiter}${syscall}"
+               }
+        done
+
+        # Group the syscall in the rule
+        sed -i -e "\#${rule_to_edit}#s#${rule_syscalls_to_edit}#${new_grouped_syscalls}#" "$file_to_edit"
+    fi
+fi
+unset syscall_a
+unset syscall_grouping
+unset syscall_string
+unset syscall
+unset file_to_edit
+unset rule_to_edit
+unset rule_syscalls_to_edit
+unset other_string
+unset auid_string
+unset full_rule
+
+# Load macro arguments into arrays
+read -a syscall_a <<< $SYSCALL
+read -a syscall_grouping <<< $SYSCALL_GROUPING
+
+# Create a list of audit *.rules files that should be inspected for presence and correctness
+# of a particular audit rule. The scheme is as follows:
+#
+# -----------------------------------------------------------------------------------------
+#  Tool used to load audit rules | Rule already defined  |  Audit rules file to inspect    |
+# -----------------------------------------------------------------------------------------
+#        auditctl                |     Doesn't matter    |  /etc/audit/audit.rules         |
+# -----------------------------------------------------------------------------------------
+#        augenrules              |          Yes          |  /etc/audit/rules.d/*.rules     |
+#        augenrules              |          No           |  /etc/audit/rules.d/$key.rules  |
+# -----------------------------------------------------------------------------------------
+#
+files_to_inspect=()
+
+
+
+# If audit tool is 'auditctl', then add '/etc/audit/audit.rules'
+# file to the list of files to be inspected
+default_file="/etc/audit/audit.rules"
+files_to_inspect+=('/etc/audit/audit.rules' )
+
+# After converting to jinja, we cannot return; therefore we skip the rest of the macro if needed instead
+skip=1
+
+for audit_file in "${files_to_inspect[@]}"
+do
+    # Filter existing $audit_file rules' definitions to select those that satisfy the rule pattern,
+    # i.e, collect rules that match:
+    # * the action, list and arch, (2-nd argument)
+    # * the other filters, (3-rd argument)
+    # * the auid filters, (4-rd argument)
+    readarray -t similar_rules < <(sed -e "/^$ACTION_ARCH_FILTERS/!d"  -e "\#$OTHER_FILTERS#!d" -e "/$AUID_FILTERS/!d" "$audit_file")
+
+    candidate_rules=()
+    # Filter out rules that have more fields then required. This will remove rules more specific than the required scope
+    for s_rule in "${similar_rules[@]}"
+    do
+        # Strip all the options and fields we know of,
+        # than check if there was any field left over
+        extra_fields=$(sed -E -e "s/^$ACTION_ARCH_FILTERS//"  -e "s#$OTHER_FILTERS##" -e "s/$AUID_FILTERS//" -e "s/((:?-S [[:alnum:],]+)+)//g" -e "s/-F key=\w+|-k \w+//"<<< "$s_rule")
+        grep -q -- "-F" <<< "$extra_fields" || candidate_rules+=("$s_rule")
+    done
+
+    if [[ ${#syscall_a[@]} -ge 1 ]]
+    then
+        # Check if the syscall we want is present in any of the similar existing rules
+        for rule in "${candidate_rules[@]}"
+        do
+            rule_syscalls=$(echo "$rule" | grep -o -P '(-S [\w,]+)+' | xargs)
+            all_syscalls_found=0
+            for syscall in "${syscall_a[@]}"
+            do
+                grep -q -- "\b${syscall}\b" <<< "$rule_syscalls" || {
+                   # A syscall was not found in the candidate rule
+                   all_syscalls_found=1
+                   }
+            done
+            if [[ $all_syscalls_found -eq 0 ]]
+            then
+                # We found a rule with all the syscall(s) we want; skip rest of macro
+                skip=0
+                break
+            fi
+
+            # Check if this rule can be grouped with our target syscall and keep track of it
+            for syscall_g in "${syscall_grouping[@]}"
+            do
+                if grep -q -- "\b${syscall_g}\b" <<< "$rule_syscalls"
+                then
+                    file_to_edit=${audit_file}
+                    rule_to_edit=${rule}
+                    rule_syscalls_to_edit=${rule_syscalls}
+                fi
+            done
+        done
+    else
+        # If there is any candidate rule, it is compliant; skip rest of macro
+        if [ "${#candidate_rules[@]}" -gt 0 ]
+        then
+            skip=0
+        fi
+    fi
+
+    if [ "$skip" -eq 0 ]; then
+        break
+    fi
+done
+
+if [ "$skip" -ne 0 ]; then
+    # We checked all rules that matched the expected resemblance pattern (action, arch & auid)
+    # At this point we know if we need to either append the $full_rule or group
+    # the syscall together with an exsiting rule
+
+    # Append the full_rule if it cannot be grouped to any other rule
+    if [ -z ${rule_to_edit+x} ]
+    then
+        # Build full_rule while avoid adding double spaces when other_filters is empty
+        if [ "${#syscall_a[@]}" -gt 0 ]
+        then
+            syscall_string=""
+            for syscall in "${syscall_a[@]}"
+            do
+                syscall_string+=" -S $syscall"
+            done
+        fi
+        other_string=$([[ $OTHER_FILTERS ]] && echo " $OTHER_FILTERS") || /bin/true
+        auid_string=$([[ $AUID_FILTERS ]] && echo " $AUID_FILTERS") || /bin/true
+        full_rule="$ACTION_ARCH_FILTERS${syscall_string}${other_string}${auid_string} -F key=$KEY" || /bin/true
+        echo "$full_rule" >> "$default_file"
+        chmod o-rwx ${default_file}
+    else
+        # Check if the syscalls are declared as a comma separated list or
+        # as multiple -S parameters
+        if grep -q -- "," <<< "${rule_syscalls_to_edit}"
+        then
+            delimiter=","
+        else
+            delimiter=" -S "
+        fi
+        new_grouped_syscalls="${rule_syscalls_to_edit}"
+        for syscall in "${syscall_a[@]}"
+        do
+            grep -q -- "\b${syscall}\b" <<< "${rule_syscalls_to_edit}" || {
+               # A syscall was not found in the candidate rule
+               new_grouped_syscalls+="${delimiter}${syscall}"
+               }
+        done
+
+        # Group the syscall in the rule
+        sed -i -e "\#${rule_to_edit}#s#${rule_syscalls_to_edit}#${new_grouped_syscalls}#" "$file_to_edit"
+    fi
+fi
+
+else
+    >&2 echo 'Remediation is not applicable, nothing was done'
+fi
+# END fix for 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_unix_update'
+
+###############################################################################
+# BEGIN fix (206 / 214) for 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_unix_update'
+###############################################################################
+(>&2 echo "Remediating rule 206/214: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_unix_update'")
+# Remediation is applicable only in certain platforms
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}\n' 'auditd' 2>/dev/null | grep -q '^installed'; then
+
+ACTION_ARCH_FILTERS="-a always,exit"
+OTHER_FILTERS="-F path=/sbin/unix_update -F perm=x"
+AUID_FILTERS="-F auid>=1000 -F auid!=unset"
+SYSCALL=""
+KEY="privileged-unix-update"
 SYSCALL_GROUPING=""
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 unset syscall_a
