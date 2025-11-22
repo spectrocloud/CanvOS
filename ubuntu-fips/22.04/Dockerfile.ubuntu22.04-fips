@@ -1,7 +1,7 @@
 FROM quay.io/kairos/kairos-init:v0.5.17 AS kairos-init
 
 FROM ubuntu:22.04
-ARG VERSION=v3.5.3
+ARG VERSION=v3.5.7
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s install --version "${VERSION}"

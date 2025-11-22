@@ -8,7 +8,7 @@ FROM $BASE_IMAGE
 ARG ORGNAME
 ARG KEYNAME
 ARG SATHOSTNAME
-ARG KAIROS_VERSION=v3.5.3
+ARG KAIROS_VERSION=v3.5.7
 
 RUN dnf config-manager --disable ubi-9-appstream-rpms ubi-9-baseos-rpms ubi-9-codeready-builder-rpms
 RUN rm /etc/rhsm-host
