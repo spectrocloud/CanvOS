@@ -33,7 +33,7 @@ variable "SPECTRO_LUET_REPO" {
 
 
 variable "PE_VERSION" {
-  default = "v4.7.16"
+  default = "v4.8.1"
 }
 
 variable "KAIROS_VERSION" {
