@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=registry.access.redhat.com/ubi9-init:9.4-6
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.5.26
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.5.27
 
 FROM $KAIROS_INIT_IMAGE as kairos-init
 
