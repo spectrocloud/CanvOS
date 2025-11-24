@@ -4539,9 +4539,7 @@ do
     else
         # Rule isn't present yet. Append it at the end of $audit_rules_file file
         # with proper key
-
         echo "-w /run/utmp -p wa -k session" >> "$audit_rules_file"
-        echo "-w /var/run/utmp -p wa -k session" >> "$audit_rules_file"
     fi
 done
 # Create a list of audit *.rules files that should be inspected for presence and correctness
@@ -4617,7 +4615,6 @@ do
     else
         # Rule isn't present yet. Append it at the end of $audit_rules_file file
         # with proper key
-
         echo "-w /run/utmp -p wa -k session" >> "$audit_rules_file"
     fi
 done
@@ -28414,3 +28411,20 @@ fi
 (>&2 echo "FIX FOR THIS RULE 'xccdf_org.ssgproject.content_rule_auditd_offload_logs' IS MISSING!")
 # END fix for 'xccdf_org.ssgproject.content_rule_auditd_offload_logs'
 
+###############################################################################
+# Misc fixes for STIG Compliance
+###############################################################################
+audit_rule_file_session=/etc/audit/rules.d/session.rules
+echo "-w /var/run/utmp -p wa -k session" >> "$audit_rule_file_session"
+
+audit_rule_file_modules=/etc/audit/rules.d/modules.rules
+echo "-w /bin/kmod -p x -k modules" >> "$audit_rule_file_modules"
+
+audit_rule_file_cronjob=/etc/audit/rules.d/cronjob.rules
+echo "-w /etc/cron.d/ -p wa -k cronjob" >> "$audit_rule_file_cronjob"
+echo "-w /var/spool/cron/ -p wa -k cronjobs" >> "$audit_rule_file_cronjob"
+
+chmod 640 "$audit_rule_file_cronjob"
+chmod 740 /bin/journalctl
+
+# END of Misc fixes for STIG Compliance
