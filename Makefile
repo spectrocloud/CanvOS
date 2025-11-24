@@ -22,6 +22,16 @@ space := $(empty) $(empty)
 PUSH ?= true
 DEBUG ?= false
 NO_CACHE ?= false
+DRY_RUN ?= false
+
+# Common Configuration expressions for building targets
+PUSH_ARGS = $(if $(filter true,$(PUSH)),--set *.output=type=image$(comma)push=$(PUSH),)
+# Dry run flag
+DRY_RUN_ARGS = $(if $(filter true,$(DRY_RUN)),--print,)
+# Progress output flag
+DOCKER_BUILD_OUT = $(if $(filter true,$(DEBUG)),--progress=plain,)
+# No cache flag
+DOCKER_NO_CACHE = $(if $(filter true,$(NO_CACHE)),--no-cache,)
 
 # ==============================================================================
 # COMPUTED VARIABLES
@@ -30,26 +40,20 @@ NO_CACHE ?= false
 PROVIDER_TARGET_TYPE = $(if $(filter true,$(IS_UKI)),uki-provider-image,provider-image)
 ISO_TARGET_TYPE = $(if $(filter true,$(IS_UKI)),build-uki-iso,build-iso)
 
-# Docker buildx progress output
-DOCKER_BUILD_OUT = $(if $(filter true,$(DEBUG)),--progress=plain,)
 
-# Docker buildx no-cache flag
-DOCKER_NO_CACHE = $(if $(filter true,$(NO_CACHE)),--no-cache,)
 
 # K8S versions: either from K8S_VERSION (comma-separated) or k8s_version.json
 ALL_K8S_VERSIONS = $(if $(strip $(K8S_VERSION)),\
 	$(subst $(comma),$(space),$(K8S_VERSION)),\
 	$(shell jq -r --arg key "$(K8S_DISTRIBUTION)" 'if .[$$key] then .[$$key][] else empty end' k8s_version.json))
 
-# Common BAKE_ARGS for pushing images
-PUSH_ARGS = $(if $(filter true,$(PUSH)),--set *.output=type=image$(comma)push=$(PUSH),)
 
 # ==============================================================================
 # CORE BUILD TARGET
 # ==============================================================================
 build:
 	@$(if $(BAKE_ENV),env $(BAKE_ENV)) \
-	docker buildx bake ${DOCKER_BUILD_OUT} ${DOCKER_NO_CACHE} ${TARGET} $(BAKE_ARGS)
+	docker buildx bake ${DRY_RUN_ARGS} ${DOCKER_BUILD_OUT} ${DOCKER_NO_CACHE} ${TARGET} $(BAKE_ARGS)
 
 # ==============================================================================
 # MAIN BUILD TARGETS
@@ -70,6 +74,10 @@ iso-disk-image:
 # ==============================================================================
 build-provider-images: .check-provider-prereqs $(addprefix .build-provider-image-,$(strip $(ALL_K8S_VERSIONS)))
 	@echo "All provider images built successfully"
+
+# ==============================================================================
+# PROVIDER IMAGE BUILD TARGETS (INTERNAL)
+# ==============================================================================
 
 .build-provider-image-%: .check-provider-prereqs
 	@echo "Building provider image for k8s version: $*"

@@ -9,7 +9,7 @@ RUN zypper --gpg-auto-import-keys ref
 ADD repos/opensuse* /etc/zypp/repos.d/
 RUN zypper --gpg-auto-import-keys ref
 
-ARG KAIROS_VERSION=v3.5.3
+ARG KAIROS_VERSION=v3.5.8
 COPY --from=kairos-init /kairos-init /kairos-init
 
 RUN zypper -n in \

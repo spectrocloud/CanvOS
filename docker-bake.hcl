@@ -8,7 +8,6 @@ variable "ARCH" {
 }
 
 variable "SPECTRO_PUB_REPO" {
-  # default = FIPS_ENABLED ? "us-east1-docker.pkg.dev/spectro-images-fips/dev/piyush" : "us-east1-docker.pkg.dev/spectro-images/dev/piyush"
   default = FIPS_ENABLED ? "us-east1-docker.pkg.dev/spectro-images/dev-fips/arun" : "us-east1-docker.pkg.dev/spectro-images/dev/arun"
 }
 
@@ -38,11 +37,11 @@ variable "PE_VERSION" {
 }
 
 variable "KAIROS_VERSION" {
-  default = "v3.5.3"
+  default = "v3.5.8"
 }
 
 variable AURORABOOT_IMAGE {
-  default = "quay.io/kairos/auroraboot:v0.8.7"
+  default = "quay.io/kairos/auroraboot:v0.14.0"
 }
 
 variable "K3S_PROVIDER_VERSION" {
