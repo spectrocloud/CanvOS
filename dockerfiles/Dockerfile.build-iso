@@ -1,0 +1,64 @@
+ARG AURORABOOT_IMAGE
+
+FROM ${AURORABOOT_IMAGE} AS builder
+
+ARG ARCH
+ARG ISO_NAME
+ARG CLUSTERCONFIG
+ARG EDGE_CUSTOM_CONFIG
+ARG CONTAINER_IMAGE
+
+COPY overlay/files-iso/ /overlay/
+
+COPY --from=validate-user-data /tmp/context /tmp/validate-context
+RUN if [ -f /tmp/validate-context/user-data ]; then \
+        cp /tmp/validate-context/user-data /cloud-config.yaml; \
+    fi
+
+COPY --from=iso-image / /iso-source/
+
+COPY . /tmp/build-context/
+
+RUN mkdir -p /overlay/opt/spectrocloud/content
+RUN if [ -d /tmp/build-context/content-* ]; then \
+        find /tmp/build-context -name "content-*" -type d -exec cp -r {}/*.zst /overlay/opt/spectrocloud/content/ \; 2>/dev/null || true; \
+    fi
+
+RUN if [ -n "$EDGE_CUSTOM_CONFIG" ] && [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
+        cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml; \
+    fi
+
+RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
+        for file in /overlay/opt/spectrocloud/content/*.zst; do \
+            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
+        done; \
+        rm -f /overlay/opt/spectrocloud/content/*.zst; \
+    fi
+
+RUN if [ "$CLUSTERCONFIG" != "" ] && [ -f /tmp/build-context/"$CLUSTERCONFIG" ]; then \
+        mkdir -p /overlay/opt/spectrocloud/clusterconfig && \
+        cp /tmp/build-context/"$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz; \
+    fi
+
+RUN if [ -f /tmp/build-context/local-ui.tar ]; then \
+        mkdir -p /overlay/opt/spectrocloud && \
+        tar -xf /tmp/build-context/local-ui.tar -C /overlay/opt/spectrocloud; \
+    fi
+
+RUN mkdir -p /output
+
+RUN /usr/bin/auroraboot \
+    --debug build-iso \
+    --output /output \
+    --override-name ${ISO_NAME} \
+    --overlay-iso /overlay \
+    $(if [ -f /cloud-config.yaml ] && [ -s /cloud-config.yaml ]; then echo "--cloud-config /cloud-config.yaml"; fi) \
+    dir:/iso-source
+
+RUN mkdir -p /iso && \
+    cp /output/${ISO_NAME}.iso /iso/ && \
+    cd /iso && \
+    sha256sum "${ISO_NAME}.iso" > "${ISO_NAME}.iso.sha256"
+
+FROM scratch AS output
+COPY --from=builder /iso/ /
