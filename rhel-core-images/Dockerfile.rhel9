@@ -1,4 +1,4 @@
-FROM quay.io/kairos/kairos-init:v0.5.20 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.5.27 AS kairos-init
 FROM registry.access.redhat.com/ubi9-init:9.4-6
 
 ARG USERNAME
