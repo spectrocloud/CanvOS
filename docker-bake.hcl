@@ -37,7 +37,7 @@ variable "PE_VERSION" {
 }
 
 variable "KAIROS_VERSION" {
-  default = "v3.5.8"
+  default = "v3.5.9"
 }
 
 variable AURORABOOT_IMAGE {

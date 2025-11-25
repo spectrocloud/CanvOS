@@ -12,7 +12,7 @@ on:
         description: "Kairos Init Image"
         required: false
         type: string
-        default: "quay.io/kairos/kairos-init:v0.5.27"
+        default: "quay.io/kairos/kairos-init:v0.5.28"
       arch:
         description: "Architecture"
         required: false
@@ -30,7 +30,7 @@ on:
         description: "Kairos Version"
         required: false
         type: string
-        default: "v3.5.8"
+        default: "v3.5.9"
       trusted_boot:
         description: "Trusted Boot"
         required: false
