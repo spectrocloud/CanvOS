@@ -181,6 +181,8 @@ BASE_ALPINE:
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
 
+    SAVE IMAGE --push gcr.io/spectro-dev-public/canvos/alpine:$ALPINE_TAG
+
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-own /. rootfs
@@ -814,6 +816,10 @@ KAIROS_RELEASE:
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
+    ARG IS_CLOUD_IMAGE=false
+    ARG IMAGE_REGISTRY
+    ARG IMAGE_TAG
+    
     IF [ "$IS_UKI" = "false" ]
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
@@ -822,6 +828,10 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+    IF [ "$IS_CLOUD_IMAGE" = "true" ]
+        COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
+        COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
+    END
 
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
@@ -831,7 +841,69 @@ iso-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    SAVE IMAGE palette-installer-image:$IMAGE_TAG
+    SAVE IMAGE --push $IMAGE_REGISTRY/palette-installer-image:$IMAGE_TAG
+
+cloud-image:
+    ARG IS_CLOUD_IMAGE=true
+
+    FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    # Copy the config file first
+    COPY cloud-images/config/user-data.yaml /config.yaml
+    WORKDIR /output
+
+    WITH DOCKER \
+        --pull quay.io/kairos/auroraboot:v0.6.4 \
+        --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)
+        RUN mkdir -p /output && \
+            docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /config.yaml:/config.yaml:ro \
+                -v /output:/aurora \
+                --net host \
+                --privileged \
+                quay.io/kairos/auroraboot:v0.6.4 \
+                --debug \
+                --set "disable_http_server=true" \
+                --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
+                --set "disable_netboot=true" \
+                --set "disk.raw=true" \
+                --set "state_dir=/aurora" \
+                --cloud-config /config.yaml
+    END
+    SAVE ARTIFACT /output/* AS LOCAL ./build/
+
+aws-cloud-image:
+    FROM +ubuntu
+
+    RUN apt-get update && apt-get install -y unzip ca-certificates curl
+    RUN curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+        unzip -q awscliv2.zip -d aws_install_temp && \  
+        ./aws_install_temp/aws/install && \
+        rm -rf awscliv2.zip aws_install_temp
+
+    ARG REGION
+    ARG S3_BUCKET
+    ARG S3_KEY
+    # Get the base image name from the BASE_IMAGE variable
+
+    WORKDIR /workdir
+    COPY cloud-images/scripts/create-raw-to-ami.sh create-raw-to-ami.sh
+    COPY +cloud-image/ /workdir/
+
+    RUN --secret AWS_PROFILE \
+    --secret AWS_ACCESS_KEY_ID \
+    --secret AWS_SECRET_ACCESS_KEY \
+    RAW_FILE_PATH=$(ls /workdir/*.raw) && \
+    echo "RAW_FILE_PATH: $RAW_FILE_PATH" && \
+    if [ ! -f "$RAW_FILE_PATH" ]; then \
+        echo "Error: RAW file '/workdir/$RAW_FILE_PATH' not found." && \
+        ls -la /workdir/ && \
+        exit 1; \
+    else \
+        echo "RAW file '$RAW_FILE_PATH' found." && \
+        echo "Proceeding with creation of AMI..."; \
+    fi && \
+    /workdir/create-raw-to-ami.sh $RAW_FILE_PATH
 
 iso-disk-image:
     FROM scratch
