@@ -183,7 +183,7 @@ BASE_ALPINE:
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
-    SAVE ARTIFACT --keep-own /. rootfs
+    SAVE ARTIFACT --keep-ts --keep-own /. rootfs
 
 uki-iso:
     WORKDIR /build
@@ -216,10 +216,10 @@ trust-boot-unpack:
 
 stylus-image-pack:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
-    COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
+    COPY --keep-ts --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
     RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
-    SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
+    SAVE ARTIFACT --keep-ts stylus-image.tar AS LOCAL ./build/
 
 kairos-agent:
     FROM --platform=linux/${ARCH} $BASE_IMAGE
@@ -312,7 +312,7 @@ iso:
     IF [ "$IS_UKI" = "true" ]
         COPY --platform=linux/${ARCH} +build-uki-iso/ .
     ELSE
-        COPY --platform=linux/${ARCH} +build-iso/ .
+        COPY --keep-ts --platform=linux/${ARCH} +build-iso/ .
     END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
@@ -348,7 +348,7 @@ build-iso:
     END
 
     WORKDIR /build
-    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    COPY --platform=linux/${ARCH} --keep-ts --keep-own +iso-image-rootfs/rootfs /build/image
 
     COPY --if-exists local-ui.tar /build/image/opt/spectrocloud/
     RUN if [ -f /build/image/opt/spectrocloud/local-ui.tar ]; then \
@@ -367,7 +367,7 @@ build-iso:
     END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
-    SAVE ARTIFACT /iso/*
+    SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
 ## Generate UKI keys
@@ -624,14 +624,14 @@ build-provider-trustedboot-image:
 
 stylus-image:
     FROM --platform=linux/${ARCH} $STYLUS_BASE
-    SAVE ARTIFACT --keep-own  ./*
+    SAVE ARTIFACT --keep-ts --keep-own  ./*
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
 
 stylus-package-image:
     FROM --platform=linux/${ARCH} $STYLUS_PACKAGE_BASE
-    SAVE ARTIFACT --keep-own  ./*
+    SAVE ARTIFACT --keep-ts --keep-own  ./*
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -815,9 +815,9 @@ KAIROS_RELEASE:
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
     IF [ "$IS_UKI" = "false" ]
-        COPY --platform=linux/${ARCH} +stylus-image/ /
+        COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
     ELSE
-        COPY --platform=linux/${ARCH} +stylus-image/ /
+        COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
         RUN find /opt/spectrocloud/bin/. ! -name 'agent-provider-stylus' -type f -exec rm -f {} +
         RUN rm -f /usr/bin/luet
     END
