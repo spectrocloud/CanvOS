@@ -964,3 +964,178 @@ UPX:
     COMMAND
     ARG bin
     RUN upx -1 $bin
+
+# MAAS-compatible image build targets
+# These targets create a MAAS-compatible image that includes:
+# - A raw dd image of the Kairos OS
+# - A curtin-hooks script for MAAS deployment
+# - cloud-init for first-boot configuration
+
+# Build raw dd image from iso-image using auroraboot
+# This creates a raw disk image that contains the full Kairos OS with A/B partitions
+# Uses Docker-in-Docker approach similar to the existing kairos-raw-image target
+build-kairos-dd-image:
+    FROM --platform=linux/${ARCH} --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    
+    # Install required tools
+    RUN apk add --no-cache bash findutils
+    
+    # Use Docker-in-Docker to convert iso-image to raw disk image
+    WITH DOCKER \
+        --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
+        RUN echo "=== Setting up workdir ===" && \
+            mkdir -p /workdir && \
+            cd /workdir && \
+            echo "=== Verifying Docker image is available ===" && \
+            docker images | grep palette-installer-image || echo "Warning: palette-installer-image not found" && \
+            if ! docker inspect index.docker.io/library/palette-installer-image:latest >/dev/null 2>&1; then \
+                echo "Error: Image palette-installer-image:latest not found"; \
+                docker images || true; \
+                exit 1; \
+            fi && \
+            echo "=== Running auroraboot to convert image to raw disk ===" && \
+            docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
+                --debug \
+                --set "disable_http_server=true" \
+                --set "disable_netboot=true" \
+                --set "disk.efi=true" \
+                --set "container_image=index.docker.io/library/palette-installer-image:latest" \
+                --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
+            AURORABOOT_EXIT=$?; \
+            echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
+            if [ $AURORABOOT_EXIT -ne 0 ]; then \
+                echo "Error: Auroraboot failed"; \
+                cat /workdir/auroraboot.log || true; \
+                exit 1; \
+            fi && \
+            echo "=== Finding raw image ===" && \
+            RAW_IMG=$(find /workdir -type f \( -name "*.raw" -o -name "*.img" \) -not -name "*.iso" | head -n1) && \
+            if [ -z "$RAW_IMG" ]; then \
+                echo "Error: No raw image found in /workdir"; \
+                echo "Contents of /workdir:"; \
+                ls -la /workdir/ || true; \
+                echo "Auroraboot log:"; \
+                cat /workdir/auroraboot.log || true; \
+                exit 1; \
+            fi && \
+            echo "✅ Found raw image: $RAW_IMG" && \
+            echo "Raw image size: $(du -h "$RAW_IMG" | cut -f1)" && \
+            cp "$RAW_IMG" /kairos-dd.img && \
+            echo "✅ Kairos dd image created: /kairos-dd.img"
+    END
+    
+    SAVE ARTIFACT /kairos-dd.img AS LOCAL kairos-dd.img
+
+# Build MAAS-compatible rootfs with curtin hooks and embedded dd image
+# This creates a rootfs tarball that MAAS can use for deployment
+build-maas-rootfs:
+    FROM --platform=linux/${ARCH} +iso-image
+    
+    # Ensure cloud-init is installed (required by MAAS for first-boot configuration)
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+        RUN if ! command -v cloud-init >/dev/null 2>&1; then \
+            apt-get update && \
+            apt-get install -y --no-install-recommends cloud-init && \
+            apt-get clean && \
+            rm -rf /var/lib/apt/lists/*; \
+        else \
+            echo "cloud-init already installed"; \
+        fi
+    END
+    
+    # Create directory for the dd image
+    RUN mkdir -p /usr/share/kairos
+    
+    # Copy the raw dd image into the rootfs
+    # This image will be written to disk by the curtin-hooks script during MAAS deployment
+    COPY --platform=linux/${ARCH} +build-kairos-dd-image/kairos-dd.img /usr/share/kairos/kairos-dd.img
+    
+    # Verify the dd image was copied
+    RUN if [ ! -f /usr/share/kairos/kairos-dd.img ]; then \
+            echo "Error: kairos-dd.img not found"; \
+            exit 1; \
+        else \
+            echo "✅ kairos-dd.img copied: $(du -h /usr/share/kairos/kairos-dd.img | cut -f1)"; \
+        fi
+    
+    # Ensure curtin directory exists and copy curtin hooks
+    # MAAS requires /curtin/curtin-hooks to be present in the rootfs
+    RUN mkdir -p /curtin
+    COPY overlay/files/curtin/curtin-hooks /curtin/curtin-hooks
+    RUN chmod +x /curtin/curtin-hooks
+    
+    # Verify curtin hooks are in place
+    RUN if [ ! -f /curtin/curtin-hooks ] || [ ! -x /curtin/curtin-hooks ]; then \
+            echo "Error: curtin-hooks not found or not executable"; \
+            exit 1; \
+        else \
+            echo "✅ curtin-hooks installed at /curtin/curtin-hooks"; \
+        fi
+    
+    # Ensure /etc/os-release has ID=ubuntu for curtin detection
+    # Kairos may have modified this, but MAAS/curtin needs to detect it as Ubuntu
+    RUN if [ -f /etc/os-release ]; then \
+            # Check if ID field exists, if not add it
+            if ! grep -q "^ID=" /etc/os-release; then \
+                sed -i '1iID=ubuntu' /etc/os-release; \
+            fi; \
+            # Ensure ID_LIKE includes ubuntu or debian for better compatibility
+            if ! grep -q "^ID_LIKE=" /etc/os-release; then \
+                sed -i '/^ID=/a ID_LIKE=debian' /etc/os-release; \
+            fi; \
+        else \
+            # Create minimal os-release if it doesn't exist
+            mkdir -p /etc && \
+            echo 'ID=ubuntu' > /etc/os-release && \
+            echo 'ID_LIKE=debian' >> /etc/os-release; \
+        fi
+    
+    # Create tarball of the rootfs for MAAS
+    # MAAS expects a rootfs tarball that it can extract and use
+    WORKDIR /
+    RUN tar -czf /ubuntu-kairos-maas-rootfs.tar.gz \
+        --exclude=/ubuntu-kairos-maas-rootfs.tar.gz \
+        --exclude=/proc \
+        --exclude=/sys \
+        --exclude=/dev \
+        --exclude=/run \
+        --exclude=/tmp \
+        --exclude=/var/cache \
+        --exclude=/var/tmp \
+        .
+    
+    # Verify tarball was created
+    RUN if [ ! -f /ubuntu-kairos-maas-rootfs.tar.gz ]; then \
+            echo "Error: Failed to create tarball"; \
+            exit 1; \
+        else \
+            echo "✅ MAAS rootfs tarball created: $(du -h /ubuntu-kairos-maas-rootfs.tar.gz | cut -f1)"; \
+        fi
+    
+    SAVE ARTIFACT /ubuntu-kairos-maas-rootfs.tar.gz AS LOCAL ubuntu-kairos-maas-rootfs.tar.gz
+
+# Main MAAS target - builds and exports MAAS-compatible image
+# 
+# Usage:
+#   ./earthly.sh +maas --ARCH=amd64 --OS_DISTRIBUTION=ubuntu --OS_VERSION=22
+#
+# This target creates a MAAS-compatible rootfs tarball that includes:
+# - The Kairos OS as a raw dd image (embedded in the rootfs)
+# - A curtin-hooks script for MAAS deployment
+# - cloud-init for first-boot configuration
+#
+# The output tarball can be uploaded to MAAS as a custom Ubuntu image.
+# MAAS will extract the tarball, discover the curtin-hooks script, and use it
+# to deploy the Kairos dd image to target machines.
+#
+# Design:
+# - Option A (dd image approach): We build a raw disk image with Kairos' A/B
+#   partition layout and embed it in the rootfs. The curtin-hooks script
+#   writes this image directly to the target disk, preserving all Kairos
+#   partitioning and bootloader configuration.
+#
+maas:
+    WORKDIR /build
+    COPY --platform=linux/${ARCH} +build-maas-rootfs/ubuntu-kairos-maas-rootfs.tar.gz .
+    SAVE ARTIFACT /build/ubuntu-kairos-maas-rootfs.tar.gz AS LOCAL ./build/ubuntu-kairos-maas-rootfs.tar.gz

@@ -2,13 +2,52 @@
 # Uncomment the line below to enable debug mode
 # set -x
 
+# Detect container engine (docker or podman)
+if [ -n "$EARTHLY_CONTAINER_ENGINE" ]; then
+    CONTAINER_ENGINE="$EARTHLY_CONTAINER_ENGINE"
+elif command -v podman >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
+    CONTAINER_ENGINE="podman"
+elif command -v docker >/dev/null 2>&1; then
+    CONTAINER_ENGINE="docker"
+else
+    CONTAINER_ENGINE="docker"
+fi
+
+# Set container socket path based on engine
+if [ "$CONTAINER_ENGINE" = "podman" ]; then
+    # Podman socket location varies by platform
+    # On macOS with podman machine, use the machine socket
+    # On Linux, use the standard socket
+    if [ -S "$HOME/.local/share/containers/podman/machine/podman-machine-default/podman.sock" ]; then
+        CONTAINER_SOCK="$HOME/.local/share/containers/podman/machine/podman-machine-default/podman.sock"
+    elif [ -S "/run/podman/podman.sock" ]; then
+        CONTAINER_SOCK="/run/podman/podman.sock"
+    elif [ -S "/run/user/$(id -u)/podman/podman.sock" ]; then
+        CONTAINER_SOCK="/run/user/$(id -u)/podman/podman.sock"
+    else
+        # Try to get socket from podman info
+        PODMAN_SOCK=$($CONTAINER_ENGINE info --format '{{.Host.RemoteSocket.Path}}' 2>/dev/null || echo "")
+        if [ -n "$PODMAN_SOCK" ] && [ -S "$PODMAN_SOCK" ]; then
+            CONTAINER_SOCK="$PODMAN_SOCK"
+        else
+            # Fallback - will be mounted but may not work
+            CONTAINER_SOCK="/var/run/podman/podman.sock"
+        fi
+    fi
+    # For podman, privileged mode works but may need additional setup on some systems
+    PRIVILEGED_FLAG="--privileged"
+else
+    CONTAINER_SOCK="/var/run/docker.sock"
+    PRIVILEGED_FLAG="--privileged"
+fi
+
 function build_with_proxy() {
     export HTTP_PROXY=$HTTP_PROXY
     export HTTPS_PROXY=$HTTPS_PROXY
     gitconfig=$(envsubst <.gitconfig.template | base64 | tr -d '\n')
     # cleanup any previous earthly-buildkitd
-    if [ "$(docker container inspect -f '{{.State.Running}}' earthly-buildkitd)" = "true" ]; then
-        docker stop earthly-buildkitd
+    if [ "$($CONTAINER_ENGINE container inspect -f '{{.State.Running}}' earthly-buildkitd 2>/dev/null)" = "true" ]; then
+        $CONTAINER_ENGINE stop earthly-buildkitd
     fi
     
     # Check if Docker config file exists
@@ -18,10 +57,10 @@ function build_with_proxy() {
     fi
     
     # start earthly buildkitd
-    docker run -d --privileged \
+    $CONTAINER_ENGINE run -d $PRIVILEGED_FLAG \
         --name earthly-buildkitd \
         ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} \
-        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v "$CONTAINER_SOCK:$CONTAINER_SOCK" \
         --rm -t \
         -e GLOBAL_CONFIG="$global_config" \
         -e BUILDKIT_TCP_TRANSPORT_ENABLED=true \
@@ -37,12 +76,12 @@ function build_with_proxy() {
         -p 8372:8372 \
         "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:"$EARTHLY_VERSION"
     # Update the CA certificates in the container
-    docker exec -it earthly-buildkitd update-ca-certificates
+    $CONTAINER_ENGINE exec -it earthly-buildkitd update-ca-certificates
 
-    # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged \
+    # Run Earthly in container to create artifacts. Variables are passed from the .arg file
+    $CONTAINER_ENGINE run $PRIVILEGED_FLAG \
         ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} \
-        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v "$CONTAINER_SOCK:$CONTAINER_SOCK" \
         --rm --env EARTHLY_BUILD_ARGS -t \
         -e GLOBAL_CONFIG="$global_config" \
         -e EARTHLY_BUILDKIT_HOST=tcp://0.0.0.0:8372 \
@@ -60,14 +99,17 @@ function build_with_proxy() {
 }
 
 function build_without_proxy() {
-    # Check if Docker config file exists
+    # Check if container config file exists (works for both docker and podman)
     DOCKER_CONFIG_MOUNT=""
     if [ -f "$HOME/.docker/config.json" ]; then
         DOCKER_CONFIG_MOUNT="-v$HOME/.docker/config.json:/root/.docker/config.json"
+    elif [ -f "$HOME/.config/containers/auth.json" ] && [ "$CONTAINER_ENGINE" = "podman" ]; then
+        # Podman uses different auth location
+        DOCKER_CONFIG_MOUNT="-v$HOME/.config/containers/auth.json:/root/.config/containers/auth.json"
     fi
     
-    # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "$@"
+    # Run Earthly in container to create artifacts. Variables are passed from the .arg file
+    $CONTAINER_ENGINE run $PRIVILEGED_FLAG ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} -v "$CONTAINER_SOCK:$CONTAINER_SOCK" --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "$@"
 }
 
 function print_os_pack() {
@@ -117,15 +159,49 @@ fi
 
 ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:3.20
 ### Verify Dependencies
-# Check if Docker is installed
-if command -v docker >/dev/null 2>&1; then
-    echo "version: $(docker -v)"
+# Check if container engine is installed
+if command -v "$CONTAINER_ENGINE" >/dev/null 2>&1; then
+    echo "Using container engine: $CONTAINER_ENGINE"
+    echo "version: $($CONTAINER_ENGINE -v)"
 else
-    echo "Docker not found.  Please use the guide for your platform located https://docs.docker.com/engine/install/ to install Docker."
+    echo "Container engine ($CONTAINER_ENGINE) not found."
+    if [ "$CONTAINER_ENGINE" = "docker" ]; then
+        echo "Please use the guide for your platform located https://docs.docker.com/engine/install/ to install Docker."
+    else
+        echo "Please install podman: https://podman.io/getting-started/installation"
+    fi
+    exit 1
 fi
+
+# For podman on macOS, check if machine is running
+if [ "$CONTAINER_ENGINE" = "podman" ] && [[ "$OSTYPE" == "darwin"* ]]; then
+    if ! $CONTAINER_ENGINE machine list --format '{{.Name}}\t{{.Running}}' 2>/dev/null | grep -q "true"; then
+        echo "Warning: Podman machine may not be running."
+        echo "Attempting to start podman machine..."
+        if $CONTAINER_ENGINE machine start 2>/dev/null; then
+            echo "Podman machine started successfully."
+            sleep 2  # Give it a moment to fully start
+        else
+            echo "Could not start podman machine automatically."
+            echo "Please run 'podman machine start' manually and try again."
+        fi
+    fi
+fi
+
 # Check if the current user has permission to run privileged containers
-if ! docker run --rm --privileged "$ALPINE_IMG" sh -c 'echo "Privileged container test"' &>/dev/null; then
+if ! $CONTAINER_ENGINE run --rm $PRIVILEGED_FLAG "$ALPINE_IMG" sh -c 'echo "Privileged container test"' &>/dev/null; then
     echo "Privileged containers are not allowed for the current user."
+    if [ "$CONTAINER_ENGINE" = "podman" ]; then
+        echo "For podman, you may need to:"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "  1. Ensure podman machine is running: 'podman machine start'"
+            echo "  2. Check podman machine status: 'podman machine list'"
+        else
+            echo "  1. Configure podman to run rootless with proper permissions"
+            echo "  2. Or run as root/sudo (not recommended)"
+        fi
+        echo "  3. Socket location: $CONTAINER_SOCK"
+    fi
     exit 1
 fi
 if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY" ] && [ -z "$(find certs -type f ! -name '.*' -print -quit)" ]; then
@@ -140,12 +216,12 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 # Cleanup builder helper images.
-docker rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION"
-if [ "$(docker container inspect -f '{{.State.Running}}' earthly-buildkitd)" = "true" ]; then
-    docker stop earthly-buildkitd
+$CONTAINER_ENGINE rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" 2>/dev/null || true
+if [ "$($CONTAINER_ENGINE container inspect -f '{{.State.Running}}' earthly-buildkitd 2>/dev/null)" = "true" ]; then
+    $CONTAINER_ENGINE stop earthly-buildkitd
 fi
-docker rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:"$EARTHLY_VERSION" 2>/dev/null
-docker rmi "$ALPINE_IMG"
+$CONTAINER_ENGINE rmi "$SPECTRO_PUB_REPO"/third-party/edge/earthly/buildkitd:"$EARTHLY_VERSION" 2>/dev/null || true
+$CONTAINER_ENGINE rmi "$ALPINE_IMG" 2>/dev/null || true
 
 if [[ "$1" == "+uki-genkey" ]]; then
     ./keys.sh secure-boot/
