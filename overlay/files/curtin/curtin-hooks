@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""
+Curtin hooks script for MAAS deployment of Kairos Ubuntu images.
+
+This script is executed by curtin in the MAAS ephemeral environment during
+installation. It handles writing the Kairos dd image to the target disk.
+"""
+
+import os
+import sys
+from curtin.config import load_command_config
+from curtin.log import LOG, basicConfig, DEBUG
+from curtin.util import load_command_environment, subp
+
+def main():
+    # Setup logging
+    basicConfig(stream=sys.stderr, verbosity=DEBUG)
+    
+    # Load curtin state and config
+    state = load_command_environment()
+    cfg = load_command_config(None, state)
+    
+    target = state.get("target", "/target")
+    
+    # Get target disk from config
+    # MAAS typically provides this in storage config
+    target_disk = None
+    storage_config = cfg.get("storage", {}).get("config", [])
+    if storage_config:
+        # Look for the root disk in storage config
+        for entry in storage_config:
+            if entry.get("type") == "disk" and entry.get("id") == "disk-root":
+                target_disk = entry.get("path")
+                break
+            # Also check for path directly
+            if entry.get("path") and entry.get("path").startswith("/dev/"):
+                target_disk = entry.get("path")
+                break
+    
+    # Fallback: try to get from MAAS-specific config
+    if not target_disk:
+        target_disk = cfg.get("maas", {}).get("target_disk")
+    
+    # Final fallback: use /dev/sda (common default)
+    if not target_disk:
+        target_disk = "/dev/sda"
+        LOG.warning("Target disk not found in config, using default: %s", target_disk)
+    
+    LOG.info("Installing Kairos dd image onto %s", target_disk)
+    
+    # The Kairos dd image is shipped inside the rootfs tarball
+    # When curtin extracts the rootfs, the image will be at this path relative to the rootfs
+    # We need to check both the target mount point and the ephemeral environment
+    image_paths = [
+        os.path.join(target, "usr/share/kairos/kairos-dd.img"),
+        "/usr/share/kairos/kairos-dd.img",
+        os.path.join(state.get("scratch", "/tmp"), "usr/share/kairos/kairos-dd.img"),
+    ]
+    
+    image_path = None
+    for path in image_paths:
+        if os.path.exists(path):
+            image_path = path
+            break
+    
+    if not image_path:
+        raise RuntimeError(f"Kairos dd image not found. Searched: {image_paths}")
+    
+    # Verify the image file exists and is readable
+    if not os.access(image_path, os.R_OK):
+        raise RuntimeError(f"Kairos dd image at {image_path} is not readable")
+    
+    LOG.info("Found Kairos dd image at %s (size: %s bytes)", 
+             image_path, os.path.getsize(image_path))
+    
+    # Flush buffers before writing
+    subp(["sync"])
+    
+    # dd the raw image to the disk
+    # Use direct I/O for better performance and reliability
+    LOG.info("Writing Kairos image to %s (this may take a while)...", target_disk)
+    subp(["dd", f"if={image_path}", f"of={target_disk}", 
+          "bs=4M", "oflag=direct", "status=progress"])
+    
+    # Final sync to ensure all data is written
+    subp(["sync"])
+    
+    LOG.info("Kairos dd image successfully written to %s", target_disk)
+    LOG.info("curtin-hooks for Kairos finished successfully")
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
+
