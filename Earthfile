@@ -1006,7 +1006,8 @@ build-kairos-dd-image:
     # Use Docker-in-Docker to convert iso-image to raw disk image
     WITH DOCKER \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
-        RUN echo "=== Setting up workdir ===" && \
+        RUN set -e && \
+            echo "=== Setting up workdir ===" && \
             mkdir -p /workdir && \
             cd /workdir && \
             echo "=== Verifying Docker image is available ===" && \
@@ -1016,11 +1017,12 @@ build-kairos-dd-image:
                 docker images || true; \
                 exit 1; \
             fi && \
-            echo "=== Checking for KAIROS_IMAGE_LABEL in image ===" && \
-            docker inspect index.docker.io/library/palette-installer-image:latest | grep -i "KAIROS_IMAGE_LABEL" || \
-            (echo "KAIROS_IMAGE_LABEL not found in image labels, checking /etc/kairos-release in image..." && \
-             docker run --rm index.docker.io/library/palette-installer-image:latest cat /etc/kairos-release 2>/dev/null | grep KAIROS_IMAGE_LABEL || \
-             echo "Warning: KAIROS_IMAGE_LABEL not found in /etc/kairos-release either") && \
+            echo "=== Checking for KAIROS_IMAGE_LABEL in /etc/kairos-release ===" && \
+            docker run --rm index.docker.io/library/palette-installer-image:latest cat /etc/kairos-release 2>/dev/null | grep KAIROS_IMAGE_LABEL || \
+            (echo "ERROR: KAIROS_IMAGE_LABEL not found in /etc/kairos-release" && \
+             echo "Contents of /etc/kairos-release:" && \
+             docker run --rm index.docker.io/library/palette-installer-image:latest cat /etc/kairos-release 2>/dev/null || echo "File not found" && \
+             exit 1) && \
             echo "=== Running auroraboot to convert image to raw disk ===" && \
             docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
                 -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
@@ -1029,23 +1031,23 @@ build-kairos-dd-image:
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
                 --set "container_image=index.docker.io/library/palette-installer-image:latest" \
-                --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
+                --set "state_dir=/aurora" > /workdir/auroraboot.log 2>&1; \
             AURORABOOT_EXIT=$?; \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
             if [ $AURORABOOT_EXIT -ne 0 ]; then \
-                echo "Error: Auroraboot failed"; \
-                echo "=== Auroraboot log (last 50 lines) ==="; \
-                tail -50 /workdir/auroraboot.log || cat /workdir/auroraboot.log || true; \
+                echo "ERROR: Auroraboot failed with exit code $AURORABOOT_EXIT"; \
+                echo "=== Full Auroraboot log ==="; \
+                cat /workdir/auroraboot.log || true; \
                 exit 1; \
             fi && \
             echo "=== Finding raw image ===" && \
             RAW_IMG=$(find /workdir -type f \( -name "*.raw" -o -name "*.img" \) -not -name "*.iso" | head -n1) && \
             if [ -z "$RAW_IMG" ]; then \
-                echo "Error: No raw image found in /workdir"; \
+                echo "ERROR: No raw image found in /workdir"; \
                 echo "Contents of /workdir:"; \
-                ls -la /workdir/ || true; \
-                echo "Auroraboot log:"; \
-                tail -50 /workdir/auroraboot.log || cat /workdir/auroraboot.log || true; \
+                ls -laR /workdir/ || true; \
+                echo "=== Auroraboot log ==="; \
+                cat /workdir/auroraboot.log || true; \
                 exit 1; \
             fi && \
             echo "✅ Found raw image: $RAW_IMG" && \
