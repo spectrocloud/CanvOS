@@ -814,6 +814,12 @@ KAIROS_RELEASE:
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
+    # Make OS_VERSION and ARCH available as environment variables for use in RUN commands
+    ARG OS_VERSION
+    ARG ARCH
+    ENV OS_VERSION=${OS_VERSION}
+    ENV ARCH=${ARCH}
+    
     IF [ "$IS_UKI" = "false" ]
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
@@ -822,15 +828,32 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
-
+    
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
-
+    
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
-
+    
+    # Set KAIROS_IMAGE_LABEL for auroraboot compatibility
+    # Auroraboot reads this from /etc/kairos-release file in the image
+    # Format: OS_VERSION-standard-ARCH-generic (e.g., 22.04-standard-amd64-generic)
+    RUN KAIROS_LABEL="${OS_VERSION}-standard-${ARCH}-generic" && \
+        if [ -f /etc/kairos-release ]; then \
+            if ! grep -q "^KAIROS_IMAGE_LABEL=" /etc/kairos-release; then \
+                echo "KAIROS_IMAGE_LABEL=\"$KAIROS_LABEL\"" >> /etc/kairos-release; \
+            else \
+                sed -i "s|^KAIROS_IMAGE_LABEL=.*|KAIROS_IMAGE_LABEL=\"$KAIROS_LABEL\"|" /etc/kairos-release; \
+            fi; \
+        else \
+            mkdir -p /etc && \
+            echo "KAIROS_IMAGE_LABEL=\"$KAIROS_LABEL\"" > /etc/kairos-release; \
+        fi && \
+        echo "Set KAIROS_IMAGE_LABEL=$KAIROS_LABEL in /etc/kairos-release" && \
+        grep KAIROS_IMAGE_LABEL /etc/kairos-release || echo "Warning: KAIROS_IMAGE_LABEL not found after setting"
+    
     SAVE IMAGE palette-installer-image:$IMAGE_TAG
 
 iso-disk-image:
@@ -993,6 +1016,11 @@ build-kairos-dd-image:
                 docker images || true; \
                 exit 1; \
             fi && \
+            echo "=== Checking for KAIROS_IMAGE_LABEL in image ===" && \
+            docker inspect index.docker.io/library/palette-installer-image:latest | grep -i "KAIROS_IMAGE_LABEL" || \
+            (echo "KAIROS_IMAGE_LABEL not found in image labels, checking /etc/kairos-release in image..." && \
+             docker run --rm index.docker.io/library/palette-installer-image:latest cat /etc/kairos-release 2>/dev/null | grep KAIROS_IMAGE_LABEL || \
+             echo "Warning: KAIROS_IMAGE_LABEL not found in /etc/kairos-release either") && \
             echo "=== Running auroraboot to convert image to raw disk ===" && \
             docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
                 -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
@@ -1006,7 +1034,8 @@ build-kairos-dd-image:
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
             if [ $AURORABOOT_EXIT -ne 0 ]; then \
                 echo "Error: Auroraboot failed"; \
-                cat /workdir/auroraboot.log || true; \
+                echo "=== Auroraboot log (last 50 lines) ==="; \
+                tail -50 /workdir/auroraboot.log || cat /workdir/auroraboot.log || true; \
                 exit 1; \
             fi && \
             echo "=== Finding raw image ===" && \
@@ -1016,7 +1045,7 @@ build-kairos-dd-image:
                 echo "Contents of /workdir:"; \
                 ls -la /workdir/ || true; \
                 echo "Auroraboot log:"; \
-                cat /workdir/auroraboot.log || true; \
+                tail -50 /workdir/auroraboot.log || cat /workdir/auroraboot.log || true; \
                 exit 1; \
             fi && \
             echo "✅ Found raw image: $RAW_IMG" && \
