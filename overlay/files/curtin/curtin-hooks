@@ -27,28 +27,72 @@ OEM_CONFIG_PATH = "userdata.yaml"   # final path will be /oem/userdata.yaml
 
 
 def find_target_disk(cfg, state):
-    """Determine the target disk from curtin/MAAS config."""
-    target_disk = None
+    """
+    Determine the target disk from curtin/MAAS config.
 
+    Strategy:
+      1. Follow the '/' mount from storage.config back to its disk.
+      2. If that fails, use any 'disk' entry with a /dev/* path.
+      3. If that fails, auto-discover from lsblk and pick the largest disk.
+      4. Last resort: /dev/sda.
+    """
     storage_config = cfg.get("storage", {}).get("config", [])
-    if storage_config:
-        for entry in storage_config:
-            if entry.get("type") == "disk" and entry.get("id") == "disk-root":
-                target_disk = entry.get("path")
-                if target_disk:
-                    break
-            if entry.get("path") and entry.get("path").startswith("/dev/"):
-                target_disk = entry.get("path")
-                break
+    LOG.info("Curtin storage config: %s", storage_config)
 
-    if not target_disk:
-        target_disk = cfg.get("maas", {}).get("target_disk")
+    # Index by id for quick lookup
+    by_id = {e.get("id"): e for e in storage_config if "id" in e}
 
-    if not target_disk:
-        target_disk = "/dev/sda"
-        LOG.warning("Target disk not found in config, using default: %s", target_disk)
+    # 1. Find the mount entry for '/' and walk its device chain back to a disk
+    root_mount = None
+    for entry in storage_config:
+        if entry.get("type") == "mount" and entry.get("path") == "/":
+            root_mount = entry
+            break
 
-    return target_disk
+    if root_mount:
+        dev_id = root_mount.get("device")
+        visited = set()
+        while dev_id and dev_id in by_id and dev_id not in visited:
+            visited.add(dev_id)
+            entry = by_id[dev_id]
+            if entry.get("type") == "disk" and entry.get("path", "").startswith("/dev/"):
+                LOG.info("Using disk from root mount chain: %s", entry["path"])
+                return entry["path"]
+            dev_id = entry.get("device")
+
+    # 2. Fall back to the first 'disk' entry with a /dev path
+    for entry in storage_config:
+        if entry.get("type") == "disk" and entry.get("path", "").startswith("/dev/"):
+            LOG.info("Using first disk from storage config: %s", entry["path"])
+            return entry["path"]
+
+    # 3. Fallback: use lsblk to pick the largest disk
+    try:
+        out, _ = subp(["lsblk", "-ndo", "NAME,TYPE,SIZE"], capture=True)
+        LOG.info("lsblk output:\n%s", out)
+        best = None
+        best_size = b"0"
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+            name, typ, size = parts
+            if typ != b"disk":
+                continue
+            dev = "/dev/" + name.decode()
+            # crude but sufficient: compare size strings lexicographically
+            if size > best_size:
+                best_size = size
+                best = dev
+        if best:
+            LOG.warning("Using largest disk from lsblk fallback: %s", best)
+            return best
+    except Exception as e:
+        LOG.warning("lsblk-based disk detection failed: %s", e)
+
+    # 4. Last resort
+    LOG.warning("Target disk not found in config, using fallback /dev/sda")
+    return "/dev/sda"
 
 
 def find_kairos_image(state, target_root):
@@ -169,7 +213,7 @@ def install_apt_shim(target_root):
     Install a fake 'apt' inside the temporary /target so that MAAS'
     extra_modules step ('apt install linux-modules-extra-...') always
     succeeds. This only affects the throwaway /target tree, not the
-    actual Kairos disk written to /dev/sda.
+    actual Kairos disk written to the target disk.
     """
     apt_path = os.path.join(target_root, "usr/bin/apt")
     os.makedirs(os.path.dirname(apt_path), exist_ok=True)
@@ -225,4 +269,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
