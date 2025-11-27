@@ -1,94 +1,227 @@
 #!/usr/bin/env python3
 """
-Curtin hooks script for MAAS deployment of Kairos Ubuntu images.
+Curtin hooks script for MAAS deployment of Kairos/CanvOS images.
 
-This script is executed by curtin in the MAAS ephemeral environment during
-installation. It handles writing the Kairos dd image to the target disk.
+Responsibilities:
+- Find the target installation disk from curtin/MAAS config.
+- Locate the embedded Kairos dd image inside the extracted rootfs.
+- dd the Kairos disk image onto the target disk (preserving A/B layout + boot menu).
+- If MAAS user-data (cloudconfig) is present, write it into the Kairos OEM
+  partition as /oem/userdata.yaml (via OEM label) so Kairos picks it up.
+- Drop an 'apt' shim into the temporary /target so MAAS late extra_modules
+  step ("apt install linux-modules-extra-...") always succeeds.
 """
 
 import os
 import sys
+import textwrap
+
 from curtin.config import load_command_config
 from curtin.log import LOG, basicConfig, DEBUG
 from curtin.util import load_command_environment, subp
 
-def main():
-    # Setup logging
-    basicConfig(stream=sys.stderr, verbosity=DEBUG)
-    
-    # Load curtin state and config
-    state = load_command_environment()
-    cfg = load_command_config(None, state)
-    
-    target = state.get("target", "/target")
-    
-    # Get target disk from config
-    # MAAS typically provides this in storage config
+# Adjust if your OEM label/path differ
+OEM_LABEL = "COS_OEM"          # label of Kairos OEM partition in the dd image
+OEM_MOUNTPOINT = "/mnt/kairos-oem"
+OEM_CONFIG_PATH = "userdata.yaml"   # final path will be /oem/userdata.yaml
+
+
+def find_target_disk(cfg, state):
+    """Determine the target disk from curtin/MAAS config."""
     target_disk = None
+
     storage_config = cfg.get("storage", {}).get("config", [])
     if storage_config:
-        # Look for the root disk in storage config
         for entry in storage_config:
             if entry.get("type") == "disk" and entry.get("id") == "disk-root":
                 target_disk = entry.get("path")
-                break
-            # Also check for path directly
+                if target_disk:
+                    break
             if entry.get("path") and entry.get("path").startswith("/dev/"):
                 target_disk = entry.get("path")
                 break
-    
-    # Fallback: try to get from MAAS-specific config
+
     if not target_disk:
         target_disk = cfg.get("maas", {}).get("target_disk")
-    
-    # Final fallback: use /dev/sda (common default)
+
     if not target_disk:
         target_disk = "/dev/sda"
         LOG.warning("Target disk not found in config, using default: %s", target_disk)
-    
-    LOG.info("Installing Kairos dd image onto %s", target_disk)
-    
-    # The Kairos dd image is shipped inside the rootfs tarball
-    # When curtin extracts the rootfs, the image will be at this path relative to the rootfs
-    # We need to check both the target mount point and the ephemeral environment
-    image_paths = [
-        os.path.join(target, "usr/share/kairos/kairos-dd.img"),
+
+    return target_disk
+
+
+def find_kairos_image(state, target_root):
+    """Locate the Kairos dd image inside the extracted rootfs or scratch."""
+    candidates = [
+        os.path.join(target_root, "usr/share/kairos/kairos-dd.img"),
         "/usr/share/kairos/kairos-dd.img",
         os.path.join(state.get("scratch", "/tmp"), "usr/share/kairos/kairos-dd.img"),
     ]
-    
-    image_path = None
-    for path in image_paths:
+
+    for path in candidates:
         if os.path.exists(path):
-            image_path = path
-            break
-    
-    if not image_path:
-        raise RuntimeError(f"Kairos dd image not found. Searched: {image_paths}")
-    
-    # Verify the image file exists and is readable
+            return path
+
+    raise RuntimeError(
+        "Kairos dd image not found. Searched:\n" +
+        "\n".join(f"  - {p}" for p in candidates)
+    )
+
+
+def write_kairos_image(image_path, target_disk):
+    """dd the Kairos raw disk image to the target disk."""
     if not os.access(image_path, os.R_OK):
         raise RuntimeError(f"Kairos dd image at {image_path} is not readable")
-    
-    LOG.info("Found Kairos dd image at %s (size: %s bytes)", 
-             image_path, os.path.getsize(image_path))
-    
-    # Flush buffers before writing
+
+    size = os.path.getsize(image_path)
+    LOG.info("Found Kairos dd image at %s (size: %s bytes)", image_path, size)
+
     subp(["sync"])
-    
-    # dd the raw image to the disk
-    # Use direct I/O for better performance and reliability
     LOG.info("Writing Kairos image to %s (this may take a while)...", target_disk)
-    subp(["dd", f"if={image_path}", f"of={target_disk}", 
-          "bs=4M", "oflag=direct", "status=progress"])
-    
-    # Final sync to ensure all data is written
+    subp([
+        "dd",
+        f"if={image_path}",
+        f"of={target_disk}",
+        "bs=4M",
+        "oflag=direct",
+        "status=progress",
+    ])
     subp(["sync"])
-    
     LOG.info("Kairos dd image successfully written to %s", target_disk)
-    LOG.info("curtin-hooks for Kairos finished successfully")
-    
+
+
+def find_oem_partition(target_disk):
+    """Refresh partition table and locate the OEM partition by label."""
+    LOG.info("Refreshing partition table for %s", target_disk)
+    try:
+        subp(["partprobe", target_disk])
+    except Exception as e:
+        LOG.warning("partprobe failed on %s: %s", target_disk, e)
+
+    try:
+        subp(["udevadm", "settle"])
+    except Exception as e:
+        LOG.warning("udevadm settle failed: %s", e)
+
+    LOG.info("Searching for OEM partition with label %s", OEM_LABEL)
+    try:
+        out, _ = subp(
+            ["blkid", "-t", f"LABEL={OEM_LABEL}", "-o", "device"],
+            capture=True
+        )
+        dev = out.strip()
+        if dev:
+            LOG.info("Found OEM partition %s", dev)
+            return dev
+    except Exception as e:
+        LOG.warning("blkid search for OEM label %s failed: %s", OEM_LABEL, e)
+
+    LOG.warning("OEM partition with label %s not found", OEM_LABEL)
+    return None
+
+
+def write_kairos_user_data(oem_dev, cloudconfig):
+    """Write MAAS user-data (cloudconfig) into the Kairos OEM partition."""
+    if not cloudconfig:
+        LOG.info("No cloudconfig provided by MAAS; skipping Kairos config injection")
+        return
+
+    if not oem_dev:
+        LOG.warning(
+            "Cannot write Kairos user-data: OEM partition not found. "
+            "User-data will NOT be applied."
+        )
+        return
+
+    os.makedirs(OEM_MOUNTPOINT, exist_ok=True)
+
+    LOG.info("Mounting OEM partition %s to %s", oem_dev, OEM_MOUNTPOINT)
+    subp(["mount", oem_dev, OEM_MOUNTPOINT])
+
+    try:
+        cfg_path = os.path.join(OEM_MOUNTPOINT, OEM_CONFIG_PATH)
+        LOG.info("Writing MAAS user-data to %s", cfg_path)
+
+        if isinstance(cloudconfig, str):
+            payload = cloudconfig
+        else:
+            try:
+                import yaml
+                payload = yaml.safe_dump(cloudconfig)
+            except Exception:
+                payload = str(cloudconfig)
+
+        payload = textwrap.dedent(payload).lstrip("\n")
+
+        with open(cfg_path, "w") as f:
+            f.write(payload)
+
+        subp(["sync"])
+        LOG.info("Kairos user-data written successfully")
+    finally:
+        LOG.info("Unmounting OEM partition %s", oem_dev)
+        subp(["umount", OEM_MOUNTPOINT])
+
+
+def install_apt_shim(target_root):
+    """
+    Install a fake 'apt' inside the temporary /target so that MAAS'
+    extra_modules step ('apt install linux-modules-extra-...') always
+    succeeds. This only affects the throwaway /target tree, not the
+    actual Kairos disk written to /dev/sda.
+    """
+    apt_path = os.path.join(target_root, "usr/bin/apt")
+    os.makedirs(os.path.dirname(apt_path), exist_ok=True)
+
+    LOG.info("Installing apt shim at %s to satisfy MAAS extra_modules", apt_path)
+
+    shim = """#!/bin/sh
+echo "apt shim called: $@" >&2
+# Pretend everything is fine
+exit 0
+"""
+    with open(apt_path, "w") as f:
+        f.write(shim)
+
+    os.chmod(apt_path, 0o755)
+    LOG.info("apt shim installed")
+
+
+def main():
+    basicConfig(stream=sys.stderr, verbosity=DEBUG)
+    LOG.info("Starting Kairos curtin hook")
+
+    state = load_command_environment()
+    cfg = load_command_config(None, state)
+
+    target_root = state.get("target", "/target")
+    target_disk = find_target_disk(cfg, state)
+
+    LOG.info("Target root: %s", target_root)
+    LOG.info("Target disk: %s", target_disk)
+
+    # 1. Locate and write the Kairos dd image
+    image_path = find_kairos_image(state, target_root)
+    write_kairos_image(image_path, target_disk)
+
+    # 2. Inject MAAS cloudconfig into Kairos OEM if available
+    oem_dev = find_oem_partition(target_disk)
+    cloudconfig = cfg.get("cloudconfig")
+    if cloudconfig:
+        LOG.info("Cloudconfig found; injecting into Kairos OEM partition")
+    else:
+        LOG.info("No cloudconfig found in curtin config")
+
+    write_kairos_user_data(oem_dev, cloudconfig)
+
+    # 3. Install apt shim in temporary /target so that MAAS late extra_modules
+    #    step ('apt install linux-modules-extra-...') does not fail.
+    install_apt_shim(target_root)
+
+    LOG.info("Kairos curtin hook completed successfully")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

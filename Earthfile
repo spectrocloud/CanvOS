@@ -1195,3 +1195,4 @@ maas:
     WORKDIR /build
     COPY --platform=linux/${ARCH} +build-maas-rootfs/ubuntu-kairos-maas-rootfs.tar.gz .
     SAVE ARTIFACT /build/ubuntu-kairos-maas-rootfs.tar.gz AS LOCAL ./build/ubuntu-kairos-maas-rootfs.tar.gz
+
