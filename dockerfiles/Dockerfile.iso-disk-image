@@ -1,0 +1,5 @@
+FROM scratch
+
+COPY --from=build-iso /*.iso /disk/
+
+LABEL org.opencontainers.image.title="CanvOS Installer Disk Image"

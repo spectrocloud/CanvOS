@@ -1,0 +1,99 @@
+ARG ARCH
+
+FROM base-image AS provider-image
+
+ARG IMAGE_REPO
+ARG K8S_DISTRIBUTION
+ARG K8S_VERSION
+ARG K3S_FLAVOR_TAG
+ARG RKE2_FLAVOR_TAG
+ARG OS_DISTRIBUTION
+ARG EDGE_CUSTOM_CONFIG
+ARG TWO_NODE
+ARG KINE_VERSION
+ARG IMAGE_PATH
+ARG IS_UKI
+ARG ARCH
+
+RUN if [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]; then \
+        BASE_K8S_VERSION="$K8S_VERSION"; \
+        if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]; then \
+            kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi; \
+        fi; \
+    elif [ "$K8S_DISTRIBUTION" = "k3s" ]; then \
+        K8S_DISTRIBUTION_TAG="$K3S_FLAVOR_TAG"; \
+        BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
+    elif [ "$K8S_DISTRIBUTION" = "rke2" ]; then \
+        K8S_DISTRIBUTION_TAG="$RKE2_FLAVOR_TAG"; \
+        BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
+    fi
+
+COPY overlay/files/etc/ /etc/
+
+RUN if [ -f /etc/logrotate.d/stylus.conf ]; then \
+        chmod 644 /etc/logrotate.d/stylus.conf; \
+    fi
+
+COPY --from=kairos-provider-image / /
+COPY --from=stylus-image /etc/kairos/branding /etc/kairos/branding
+COPY --from=stylus-image /oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
+COPY --from=stylus-image /etc/elemental/config.yaml /etc/elemental/config.yaml
+
+COPY . /tmp/build-context/
+RUN if [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
+        cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
+    fi
+
+COPY --from=install-k8s /output/ /tmp/k8s-output/
+COPY --from=internal-slink /slink /usr/bin/slink
+
+RUN if [ "$IS_UKI" = "true" ]; then \
+        mkdir -p /k8s && cp -r /tmp/k8s-output/* /k8s/ && \
+        slink --source /k8s/ --target /opt/k8s && \
+        rm -f /usr/bin/slink && \
+        rm -rf /k8s && \
+        ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus; \
+    else \
+        cp -r /tmp/k8s-output/* /; \
+    fi && \
+    rm -rf /tmp/k8s-output
+
+RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+
+COPY --from=third-party-etcdctl /WORKDIR/etcdctl /usr/bin/
+
+RUN touch /etc/machine-id && \
+    chmod 444 /etc/machine-id
+
+RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$K8S_DISTRIBUTION" = "nodeadm" ]; then \
+        apt-get update -y && apt-get install -y gnupg && \
+        /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION --skip validate && \
+        /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION --skip validate && \
+        find /opt/ssm -type f -name "amazon-ssm-agent.deb" -exec sudo dpkg -i {} \; && \
+        apt-get remove gnupg -y && apt autoremove -y && \
+        mv /usr/local/bin/aws-iam-authenticator /usr/bin && \
+        mv /usr/local/bin/aws_signing_helper /usr/bin && \
+        cp /lib/systemd/system/amazon-ssm-agent.service /etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service; \
+    fi
+
+RUN if [ "$TWO_NODE" = "true" ]; then \
+        if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
+            apt install -y ca-certificates curl && \
+            install -d /usr/share/postgresql-common/pgdg && \
+            curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+            echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+            apt update && \
+            apt install -y postgresql-16 postgresql-contrib-16 iputils-ping; \
+        elif [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]; then \
+            zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
+            zypper --gpg-auto-import-keys ref && \
+            zypper install -y postgresql-16 postgresql-server-16 postgresql-contrib iputils; \
+        fi && \
+        mkdir -p /opt/spectrocloud/bin && \
+        curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine && \
+        su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/etc/perl:/usr/lib/x86_64-linux-gnu/perl5/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34:/usr/lib/x86_64-linux-gnu/perl-base" > ~/.bash_profile' && \
+        sed -i 's/After=network.target/After=network-online.target/' /lib/systemd/system/postgresql@.service && \
+        systemctl disable postgresql; \
+    fi
+
+RUN rm -rf /tmp/build-context

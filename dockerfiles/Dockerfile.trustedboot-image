@@ -1,0 +1,24 @@
+ARG AURORABOOT_IMAGE
+ARG DEBUG=false
+
+FROM provider-image AS provider-image-rootfs
+
+FROM ${AURORABOOT_IMAGE} AS builder
+
+COPY --from=provider-image-rootfs / /build/image/
+
+COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys/
+
+RUN mkdir -p /output
+
+RUN /usr/bin/auroraboot \
+    $([ "$DEBUG" = "true" ] && echo "--debug") \
+    build-uki \
+    --output-dir /output \
+    --keys /keys \
+    --output-type container \
+    --boot-branding "Palette eXtended Kubernetes Edge" \
+    dir:/build/image
+
+FROM scratch AS output
+COPY --from=builder /output/ /

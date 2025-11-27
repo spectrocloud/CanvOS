@@ -1,0 +1,18 @@
+ARG STYLUS_PACKAGE_BASE
+FROM ${STYLUS_PACKAGE_BASE} AS stylus-package
+
+FROM alpine AS packer
+
+ARG STYLUS_BASE
+ARG ARCH
+
+COPY --from=third-party-luet /WORKDIR/luet /usr/bin/luet
+
+COPY --from=stylus-package / /stylus/
+
+RUN cd /stylus && \
+    tar -czf /stylus.tar * && \
+    luet util pack "$STYLUS_BASE" /stylus.tar /stylus-image.tar
+
+FROM scratch as output
+COPY --from=packer /stylus-image.tar /

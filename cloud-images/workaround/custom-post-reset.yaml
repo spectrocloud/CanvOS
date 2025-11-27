@@ -1,0 +1,54 @@
+stages:
+    after-reset:
+    - if: '[ ! -e "/run/cos/uki_boot_mode" ] && [ ! -e "/run/cos/uki_install_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+    - commands:
+        - rm /oem/80_stylus.yaml || true
+        - grub2-editenv /oem/grubenv set saved_entry=registration
+      name: "Set registration grub env entry after reset"
+    - if: '[ -e "/run/cos/uki_boot_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+    - commands:
+        - rm /oem/80_stylus.yaml || true
+        - kairos-agent bootentry --select registration
+      name: "Set EFI registration entry after reset"
+    - if: '[ ! -e "/run/cos/uki_boot_mode" ] && [ ! -e "/run/cos/uki_install_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+      commands:
+        - if mount | grep /usr/local >/dev/null; then umount /usr/local; fi
+        - mount $(findfs PARTLABEL=persistent) /usr/local
+        - bash /opt/spectrocloud/scripts/content.sh
+        - mkdir -p /usr/local/bin
+        - ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+        - ln -sf /opt/spectrocloud/bin/palette-tui /usr/local/bin/palette-tui
+        - journalctl > /usr/local/installer.log
+        - umount /usr/local
+      name: "Run after install commands"
+    - if: '[ ! -e "/run/cos/uki_boot_mode" ] && [ ! -e "/run/cos/uki_install_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+      commands:
+        - if mount | grep /oem >/dev/null; then umount /oem || /bin/true; fi
+        - mount $(findfs PARTLABEL=oem) /oem
+        - if [ -e /run/initramfs/live/.edge_custom_config.yaml ]; then cp /run/initramfs/live/.edge_custom_config.yaml /oem/.edge_custom_config.yaml; fi
+        - umount /oem || /bin/true
+      name: "Copy public key after install"
+    - if: '[ -e "/run/cos/uki_install_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+      commands:
+        - if mount | grep /usr/local >/dev/null; then umount /usr/local; fi
+        - for d in /dev/mapper/*; do if [ ! "$d" = "/dev/mapper/control" ]; then cryptsetup close $d; fi; done
+        - /usr/lib/systemd/systemd-cryptsetup attach persistent $(findfs PARTLABEL=persistent) - tpm2-device=auto
+        - mount /dev/mapper/persistent /usr/local
+        - bash /opt/spectrocloud/scripts/content.sh
+        - mkdir -p /usr/local/bin
+        - ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+        - ln -sf /opt/spectrocloud/bin/palette-tui /usr/local/bin/palette-tui
+        - journalctl > /usr/local/installer.log
+        - if mount | grep /usr/local >/dev/null; then umount /usr/local; fi
+        - if [ -e /dev/mapper/persistent ]; then cryptsetup close /dev/mapper/persistent; fi
+      name: "Run after uki install commands"
+    - if: '[ -e "/run/cos/uki_install_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+      commands:
+        - if mount | grep /oem >/dev/null; then umount /oem || /bin/true; fi
+        - for d in /dev/mapper/*; do if [ ! "$d" = "/dev/mapper/control" ]; then cryptsetup close $d; fi; done
+        - /usr/lib/systemd/systemd-cryptsetup attach oem $(findfs PARTLABEL=oem) - tpm2-device=auto
+        - mount /dev/mapper/oem /oem
+        - if [ -e /run/initramfs/live/.edge_custom_config.yaml ]; then cp /run/initramfs/live/.edge_custom_config.yaml /oem/.edge_custom_config.yaml; fi
+        - if mount | grep /oem >/dev/null; then umount /oem || /bin/true; fi
+        - if [ -e /dev/mapper/oem ]; then cryptsetup close /dev/mapper/oem; fi
+      name: "Run uki copy public key after install commands"
