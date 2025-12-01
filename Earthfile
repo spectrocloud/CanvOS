@@ -314,8 +314,6 @@ iso:
     WORKDIR /build
     IF [ "$IS_UKI" = "true" ]
         COPY --platform=linux/${ARCH} +build-uki-iso/ .
-    ELSE IF [ "$IS_MAAS" = "true" ]
-        COPY --platform=linux/${ARCH} +maas-image/ .
     ELSE
         COPY --platform=linux/${ARCH} +build-iso/ .
     END
@@ -923,73 +921,6 @@ kairos-raw-image:
     END
     
     SAVE ARTIFACT /kairos.raw AS LOCAL ./build/
-
-# NOTE: This target requires privileged mode. Run with: earthly -P +maas-image
-# or: earthly -P +iso --IS_MAAS=true
-# This target builds the MAAS composite image by:
-# 1. Generating the Kairos raw image
-# 2. Calling the original build-kairos-maas.sh script to create the composite image
-maas-image:
-    # Use Ubuntu base image since the original script was designed for Ubuntu-like systems
-    # and requires kpartx which is more reliably available in Ubuntu
-    FROM --platform=linux/amd64 --allow-privileged ubuntu:22.04
-    
-    # Install required tools for the original build-kairos-maas.sh script
-    RUN apt-get update && \
-        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        wget \
-        tar \
-        qemu-utils \
-        parted \
-        e2fsprogs \
-        dosfstools \
-        rsync \
-        util-linux \
-        grub-efi \
-        bash \
-        kpartx \
-        device-mapper \
-        && rm -rf /var/lib/apt/lists/*
-    
-    # Copy the original build script and curtin hooks
-    COPY cloudconfigs/build-kairos-maas.sh /usr/local/bin/build-kairos-maas.sh
-    COPY --if-exists cloudconfigs/curtin-hooks /curtin-hooks
-    RUN chmod +x /usr/local/bin/build-kairos-maas.sh
-    
-    # Copy the Kairos raw image from the kairos-raw-image target
-    COPY +kairos-raw-image/kairos.raw /kairos.raw
-    
-    # Run the original build-kairos-maas.sh script
-    # The script expects curtin-hooks to be in the current working directory
-    WORKDIR /workdir
-    RUN cp /kairos.raw /workdir/kairos.raw && \
-        if [ -f /curtin-hooks ]; then \
-            cp /curtin-hooks /workdir/curtin-hooks; \
-        else \
-            echo "Error: curtin-hooks not found at /curtin-hooks"; \
-            exit 1; \
-        fi && \
-        echo "=== Running original build-kairos-maas.sh ===" && \
-        /usr/local/bin/build-kairos-maas.sh /workdir/kairos.raw || { \
-            echo "Error: build-kairos-maas.sh failed with exit code $?"; \
-            exit 1; \
-        } && \
-        echo "=== Checking for output ===" && \
-        if [ -f /workdir/kairos-ubuntu-maas.raw ]; then \
-            cp /workdir/kairos-ubuntu-maas.raw /kairos-ubuntu-maas.raw && \
-            echo "✅ Composite image created: kairos-ubuntu-maas.raw"; \
-        else \
-            echo "❌ ERROR: Composite image not found in /workdir"; \
-            ls -la /workdir || true; \
-            exit 1; \
-        fi
-    
-    # Save raw composite image
-    # The raw image contains the full composite image with all partitions (EFI, Ubuntu rootfs, OEM, Recovery)
-    # Note: The earthly.sh script handles compression for the +maas-image target
-    RUN mkdir -p /output && \
-        if [ -f /kairos-ubuntu-maas.raw ]; then cp /kairos-ubuntu-maas.raw /output/kairos-ubuntu-maas.raw; fi
-    SAVE ARTIFACT /output/ AS LOCAL ./build/
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine

@@ -132,12 +132,12 @@ fi
 # Special handling for MAAS image build: build kairos-raw-image first, then run build-kairos-maas.sh locally
 if [[ "$1" == "+maas-image" ]]; then
     echo "=== Building MAAS image: Step 1 - Generating Kairos raw image ==="
-    # Build the kairos-raw-image target first
+    # Build the kairos-raw-image target first with IS_MAAS=true flag
     if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY" ] && [ -z "$(find certs -type f ! -name '.*' -print -quit)" ]; then
-        build_without_proxy "+kairos-raw-image"
+        build_without_proxy "+kairos-raw-image" --IS_MAAS=true
         BUILD_EXIT=$?
     else
-        build_with_proxy "+kairos-raw-image"
+        build_with_proxy "+kairos-raw-image" --IS_MAAS=true
         BUILD_EXIT=$?
     fi
     
