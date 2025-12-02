@@ -61,7 +61,10 @@ RUN if [ "$ARCH" = "amd64" ]; then \
             --name "${ISO_NAME}" \
             --output-dir /iso \
             --overlay-iso /overlay \
-            --keys /keys \
+            --public-keys /keys \
+            --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+            --sb-key /keys/db.key \
+            --sb-cert /keys/db.pem \
             --boot-branding "${BRANDING}" \
             $([ -n "$CMDLINE" ] && echo "--extend-cmdline \"$CMDLINE\"") \
             $([ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ] && echo "--secure-boot-enroll force") \

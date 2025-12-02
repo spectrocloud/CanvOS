@@ -15,7 +15,10 @@ RUN /usr/bin/auroraboot \
     $([ "$DEBUG" = "true" ] && echo "--debug") \
     build-uki \
     --output-dir /output \
-    --keys /keys \
+    --public-keys /keys \
+    --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+    --sb-key /keys/db.key \
+    --sb-cert /keys/db.pem \
     --output-type container \
     --boot-branding "Palette eXtended Kubernetes Edge" \
     dir:/build/image
