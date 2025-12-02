@@ -2588,7 +2588,7 @@ if ! grep -Erq "^auth\.\*,authpriv\.\*" /etc/rsyslog.*; then
 fi
 
 if ! grep -Erq "^daemon\.\*" /etc/rsyslog.*; then
-    echo "daemon.* /var/log/messages" >> /etc/rsyslog.d/50-default.conf
+    echo "daemon.* /var/log/syslog" >> /etc/rsyslog.d/50-default.conf
 fi
 
 systemctl restart rsyslog.service
