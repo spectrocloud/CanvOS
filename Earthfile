@@ -792,7 +792,7 @@ base-image:
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
 
-    DO +KAIROS_RELEASE --OS_VERSION=$OS_VERSION --OS_DISTRIBUTION=$OS_DISTRIBUTION
+    DO +KAIROS_RELEASE --OS_VERSION=$OS_VERSION --OS_DISTRIBUTION=$OS_DISTRIBUTION --ARCH=$ARCH --IS_MAAS=$IS_MAAS
 
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
@@ -812,19 +812,44 @@ KAIROS_RELEASE:
     COMMAND
     ARG OS_VERSION
     ARG OS_DISTRIBUTION
+    ARG ARCH
+    ARG IS_MAAS=false
+    # Build dynamic KAIROS_IMAGE_LABEL based on OS version, arch, and MAAS flag
+    # Format: {OS_VERSION}-standard-{ARCH}-generic{MAAS_SUFFIX}
+    # For Ubuntu, OS_VERSION is the major version (e.g., "22"), so we format it as "22.04"
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+        IF [ "$OS_VERSION" = "22" ] || [ "$OS_VERSION" = "20" ]
+            IF [ "$IS_MAAS" = "true" ]
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}.04-standard-${ARCH}-generic-maas"
+            ELSE
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}.04-standard-${ARCH}-generic"
+            END
+        ELSE
+            IF [ "$IS_MAAS" = "true" ]
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic-maas"
+            ELSE
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic"
+            END
+        END
+    ELSE
+        IF [ "$IS_MAAS" = "true" ]
+            LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic-maas"
+        ELSE
+            LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic"
+        END
+    END
     RUN if [ -f /etc/kairos-release ]; then \
             sed -i 's/^KAIROS_NAME=.*/KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"/' /etc/kairos-release; \
-            echo 'KAIROS_IMAGE_LABEL="22.04-standard-amd64-generic-maas"' >> /etc/kairos-release; \
+            sed -i '/^KAIROS_IMAGE_LABEL=/d' /etc/kairos-release; \
+            echo 'KAIROS_IMAGE_LABEL="'"$KAIROS_IMAGE_LABEL"'"' >> /etc/kairos-release; \
         else \
             echo 'KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"' >> /etc/kairos-release; \
-            echo 'KAIROS_IMAGE_LABEL="22.04-standard-amd64-generic-maas"' >> /etc/kairos-release; \
+            echo 'KAIROS_IMAGE_LABEL="'"$KAIROS_IMAGE_LABEL"'"' >> /etc/kairos-release; \
         fi
 
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
-    ARG IMAGE_REGISTRY
-    ARG IMAGE_TAG
 
     IF [ "$IS_UKI" = "false" ]
         COPY --platform=linux/${ARCH} +stylus-image/ /
@@ -843,7 +868,13 @@ iso-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    SAVE IMAGE --push $IMAGE_REGISTRY/palette-installer-image:$IMAGE_TAG
+    # Only push image if not building for MAAS (MAAS uses local image via --load)
+    IF [ "$IS_MAAS" = "false" ]
+        ARG IMAGE_TAG
+        SAVE IMAGE --push palette-installer-image:$IMAGE_TAG
+    ELSE
+        SAVE IMAGE index.docker.io/library/palette-installer-image:latest
+    END
 
 iso-disk-image:
     FROM scratch

@@ -131,6 +131,16 @@ fi
 
 # Special handling for MAAS image build: build kairos-raw-image first, then run build-kairos-maas.sh locally
 if [[ "$1" == "+maas-image" ]]; then
+    # Check that OS_DISTRIBUTION is set to ubuntu (MAAS only supports Ubuntu)
+    if [ -z "$OS_DISTRIBUTION" ]; then
+        echo "Error: OS_DISTRIBUTION is not set. Please set OS_DISTRIBUTION=ubuntu in .arg file or via environment variable." >&2
+        exit 1
+    fi
+    if [ "$OS_DISTRIBUTION" != "ubuntu" ]; then
+        echo "Error: MAAS image build only supports Ubuntu. Current OS_DISTRIBUTION: $OS_DISTRIBUTION" >&2
+        echo "Please set OS_DISTRIBUTION=ubuntu in .arg file or via environment variable." >&2
+        exit 1
+    fi
     echo "=== Building MAAS image: Step 1 - Generating Kairos raw image ==="
     # Build the kairos-raw-image target first with IS_MAAS=true flag
     if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY" ] && [ -z "$(find certs -type f ! -name '.*' -print -quit)" ]; then
@@ -194,13 +204,21 @@ if [[ "$1" == "+maas-image" ]]; then
     mkdir -p build
     mv "$COMPOSITE_IMAGE" "build/$COMPOSITE_IMAGE"
     
+    # Generate SHA256 checksum file for the final image
+    echo "=== Generating SHA256 checksum ==="
+    FINAL_IMAGE_PATH="build/$COMPOSITE_IMAGE"
+    sha256sum "$FINAL_IMAGE_PATH" > "${FINAL_IMAGE_PATH}.sha256"
+    echo "✅ SHA256 checksum created: ${FINAL_IMAGE_PATH}.sha256"
+    
     # Clean up temporary curtin-hooks file from repo root
     rm -f ./curtin-hooks
     
-    # Show final image size
-    FINAL_SIZE=$(du -h "build/$COMPOSITE_IMAGE" | cut -f1)
-    echo "✅ MAAS composite image created and compressed successfully: build/$COMPOSITE_IMAGE"
+    # Show final image size and checksum
+    FINAL_SIZE=$(du -h "$FINAL_IMAGE_PATH" | cut -f1)
+    CHECKSUM=$(cat "${FINAL_IMAGE_PATH}.sha256" | cut -d' ' -f1)
+    echo "✅ MAAS composite image created and compressed successfully: $FINAL_IMAGE_PATH"
     echo "   Final size: $FINAL_SIZE"
+    echo "   SHA256: $CHECKSUM"
     echo "   MAAS will automatically decompress this image during upload."
     exit 0
 fi
