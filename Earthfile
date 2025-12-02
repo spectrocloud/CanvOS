@@ -880,8 +880,7 @@ iso-image:
 
     # Only push image if not building for MAAS (MAAS uses local image via --load)
     IF [ "$IS_MAAS" = "false" ]
-        ARG IMAGE_TAG
-        SAVE IMAGE --push palette-installer-image:$IMAGE_TAG
+        SAVE IMAGE palette-installer-image:$IMAGE_TAG
     ELSE
         SAVE IMAGE index.docker.io/library/palette-installer-image:latest
     END
