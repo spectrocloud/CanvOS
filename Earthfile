@@ -880,7 +880,11 @@ iso-image:
 
     # Only push image if not building for MAAS (MAAS uses local image via --load)
     IF [ "$IS_MAAS" = "false" ]
-        ARG IMAGE_TAG
+        IF [ "$CUSTOM_TAG" != "" ]
+            ARG IMAGE_TAG=$PE_VERSION-$CUSTOM_TAG
+        ELSE
+            ARG IMAGE_TAG=$PE_VERSION
+        END
         SAVE IMAGE --push palette-installer-image:$IMAGE_TAG
     ELSE
         SAVE IMAGE index.docker.io/library/palette-installer-image:latest
@@ -896,7 +900,7 @@ iso-disk-image:
 # This target converts the installer image to a raw disk image using auroraboot
 kairos-raw-image:
     FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
-    
+
     # Use Docker-in-Docker to convert iso-image to raw
     WITH DOCKER \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
@@ -960,7 +964,7 @@ kairos-raw-image:
             cp "$RAW_IMG" /kairos.raw && \
             echo "✅ Kairos raw image created: /kairos.raw"
     END
-    
+
     SAVE ARTIFACT /kairos.raw AS LOCAL ./build/
 
 go-deps:
