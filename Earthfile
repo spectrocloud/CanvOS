@@ -898,15 +898,28 @@ kairos-raw-image:
                 docker images || true; \
                 exit 1; \
             fi && \
+            echo "=== Checking Docker image size ===" && \
+            IMAGE_SIZE=$(docker images --format "{{.Size}}" index.docker.io/library/palette-installer-image:latest 2>/dev/null || docker images --format "{{.Size}}" palette-installer-image:latest 2>/dev/null || echo "unknown") && \
+            echo "Image size: $IMAGE_SIZE" && \
+            if echo "$IMAGE_SIZE" | grep -qE '[0-9]+GB'; then \
+                SIZE_GB=$(echo "$IMAGE_SIZE" | sed 's/GB//' | awk '{print int($1)}'); \
+                if [ "$SIZE_GB" -gt 10 ]; then \
+                    echo "⚠️  WARNING: Image is very large (${IMAGE_SIZE}). This may cause auroraboot extraction issues."; \
+                    echo "Consider reducing content bundle size or excluding large files."; \
+                fi; \
+            fi && \
             echo "=== Running auroraboot to convert image ===" && \
-            echo "Using auroraboot v0.6.4 (known working version)" && \
+            echo "Using auroraboot v0.15.0 (known working version)" && \
+            echo "=== Docker images available ===" && \
+            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.ID}}" | head -10 && \
+            echo "=== Running auroraboot (this may take a while for large images) ===" && \
             docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
+                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.15.0 \
                 --debug \
                 --set "disable_http_server=true" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
-                --set "container_image=index.docker.io/library/palette-installer-image:latest"  \
+                --set "container_image=palette-installer-image:latest"  \
                 --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
             AURORABOOT_EXIT=$?; \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
@@ -1075,4 +1088,5 @@ UPX:
     COMMAND
     ARG bin
     RUN upx -1 $bin
+
 
