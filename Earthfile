@@ -67,6 +67,7 @@ ARG KINE_VERSION=0.11.4
 
 # MAAS Variables
 ARG IS_MAAS=false
+ARG MAAS_IMAGE_NAME=kairos-ubuntu-maas
 
 # UKI Variables
 ARG IS_UKI=false
@@ -270,28 +271,10 @@ build-uki-iso:
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
-
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
-    RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
-        for file in /overlay/opt/spectrocloud/content/*.zst; do \
-            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
-        done; \
-        rm -f /overlay/opt/spectrocloud/content/*.zst; \
-    fi
-
-    #check if clusterconfig is passed in
-    IF [ "$CLUSTERCONFIG" != "" ]
-        COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
-    END
-
-    COPY --if-exists local-ui.tar /overlay/opt/spectrocloud/
-    RUN if [ -f /overlay/opt/spectrocloud/local-ui.tar ]; then \
-        tar -xf /overlay/opt/spectrocloud/local-ui.tar -C /overlay/opt/spectrocloud && \
-        rm -f /overlay/opt/spectrocloud/local-ui.tar; \
-    fi
 
     WORKDIR /build
+    # Content, SPC, and local-ui are already included in iso-image-rootfs from iso-image
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
     IF [ "$ARCH" = "arm64" ]
        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
@@ -338,7 +321,6 @@ build-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
 
     # Generate grub.cfg based on FORCE_INTERACTIVE_INSTALL setting (without modifying source)
@@ -349,25 +331,10 @@ build-iso:
         sed 's/{{DEFAULT_ENTRY}}/0/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
         mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
     fi
-    RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
-        for file in /overlay/opt/spectrocloud/content/*.zst; do \
-            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
-        done; \
-        rm -f /overlay/opt/spectrocloud/content/*.zst; \
-    fi
-    #check if clusterconfig is passed in
-    IF [ "$CLUSTERCONFIG" != "" ]
-        COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
-    END
 
     WORKDIR /build
+    # Content, SPC, and local-ui are already included in iso-image-rootfs from iso-image
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
-
-    COPY --if-exists local-ui.tar /build/image/opt/spectrocloud/
-    RUN if [ -f /build/image/opt/spectrocloud/local-ui.tar ]; then \
-        tar -xf /build/image/opt/spectrocloud/local-ui.tar -C /build/image/opt/spectrocloud && \
-        rm -f /build/image/opt/spectrocloud/local-ui.tar; \
-    fi
 
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
@@ -873,6 +840,27 @@ iso-image:
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
+
+    # Add content files (split if > 3GB, similar to build-iso)
+    COPY --if-exists content-*/*.zst /opt/spectrocloud/content/
+    RUN if [ -n "$(ls /opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
+        for file in /opt/spectrocloud/content/*.zst; do \
+            split --bytes=3GB --numeric-suffixes "$file" /opt/spectrocloud/content/$(basename "$file")_part; \
+        done; \
+        rm -f /opt/spectrocloud/content/*.zst; \
+    fi
+
+    # Add cluster config (SPC) if provided
+    IF [ "$CLUSTERCONFIG" != "" ]
+        COPY --if-exists "$CLUSTERCONFIG" /opt/spectrocloud/clusterconfig/spc.tgz
+    END
+
+    # Add local-ui if provided (extract it similar to build-iso)
+    COPY --if-exists local-ui.tar /opt/spectrocloud/
+    RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
+        tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
+        rm -f /opt/spectrocloud/local-ui.tar; \
+    fi
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \

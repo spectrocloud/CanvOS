@@ -17,8 +17,10 @@ set -euo pipefail
 
 # --- Configuration ---
 # The path to your input Kairos OS raw image.
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <path_to_kairos_raw_image>" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    echo "Usage: $0 <path_to_kairos_raw_image> [maas_image_name]" >&2
+    echo "  maas_image_name: Optional custom name for the final MAAS image (without .raw.gz extension)" >&2
+    echo "                   Default: kairos-ubuntu-maas" >&2
     exit 1
 fi
 # Convert the input path to an absolute path to avoid "No such file or directory" error
@@ -28,8 +30,17 @@ INPUT_IMG=$(readlink -f "$1")
 ORIG_DIR=$(pwd)
 # The URL for the Ubuntu cloud image.
 UBUNTU_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.tar.gz"
-# The name of the final output image.
-FINAL_IMG="kairos-ubuntu-maas.raw"
+# The name of the final output image (can be customized via parameter or MAAS_IMAGE_NAME env var)
+if [ "$#" -eq 2 ]; then
+    FINAL_IMG_BASE="$2"
+elif [ -n "${MAAS_IMAGE_NAME:-}" ]; then
+    FINAL_IMG_BASE="$MAAS_IMAGE_NAME"
+else
+    FINAL_IMG_BASE="kairos-ubuntu-maas"
+fi
+# Ensure the name doesn't already have .raw extension
+FINAL_IMG_BASE="${FINAL_IMG_BASE%.raw}"
+FINAL_IMG="${FINAL_IMG_BASE}.raw"
 # The size of the new Ubuntu rootfs partition.
 UBUNTU_ROOT_SIZE="5G"
 # Path to the curtin hooks script (relative to the original directory)
