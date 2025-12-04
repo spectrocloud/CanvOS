@@ -4,24 +4,39 @@ FROM ${UBUNTU_IMAGE}
 
 ARG INCLUDE_MS_SECUREBOOT_KEYS=false
 
-RUN apt-get update && apt-get install -y efitools curl
 
-RUN apk add --no-cache curl tar && \
-    curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && \
-    mv sbctl/sbctl /usr/bin/sbctl
+RUN apt-get update && apt-get install -y efitools curl tar ca-certificates && \
+    update-ca-certificates
 
-RUN mkdir -p /exported-keys /keys
-RUN if [ -d "secure-boot/private-keys" ]; then \
-        cp -r secure-boot/private-keys/ /keys/ ; \
+RUN curl -fsSL -o /tmp/sbctl.tar.gz https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz && \
+    tar -xzf /tmp/sbctl.tar.gz -C /tmp && \
+    mv /tmp/sbctl/sbctl /usr/bin/sbctl && \
+    chmod +x /usr/bin/sbctl && \
+    rm -rf /tmp/sbctl.tar.gz /tmp/sbctl
+
+RUN mkdir -p /exported-keys /keys /tmp/secure-boot /private-keys /public-keys
+
+COPY secure-boot/ /tmp/secure-boot
+
+RUN ls -ltrh /tmp/secure-boot
+
+# Copy keys from /tmp/secure-boot to their destinations
+# Preserve original structure in /private-keys and /public-keys for output
+RUN if [ -d "/tmp/secure-boot/private-keys" ]; then \
+        cp -r /tmp/secure-boot/private-keys/* /keys/ && \
+        cp -r /tmp/secure-boot/private-keys/* /private-keys/; \
     fi
 
-RUN if [ -d "secure-boot/public-keys" ]; then \
-        cp -r secure-boot/public-keys/* /keys/ ; \
+RUN if [ -d "/tmp/secure-boot/public-keys" ]; then \
+        cp -r /tmp/secure-boot/public-keys/* /keys/ && \
+        cp -r /tmp/secure-boot/public-keys/* /public-keys/; \
     fi
 
-RUN if [ -d "secure-boot/exported-keys" ]; then \
-        cp -r secure-boot/exported-keys/* /exported-keys/ ; \
+RUN if [ -d "/tmp/secure-boot/exported-keys" ]; then \
+        cp -r /tmp/secure-boot/exported-keys/* /exported-keys/; \
     fi
+
+RUN rm -rf /tmp/secure-boot
 
 WORKDIR /keys
 

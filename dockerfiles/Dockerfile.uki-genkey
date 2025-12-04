@@ -1,65 +1,68 @@
 ARG MY_ORG
 ARG EXPIRATION_IN_DAYS
-ARG UKI_BRING_YOUR_OWN_KEYS
 ARG INCLUDE_MS_SECUREBOOT_KEYS
 ARG AURORABOOT_IMAGE
 ARG ARCH
 
+# Stage 1: Generate keys (used when UKI_BRING_YOUR_OWN_KEYS=false)
 FROM ${AURORABOOT_IMAGE} AS builder
 
-RUN if [ "$UKI_BRING_YOUR_OWN_KEYS" != "true" ]; then \
-        mkdir -p /custom-keys && \
-        if [ -d "secure-boot/exported-keys" ]; then \
-            cp -r secure-boot/exported-keys/* /custom-keys/ 2>/dev/null || true; \
-        fi && \
-        \
-        if [ "$INCLUDE_MS_SECUREBOOT_KEYS" != "true" ]; then \
-            if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
-                echo "Generating Secure Boot keys, including exported UEFI keys..." && \
-                /usr/bin/auroraboot genkey \
-                    "$MY_ORG" \
-                    --custom-cert-dir /custom-keys \
-                    --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING \
-                    --expiration-days $EXPIRATION_IN_DAYS \
-                    --output /keys; \
-            else \
-                echo "Generating Secure Boot keys..." && \
-                /usr/bin/auroraboot genkey \
-                    "$MY_ORG" \
-                    --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING \
-                    --expiration-days $EXPIRATION_IN_DAYS \
-                    --output /keys; \
-            fi; \
+ARG MY_ORG
+ARG EXPIRATION_IN_DAYS
+ARG INCLUDE_MS_SECUREBOOT_KEYS
+
+RUN mkdir -p /custom-keys && \
+    if [ -d "secure-boot/exported-keys" ]; then \
+        cp -r secure-boot/exported-keys/* /custom-keys/ 2>/dev/null || true; \
+    fi && \
+    \
+    if [ "$INCLUDE_MS_SECUREBOOT_KEYS" != "true" ]; then \
+        if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
+            echo "Generating Secure Boot keys, including exported UEFI keys..." && \
+            /usr/bin/auroraboot genkey \
+                "$MY_ORG" \
+                --custom-cert-dir /custom-keys \
+                --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING \
+                --expiration-days $EXPIRATION_IN_DAYS \
+                --output /keys; \
         else \
-            if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
-                echo "Generating Secure Boot keys, including exported UEFI keys and Microsoft keys..." && \
-                /usr/bin/auroraboot genkey \
-                    "$MY_ORG" \
-                    --custom-cert-dir /custom-keys \
-                    --expiration-days $EXPIRATION_IN_DAYS \
-                    --output /keys; \
-            else \
-                echo "Generating Secure Boot keys, including Microsoft keys..." && \
-                /usr/bin/auroraboot genkey \
-                    "$MY_ORG" \
-                    --expiration-days $EXPIRATION_IN_DAYS \
-                    --output /keys; \
-            fi; \
-        fi && \
-        \
-        ls -ltrh /keys && \
-        mkdir -p /private-keys /public-keys && \
-        cd /keys && mv *.key tpm2-pcr-private.pem /private-keys/ 2>/dev/null || true && \
-        cd /keys && mv *.pem /public-keys/ 2>/dev/null || true; \
-    else \
-        mkdir -p /keys && \
-        if [ -d "uki-byok" ]; then \
-            cp -r uki-byok/* /keys/ 2>/dev/null || true; \
+            echo "Generating Secure Boot keys..." && \
+            /usr/bin/auroraboot genkey \
+                "$MY_ORG" \
+                --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING \
+                --expiration-days $EXPIRATION_IN_DAYS \
+                --output /keys; \
         fi; \
-    fi
+    else \
+        if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
+            echo "Generating Secure Boot keys, including exported UEFI keys and Microsoft keys..." && \
+            /usr/bin/auroraboot genkey \
+                "$MY_ORG" \
+                --custom-cert-dir /custom-keys \
+                --expiration-days $EXPIRATION_IN_DAYS \
+                --output /keys; \
+        else \
+            echo "Generating Secure Boot keys, including Microsoft keys..." && \
+            /usr/bin/auroraboot genkey \
+                "$MY_ORG" \
+                --expiration-days $EXPIRATION_IN_DAYS \
+                --output /keys; \
+        fi; \
+    fi && \
+    \
+    ls -ltrh /keys && \
+    mkdir -p /private-keys /public-keys && \
+    cd /keys && mv *.key tpm2-pcr-private.pem /private-keys/ 2>/dev/null || true && \
+    cd /keys && mv *.pem /public-keys/ 2>/dev/null || true
 
-FROM scratch AS output
+# UKI_BRING_YOUR_OWN_KEYS=true - copy all files from uki-byok context
+FROM scratch AS output-byok
+COPY --from=uki-byok /output/ /enrollment/
+COPY --from=uki-byok /private-keys/ /private-keys/
+COPY --from=uki-byok /public-keys/ /public-keys/
 
+# UKI_BRING_YOUR_OWN_KEYS=false - use generated keys from builder
+FROM scratch AS output-no-byok
 COPY --from=builder /keys/ /enrollment/
 COPY --from=builder /private-keys/ /private-keys/
 COPY --from=builder /public-keys/ /public-keys/

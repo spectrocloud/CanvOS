@@ -50,9 +50,16 @@ WORKDIR /build
 
 COPY --from=iso-image / /iso-source/
 
-COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys/
+COPY secure-boot/enrollment/ /keys/
 
-RUN if [ "$ARCH" = "amd64" ]; then \
+RUN --mount=type=secret,id=db_key,target=/keys/db.key \
+    --mount=type=secret,id=db_pem,target=/keys/db.pem \
+    --mount=type=secret,id=kek_key,target=/keys/KEK.key \
+    --mount=type=secret,id=kek_pem,target=/keys/KEK.pem \
+    --mount=type=secret,id=pk_key,target=/keys/PK.key \
+    --mount=type=secret,id=pk_pem,target=/keys/PK.pem \
+    --mount=type=secret,id=tpm2_pcr_private,target=/keys/tpm2-pcr-private.pem \
+    if [ "$ARCH" = "amd64" ]; then \
         mkdir -p /iso && \
         /usr/bin/auroraboot \
             $([ "$DEBUG" = "true" ] && echo "--debug") \

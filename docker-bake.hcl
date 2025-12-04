@@ -177,6 +177,19 @@ variable "EXPIRATION_IN_DAYS" {
   default = 5475
 }
 
+# Secrets for secure boot private keys - used by trustedboot-image and build-uki-iso
+variable "SECURE_BOOT_SECRETS" {
+  default = [
+    "id=db_key,src=secure-boot/private-keys/db.key",
+    "id=db_pem,src=secure-boot/public-keys/db.pem",
+    "id=kek_key,src=secure-boot/private-keys/KEK.key",
+    "id=kek_pem,src=secure-boot/public-keys/KEK.pem",
+    "id=pk_key,src=secure-boot/private-keys/PK.key",
+    "id=pk_pem,src=secure-boot/public-keys/PK.pem",
+    "id=tpm2_pcr_private,src=secure-boot/private-keys/tpm2-pcr-private.pem"
+  ]
+}
+
 variable "EFI_MAX_SIZE" {
   default = "2048"
 }
@@ -279,7 +292,6 @@ target "base-image" {
     OS_VERSION = OS_VERSION
     IS_JETSON = IS_JETSON
     IS_UKI = IS_UKI
-    UBUNTU_PRO_KEY = UBUNTU_PRO_KEY
     UPDATE_KERNEL = UPDATE_KERNEL
     CIS_HARDENING = CIS_HARDENING
     KAIROS_VERSION = KAIROS_VERSION
@@ -287,6 +299,7 @@ target "base-image" {
     ARCH = ARCH
     FIPS_ENABLED = FIPS_ENABLED
   }
+  secret = ["id=ubuntu_pro_key,env=UBUNTU_PRO_KEY"]
 }
 
 function "get_provider_base" {
@@ -399,6 +412,7 @@ target "trustedboot-image" {
     AURORABOOT_IMAGE = AURORABOOT_IMAGE
     DEBUG = DEBUG
   }
+  secret = SECURE_BOOT_SECRETS
   output = ["type=local,dest=./trusted-boot/"]
 }
 
@@ -449,6 +463,7 @@ target "build-iso" {
 target "build-uki-iso" {
   dockerfile = "dockerfiles/Dockerfile.build-uki-iso"
   target = "output"
+  context = "."
   platforms = ["linux/${ARCH}"]
   contexts = {
     validate-user-data = "target:validate-user-data"
@@ -467,6 +482,7 @@ target "build-uki-iso" {
     CMDLINE = CMDLINE
     BRANDING = BRANDING
   }
+  secret = SECURE_BOOT_SECRETS
   output = ["type=local,dest=./build/"]
 }
 
@@ -488,7 +504,7 @@ target "stylus-image-pack" {
 target "uki-genkey" {
   dockerfile = "dockerfiles/Dockerfile.uki-genkey"
   context = "."
-  target = "output"
+  target = UKI_BRING_YOUR_OWN_KEYS ? "output-byok" : "output-no-byok"
   platforms = ["linux/${ARCH}"]
   contexts = UKI_BRING_YOUR_OWN_KEYS ? {
     uki-byok = "target:uki-byok"
@@ -496,7 +512,6 @@ target "uki-genkey" {
   args = {
     MY_ORG = MY_ORG
     EXPIRATION_IN_DAYS = EXPIRATION_IN_DAYS
-    UKI_BRING_YOUR_OWN_KEYS = UKI_BRING_YOUR_OWN_KEYS
     INCLUDE_MS_SECUREBOOT_KEYS = INCLUDE_MS_SECUREBOOT_KEYS
     AURORABOOT_IMAGE = AURORABOOT_IMAGE
     ARCH = ARCH
@@ -506,6 +521,7 @@ target "uki-genkey" {
 
 target "uki-byok" {
   dockerfile = "dockerfiles/Dockerfile.uki-byok"
+  context = "."
   platforms = ["linux/${ARCH}"]
   args = {
     UBUNTU_IMAGE = get_ubuntu_image(FIPS_ENABLED, SPECTRO_PUB_REPO)
