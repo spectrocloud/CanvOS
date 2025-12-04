@@ -1,8 +1,7 @@
-ARG ARCH
+FROM base-image AS iso-image
+
 ARG IS_UKI
 ARG IS_CLOUD_IMAGE=false
-
-FROM base-image AS iso-image
 
 COPY --from=stylus-image / /
 

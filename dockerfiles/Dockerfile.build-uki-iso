@@ -73,7 +73,7 @@ RUN --mount=type=secret,id=db_key,target=/keys/db.key \
             --sb-key /keys/db.key \
             --sb-cert /keys/db.pem \
             --boot-branding "${BRANDING}" \
-            $([ -n "$CMDLINE" ] && echo "--extend-cmdline \"$CMDLINE\"") \
+            $([ -n "$CMDLINE" ] && echo "--extend-cmdline $CMDLINE") \
             $([ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ] && echo "--secure-boot-enroll force") \
             dir:/iso-source; \
     fi
@@ -81,5 +81,5 @@ RUN --mount=type=secret,id=db_key,target=/keys/db.key \
 RUN cd /iso && \
     sha256sum "${ISO_NAME}.iso" > "${ISO_NAME}.iso.sha256"
 
-FROM scratch as output
+FROM scratch AS output
 COPY --from=builder /iso/ /

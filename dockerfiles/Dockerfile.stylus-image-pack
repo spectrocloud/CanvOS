@@ -14,5 +14,5 @@ RUN cd /stylus && \
     tar -czf /stylus.tar * && \
     luet util pack "$STYLUS_BASE" /stylus.tar /stylus-image.tar
 
-FROM scratch as output
+FROM scratch AS output
 COPY --from=packer /stylus-image.tar /
