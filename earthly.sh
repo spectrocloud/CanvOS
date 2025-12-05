@@ -183,9 +183,16 @@ if [[ "$1" == "+maas-image" ]]; then
     # Copy curtin-hooks to the repo root (current directory) so the script can find it
     cp "$CURTIN_HOOKS" ./curtin-hooks
     
+    # Get custom MAAS image name from .arg file (sourced earlier) or use default
+    MAAS_IMAGE_NAME="${MAAS_IMAGE_NAME:-kairos-ubuntu-maas}"
+    # Ensure the name doesn't already have .raw or .raw.gz extension
+    MAAS_IMAGE_NAME="${MAAS_IMAGE_NAME%.raw.gz}"
+    MAAS_IMAGE_NAME="${MAAS_IMAGE_NAME%.raw}"
+    
     # Run the build script from the repo root
     # The script will look for curtin-hooks in ORIG_DIR (which will be the repo root)
-    bash "$BUILD_SCRIPT" "$KAIROS_RAW_IMAGE"
+    # Pass the custom image name as the second parameter
+    bash "$BUILD_SCRIPT" "$KAIROS_RAW_IMAGE" "$MAAS_IMAGE_NAME"
     BUILD_EXIT=$?
     
     if [ $BUILD_EXIT -ne 0 ]; then
@@ -194,7 +201,7 @@ if [[ "$1" == "+maas-image" ]]; then
     fi
     
     # Verify the composite image was created (script outputs compressed .raw.gz to ORIG_DIR, which is repo root)
-    COMPOSITE_IMAGE="kairos-ubuntu-maas.raw.gz"
+    COMPOSITE_IMAGE="${MAAS_IMAGE_NAME}.raw.gz"
     if [ ! -f "$COMPOSITE_IMAGE" ]; then
         echo "Error: Composite image not found at $COMPOSITE_IMAGE"
         exit 1
