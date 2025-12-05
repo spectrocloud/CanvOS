@@ -65,6 +65,9 @@ ARG ETCD_VERSION="v3.5.13"
 ARG TWO_NODE=false
 ARG KINE_VERSION=0.11.4
 
+# MAAS Variables
+ARG IS_MAAS=false
+
 # UKI Variables
 ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
@@ -73,6 +76,7 @@ ARG UKI_BRING_YOUR_OWN_KEYS=false
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
+ARG FORCE_INTERACTIVE_INSTALL=false
 
 # EFI size check
 ARG EFI_MAX_SIZE=2048
@@ -206,7 +210,7 @@ uki-provider-image:
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
-    COPY --if-exists +stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml
+    COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -338,6 +342,15 @@ build-iso:
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
+
+    # Generate grub.cfg based on FORCE_INTERACTIVE_INSTALL setting (without modifying source)
+    RUN if [ "$FORCE_INTERACTIVE_INSTALL" = "true" ]; then \
+        sed 's/{{DEFAULT_ENTRY}}/2/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
+        mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
+    else \
+        sed 's/{{DEFAULT_ENTRY}}/0/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
+        mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
+    fi
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
@@ -540,7 +553,7 @@ provider-image:
 
     COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
-    COPY --if-exists +stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml
+    COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
@@ -662,12 +675,16 @@ base-image:
     --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION .
 
     IF [ "$IS_JETSON" = "true" ]
-        COPY cloudconfigs/mount.yaml /system/oem/mount.yaml
+        COPY cloudconfigs/mount.yaml /etc/kairos/mount.yaml
     END
 
     IF [ "$IS_UKI" = "true" ]
         # create empty boot directory to support services like longhorn which require /boot
-        COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
+        COPY cloudconfigs/80_stylus_uki.yaml /etc/kairos/80_stylus_uki.yaml
+    END
+
+    IF [ "$IS_MAAS" = "true" ]
+        COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
     END
 
     # OS == Ubuntu
@@ -787,7 +804,7 @@ base-image:
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
 
-    DO +KAIROS_RELEASE --OS_VERSION=$OS_VERSION --OS_DISTRIBUTION=$OS_DISTRIBUTION
+    DO +KAIROS_RELEASE --OS_VERSION=$OS_VERSION --OS_DISTRIBUTION=$OS_DISTRIBUTION --ARCH=$ARCH --IS_MAAS=$IS_MAAS
 
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
@@ -807,19 +824,45 @@ KAIROS_RELEASE:
     COMMAND
     ARG OS_VERSION
     ARG OS_DISTRIBUTION
+    ARG ARCH
+    ARG IS_MAAS=false
+    # Build dynamic KAIROS_IMAGE_LABEL based on OS version, arch, and MAAS flag
+    # Format: {OS_VERSION}-standard-{ARCH}-generic{MAAS_SUFFIX}
+    # For Ubuntu, OS_VERSION is the major version (e.g., "22"), so we format it as "22.04"
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+        IF [ "$OS_VERSION" = "22" ] || [ "$OS_VERSION" = "20" ]
+            IF [ "$IS_MAAS" = "true" ]
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}.04-standard-${ARCH}-generic-maas"
+            ELSE
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}.04-standard-${ARCH}-generic"
+            END
+        ELSE
+            IF [ "$IS_MAAS" = "true" ]
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic-maas"
+            ELSE
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic"
+            END
+        END
+    ELSE
+        IF [ "$IS_MAAS" = "true" ]
+            LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic-maas"
+        ELSE
+            LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic"
+        END
+    END
     RUN if [ -f /etc/kairos-release ]; then \
             sed -i 's/^KAIROS_NAME=.*/KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"/' /etc/kairos-release; \
+            sed -i '/^KAIROS_IMAGE_LABEL=/d' /etc/kairos-release; \
+            echo 'KAIROS_IMAGE_LABEL="'"$KAIROS_IMAGE_LABEL"'"' >> /etc/kairos-release; \
         else \
             echo 'KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"' >> /etc/kairos-release; \
+            echo 'KAIROS_IMAGE_LABEL="'"$KAIROS_IMAGE_LABEL"'"' >> /etc/kairos-release; \
         fi
 
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
-    ARG IS_CLOUD_IMAGE=false
-    ARG IMAGE_REGISTRY
-    ARG IMAGE_TAG
-    
+
     IF [ "$IS_UKI" = "false" ]
         COPY --platform=linux/${ARCH} +stylus-image/ /
     ELSE
@@ -841,75 +884,89 @@ iso-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-    SAVE IMAGE --push $IMAGE_REGISTRY/palette-installer-image:$IMAGE_TAG
-
-cloud-image:
-    ARG IS_CLOUD_IMAGE=true
-
-    FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
-    # Copy the config file first
-    COPY cloud-images/config/user-data.yaml /config.yaml
-    WORKDIR /output
-
-    WITH DOCKER \
-        --pull quay.io/kairos/auroraboot:v0.6.4 \
-        --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)
-        RUN mkdir -p /output && \
-            docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /config.yaml:/config.yaml:ro \
-                -v /output:/aurora \
-                --net host \
-                --privileged \
-                quay.io/kairos/auroraboot:v0.6.4 \
-                --debug \
-                --set "disable_http_server=true" \
-                --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
-                --set "disable_netboot=true" \
-                --set "disk.raw=true" \
-                --set "state_dir=/aurora" \
-                --cloud-config /config.yaml
+    # Only push image if not building for MAAS (MAAS uses local image via --load)
+    IF [ "$IS_MAAS" = "false" ]
+        SAVE IMAGE palette-installer-image:$IMAGE_TAG
+    ELSE
+        SAVE IMAGE index.docker.io/library/palette-installer-image:latest
     END
-    SAVE ARTIFACT /output/* AS LOCAL ./build/
-
-aws-cloud-image:
-    FROM +ubuntu
-
-    RUN apt-get update && apt-get install -y unzip ca-certificates curl
-    RUN curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-        unzip -q awscliv2.zip -d aws_install_temp && \  
-        ./aws_install_temp/aws/install && \
-        rm -rf awscliv2.zip aws_install_temp
-
-    ARG REGION
-    ARG S3_BUCKET
-    ARG S3_KEY
-    # Get the base image name from the BASE_IMAGE variable
-
-    WORKDIR /workdir
-    COPY cloud-images/scripts/create-raw-to-ami.sh create-raw-to-ami.sh
-    COPY +cloud-image/ /workdir/
-
-    RUN --secret AWS_PROFILE \
-    --secret AWS_ACCESS_KEY_ID \
-    --secret AWS_SECRET_ACCESS_KEY \
-    RAW_FILE_PATH=$(ls /workdir/*.raw) && \
-    echo "RAW_FILE_PATH: $RAW_FILE_PATH" && \
-    if [ ! -f "$RAW_FILE_PATH" ]; then \
-        echo "Error: RAW file '/workdir/$RAW_FILE_PATH' not found." && \
-        ls -la /workdir/ && \
-        exit 1; \
-    else \
-        echo "RAW file '$RAW_FILE_PATH' found." && \
-        echo "Proceeding with creation of AMI..."; \
-    fi && \
-    /workdir/create-raw-to-ami.sh $RAW_FILE_PATH
 
 iso-disk-image:
     FROM scratch
 
     COPY +iso/*.iso /disk/
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
+
+# Generate just the Kairos raw image from the iso-image
+# This target converts the installer image to a raw disk image using auroraboot
+kairos-raw-image:
+    FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    
+    # Use Docker-in-Docker to convert iso-image to raw
+    WITH DOCKER \
+        --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
+        RUN echo "=== Setting up workdir ===" && \
+            mkdir -p /workdir && \
+            cd /workdir && \
+            echo "=== Verifying Docker image is available ===" && \
+            docker images | grep palette-installer-image || echo "Warning: palette-installer-image not found in docker images" && \
+            if ! docker inspect index.docker.io/library/palette-installer-image:latest >/dev/null 2>&1; then \
+                echo "Error: Image index.docker.io/library/palette-installer-image:latest not found"; \
+                echo "Available images:"; \
+                docker images || true; \
+                exit 1; \
+            fi && \
+            echo "=== Running auroraboot to convert image ===" && \
+            echo "Using auroraboot v0.6.4 (known working version)" && \
+            docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
+                --debug \
+                --set "disable_http_server=true" \
+                --set "disable_netboot=true" \
+                --set "disk.efi=true" \
+                --set "container_image=index.docker.io/library/palette-installer-image:latest"  \
+                --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
+            AURORABOOT_EXIT=$?; \
+            echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
+            echo "=== Auroraboot log size: $(wc -l < /workdir/auroraboot.log 2>/dev/null || echo '0') lines ===" && \
+            echo "=== Full auroraboot log ===" && \
+            cat /workdir/auroraboot.log 2>/dev/null || echo "Could not read log file" && \
+            echo "" && \
+            echo "=== Checking for errors/warnings in log ===" && \
+            grep -i "error\|fail\|panic\|warn" /workdir/auroraboot.log 2>/dev/null | head -20 || echo "No errors/warnings found" && \
+            echo "" && \
+            echo "=== Checking temp-rootfs contents ===" && \
+            if [ -d /workdir/temp-rootfs ]; then \
+                echo "temp-rootfs directory size: $(du -sh /workdir/temp-rootfs 2>/dev/null || echo 'unknown')"; \
+                echo "temp-rootfs file count: $(find /workdir/temp-rootfs -type f 2>/dev/null | wc -l || echo '0')"; \
+                find /workdir/temp-rootfs -type f 2>/dev/null | head -10 || echo "No files found in temp-rootfs"; \
+            fi && \
+            echo "" && \
+            echo "=== Finding raw image ===" && \
+            echo "Searching in /workdir and all subdirectories..." && \
+            find /workdir -type f \( -name "*.raw" -o -name "*.img" \) 2>/dev/null | head -20 && \
+            RAW_IMG=$(find /workdir -type f \( -name "*.raw" -o -name "*.img" \) | head -n1); \
+            if [ -z "$RAW_IMG" ]; then \
+                echo "❌ Error: No raw image found in /workdir"; \
+                echo "Auroraboot exit code: $AURORABOOT_EXIT"; \
+                echo "=== Auroraboot log (checking for errors) ==="; \
+                grep -i "error\|fail\|panic" /workdir/auroraboot.log 2>/dev/null || echo "No obvious errors in log"; \
+                echo "=== Contents of /workdir ==="; \
+                ls -laR /workdir || true; \
+                echo "=== Checking auroraboot state directory ==="; \
+                if [ -d /workdir/temp-rootfs ]; then \
+                    echo "temp-rootfs directory exists, size: $(du -sh /workdir/temp-rootfs 2>/dev/null || echo 'unknown')"; \
+                    find /workdir/temp-rootfs -type f | head -10 || true; \
+                fi; \
+                exit 1; \
+            fi && \
+            echo "✅ Found raw image: $RAW_IMG" && \
+            echo "Raw image size: $(du -h "$RAW_IMG" | cut -f1)" && \
+            cp "$RAW_IMG" /kairos.raw && \
+            echo "✅ Kairos raw image created: /kairos.raw"
+    END
+    
+    SAVE ARTIFACT /kairos.raw AS LOCAL ./build/
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine
@@ -1036,3 +1093,4 @@ UPX:
     COMMAND
     ARG bin
     RUN upx -1 $bin
+
