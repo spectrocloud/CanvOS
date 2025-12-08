@@ -1,0 +1,338 @@
+#cloud-config
+install:
+  reboot: true
+  poweroff: false
+stylus:
+  vip:
+    skip: false
+  managementMode: local
+  featureGate: UserDataForm
+  installationMode: airgap
+stages:
+  
+  after-install:
+    - name: "Copy in security rule files"
+      files:
+      - path: "/var/lib/spectro/new-palette-agent.te"
+        permissions: 0600
+        owner: 0
+        group: 0
+        content: |
+          module new-palette-agent 1.0;
+          require {
+              type admin_home_t;
+              type default_t;
+              type etc_t;
+              type etc_runtime_t;
+              type init_t;
+              type root_t;
+              type rsync_t;
+              type usr_t;
+              type var_lib_t;
+              type syslog_conf_t;
+              type syslogd_t;
+              class capability dac_override;
+              class dir read;
+              class lnk_file read;
+              class file { create execute execute_no_trans map open read write };
+          }
+          allow init_t admin_home_t:file read;
+          allow init_t default_t:file { read open write };
+          allow init_t etc_t:file write;
+          allow init_t root_t:file create;
+          allow init_t usr_t:file create;
+          allow init_t var_lib_t:file execute;
+          allow init_t var_lib_t:file execute_no_trans;
+          allow init_t var_lib_t:file map;
+          allow rsync_t default_t:dir read;
+          allow rsync_t self:capability dac_override;
+          allow syslogd_t syslog_conf_t:lnk_file read;
+          # Kairos agent permissions - needs access to OEM and system directories for configuration management
+          allow init_t etc_runtime_t:dir { read search };
+          allow init_t etc_runtime_t:file { read open };
+          allow init_t etc_runtime_t:lnk_file read;
+      - path: "/var/lib/spectro/00-palette.rules"
+        permissions: 0600
+        owner: 0
+        group: 0
+        content: |
+          allow perm=execute exe=/opt/bin/containerd-shim-runc-v2 trust=0 : dir=/opt/bin/ trust=0
+          allow perm=execute exe=/opt/bin/containerd trust=0 : dir=/opt/bin/ trust=0
+          allow perm=execute exe=/opt/bin/containerd trust=0 : dir=/opt/cni/bin/ trust=0
+          allow perm=execute exe=/opt/bin/containerd trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/opt/cni/bin/calico trust=0 : dir=/opt/cni/bin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/bin/agent-provider-stylus trust=0 : dir=/opt/spectrocloud/bin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/bin/palette-agent trust=0 : dir=/opt/spectrocloud/bin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/usr/bin/kairos-agent trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/usr/bin/kairos-agent trust=0 : dir=/oem/ trust=0
+          allow perm=execute exe=/usr/bin/kairos-agent trust=0 : dir=/system/ trust=0
+          allow perm=execute exe=/usr/bin/kairos-agent trust=0 : dir=/etc/kairos/ trust=0
+          allow perm=execute exe=/usr/bin/kairos-agent trust=0 : dir=/usr/bin/ trust=1
+          allow perm=execute exe=/usr/bin/kairos-agent trust=0 : dir=/usr/sbin/ trust=0
+          allow perm=execute exe=/usr/bin/kairos-agent trust=0 : dir=/usr/sbin/ trust=1
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.13/opt/spectrocloud/bin/palette-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.13/opt/spectrocloud/bin/palette-agent trust=0 : dir=/system/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.13/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.13/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=1
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.13/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.13/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=1
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.16/opt/spectrocloud/bin/palette-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.16/opt/spectrocloud/bin/palette-agent trust=0 : dir=/system/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.16/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.16/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=1
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.16/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.7.16/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=1
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/palette-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/palette-agent trust=0 : dir=/system/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=1
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=1
+          allow perm=execute exe=/system/providers/agent-provider-kubeadm trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/system/providers/agent-provider-kubeadm trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=execute exe=/usr/bin/k9s trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/usr/bin/kubeadm trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/usr/bin/kubeadm trust=0 : dir=/usr/local/bin/ trust=0
+          allow perm=execute exe=/usr/local/nvidia/toolkit/nvidia-container-runtime.cdi.real trust=0 : dir=/opt/bin/ trust=0
+          allow perm=execute exe=/usr/local/nvidia/toolkit/nvidia-container-runtime.legacy.real trust=0 : dir=/opt/bin/ trust=0
+          allow perm=execute exe=/usr/local/nvidia/toolkit/nvidia-container-runtime.real trust=0 : dir=/opt/bin/ trust=0
+          allow perm=execute exe=/var/lib/spectro/stylus/opt/spectrocloud/bin/palette-agent trust=0 : dir=/var/lib/spectro/stylus/opt/spectrocloud/bin/ trust=0
+          allow perm=open exe=/opt/spectrocloud/bin/palette-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=open exe=/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=open exe=/usr/bin/kairos-agent trust=0 : dir=/oem/ trust=0
+          allow perm=open exe=/usr/bin/kairos-agent trust=0 : dir=/system/ trust=0
+          allow perm=open exe=/usr/bin/kairos-agent trust=0 : dir=/etc/kairos/ trust=0
+          allow perm=open exe=/opt/spectrocloud/updates/4.7.13/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=open exe=/opt/spectrocloud/updates/4.7.16/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=open exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=open exe=/usr/local/nvidia/toolkit/nvidia-container-cli.real trust=0 : dir=/usr/local/nvidia/toolkit/ trust=0
+      - path: "/var/lib/spectro/configure-firewalld.sh"
+        permissions: 0700
+        owner: 0
+        group: 0
+        content: |
+          #!/bin/bash
+          if [ -z "$1" ]; then
+            echo "Usage: $0 <zone>"
+            exit 1
+          fi
+          ZONE="$1"
+          # Palette Edge Web UI
+          firewall-cmd --permanent --zone="$ZONE" --add-port=5080/tcp
+          # Kubernetes API Server
+          firewall-cmd --permanent --zone="$ZONE" --add-port=6443/tcp
+          # Etcd
+          firewall-cmd --permanent --zone="$ZONE" --add-port=2379-2380/tcp
+          # Kubelet API
+          firewall-cmd --permanent --zone="$ZONE" --add-port=10250/tcp
+          # Scheduler and Controller Manager
+          firewall-cmd --permanent --zone="$ZONE" --add-port=10257-10259/tcp
+          # kube proxy health check
+          firewall-cmd --permanent --zone="$ZONE" --add-port=10255/tcp
+          # Nodeport range
+          firewall-cmd --permanent --zone="$ZONE" --add-port=30000-32767/tcp
+          ############### Start Cilium Rules ##########################
+          # Cilium: VXLAN Overlay
+          firewall-cmd --permanent --zone="$ZONE" --add-port=8472/udp
+          # Cilium: Health Checks
+          firewall-cmd --permanent --zone="$ZONE" --add-port=4240/tcp
+          # Cilium: Geneve Overlay networking (if enabled)
+          firewall-cmd --permanent --zone="$ZONE" --add-port=6081/udp
+          # Cilium: WireGuard Encryption (if enabled)
+          firewall-cmd --permanent --zone="$ZONE" --add-port=51871/udp
+          # Cilium: IPsec Encryption (if enabled)
+          firewall-cmd --permanent --zone="$ZONE" --add-protocol=esp
+          # Cilium: Prometheus Observability
+          firewall-cmd --permanent --zone="$ZONE" --add-port=9962/tcp
+          firewall-cmd --permanent --zone="$ZONE" --add-port=9963/tcp
+          # Cilium: Enable ICMP Type 8 (Echo request) and Type 0 (Echo Reply)
+          firewall-cmd --permanent --zone="$ZONE" --add-icmp-block-inversion
+          ############### End Cilium Rules ##########################
+          # DNS and service communications
+          # DNS (CoreDNS)
+          firewall-cmd --permanent --zone="$ZONE" --add-port=53/tcp
+          firewall-cmd --permanent --zone="$ZONE" --add-port=53/udp
+          # Allow inbound/outbound traffic to port 443 (HTTPS)
+          firewall-cmd --permanent --zone="$ZONE" --add-port=443/tcp
+          # Allow NAT traffic
+          firewall-cmd --permanent --add-masquerade
+          # For calico systems
+          firewall-cmd --permanent --new-zone=calico-zone
+          firewall-cmd --permanent --zone=calico-zone --set-target=ACCEPT
+          firewall-cmd --permanent --zone=calico-zone --add-interface=tunl0
+          firewall-cmd --permanent --zone=calico-zone --add-interface="cali+" # Wildcard for cali* interfaces
+          
+          # Reload firewalld cache
+          firewall-cmd --reload
+      - path: "/etc/NetworkManager/system-connections/scbr-100.nmconnection"
+        permissions: 0600
+        owner: 0
+        group: 0
+        content: |
+          [connection]
+          id=scbr-100
+          uuid=144787b5-4b3a-33f1-addb-dcf19859d7f6
+          type=vxlan
+          interface-name=scbr-100
+          timestamp=1759919846
+          [ethernet]
+          cloned-mac-address=7A:22:F5:3B:76:B1
+          [vxlan]
+          id=2
+          local=100.64.192.2
+          [ipv4]
+          address1=100.64.192.2/23
+          address2=100.64.192.1/23
+          method=manual
+          [ipv6]
+          addr-gen-mode=default
+          method=auto
+          [proxy]
+      - path: "/etc/sysctl.d/99-zzz-override_cilium.conf"
+        permissions: 0600
+        owner: 0
+        group: 0
+        content: |
+          # Disable rp_filter on Cilium interfaces since it may cause mangled packets to be dropped
+          -net.ipv4.conf.lxc*.rp_filter = 0
+          -net.ipv4.conf.cilium_*.rp_filter = 0
+          # The kernel uses max(conf.all, conf.{dev}) as its value, so we need to set .all. to 0 as well.
+          # Otherwise it will overrule the device specific settings.
+          net.ipv4.conf.all.rp_filter = 0
+      - path: "/etc/sysctl.d/99-sysctl.conf"
+        permissions: 0600
+        owner: 0
+        group: 0
+        content: |
+          # sysctl settings are defined through files in
+          # /usr/lib/sysctl.d/, /run/sysctl.d/, and /etc/sysctl.d/.
+          #
+          # Vendors settings live in /usr/lib/sysctl.d/.
+          # To override a whole file, create a new file with the same in
+          # /etc/sysctl.d/ and put new settings there. To override
+          # only specific settings, add a file with a lexically later
+          # name in /etc/sysctl.d/ and put new settings there.
+          #
+          # For more information, see sysctl.conf(5) and sysctl.d(5).
+          # Per CCE-84120-5: Set net.ipv6.conf.all.accept_ra = 0 in /etc/sysctl.conf
+          net.ipv6.conf.all.accept_ra = 0
+          # Per CCE-84125-4: Set net.ipv6.conf.all.accept_redirects = 0 in /etc/sysctl.conf
+          net.ipv6.conf.all.accept_redirects = 0
+          # Per CCE-84131-2: Set net.ipv6.conf.all.accept_source_route = 0 in /etc/sysctl.conf
+          net.ipv6.conf.all.accept_source_route = 0
+          # Per CCE-84114-8: Set net.ipv6.conf.all.forwarding = 0 in /etc/sysctl.conf
+          net.ipv6.conf.all.forwarding = 0
+          # Per CCE-84124-7: Set net.ipv6.conf.default.accept_ra = 0 in /etc/sysctl.conf
+          net.ipv6.conf.default.accept_ra = 0
+          # Per CCE-84113-0: Set net.ipv6.conf.default.accept_redirects = 0 in /etc/sysctl.conf
+          net.ipv6.conf.default.accept_redirects = 0
+          # Per CCE-84130-4: Set net.ipv6.conf.default.accept_source_route = 0 in /etc/sysctl.conf
+          net.ipv6.conf.default.accept_source_route = 0
+          # Per CCE-84011-6: Set net.ipv4.conf.all.accept_redirects = 0 in /etc/sysctl.conf
+          net.ipv4.conf.all.accept_redirects = 0
+          # Per CCE-84001-7: Set net.ipv4.conf.all.accept_source_route = 0 in /etc/sysctl.conf
+          net.ipv4.conf.all.accept_source_route = 0
+          # Per CCE-87181-4: Set net.ipv4.conf.all.forwarding = 0 in /etc/sysctl.conf
+          #net.ipv4.conf.all.forwarding = 0
+          # Per CCE-84000-9: Set net.ipv4.conf.all.log_martians = 1 in /etc/sysctl.conf
+          net.ipv4.conf.all.log_martians = 1
+          # Per CCE-84008-2: Set net.ipv4.conf.all.rp_filter = 1 in /etc/sysctl.conf
+          net.ipv4.conf.all.rp_filter = 1
+          # Per CCE-84003-3: Set net.ipv4.conf.default.accept_redirects = 0 in /etc/sysctl.conf
+          net.ipv4.conf.default.accept_redirects = 0
+          # Per CCE-84014-0: Set net.ipv4.conf.default.log_martians = 1 in /etc/sysctl.conf
+          net.ipv4.conf.default.log_martians = 1
+          # Per CCE-84009-0: Set net.ipv4.conf.default.rp_filter = 1 in /etc/sysctl.conf
+          net.ipv4.conf.default.rp_filter = 1
+          # Per CCE-84004-1: Set net.ipv4.icmp_echo_ignore_broadcasts = 1 in /etc/sysctl.conf
+          net.ipv4.icmp_echo_ignore_broadcasts = 1
+          # Per CCE-84015-7: Set net.ipv4.icmp_ignore_bogus_error_responses = 1 in /etc/sysctl.conf
+          net.ipv4.icmp_ignore_bogus_error_responses = 1
+          # Per CCE-84006-6: Set net.ipv4.tcp_syncookies = 1 in /etc/sysctl.conf
+          net.ipv4.tcp_syncookies = 1
+          # Per CCE-83997-7: Set net.ipv4.conf.all.send_redirects = 0 in /etc/sysctl.conf
+          net.ipv4.conf.all.send_redirects = 0
+          # Per CCE-83999-3: Set net.ipv4.conf.default.send_redirects = 0 in /etc/sysctl.conf
+          net.ipv4.conf.default.send_redirects = 0
+          # Per CCE-83961-3: Set kernel.core_pattern = |/bin/false in /etc/sysctl.conf
+          kernel.core_pattern = |/bin/false
+          # Per CCE-83952-2: Set kernel.dmesg_restrict = 1 in /etc/sysctl.conf
+          kernel.dmesg_restrict = 1
+          # Per CCE-83954-8: Set kernel.kexec_load_disabled = 1 in /etc/sysctl.conf
+          kernel.kexec_load_disabled = 1
+          # Per CCE-83959-7: Set kernel.perf_event_paranoid = 2 in /etc/sysctl.conf
+          kernel.perf_event_paranoid = 2
+          # Per CCE-83957-1: Set kernel.unprivileged_bpf_disabled = 1 in /etc/sysctl.conf
+          kernel.unprivileged_bpf_disabled = 1
+          # Per CCE-83965-4: Set kernel.yama.ptrace_scope = 1 in /etc/sysctl.conf
+          kernel.yama.ptrace_scope = 1
+          # Per CCE-83966-2: Set net.core.bpf_jit_harden = 2 in /etc/sysctl.conf
+          #net.core.bpf_jit_harden = 2
+          # Per CCE-83971-2: Set kernel.randomize_va_space = 2 in /etc/sysctl.conf
+          kernel.randomize_va_space = 2
+          #
+          #
+          # STIG baseline overrides below. Below STIG kernel params modified to allow Kubernetes to run
+          # Allow IP forwarding for pod networks. Required for Kubernetes to function.
+          net.ipv4.ip_forward = 1
+          net.ipv4.conf.all.forwarding = 1
+          # Setting required for NVIDIA GPU Operator pod to execute.
+          net.core.bpf_jit_harden = 1
+    - name: "Harden OS"
+      commands:
+        - |
+          dnf -y install scap-security-guide openscap
+          oscap xccdf eval --remediate --profile xccdf_org.ssgproject.content_profile_stig  /usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml
+          fips-mode-setup --enable
+          sed -i -e 's/# ec2-user/ec2-user/g' /etc/sudoers.d/90-cloud-init-users
+          sed -i -e 's/# azureuser/azureuser/g' /etc/sudoers.d/90-cloud-init-users
+          sed -i -e 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config.d/50-cloud-init.conf
+    - name: "Apply security settings"
+      commands:
+        - |
+          setenforce 0
+          systemctl stop fapolicyd
+          dnf -y install selinux-policy-devel kernel-headers kernel-devel jq zstd conntrack
+          mkdir /oem /system
+          semanage fcontext -a -t etc_runtime_t "/oem(/.*)?"
+          semanage fcontext -a -t etc_runtime_t "/system(/.*)?"
+          semanage fcontext -a -t bin_t /var/lib/spectro/spectro-init.sh
+          semanage fcontext -a -t bin_t /var/lib/spectro/configure-firewalld.sh
+          restorecon -Rv /oem
+          restorecon -Rv /system
+          restorecon -v /var/lib/spectro/spectro-init.sh
+          restorecon -v /var/lib/spectro/configure-firewalld.sh
+          setsebool -P rsync_full_access 1
+          checkmodule -M -m --output /var/lib/spectro/new-palette-agent.mod /var/lib/spectro/new-palette-agent.te
+          semodule_package --outfile /var/lib/spectro/new-palette-agent.pp -m /var/lib/spectro/new-palette-agent.mod
+          semodule --install /var/lib/spectro/new-palette-agent.pp
+          systemctl start firewalld
+          sh /var/lib/spectro/configure-firewalld.sh public
+          cp -f /var/lib/spectro/00-palette.rules /etc/fapolicyd/rules.d/00-palette.rules
+          nmcli connection reload
+          sysctl --system
+  initramfs:  
+    - users:
+       kairos:
+         groups:
+           - wheel
+         passwd: kairos
+      name: "Configure user"
+    - name: "Update kernel parameter to allow GPU operator to run."
+      commands:
+        - |
+          sed -i -e 's/net.core.bpf_jit_harden = 2/net.core.bpf_jit_harden = 1/g' /etc/sysctl.d/99-sysctl.conf
+          sed -i -e 's/net.core.bpf_jit_harden = 2/net.core.bpf_jit_harden = 1/g' /etc/sysctl.conf
+          sed -i -e 's/net.ipv4.ip_forward = 0/net.ipv4.ip_forward = 1/g' /etc/sysctl.d/99-sysctl.conf
+          sed -i -e 's/net.ipv4.ip_forward = 0/net.ipv4.ip_forward = 1/g' /etc/sysctl.conf
+          sed -i -e 's/net.ipv4.conf.all.forwarding = 0/net.ipv4.conf.all.forwarding = 1/g' /etc/sysctl.d/99-sysctl.conf
+          sed -i -e 's/net.ipv4.conf.all.forwarding = 0/net.ipv4.conf.all.forwarding = 1/g' /etc/sysctl.conf
+          sed -i -e 's/^#\s*net.core.bpf_jit_harden/net.core.bpf_jit_harden/g' /etc/sysctl.conf
+          sed -i -e 's/^#\s*net.core.bpf_jit_harden/net.core.bpf_jit_harden/g' /etc/sysctl.d/99-sysctl.conf
+          sed -i -e 's/^#net.ipv4.ip_forward/net.ipv4.ip_forward/g' /etc/sysctl.conf
+          sed -i -e 's/^#net.ipv4.ip_forward/net.ipv4.ip_forward/g' /etc/sysctl.d/99-sysctl.conf
+          sed -i -e 's/^#net.ipv4.conf.all.forwarding/net.ipv4.conf.all.forwarding/g' /etc/sysctl.conf
+          sed -i -e 's/^#net.ipv4.conf.all.forwarding/net.ipv4.conf.all.forwarding/g' /etc/sysctl.d/99-sysctl.conf
+          sysctl --system
