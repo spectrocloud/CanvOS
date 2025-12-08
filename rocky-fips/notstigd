@@ -1,0 +1,301 @@
+pack:
+  content:
+    images:
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/coredns:v1.12.0
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/etcd:3.5.21-0
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/kube-apiserver:v1.33.5
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/kube-controller-manager:v1.33.5
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/kube-proxy:v1.33.5
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/kube-scheduler:v1.33.5
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/pause:3.9
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/pause:3.8
+    - image: us-docker.pkg.dev/palette-images-fips/k8s/pause:3.10
+    - image: us-docker.pkg.dev/palette-images-fips/edge/kubernetes:kubeadm-agent-mode-k8s-1.33.5
+#Client configuration to add OIDC based authentication flags in kubeconfig
+#clientConfig:
+  #oidc-issuer-url: "{{ .spectro.pack.kubernetes.kubeadmconfig.apiServer.extraArgs.oidc-issuer-url }}"
+  #oidc-client-id: "{{ .spectro.pack.kubernetes.kubeadmconfig.apiServer.extraArgs.oidc-client-id }}"
+  #oidc-client-secret: ""
+  #oidc-extra-scope: profile,email
+cluster:
+  # kubevipArgs:
+  #   svc_enable: "true"
+  #   vip_interface: "ens32"
+  #   vip_servicesinterface: "eno1"
+  # apiServer:
+  #   extraArgs:
+  #      oidc-groups-claim: "groups"
+  #      oidc-username-claim: "email"
+  #      oidc-issuer-url: ""
+  #      oidc-client-id: ""
+  config: |
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          - name: "advertise-address"
+            value: "0.0.0.0"
+          - name: "anonymous-auth"
+            value: "true"
+          - name: "audit-log-maxage"
+            value: "30"
+          - name: "audit-log-maxbackup"
+            value: "10"
+          - name: "audit-log-maxsize"
+            value: "100"
+          - name: "audit-log-path"
+            value: "/var/log/apiserver/audit.log"
+          - name: "audit-policy-file"
+            value: "/etc/kubernetes/audit-policy.yaml"
+          - name: "authorization-mode"
+            value: RBAC,Node
+          - name: "default-not-ready-toleration-seconds"
+            value: "60"
+          - name: "default-unreachable-toleration-seconds"
+            value: "60"
+          - name: "disable-admission-plugins"
+            value: "AlwaysAdmit"
+          - name: "enable-admission-plugins"
+            value: "AlwaysPullImages,NamespaceLifecycle,ServiceAccount,NodeRestriction"
+          - name: "profiling"
+            value: "false"
+          - name: "secure-port"
+            value: "6443"
+          - name: "tls-cipher-suites"
+            value: "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+        extraVolumes:
+        - hostPath: /var/log/apiserver
+          mountPath: /var/log/apiserver
+          name: audit-log
+          pathType: DirectoryOrCreate
+        - hostPath: /etc/kubernetes/audit-policy.yaml
+          mountPath: /etc/kubernetes/audit-policy.yaml
+          name: audit-policy
+          pathType: File
+          readOnly: true
+      controllerManager:
+        extraArgs:
+          - name: "feature-gates"
+            value: RotateKubeletServerCertificate=true
+          - name: "profiling"
+            value: "false"
+          - name: "terminated-pod-gc-threshold"
+            value: "25"
+          - name: "use-service-account-credentials"
+            value: "true"
+      kubernetesVersion: v1.33.5
+      featureGates:
+        ControlPlaneKubeletLocalMode: true
+      imageRepository: us-docker.pkg.dev/palette-images-fips/k8s
+      etcd:
+        local:
+          dataDir: "/etc/kubernetes/etcd"
+          extraArgs:
+            - name: "listen-client-urls"
+              value: "https://0.0.0.0:2379"
+            - name: "snapshot-count"
+              value: "50000"
+            - name: "max-snapshots"
+              value: "12"
+            - name: "cipher-suites"
+              value: "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+      networking:
+        podSubnet: 192.168.0.0/16
+        serviceSubnet: 10.96.0.0/12
+      scheduler:
+        extraArgs:
+          - name: "profiling"
+            value: "false"
+    kubeletConfiguration:
+      eventRecordQPS: 0
+      featureGates:
+        RotateKubeletServerCertificate: true
+      protectKernelDefaults: true
+      readOnlyPort: 0
+      tlsCipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          - name: "rotate-server-certificates"
+            value: "true"
+      timeouts:
+        controlPlaneComponentHealthCheck: 5m0s
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          - name: "rotate-server-certificates"
+            value: "true"
+      timeouts:
+        controlPlaneComponentHealthCheck: 5m0s
+stages:
+  initramfs:
+    - sysctl:
+        vm.overcommit_memory: 1
+        kernel.panic: 10
+        kernel.panic_on_oops: 1
+      commands:
+        - "ln -s /etc/kubernetes/admin.conf /run/kubeconfig"
+      files:
+        - path: /etc/hosts
+          permissions: 0644
+          content: |
+            127.0.0.1 localhost
+        - path: "/etc/kubernetes/audit-policy.yaml"
+          owner_string: "root"
+          permissions: 0600
+          content: |
+            apiVersion: audit.k8s.io/v1
+            kind: Policy
+            rules:
+              - level: None
+                users: ["system:kube-proxy"]
+                verbs: ["watch"]
+                resources:
+                  - group: "" # core
+                    resources: ["endpoints", "services", "services/status"]
+              - level: None
+                users: ["system:unsecured"]
+                namespaces: ["kube-system"]
+                verbs: ["get"]
+                resources:
+                  - group: "" # core
+                    resources: ["configmaps"]
+              - level: None
+                users: ["kubelet"] # legacy kubelet identity
+                verbs: ["get"]
+                resources:
+                  - group: "" # core
+                    resources: ["nodes", "nodes/status"]
+              - level: None
+                userGroups: ["system:nodes"]
+                verbs: ["get"]
+                resources:
+                  - group: "" # core
+                    resources: ["nodes", "nodes/status"]
+              - level: None
+                users:
+                  - system:kube-controller-manager
+                  - system:kube-scheduler
+                  - system:serviceaccount:kube-system:endpoint-controller
+                verbs: ["get", "update"]
+                namespaces: ["kube-system"]
+                resources:
+                  - group: "" # core
+                    resources: ["endpoints"]
+              - level: None
+                users: ["system:apiserver"]
+                verbs: ["get"]
+                resources:
+                  - group: "" # core
+                    resources: ["namespaces", "namespaces/status", "namespaces/finalize"]
+              - level: None
+                users: ["cluster-autoscaler"]
+                verbs: ["get", "update"]
+                namespaces: ["kube-system"]
+                resources:
+                  - group: "" # core
+                    resources: ["configmaps", "endpoints"]
+              # Don't log HPA fetching metrics.
+              - level: None
+                users:
+                  - system:kube-controller-manager
+                verbs: ["get", "list"]
+                resources:
+                  - group: "metrics.k8s.io"
+              # Don't log these read-only URLs.
+              - level: None
+                nonResourceURLs:
+                  - /healthz*
+                  - /version
+                  - /swagger*
+              # Don't log events requests.
+              - level: None
+                resources:
+                  - group: "" # core
+                    resources: ["events"]
+              # node and pod status calls from nodes are high-volume and can be large, don't log responses for expected updates from nodes
+              - level: Request
+                users: ["kubelet", "system:node-problem-detector", "system:serviceaccount:kube-system:node-problem-detector"]
+                verbs: ["update","patch"]
+                resources:
+                  - group: "" # core
+                    resources: ["nodes/status", "pods/status"]
+                omitStages:
+                  - "RequestReceived"
+              - level: Request
+                userGroups: ["system:nodes"]
+                verbs: ["update","patch"]
+                resources:
+                  - group: "" # core
+                    resources: ["nodes/status", "pods/status"]
+                omitStages:
+                  - "RequestReceived"
+              # deletecollection calls can be large, don't log responses for expected namespace deletions
+              - level: Request
+                users: ["system:serviceaccount:kube-system:namespace-controller"]
+                verbs: ["deletecollection"]
+                omitStages:
+                  - "RequestReceived"
+              # Secrets, ConfigMaps, and TokenReviews can contain sensitive & binary data,
+              # so only log at the Metadata level.
+              - level: Metadata
+                resources:
+                  - group: "" # core
+                    resources: ["secrets", "configmaps"]
+                  - group: authentication.k8s.io
+                    resources: ["tokenreviews"]
+                omitStages:
+                  - "RequestReceived"
+              # Get repsonses can be large; skip them.
+              - level: Request
+                verbs: ["get", "list", "watch"]
+                resources:
+                  - group: "" # core
+                  - group: "admissionregistration.k8s.io"
+                  - group: "apiextensions.k8s.io"
+                  - group: "apiregistration.k8s.io"
+                  - group: "apps"
+                  - group: "authentication.k8s.io"
+                  - group: "authorization.k8s.io"
+                  - group: "autoscaling"
+                  - group: "batch"
+                  - group: "certificates.k8s.io"
+                  - group: "extensions"
+                  - group: "metrics.k8s.io"
+                  - group: "networking.k8s.io"
+                  - group: "policy"
+                  - group: "rbac.authorization.k8s.io"
+                  - group: "settings.k8s.io"
+                  - group: "storage.k8s.io"
+                omitStages:
+                  - "RequestReceived"
+              # Default level for known APIs
+              - level: Request
+                omitRequestBody: true
+                resources:
+                  - group: "" # core
+                  - group: "admissionregistration.k8s.io"
+                  - group: "apiextensions.k8s.io"
+                  - group: "apiregistration.k8s.io"
+                  - group: "apps"
+                  - group: "authentication.k8s.io"
+                  - group: "authorization.k8s.io"
+                  - group: "autoscaling"
+                  - group: "batch"
+                  - group: "certificates.k8s.io"
+                  - group: "extensions"
+                  - group: "metrics.k8s.io"
+                  - group: "networking.k8s.io"
+                  - group: "policy"
+                  - group: "rbac.authorization.k8s.io"
+                  - group: "settings.k8s.io"
+                  - group: "storage.k8s.io"
+                omitStages:
+                  - "RequestReceived"
+              # Default level for all other requests.
+              - level: Metadata
+                omitStages:
+                  - "RequestReceived"
