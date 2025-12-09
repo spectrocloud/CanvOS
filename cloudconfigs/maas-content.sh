@@ -6,7 +6,7 @@ set -euo pipefail
 # Note: local-ui is handled directly in the iso-image build, not via content partition
 
 # Log file path
-LOG_FILE="/var/logs/stylus-maas-content-script.log"
+LOG_FILE="/var/log/stylus-maas-content-script.log"
 
 # Function to log messages to both stdout and log file
 log() {
