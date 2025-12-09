@@ -239,6 +239,8 @@ if [[ "$1" == "+maas-image" ]]; then
     # The script will look for curtin-hooks in ORIG_DIR (which will be the repo root)
     # The script will also look for content files in ./content directory
     # Pass the custom image name as the second parameter
+    # Export CLUSTERCONFIG to ensure it's available to the build script
+    export CLUSTERCONFIG
     bash "$BUILD_SCRIPT" "$KAIROS_RAW_IMAGE" "$MAAS_IMAGE_NAME"
     BUILD_EXIT=$?
     
