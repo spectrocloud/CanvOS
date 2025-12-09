@@ -42,9 +42,16 @@ fi
 FINAL_IMG_BASE="${FINAL_IMG_BASE%.raw}"
 FINAL_IMG="${FINAL_IMG_BASE}.raw"
 # The size of the new Ubuntu rootfs partition.
-UBUNTU_ROOT_SIZE="5G"
+UBUNTU_ROOT_SIZE="3G"
+# The size of the content partition (for Stylus content files)
+# Default to 2G, but will be calculated based on actual content size if content files exist
+CONTENT_SIZE="2G"
 # Path to the curtin hooks script (relative to the original directory)
 CURTIN_HOOKS_SCRIPT="$ORIG_DIR/curtin-hooks"
+# Path to content directory (if content files are provided)
+CONTENT_DIR="$ORIG_DIR/content"
+# Path to cluster config (SPC) file if provided
+CLUSTERCONFIG_FILE=""
 
 # --- Tools check ---
 for tool in wget tar losetup grub-editenv qemu-img parted kpartx mkfs.ext2 mkfs.vfat mkfs.ext4 rsync blkid; do
@@ -115,8 +122,46 @@ echo "  OEM: $(numfmt --to=iec $COS_OEM_SIZE) ($COS_OEM_SIZE bytes)"
 echo "  Recovery: $(numfmt --to=iec $COS_RECOVERY_SIZE) ($COS_RECOVERY_SIZE bytes)"
 echo ""
 
+# Check for SPC file
+if [ -f "$ORIG_DIR/spc.tgz" ]; then
+    CLUSTERCONFIG_FILE="$ORIG_DIR/spc.tgz"
+    echo "Found SPC file: $CLUSTERCONFIG_FILE"
+elif [ -n "${CLUSTERCONFIG:-}" ] && [ -f "$CLUSTERCONFIG" ]; then
+    CLUSTERCONFIG_FILE="$CLUSTERCONFIG"
+    echo "Found SPC file from CLUSTERCONFIG: $CLUSTERCONFIG_FILE"
+fi
+
+# Check if content directory exists and calculate size needed
+CONTENT_SIZE_BYTES=0
+HAS_CONTENT=false
+CONTENT_FILES_SIZE=0
+
+# Calculate size of content files
+if [ -d "$CONTENT_DIR" ] && [ -n "$(find "$CONTENT_DIR" -type f \( -name "*.zst" -o -name "*.tar" \) 2>/dev/null | head -1)" ]; then
+    CONTENT_FILES_SIZE=$(find "$CONTENT_DIR" -type f \( -name "*.zst" -o -name "*.tar" \) -exec du -cb {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
+fi
+
+# Add size of SPC file if it exists
+if [ -n "$CLUSTERCONFIG_FILE" ] && [ -f "$CLUSTERCONFIG_FILE" ]; then
+    SPC_SIZE=$(du -cb "$CLUSTERCONFIG_FILE" 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
+    CONTENT_FILES_SIZE=$(($CONTENT_FILES_SIZE + $SPC_SIZE))
+fi
+
+# Create content partition if we have any files to store
+if [ "$CONTENT_FILES_SIZE" -gt 0 ]; then
+    HAS_CONTENT=true
+    # Add 20% overhead for filesystem metadata and safety margin
+    CONTENT_SIZE_BYTES=$(($CONTENT_FILES_SIZE + $CONTENT_FILES_SIZE / 5 + 100*1024*1024))
+    CONTENT_SIZE=$(numfmt --to=iec "$CONTENT_SIZE_BYTES")
+    echo "Content files found: $(numfmt --to=iec $CONTENT_FILES_SIZE)"
+    echo "Content partition size: $CONTENT_SIZE (with overhead)"
+else
+    echo "No content files found, skipping content partition"
+fi
+echo ""
+
 UBUNTU_ROOT_SIZE_BYTES=$(numfmt --from=iec "$UBUNTU_ROOT_SIZE")
-FINAL_IMG_SIZE_BYTES=$(($COS_GRUB_SIZE + $UBUNTU_ROOT_SIZE_BYTES + $COS_OEM_SIZE + $COS_RECOVERY_SIZE + 1024*1024 )) 
+FINAL_IMG_SIZE_BYTES=$(($COS_GRUB_SIZE + $UBUNTU_ROOT_SIZE_BYTES + $COS_OEM_SIZE + $COS_RECOVERY_SIZE + $CONTENT_SIZE_BYTES + 1024*1024 )) 
 
 FINAL_IMG_SIZE=$(numfmt --to=iec "$FINAL_IMG_SIZE_BYTES")
 
@@ -135,14 +180,33 @@ COS_OEM_END="${COS_OEM_END_BYTES}MiB"
 COS_RECOVERY_END_BYTES=$(($COS_OEM_END_BYTES + $COS_RECOVERY_SIZE / 1024 / 1024))
 COS_RECOVERY_END="${COS_RECOVERY_END_BYTES}MiB"
 
+# Calculate content partition end point (if content exists)
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    CONTENT_END_BYTES=$(($COS_RECOVERY_END_BYTES + $CONTENT_SIZE_BYTES / 1024 / 1024))
+    CONTENT_END="${CONTENT_END_BYTES}MiB"
+else
+    CONTENT_END="$COS_RECOVERY_END"
+fi
+
 # Create partitions with names that match the source image.
-parted -s "$FINAL_IMG" -- \
-  mklabel gpt \
-  mkpart efi fat32 1MiB "$COS_GRUB_END" \
-  set 1 esp on \
-  mkpart ubuntu_rootfs ext4 "$COS_GRUB_END" "$UBUNTU_END" \
-  mkpart oem ext2 "$UBUNTU_END" "$COS_OEM_END" \
-  mkpart recovery ext2 "$COS_OEM_END" "$COS_RECOVERY_END"
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    parted -s "$FINAL_IMG" -- \
+      mklabel gpt \
+      mkpart efi fat32 1MiB "$COS_GRUB_END" \
+      set 1 esp on \
+      mkpart ubuntu_rootfs ext4 "$COS_GRUB_END" "$UBUNTU_END" \
+      mkpart oem ext2 "$UBUNTU_END" "$COS_OEM_END" \
+      mkpart recovery ext2 "$COS_OEM_END" "$COS_RECOVERY_END" \
+      mkpart content ext4 "$COS_RECOVERY_END" "$CONTENT_END"
+else
+    parted -s "$FINAL_IMG" -- \
+      mklabel gpt \
+      mkpart efi fat32 1MiB "$COS_GRUB_END" \
+      set 1 esp on \
+      mkpart ubuntu_rootfs ext4 "$COS_GRUB_END" "$UBUNTU_END" \
+      mkpart oem ext2 "$UBUNTU_END" "$COS_OEM_END" \
+      mkpart recovery ext2 "$COS_OEM_END" "$COS_RECOVERY_END"
+fi
 
 
 # --- Loop setup for device mapping ---
@@ -161,6 +225,9 @@ FINAL_EFI_DEV="${FINAL_PARTS[0]}"
 FINAL_UBUNTU_ROOTFS_DEV="${FINAL_PARTS[1]}"
 FINAL_OEM_DEV="${FINAL_PARTS[2]}"
 FINAL_RECOVERY_DEV="${FINAL_PARTS[3]}"
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    FINAL_CONTENT_DEV="${FINAL_PARTS[4]}"
+fi
 
 sleep 2
 
@@ -171,6 +238,9 @@ mkfs.vfat -n "COS_GRUB" "$FINAL_EFI_DEV"
 mkfs.ext4 -L UBUNTU_ROOTFS "$FINAL_UBUNTU_ROOTFS_DEV"
 mkfs.ext2 -L COS_OEM "$FINAL_OEM_DEV"
 mkfs.ext2 -L COS_RECOVERY "$FINAL_RECOVERY_DEV"
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    mkfs.ext4 -L COS_CONTENT "$FINAL_CONTENT_DEV"
+fi
 
 MNT_INPUT_EFI=$(mktemp -d)
 MNT_INPUT_OEM=$(mktemp -d)
@@ -181,6 +251,9 @@ MNT_FINAL_EFI=$(mktemp -d)
 MNT_FINAL_UBUNTU_ROOTFS=$(mktemp -d)
 MNT_FINAL_OEM=$(mktemp -d)
 MNT_FINAL_RECOVERY=$(mktemp -d)
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    MNT_FINAL_CONTENT=$(mktemp -d)
+fi
 
 mount -t vfat "$INPUT_EFI_DEV" "$MNT_INPUT_EFI"
 mount -t ext2 "$INPUT_OEM_DEV" "$MNT_INPUT_OEM"
@@ -191,6 +264,9 @@ mount -t vfat "$FINAL_EFI_DEV" "$MNT_FINAL_EFI"
 mount "$FINAL_UBUNTU_ROOTFS_DEV" "$MNT_FINAL_UBUNTU_ROOTFS"
 mount -t ext2 "$FINAL_OEM_DEV" "$MNT_FINAL_OEM"
 mount -t ext2 "$FINAL_RECOVERY_DEV" "$MNT_FINAL_RECOVERY"
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    mount "$FINAL_CONTENT_DEV" "$MNT_FINAL_CONTENT"
+fi
 
 # --- Copy Filesystems ---
 echo "--- Copying Filesystem Data ---"
@@ -210,6 +286,28 @@ RECOVERY_OUT_SIZE=$(du -sb "$MNT_FINAL_RECOVERY" 2>/dev/null | cut -f1 || echo "
 echo "  Input recovery size: $(numfmt --to=iec $RECOVERY_IN_SIZE)"
 echo "  Output recovery size: $(numfmt --to=iec $RECOVERY_OUT_SIZE)"
 
+# Copy content files and SPC to content partition if it exists
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    echo "--- Copying Files to Content Partition ---"
+    mkdir -p "$MNT_FINAL_CONTENT"
+    
+    # Copy all content files (.zst and .tar files only)
+    if [ -d "$CONTENT_DIR" ]; then
+        find "$CONTENT_DIR" -type f \( -name "*.zst" -o -name "*.tar" \) -exec cp -v {} "$MNT_FINAL_CONTENT/" \;
+    fi
+    
+    # Copy SPC file if it exists
+    if [ -n "$CLUSTERCONFIG_FILE" ] && [ -f "$CLUSTERCONFIG_FILE" ]; then
+        cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/spc.tgz"
+        echo "Copied SPC file to content partition"
+    fi
+    
+    CONTENT_COUNT=$(find "$MNT_FINAL_CONTENT" -type f | wc -l)
+    echo "Copied $CONTENT_COUNT file(s) to content partition"
+    echo "Content partition usage:"
+    df -h "$MNT_FINAL_CONTENT" || true
+fi
+
 # Sync all filesystems to ensure data is written
 echo "Syncing filesystems..."
 sync
@@ -220,6 +318,7 @@ mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/curtin"
 cp "$CURTIN_HOOKS_SCRIPT" "$MNT_FINAL_UBUNTU_ROOTFS/curtin/"
 chmod 750 "$MNT_FINAL_UBUNTU_ROOTFS/curtin/curtin-hooks"
 echo "Curtin hooks script installed at /curtin/curtin-hooks with 750 permissions"
+
 
 # --- Install cloud-init userdata processing script ---
 echo "--- Installing cloud-init userdata processing script ---"
@@ -311,7 +410,11 @@ echo ""
 
 # Verify filesystem labels
 echo "Filesystem labels:"
-blkid "$FINAL_EFI_DEV" "$FINAL_UBUNTU_ROOTFS_DEV" "$FINAL_OEM_DEV" "$FINAL_RECOVERY_DEV" 2>/dev/null || true
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    blkid "$FINAL_EFI_DEV" "$FINAL_UBUNTU_ROOTFS_DEV" "$FINAL_OEM_DEV" "$FINAL_RECOVERY_DEV" "$FINAL_CONTENT_DEV" 2>/dev/null || true
+else
+    blkid "$FINAL_EFI_DEV" "$FINAL_UBUNTU_ROOTFS_DEV" "$FINAL_OEM_DEV" "$FINAL_RECOVERY_DEV" 2>/dev/null || true
+fi
 echo ""
 
 # Check recovery partition filesystem
@@ -328,6 +431,9 @@ umount -l "$MNT_FINAL_EFI" || true
 umount -l "$MNT_FINAL_UBUNTU_ROOTFS" || true
 umount -l "$MNT_FINAL_OEM" || true
 umount -l "$MNT_FINAL_RECOVERY" || true
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    umount -l "$MNT_FINAL_CONTENT" || true
+fi
 
 if [ -n "$UBUNTU_LOOP_DEV" ]; then losetup -d "$UBUNTU_LOOP_DEV" || true; fi
 kpartx -d "$FINAL_IMG" || true
@@ -343,7 +449,11 @@ echo "Final image size: $FINAL_IMG_SIZE"
 echo "Expected size: ~$(numfmt --to=iec $FINAL_IMG_SIZE_BYTES)"
 echo ""
 
-rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY" "$WORKDIR"
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY" "$MNT_FINAL_CONTENT" "$WORKDIR"
+else
+    rm -rf "$MNT_INPUT_EFI" "$MNT_INPUT_OEM" "$MNT_INPUT_RECOVERY" "$MNT_UBUNTU_ROOT_IMG" "$MNT_FINAL_EFI" "$MNT_FINAL_UBUNTU_ROOTFS" "$MNT_FINAL_OEM" "$MNT_FINAL_RECOVERY" "$WORKDIR"
+fi
 
 # Mark cleanup as done so trap doesn't try again
 CLEANUP_DONE=true

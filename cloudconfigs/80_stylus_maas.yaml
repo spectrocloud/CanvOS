@@ -20,3 +20,8 @@ stages:
           else
             echo "No Ubuntu rootfs partition found with label UBUNTU_ROOTFS"
           fi
+  network:
+    - if: '[ -f "/run/cos/active_mode" ]'
+      name: "extract content from content partition"
+      commands:
+        - bash /opt/spectrocloud/scripts/maas-content.sh

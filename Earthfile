@@ -881,24 +881,13 @@ iso-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    # For MAAS builds, add content, SPC, and local-ui directly to installed filesystem paths
-    # (not to /run/initramfs/live which doesn't exist in MAAS deployments)
+    # For MAAS builds, install maas-content.sh script and handle local-ui
     IF [ "$IS_MAAS" = "true" ]
-        # Add content files (split if > 3GB)
-        COPY --if-exists content-*/*.zst /opt/spectrocloud/content/
-        RUN if [ -n "$(ls /opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
-            for file in /opt/spectrocloud/content/*.zst; do \
-                split --bytes=3GB --numeric-suffixes "$file" /opt/spectrocloud/content/$(basename "$file")_part; \
-            done; \
-            rm -f /opt/spectrocloud/content/*.zst; \
-        fi
-
-        # Add cluster config (SPC) if provided
-        IF [ "$CLUSTERCONFIG" != "" ]
-            COPY --if-exists "$CLUSTERCONFIG" /opt/spectrocloud/clusterconfig/spc.tgz
-        END
-
-        # Add local-ui if provided
+        RUN mkdir -p /opt/spectrocloud/scripts
+        COPY cloudconfigs/maas-content.sh /opt/spectrocloud/scripts/maas-content.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/maas-content.sh
+        
+        # Add local-ui if provided (extract it directly to the image)
         COPY --if-exists local-ui.tar /opt/spectrocloud/
         RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
             tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \

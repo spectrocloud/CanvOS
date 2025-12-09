@@ -183,6 +183,33 @@ if [[ "$1" == "+maas-image" ]]; then
     # Copy curtin-hooks to the repo root (current directory) so the script can find it
     cp "$CURTIN_HOOKS" ./curtin-hooks
     
+    # Check for files to add to content partition
+    # The build script looks for:
+    # - Content files in ./content directory (.zst or .tar files)
+    # - SPC file as ./spc.tgz or from CLUSTERCONFIG env var
+    # Note: local-ui.tar is handled directly in iso-image build, not in content partition
+    HAS_FILES=false
+    
+    if [ -d "content" ] && [ -n "$(find content -type f \( -name "*.zst" -o -name "*.tar" \) 2>/dev/null | head -1)" ]; then
+        CONTENT_FILES_COUNT=$(find content -type f \( -name "*.zst" -o -name "*.tar" \) 2>/dev/null | wc -l)
+        echo "Content files found: $CONTENT_FILES_COUNT file(s) (.zst or .tar)"
+        HAS_FILES=true
+    fi
+    
+    if [ -f "spc.tgz" ]; then
+        echo "SPC file found (spc.tgz), will be added to content partition"
+        HAS_FILES=true
+    elif [ -n "${CLUSTERCONFIG:-}" ] && [ -f "${CLUSTERCONFIG:-}" ]; then
+        echo "SPC file found (from CLUSTERCONFIG), will be added to content partition"
+        HAS_FILES=true
+    fi
+    
+    if [ "$HAS_FILES" = "true" ]; then
+        echo "Files will be added to content partition"
+    else
+        echo "No content files or SPC found, content partition will be skipped"
+    fi
+    
     # Get custom MAAS image name from .arg file (sourced earlier) or use default
     MAAS_IMAGE_NAME="${MAAS_IMAGE_NAME:-kairos-ubuntu-maas}"
     # Ensure the name doesn't already have .raw or .raw.gz extension
@@ -191,6 +218,7 @@ if [[ "$1" == "+maas-image" ]]; then
     
     # Run the build script from the repo root
     # The script will look for curtin-hooks in ORIG_DIR (which will be the repo root)
+    # The script will also look for content files in ./content directory
     # Pass the custom image name as the second parameter
     bash "$BUILD_SCRIPT" "$KAIROS_RAW_IMAGE" "$MAAS_IMAGE_NAME"
     BUILD_EXIT=$?
