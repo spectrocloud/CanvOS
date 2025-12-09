@@ -5,13 +5,18 @@ FROM ${UBUNTU_IMAGE} AS builder
 ARG REGION
 ARG S3_BUCKET
 ARG S3_KEY
+ARG ARCH
 
 # Install dependencies
 RUN apt-get update && apt-get install -y unzip ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Install AWS CLI
-RUN curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+RUN AWS_CLI_ARCH=$(case "$ARCH" in \
+        amd64) echo "x86_64" ;; \
+        arm64) echo "aarch64" ;; \
+    esac) && \
+    curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_CLI_ARCH}.zip" -o "awscliv2.zip" && \
     unzip -q awscliv2.zip -d aws_install_temp && \
     ./aws_install_temp/aws/install && \
     rm -rf awscliv2.zip aws_install_temp
@@ -19,7 +24,7 @@ RUN curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o
 WORKDIR /workdir
 
 # Copy the cloud image output
-COPY --from=cloud-image / /workdir/
+COPY --from=raw-image / /workdir/raw-image/
 
 # Copy the AMI creation script
 COPY cloud-images/scripts/create-raw-to-ami.sh /workdir/create-raw-to-ami.sh
@@ -28,7 +33,7 @@ COPY cloud-images/scripts/create-raw-to-ami.sh /workdir/create-raw-to-ami.sh
 RUN --mount=type=secret,id=AWS_PROFILE \
     --mount=type=secret,id=AWS_ACCESS_KEY_ID \
     --mount=type=secret,id=AWS_SECRET_ACCESS_KEY \
-    RAW_FILE_PATH=$(ls /workdir/*.raw) && \
+    RAW_FILE_PATH=$(ls /workdir/raw-image/*.raw) && \
     echo "RAW_FILE_PATH: $RAW_FILE_PATH" && \
     if [ ! -f "$RAW_FILE_PATH" ]; then \
         echo "Error: RAW file not found." && \
@@ -40,8 +45,6 @@ RUN --mount=type=secret,id=AWS_PROFILE \
     fi && \
     /workdir/create-raw-to-ami.sh "$RAW_FILE_PATH"
 
-FROM scratch AS output
-COPY --from=builder /workdir/ /
 
 
 

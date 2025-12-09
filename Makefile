@@ -5,9 +5,20 @@ export
 # TARGETS
 # ==============================================================================
 .PHONY: build build-all-images iso build-provider-images iso-disk-image \
-	uki-genkey alpine-all validate-user-data cloud-image aws-cloud-image help
+	uki-genkey alpine-all validate-user-data raw-image aws-cloud-image \
+	iso-image-cloud internal-slink iso-efi-size-check \
+	clean clean-all clean-raw-image clean-keys help
 
-.SILENT: uki-genkey validate-user-data
+.SILENT: uki-genkey validate-user-data clean-raw-image
+
+# ==============================================================================
+# CONSTANTS
+# ==============================================================================
+AURORABOOT_IMAGE := quay.io/kairos/auroraboot:v0.14.0
+RAW_IMAGE_DIR := $(CURDIR)/build/raw-image
+ISO_IMAGE_CLOUD := palette-installer-image-cloud:latest
+ISO_IMAGE_MAAS := palette-installer-image-maas:latest
+
 
 # ==============================================================================
 # HELPER VARIABLES
@@ -23,6 +34,7 @@ PUSH := $(or $(PUSH),true)
 DEBUG := $(or $(DEBUG),false)
 NO_CACHE := $(or $(NO_CACHE),false)
 DRY_RUN := $(or $(DRY_RUN),false)
+ARCH := $(or $(ARCH),amd64)
 
 # Common Configuration expressions for building targets
 PUSH_ARGS = $(if $(filter true,$(PUSH)),--set *.output=type=image$(comma)push=$(PUSH),)
@@ -53,7 +65,7 @@ ALL_K8S_VERSIONS = $(if $(strip $(K8S_VERSION)),\
 # ==============================================================================
 build:
 	$(if $(BAKE_ENV),env $(BAKE_ENV)) \
-	docker buildx bake ${DRY_RUN_ARGS} ${DOCKER_BUILD_OUT} ${DOCKER_NO_CACHE} ${TARGET} $(BAKE_ARGS)
+	docker buildx bake $(DRY_RUN_ARGS) $(DOCKER_BUILD_OUT) $(DOCKER_NO_CACHE) $(TARGET) $(BAKE_ARGS)
 
 # ==============================================================================
 # MAIN BUILD TARGETS
@@ -63,17 +75,29 @@ build-all-images: build-provider-images iso
 iso:
 	$(MAKE) TARGET=$(ISO_TARGET_TYPE) build
 
-iso-image:
-	$(MAKE) TARGET=iso-image build
-
 iso-disk-image:
 	$(MAKE) TARGET=iso-disk-image build BAKE_ARGS="$(PUSH_ARGS)"
 
-aws-cloud-image:
+aws-cloud-image: raw-image
 	$(MAKE) TARGET=aws-cloud-image build
 
-cloud-image:
-	$(MAKE) TARGET=cloud-image build
+raw-image: clean-raw-image iso-image-cloud
+	mkdir -p $(RAW_IMAGE_DIR)
+	docker run --net host --privileged -v /var/run/docker.sock:/var/run/docker.sock \
+  	-v $(RAW_IMAGE_DIR):/build \
+	-v $(CURDIR)/cloud-images/config/user-data.yaml:/config.yaml \
+	--rm -it $(AURORABOOT_IMAGE) \
+  	--debug \
+  	--set "disable_http_server=true" \
+  	--set "disable_netboot=true" \
+  	--set "disk.efi=true" \
+  	--set "arch=$(ARCH)" \
+  	--set "container_image=$(ISO_IMAGE_CLOUD)" \
+  	--set "state_dir=/build" \
+  	--cloud-config /config.yaml
+
+iso-image-cloud:
+	$(MAKE) TARGET=iso-image-cloud build BAKE_ARGS="--set *.tags.ISO_IMAGE_CLOUD=$(ISO_IMAGE_CLOUD)"
 
 # ==============================================================================
 # PROVIDER IMAGE BUILD TARGETS
@@ -81,7 +105,6 @@ cloud-image:
 build-provider-images: .check-provider-prereqs $(addprefix .build-provider-image-,$(strip $(ALL_K8S_VERSIONS)))
 	@echo "All provider images built successfully"
 
-# ==============================================================================
 # PROVIDER IMAGE BUILD TARGETS (INTERNAL)
 # ==============================================================================
 
@@ -117,16 +140,35 @@ iso-efi-size-check:
 alpine-all:
 	$(MAKE) TARGET=alpine-all BAKE_ARGS="$(PUSH_ARGS)" build
 
+# ==============================================================================
+# CLEAN TARGETS
+# ==============================================================================
+clean-all: clean clean-keys
+
+clean:
+	rm -rf build
+
+clean-raw-image:
+	rm -rf build/raw-image
+
+clean-keys:
+	rm -rf secure-boot
+
+# ==============================================================================
 help:
 	@echo "Available targets:"
 	@echo "  build-all-images      - Build all provider images and ISO"
 	@echo "  iso                   - Build ISO installer"
 	@echo "  iso-disk-image        - Build ISO disk image"
 	@echo "  build-provider-images - Build all provider images for configured K8S versions"
-	@echo "  cloud-image           - Build raw cloud disk image"
-	@echo "  aws-cloud-image       - Build AWS AMI from cloud image"
+	@echo "  raw-image             - Build raw cloud disk image(Requires root privileges)"
+	@echo "  aws-cloud-image       - Build AWS AMI from raw image(Requires root privileges)"
 	@echo "  uki-genkey            - Generate UKI secure boot keys"
 	@echo "  validate-user-data    - Validate user-data configuration"
+	@echo "  clean-all             - Remove the build directory and secure boot keys"
+	@echo "  clean                 - Remove the build directory"
+	@echo "  clean-raw-image       - Remove the $(RAW_IMAGE_DIR) build directory"
+	@echo "  clean-keys            - Clean secure boot keys"
 	@echo ""
 	@echo "Build specific configuration (set in .arg file or as make variables):"
 	@echo "  PUSH                  - Push images to registry (default: true)"

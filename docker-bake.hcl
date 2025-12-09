@@ -152,6 +152,10 @@ variable "IS_MAAS" {
 variable "IS_UKI" {
   type = bool
   default = false
+  validation{
+    condition = ((IS_UKI && (OS_VERSION == "24" || OS_VERSION == "24.04")) || IS_UKI == false)
+    error_message = "OS_VERSION must be 24.04 for UKI"
+  }
 }
 
 variable "INCLUDE_MS_SECUREBOOT_KEYS" {
@@ -275,15 +279,19 @@ function "get_ubuntu_image" {
   result = fips_enabled ? "${spectro_pub_repo}/third-party/ubuntu-fips:22.04" : "${spectro_pub_repo}/third-party/ubuntu:22.04"
 }
 
+function "normalized_os_version" {
+  params = [os_distribution, os_version]
+  // For Ubuntu: if version is like 20, 22, 24, append .04
+  result = os_distribution != "ubuntu" ? os_version : (length(regexall("\\.", os_version)) > 0 ? os_version : "${os_version}.04")
+}
+
 function "get_base_image" {
   params = [base_image, os_distribution, os_version, is_uki]
   result = base_image != "" ? base_image : (
-    # Format version: add .04 if not present, then build image URL
-    os_distribution == "ubuntu" && length(regexall("^(20|22|24)(\\.04)?$", os_version)) > 0 ? 
-      "${KAIROS_BASE_IMAGE_URL}/kairos-${OS_DISTRIBUTION}:${length(regexall("\\.04", os_version)) > 0 ? os_version : os_version + ".04"}-core-${ARCH}-generic-${KAIROS_VERSION}${is_uki && length(regexall("^24", os_version)) > 0 ? "-uki" : ""}" :
+    os_distribution == "ubuntu" ? "${KAIROS_BASE_IMAGE_URL}/kairos-${os_distribution}:${os_version}-core-${ARCH}-generic-${KAIROS_VERSION}${is_uki ? "-uki" : ""}" :
 
     os_distribution == "opensuse-leap" && os_version == "15.6" ? 
-      "${KAIROS_BASE_IMAGE_URL}/kairos-opensuse:leap-${OS_VERSION}-core-${ARCH}-generic-${KAIROS_VERSION}" :
+      "${KAIROS_BASE_IMAGE_URL}/kairos-opensuse:leap-${os_version}-core-${ARCH}-generic-${KAIROS_VERSION}" :
     
     ""
   )
@@ -293,7 +301,9 @@ function "get_base_image" {
 target "base" {
   dockerfile = "Dockerfile"
   args = {
-    BASE = get_base_image(BASE_IMAGE, OS_DISTRIBUTION, OS_VERSION, IS_UKI)
+    BASE = get_base_image(BASE_IMAGE, OS_DISTRIBUTION, 
+            normalized_os_version(OS_DISTRIBUTION, OS_VERSION), 
+            IS_UKI)
     OS_DISTRIBUTION = OS_DISTRIBUTION
     PROXY_CERT_PATH = PROXY_CERT_PATH
     HTTP_PROXY = HTTP_PROXY
@@ -310,7 +320,7 @@ target "base-image" {
   }
   args = {
     OS_DISTRIBUTION = OS_DISTRIBUTION
-    OS_VERSION = OS_VERSION
+    OS_VERSION = normalized_os_version(OS_DISTRIBUTION, OS_VERSION)
     IS_JETSON = IS_JETSON
     IS_UKI = IS_UKI
     UPDATE_KERNEL = UPDATE_KERNEL
@@ -324,15 +334,19 @@ target "base-image" {
   secret = ["id=ubuntu_pro_key,env=UBUNTU_PRO_KEY"]
 }
 
+variable "provider_prefix" {
+  default = "docker-image://${SPECTRO_PUB_REPO}/edge/kairos-io/provider"
+}
+
 function "get_provider_base" {
-  params = [k8s_distribution, spectro_pub_repo, kubeadm_version, k3s_version, rke2_version, nodeadm_version, canonical_version]
+  params = [k8s_distribution, kubeadm_version, k3s_version, rke2_version, nodeadm_version, canonical_version]
   result = (
-    k8s_distribution == "kubeadm" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-kubeadm:${kubeadm_version}" :
-    k8s_distribution == "kubeadm-fips" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-kubeadm:${kubeadm_version}" :
-    k8s_distribution == "k3s" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-k3s:${k3s_version}" :
-    k8s_distribution == "rke2" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-rke2:${rke2_version}" :
-    k8s_distribution == "nodeadm" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-nodeadm:${nodeadm_version}" :
-    k8s_distribution == "canonical" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-canonical:${canonical_version}" :
+    k8s_distribution == "kubeadm" ? "${provider_prefix}-kubeadm:${kubeadm_version}" :
+    k8s_distribution == "kubeadm-fips" ? "${provider_prefix}-kubeadm:${kubeadm_version}" :
+    k8s_distribution == "k3s" ? "${provider_prefix}-k3s:${k3s_version}" :
+    k8s_distribution == "rke2" ? "${provider_prefix}-rke2:${rke2_version}" :
+    k8s_distribution == "nodeadm" ? "${provider_prefix}-nodeadm:${nodeadm_version}" :
+    k8s_distribution == "canonical" ? "${provider_prefix}-canonical:${canonical_version}" :
     ""
   )
 }
@@ -362,10 +376,8 @@ target "provider-image" {
   platforms = ["linux/${ARCH}"]
   contexts = {
     base-image = "target:base-image"
-    // kairos-provider-image = "target:kairos-provider-image"
     kairos-provider-image = get_provider_base(
       K8S_DISTRIBUTION,
-      SPECTRO_PUB_REPO,
       KUBEADM_PROVIDER_VERSION,
       K3S_PROVIDER_VERSION,
       RKE2_PROVIDER_VERSION,
@@ -407,7 +419,9 @@ target "uki-provider-image" {
     stylus-image = "docker-image://${STYLUS_BASE}"
   }
   args = {
-    BASE_IMAGE = get_base_image(BASE_IMAGE, OS_DISTRIBUTION, OS_VERSION, IS_UKI)
+    BASE_IMAGE = get_base_image(BASE_IMAGE, OS_DISTRIBUTION, 
+                 normalized_os_version(OS_DISTRIBUTION, OS_VERSION), 
+                IS_UKI)
     UBUNTU_IMAGE = get_ubuntu_image(FIPS_ENABLED, SPECTRO_PUB_REPO)
     EDGE_CUSTOM_CONFIG = EDGE_CUSTOM_CONFIG
     IMAGE_PATH = IMAGE_PATH
@@ -456,8 +470,7 @@ target "iso-image" {
     IS_UKI = IS_UKI
     IS_CLOUD_IMAGE = IS_CLOUD_IMAGE
   }
-  # MAAS uses latest tag, non-MAAS uses version tag
-  tags = IS_MAAS ? ["palette-installer-image:latest"] : ["palette-installer-image:${IMAGE_TAG}"]
+  tags = ["palette-installer-image:${IMAGE_TAG}"]
   output = ["type=docker"]
 }
 
@@ -622,31 +635,25 @@ target "iso-efi-size-check" {
   output = ["type=local,dest=./build/"]
 }
 
-target "cloud-image" {
-  dockerfile = "dockerfiles/Dockerfile.cloud-image"
-  context = "."
-  target = "output"
-  platforms = ["linux/${ARCH}"]
-  contexts = {
-    iso-image = "target:iso-image"
-  }
-  args = {
-    AURORABOOT_IMAGE = AURORABOOT_IMAGE
-    ARCH = ARCH
-  }
-  output = ["type=local,dest=./build/"]
+variable "RAW_IMAGE_DIR" {
+  default = "./build/raw-image"
+}
+
+target "iso-image-cloud" {
+  inherits = ["iso-image"]
+  tags = ["palette-installer-image-cloud:latest"]
 }
 
 target "aws-cloud-image" {
   dockerfile = "dockerfiles/Dockerfile.aws-cloud-image"
   context = "."
-  target = "output"
   platforms = ["linux/${ARCH}"]
   contexts = {
-    cloud-image = "target:cloud-image"
+    raw-image = RAW_IMAGE_DIR
   }
   args = {
     UBUNTU_IMAGE = get_ubuntu_image(FIPS_ENABLED, SPECTRO_PUB_REPO)
+    ARCH = ARCH
     REGION = REGION
     S3_BUCKET = S3_BUCKET
     S3_KEY = S3_KEY
@@ -656,5 +663,4 @@ target "aws-cloud-image" {
     "id=AWS_ACCESS_KEY_ID,env=AWS_ACCESS_KEY_ID",
     "id=AWS_SECRET_ACCESS_KEY,env=AWS_SECRET_ACCESS_KEY"
   ]
-  output = ["type=local,dest=./build/"]
 }
