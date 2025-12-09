@@ -67,6 +67,7 @@ ARG KINE_VERSION=0.11.4
 
 # MAAS Variables
 ARG IS_MAAS=false
+ARG MAAS_IMAGE_NAME=kairos-ubuntu-maas
 
 # UKI Variables
 ARG IS_UKI=false
@@ -270,9 +271,10 @@ build-uki-iso:
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
-
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
+
+    # Add content files (split if > 3GB)
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
@@ -280,11 +282,12 @@ build-uki-iso:
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
 
-    #check if clusterconfig is passed in
+    # Add cluster config (SPC) if provided
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
+    # Add local-ui if provided (extract it)
     COPY --if-exists local-ui.tar /overlay/opt/spectrocloud/
     RUN if [ -f /overlay/opt/spectrocloud/local-ui.tar ]; then \
         tar -xf /overlay/opt/spectrocloud/local-ui.tar -C /overlay/opt/spectrocloud && \
@@ -338,7 +341,6 @@ build-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
 
     # Generate grub.cfg based on FORCE_INTERACTIVE_INSTALL setting (without modifying source)
@@ -349,13 +351,17 @@ build-iso:
         sed 's/{{DEFAULT_ENTRY}}/0/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
         mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
     fi
+
+    # Add content files (split if > 3GB)
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
         done; \
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
-    #check if clusterconfig is passed in
+
+    # Add cluster config (SPC) if provided
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
@@ -363,6 +369,7 @@ build-iso:
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
 
+    # Add local-ui if provided (extract it)
     COPY --if-exists local-ui.tar /build/image/opt/spectrocloud/
     RUN if [ -f /build/image/opt/spectrocloud/local-ui.tar ]; then \
         tar -xf /build/image/opt/spectrocloud/local-ui.tar -C /build/image/opt/spectrocloud && \
@@ -874,6 +881,20 @@ iso-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
+    # For MAAS builds, install maas-content.sh script and handle local-ui
+    IF [ "$IS_MAAS" = "true" ]
+        RUN mkdir -p /opt/spectrocloud/scripts
+        COPY cloudconfigs/maas-content.sh /opt/spectrocloud/scripts/maas-content.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/maas-content.sh
+        
+        # Add local-ui if provided (extract it directly to the image)
+        COPY --if-exists local-ui.tar /opt/spectrocloud/
+        RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
+            tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
+            rm -f /opt/spectrocloud/local-ui.tar; \
+        fi
+    END
+
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
@@ -910,15 +931,28 @@ kairos-raw-image:
                 docker images || true; \
                 exit 1; \
             fi && \
+            echo "=== Checking Docker image size ===" && \
+            IMAGE_SIZE=$(docker images --format "{{.Size}}" index.docker.io/library/palette-installer-image:latest 2>/dev/null || docker images --format "{{.Size}}" palette-installer-image:latest 2>/dev/null || echo "unknown") && \
+            echo "Image size: $IMAGE_SIZE" && \
+            if echo "$IMAGE_SIZE" | grep -qE '[0-9]+GB'; then \
+                SIZE_GB=$(echo "$IMAGE_SIZE" | sed 's/GB//' | awk '{print int($1)}'); \
+                if [ "$SIZE_GB" -gt 10 ]; then \
+                    echo "⚠️  WARNING: Image is very large (${IMAGE_SIZE}). This may cause auroraboot extraction issues."; \
+                    echo "Consider reducing content bundle size or excluding large files."; \
+                fi; \
+            fi && \
             echo "=== Running auroraboot to convert image ===" && \
-            echo "Using auroraboot v0.6.4 (known working version)" && \
+            echo "Using auroraboot v0.15.0 (known working version)" && \
+            echo "=== Docker images available ===" && \
+            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.ID}}" | head -10 && \
+            echo "=== Running auroraboot (this may take a while for large images) ===" && \
             docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
+                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.15.0 \
                 --debug \
                 --set "disable_http_server=true" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
-                --set "container_image=index.docker.io/library/palette-installer-image:latest"  \
+                --set "container_image=palette-installer-image:latest"  \
                 --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
             AURORABOOT_EXIT=$?; \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
@@ -1087,4 +1121,3 @@ UPX:
     COMMAND
     ARG bin
     RUN upx -1 $bin
-
