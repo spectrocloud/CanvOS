@@ -1,7 +1,6 @@
 ARG ARCH
-ARG ALPINE_IMG
 
-FROM --platform=linux/${ARCH} ${ALPINE_IMG} AS install-k8s
+FROM --platform=linux/${ARCH} alpine-certs AS install-k8s
 
 ARG K8S_DISTRIBUTION
 ARG K8S_VERSION
@@ -10,11 +9,6 @@ ARG RKE2_FLAVOR_TAG
 ARG SPECTRO_LUET_REPO
 ARG ARCH
 ARG LUET_REPO
-
-COPY . /tmp/build-context/
-
-RUN [ -d "/tmp/build-context/certs" ] && cp -r /tmp/build-context/certs/. /etc/ssl/certs/ || true
-RUN update-ca-certificates
 
 COPY --from=third-party-luet /WORKDIR/luet /usr/bin/luet
 

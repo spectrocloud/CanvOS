@@ -356,10 +356,10 @@ target "install-k8s" {
   target = "install-k8s"
   platforms = ["linux/${ARCH}"]
   contexts = {
+    alpine-certs = "target:alpine-certs"
     third-party-luet = "target:third-party-luet"
   }
   args = {
-    ALPINE_IMG = ALPINE_IMG
     ARCH = ARCH
     K8S_DISTRIBUTION = K8S_DISTRIBUTION
     K8S_VERSION = K8S_VERSION
@@ -579,9 +579,11 @@ target "internal-slink" {
 target "third-party-luet" {
   dockerfile = "dockerfiles/Dockerfile.third-party"
   target = "third-party"
+  contexts = {
+    alpine-certs = "target:alpine-certs"
+  }
   args = {
     SPECTRO_THIRD_PARTY_IMAGE = SPECTRO_THIRD_PARTY_IMAGE
-    ALPINE_IMG = ALPINE_IMG
     binary = "luet"
     BIN_TYPE = BIN_TYPE
     ARCH = ARCH
@@ -592,9 +594,11 @@ target "third-party-luet" {
 target "third-party-etcdctl" {
   dockerfile = "dockerfiles/Dockerfile.third-party"
   target = "third-party"
+  contexts = {
+    alpine-certs = "target:alpine-certs"
+  }
   args = {
     SPECTRO_THIRD_PARTY_IMAGE = SPECTRO_THIRD_PARTY_IMAGE
-    ALPINE_IMG = ALPINE_IMG
     binary = "etcdctl"
     BIN_TYPE = BIN_TYPE
     ARCH = ARCH
@@ -603,23 +607,38 @@ target "third-party-etcdctl" {
 }
 
 target "iso-disk-image" {
-  dockerfile = "dockerfiles/Dockerfile.iso-disk-image"
   platforms = ["linux/${ARCH}"]
   contexts = {
     build-iso = IS_UKI ? "target:build-uki-iso" : "target:build-iso"
   }
+  dockerfile-inline = <<-EOF
+    FROM scratch
+    COPY --from=build-iso /*.iso /disk/
+  EOF
   tags = ["${IMAGE_REGISTRY}/${IMAGE_REPO}/${ISO_NAME}:${IMAGE_TAG}"]
   output = ["type=image,push=true"]
 }
 
 target "alpine-all" {
   dockerfile = "dockerfiles/Dockerfile.alpine"
+  target = "alpine"
   platforms = ["linux/amd64", "linux/arm64"]
   args = {
     ALPINE_BASE_IMAGE = ALPINE_BASE_IMAGE
   }
   tags = [ALPINE_IMG]
   output = ["type=image,push=true"]
+}
+
+# Alpine with custom certificates from build context - used as base for install-k8s and third-party targets
+target "alpine-certs" {
+  dockerfile = "dockerfiles/Dockerfile.alpine"
+  context = "."
+  target = "alpine-certs"
+  platforms = ["linux/${ARCH}"]
+  args = {
+    ALPINE_BASE_IMAGE = ALPINE_BASE_IMAGE
+  }
 }
 
 target "iso-efi-size-check" {
