@@ -18,8 +18,6 @@ RUN mkdir -p /exported-keys /keys /tmp/secure-boot /private-keys /public-keys
 
 COPY secure-boot/ /tmp/secure-boot
 
-RUN ls -ltrh /tmp/secure-boot
-
 # Copy keys from /tmp/secure-boot to their destinations
 # Preserve original structure in /private-keys and /public-keys for output
 RUN if [ -d "/tmp/secure-boot/private-keys" ]; then \

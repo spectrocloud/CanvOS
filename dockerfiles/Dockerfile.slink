@@ -7,15 +7,12 @@ RUN apk add libc-dev binutils-gold clang
 
 FROM go-deps AS build
 
-WORKDIR /build
+COPY internal /build/internal
 
-COPY internal internal
+WORKDIR /build/internal
 
-ARG BUILD_DIR=/build/internal
-WORKDIR ${BUILD_DIR}
-
-ARG VERSION
-ARG BIN
+ARG VERSION=dev
+ARG BIN=slink
 ARG SRC
 ARG GOOS
 ARG GOARCH
@@ -27,7 +24,7 @@ ENV CC=clang
 
 RUN go mod download
 
-RUN go-build-static.sh -a -o ${BIN} ./${SRC}
+RUN go-build-static.sh -a -o /build/bin/${BIN} ./${SRC}
 
 FROM scratch AS export
-COPY --from=build /build/internal/${BIN} /${BIN}
+COPY --from=build /build/bin/${BIN} /${BIN}

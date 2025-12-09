@@ -14,18 +14,48 @@ ARG KINE_VERSION
 ARG IMAGE_PATH
 ARG IS_UKI
 ARG ARCH
+ARG UPDATE_KERNEL=false
 
-RUN if [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]; then \
-        BASE_K8S_VERSION="$K8S_VERSION"; \
-        if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]; then \
-            kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi; \
+RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]; then \
+        kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+        if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi; \
+    fi
+
+# UPDATE_KERNEL handling for different OS distributions
+RUN if [ "$UPDATE_KERNEL" = "true" ]; then \
+        if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
+            kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+            if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi; \
+        elif [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]; then \
+            zypper --non-interactive ref && \
+            kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+            echo "kernel module: $kernel" && \
+            version=$(echo $kernel | sed 's/-default$//') && \
+            echo "kernel version: $version" && \
+            if ! zypper --non-interactive install --no-recommends kernel-default-devel-$version; then \
+                echo "Exact kernel-default-devel-$version not found, searching for closest match..."; \
+                match=$(zypper se -s kernel-default-devel | awk -F'|' '/kernel-default-devel/ && $3 ~ /^ *[0-9]/ {gsub(/^ +| +$/,"",$3); if (index($3,"'"$version"'")==1) print $3}' | sort -Vr | head -n1); \
+                if [ -n "$match" ]; then \
+                    echo "Trying to install kernel-default-devel-$match"; \
+                    zypper --non-interactive install --no-recommends kernel-default-devel-$match || echo "Failed to install kernel-default-devel-$match"; \
+                else \
+                    echo "No matching kernel-default-devel package found, trying generic kernel-devel"; \
+                    zypper --non-interactive install --no-recommends kernel-devel || echo "kernel development packages not available, continuing without them"; \
+                fi; \
+            fi; \
+        elif [ "$OS_DISTRIBUTION" = "rhel" ]; then \
+            yum clean all && yum makecache && \
+            yum-config-manager --enable ubi-8-baseos-rpms ubi-8-appstream-rpms ubi-8-codeready-builder-rpms 2>/dev/null || true && \
+            yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm 2>/dev/null || echo "EPEL repo not available" && \
+            yum makecache && \
+            kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && echo "kernel version: $kernel" && \
+            if ! yum install -y kernel-devel-$kernel; then \
+                echo "kernel-devel-$kernel not available, trying alternative packages" && \
+                yum install -y kernel-devel || \
+                echo "Trying to install from different source..." && \
+                yum install -y gcc make || echo "kernel development packages not available, continuing without them"; \
+            fi; \
         fi; \
-    elif [ "$K8S_DISTRIBUTION" = "k3s" ]; then \
-        K8S_DISTRIBUTION_TAG="$K3S_FLAVOR_TAG"; \
-        BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
-    elif [ "$K8S_DISTRIBUTION" = "rke2" ]; then \
-        K8S_DISTRIBUTION_TAG="$RKE2_FLAVOR_TAG"; \
-        BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
     fi
 
 COPY overlay/files/etc/ /etc/
@@ -39,24 +69,29 @@ COPY --from=stylus-image /etc/kairos/branding /etc/kairos/branding
 COPY --from=stylus-image /oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
 COPY --from=stylus-image /etc/elemental/config.yaml /etc/elemental/config.yaml
 
+COPY --from=stylus-image / /tmp/stylus-image/
+RUN if [ -f /tmp/stylus-image/system/oem/80_stylus.yaml ]; then \
+        mkdir -p /system/oem && \
+        cp /tmp/stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml; \
+    fi && \
+    rm -rf /tmp/stylus-image
+
 COPY . /tmp/build-context/
 RUN if [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
         cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
     fi
 
-COPY --from=install-k8s /output/ /tmp/k8s-output/
+COPY --from=install-k8s /output/ /k8s
 COPY --from=internal-slink /slink /usr/bin/slink
 
 RUN if [ "$IS_UKI" = "true" ]; then \
-        mkdir -p /k8s && cp -r /tmp/k8s-output/* /k8s/ && \
         slink --source /k8s/ --target /opt/k8s && \
-        rm -f /usr/bin/slink && \
         rm -rf /k8s && \
         ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus; \
     else \
-        cp -r /tmp/k8s-output/* /; \
+        cp -r /k8s/* /; \
     fi && \
-    rm -rf /tmp/k8s-output
+    rm -rf /k8s /usr/bin/slink
 
 RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
@@ -78,12 +113,15 @@ RUN if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$K8S_DISTRIBUTION" = "nodeadm" ];
 
 RUN if [ "$TWO_NODE" = "true" ]; then \
         if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
-            apt install -y ca-certificates curl && \
+            apt-get update && \
+            echo "tzdata tzdata/Areas select Etc" | debconf-set-selections && \
+            echo "tzdata tzdata/Zones/Etc select UTC" | debconf-set-selections && \
+            DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl && \
             install -d /usr/share/postgresql-common/pgdg && \
             curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
             echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-            apt update && \
-            apt install -y postgresql-16 postgresql-contrib-16 iputils-ping; \
+            apt-get update && \
+            DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-16 postgresql-contrib-16 iputils-ping; \
         elif [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]; then \
             zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
             zypper --gpg-auto-import-keys ref && \

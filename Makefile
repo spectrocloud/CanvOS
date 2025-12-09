@@ -4,8 +4,8 @@ export
 # ==============================================================================
 # TARGETS
 # ==============================================================================
-.PHONY: build build-all-images base-image iso build-provider-images iso-disk-image \
-	uki-genkey alpine-all validate-user-data help
+.PHONY: build build-all-images iso build-provider-images iso-disk-image \
+	uki-genkey alpine-all validate-user-data cloud-image aws-cloud-image help
 
 .SILENT: uki-genkey validate-user-data
 
@@ -19,10 +19,10 @@ space := $(empty) $(empty)
 # ==============================================================================
 # CONFIGURATION DEFAULTS
 # ==============================================================================
-PUSH ?= true
-DEBUG ?= false
-NO_CACHE ?= false
-DRY_RUN ?= false
+PUSH := $(or $(PUSH),true)
+DEBUG := $(or $(DEBUG),false)
+NO_CACHE := $(or $(NO_CACHE),false)
+DRY_RUN := $(or $(DRY_RUN),false)
 
 # Common Configuration expressions for building targets
 PUSH_ARGS = $(if $(filter true,$(PUSH)),--set *.output=type=image$(comma)push=$(PUSH),)
@@ -52,7 +52,7 @@ ALL_K8S_VERSIONS = $(if $(strip $(K8S_VERSION)),\
 # CORE BUILD TARGET
 # ==============================================================================
 build:
-	@$(if $(BAKE_ENV),env $(BAKE_ENV)) \
+	$(if $(BAKE_ENV),env $(BAKE_ENV)) \
 	docker buildx bake ${DRY_RUN_ARGS} ${DOCKER_BUILD_OUT} ${DOCKER_NO_CACHE} ${TARGET} $(BAKE_ARGS)
 
 # ==============================================================================
@@ -60,14 +60,20 @@ build:
 # ==============================================================================
 build-all-images: build-provider-images iso
 
-base-image:
-	$(MAKE) TARGET=base-image build
-
 iso:
 	$(MAKE) TARGET=$(ISO_TARGET_TYPE) build
 
+iso-image:
+	$(MAKE) TARGET=iso-image build
+
 iso-disk-image:
 	$(MAKE) TARGET=iso-disk-image build BAKE_ARGS="$(PUSH_ARGS)"
+
+aws-cloud-image:
+	$(MAKE) TARGET=aws-cloud-image build
+
+cloud-image:
+	$(MAKE) TARGET=cloud-image build
 
 # ==============================================================================
 # PROVIDER IMAGE BUILD TARGETS
@@ -81,7 +87,7 @@ build-provider-images: .check-provider-prereqs $(addprefix .build-provider-image
 
 .build-provider-image-%: .check-provider-prereqs
 	@echo "Building provider image for k8s version: $*"
-	$(MAKE) TARGET=$(PROVIDER_TARGET_TYPE) \
+	@$(MAKE) TARGET=$(PROVIDER_TARGET_TYPE) \
 		BAKE_ENV="K8S_VERSION=$*" \
 		BAKE_ARGS="--set *.args.K8S_VERSION=$* $(PUSH_ARGS)" \
 		build
@@ -102,20 +108,28 @@ uki-genkey:
 validate-user-data:
 	$(MAKE) TARGET=validate-user-data build
 
+internal-slink:
+	$(MAKE) TARGET=internal-slink build
+
+iso-efi-size-check:
+	$(MAKE) TARGET=iso-efi-size-check build
+
 alpine-all:
 	$(MAKE) TARGET=alpine-all BAKE_ARGS="$(PUSH_ARGS)" build
 
 help:
 	@echo "Available targets:"
 	@echo "  build-all-images      - Build all provider images and ISO"
-	@echo "  base-image            - Build base image"
 	@echo "  iso                   - Build ISO installer"
 	@echo "  iso-disk-image        - Build ISO disk image"
 	@echo "  build-provider-images - Build all provider images for configured K8S versions"
+	@echo "  cloud-image           - Build raw cloud disk image"
+	@echo "  aws-cloud-image       - Build AWS AMI from cloud image"
 	@echo "  uki-genkey            - Generate UKI secure boot keys"
 	@echo "  validate-user-data    - Validate user-data configuration"
 	@echo ""
-	@echo "Configuration (set in .arg file or as make variables):"
+	@echo "Build specific configuration (set in .arg file or as make variables):"
 	@echo "  PUSH                  - Push images to registry (default: true)"
 	@echo "  DEBUG                 - Enable debug output (default: false)"
 	@echo "  NO_CACHE              - Disable build cache (default: false)"
+	@echo "  DRY_RUN               - Print build commands without executing (default: false)"

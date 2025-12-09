@@ -6,4 +6,3 @@ RUN apk add --no-cache bash curl jq ca-certificates upx
 
 # In FIPS mode, this may fail due to OpenSSL FIPS constraints.
 RUN update-ca-certificates || true
-

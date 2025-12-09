@@ -1,6 +1,6 @@
 FROM base-image AS iso-image
 
-ARG IS_UKI
+ARG IS_UKI=false
 ARG IS_CLOUD_IMAGE=false
 
 COPY --from=stylus-image / /

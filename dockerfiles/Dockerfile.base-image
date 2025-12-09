@@ -3,25 +3,28 @@ FROM base
 ARG OS_DISTRIBUTION
 ARG OS_VERSION
 
-ARG IS_JETSON
-ARG IS_UKI
+ARG IS_JETSON=false
+ARG IS_UKI=false
 ARG UPDATE_KERNEL
 ARG CIS_HARDENING
 ARG KAIROS_VERSION
 ARG DISABLE_SELINUX
-ARG ARCH
-ARG FIPS_ENABLED
+ARG ARCH=amd64
+ARG FIPS_ENABLED=false
+ARG IS_MAAS=false
 
 COPY . /tmp/build-context
+
 RUN if [ "$IS_JETSON" = "true" ]; then \
         cp /tmp/build-context/cloudconfigs/mount.yaml /system/oem/mount.yaml; \
     fi
+
 RUN if [ "$IS_UKI" = "true" ]; then \
         cp /tmp/build-context/cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml; \
     fi
 
 # Use secret for UBUNTU_PRO_KEY - not cached, not stored in image layers
-RUN --mount=type=secret,id=ubuntu_pro_key \
+RUN --mount=type=secret,id=ubuntu_pro_key,target=/run/secrets/ubuntu_pro_key \
     if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
         if [ -f /run/secrets/ubuntu_pro_key ] && [ -s /run/secrets/ubuntu_pro_key ]; then \
             sed -i '/^[[:space:]]*$/d' /etc/os-release && \
@@ -50,7 +53,18 @@ RUN --mount=type=secret,id=ubuntu_pro_key \
         if [ "$IS_UKI" = "false" ]; then \
             DEBIAN_FRONTEND=noninteractive apt-get update && \
             apt-get upgrade $APT_UPGRADE_FLAGS && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y cloud-guest-utils && \
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+                util-linux \
+                parted \
+                cloud-guest-utils \
+                gawk \
+                fdisk \
+                gdisk \
+                e2fsprogs \
+                dosfstools \
+                rsync \
+                cryptsetup-bin \
+                udev && \
             \
             latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
             if [ "$FIPS_ENABLED" = "true" ]; then \
@@ -70,9 +84,8 @@ RUN --mount=type=secret,id=ubuntu_pro_key \
             apt-get autoremove -y && \
             rm -rf /var/lib/apt/lists/* && \
             kernel=$(ls /boot/vmlinuz-* 2>/dev/null | tail -n1) && \
-            # if [ -n "$kernel" ]; then \
-                ln -sf "${kernel#/boot/}" /boot/vmlinuz; \
-            # fi && \
+            ln -sf "${kernel#/boot/}" /boot/vmlinuz && \
+            \
             if [ "$FIPS_ENABLED" = "false" ]; then \
                 kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
                 dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
@@ -105,7 +118,7 @@ RUN if [ "$OS_DISTRIBUTION" = "opensuse-leap" ]; then \
             zypper refresh && zypper update -y && \
             \
             if [ -e "/usr/bin/dracut" ]; then \
-                kernel=$(ls /lib/modules | tail -n1) && \
+                kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
                 depmod -a "${kernel}" && \
                 dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
                 ln -sf "initrd-${kernel}" /boot/initrd; \
@@ -147,6 +160,19 @@ RUN export OS_ID=${OS_DISTRIBUTION} && \
     export ARTIFACT=${kairos-core-${OS_DISTRIBUTION}-${OS_VERSION}} && \
     export KAIROS_RELEASE=${KAIROS_VERSION} && \
     envsubst >>/etc/os-release < /tmp/build-context/overlay/files/usr/lib/os-release.tmpl
+
+RUN  KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic" && \
+    if [ "$IS_MAAS" = "true" ]; then \
+        KAIROS_IMAGE_LABEL="${KAIROS_IMAGE_LABEL}-maas";\
+    fi; \
+    if [ -f /etc/kairos-release ]; then \
+        sed -i 's/^KAIROS_NAME=.*/KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"/' /etc/kairos-release; \
+        sed -i '/^KAIROS_IMAGE_LABEL=/d' /etc/kairos-release; \
+        echo 'KAIROS_IMAGE_LABEL="'"$KAIROS_IMAGE_LABEL"'"' >> /etc/kairos-release; \
+    else \
+        echo 'KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"' >> /etc/kairos-release; \
+        echo 'KAIROS_IMAGE_LABEL="'"$KAIROS_IMAGE_LABEL"'"' >> /etc/kairos-release; \
+    fi
 
 RUN rm -rf /var/cache/* && \
     journalctl --vacuum-size=1K && \

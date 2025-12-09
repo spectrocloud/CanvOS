@@ -1,7 +1,7 @@
 ARG ARCH
-ARG BASE_ALPINE_IMAGE
+ARG ALPINE_IMG
 
-FROM --platform=linux/${ARCH} ${BASE_ALPINE_IMAGE} AS install-k8s
+FROM --platform=linux/${ARCH} ${ALPINE_IMG} AS install-k8s
 
 ARG K8S_DISTRIBUTION
 ARG K8S_VERSION
@@ -11,21 +11,21 @@ ARG SPECTRO_LUET_REPO
 ARG ARCH
 ARG LUET_REPO
 
-RUN [ -d "certs" ] && cp -r certs/. /etc/ssl/certs/ || true
+COPY . /tmp/build-context/
+
+RUN [ -d "/tmp/build-context/certs" ] && cp -r /tmp/build-context/certs/. /etc/ssl/certs/ || true
 RUN update-ca-certificates
-RUN apk add curl
 
 COPY --from=third-party-luet /WORKDIR/luet /usr/bin/luet
 
 WORKDIR /output
 
-COPY . /tmp/build-context/
 
 RUN mkdir -p /etc/luet/repos.conf.d && \
     luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y
 
 RUN if [ -f /tmp/build-context/spectro-luet-auth.yaml ]; then \
-    cat /tmp/build-context/spectro-luet-auth.yaml  >> /etc/luet/repos.conf.d/spectro.yaml; \
+    cat /tmp/build-context/spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; \
     fi
 
 RUN luet repo update

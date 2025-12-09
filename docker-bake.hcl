@@ -11,10 +11,6 @@ variable "SPECTRO_PUB_REPO" {
   default = FIPS_ENABLED ? "us-east1-docker.pkg.dev/spectro-images/dev-fips/arun" : "us-east1-docker.pkg.dev/spectro-images/dev/arun"
 }
 
-variable "KAIROS_BASE_IMAGE_URL" {
-  default = "${SPECTRO_PUB_REPO}/edge"
-}
-
 variable "SPECTRO_THIRD_PARTY_IMAGE" {
   default = "us-east1-docker.pkg.dev/spectro-images/third-party/spectro-third-party:4.6"
 }
@@ -31,6 +27,13 @@ variable "SPECTRO_LUET_REPO" {
   default = "us-docker.pkg.dev/palette-images/edge"
 }
 
+variable "KAIROS_BASE_IMAGE_URL" {
+  default = "${SPECTRO_PUB_REPO}/edge"
+}
+
+variable AURORABOOT_IMAGE {
+  default = "quay.io/kairos/auroraboot:v0.14.0"
+}
 
 variable "PE_VERSION" {
   default = "v4.8.1"
@@ -40,8 +43,12 @@ variable "KAIROS_VERSION" {
   default = "v3.5.9"
 }
 
-variable AURORABOOT_IMAGE {
-  default = "quay.io/kairos/auroraboot:v0.14.0"
+variable "K3S_FLAVOR_TAG" {
+  default = "k3s1"
+}
+
+variable "RKE2_FLAVOR_TAG" {
+  default = "rke2r1"
 }
 
 variable "K3S_PROVIDER_VERSION" {
@@ -64,13 +71,6 @@ variable "CANONICAL_PROVIDER_VERSION" {
   default = "v1.2.2"
 }
 
-variable "K3S_FLAVOR_TAG" {
-  default = "k3s1"
-}
-
-variable "RKE2_FLAVOR_TAG" {
-  default = "rke2r1"
-}
 
 variable OS_DISTRIBUTION {}
 variable OS_VERSION {}
@@ -107,6 +107,10 @@ variable "CIS_HARDENING" {
 
 variable UBUNTU_PRO_KEY {}
 
+variable DRBD_VERSION {
+  default = "9.2.13"
+}
+
 variable HTTP_PROXY {}
 variable HTTPS_PROXY {}
 variable NO_PROXY {}
@@ -127,11 +131,20 @@ variable "UPDATE_KERNEL" {
   default = false
 }
 
+variable ETCD_VERSION {
+  default = "v3.5.13"
+}
+
 variable KINE_VERSION {
   default = "0.11.4"
 }
 
 variable "TWO_NODE" {
+  type = bool
+  default = false
+}
+
+variable "IS_MAAS" {
   type = bool
   default = false
 }
@@ -151,6 +164,11 @@ variable "AUTO_ENROLL_SECUREBOOT_KEYS" {
   default = false
 }
 
+variable "UKI_BRING_YOUR_OWN_KEYS" {
+  type = bool
+  default = false
+}
+
 variable "CMDLINE" {
   default = "stylus.registration"
 }
@@ -159,12 +177,7 @@ variable "BRANDING" {
   default = "Palette eXtended Kubernetes Edge"
 }
 
-variable "DEBUG" {
-  type = bool
-  default = false
-}
-
-variable "UKI_BRING_YOUR_OWN_KEYS" {
+variable "FORCE_INTERACTIVE_INSTALL"{
   type = bool
   default = false
 }
@@ -175,19 +188,6 @@ variable "MY_ORG" {
 
 variable "EXPIRATION_IN_DAYS" {
   default = 5475
-}
-
-# Secrets for secure boot private keys - used by trustedboot-image and build-uki-iso
-variable "SECURE_BOOT_SECRETS" {
-  default = [
-    "id=db_key,src=secure-boot/private-keys/db.key",
-    "id=db_pem,src=secure-boot/public-keys/db.pem",
-    "id=kek_key,src=secure-boot/private-keys/KEK.key",
-    "id=kek_pem,src=secure-boot/public-keys/KEK.pem",
-    "id=pk_key,src=secure-boot/private-keys/PK.key",
-    "id=pk_pem,src=secure-boot/public-keys/PK.pem",
-    "id=tpm2_pcr_private,src=secure-boot/private-keys/tpm2-pcr-private.pem"
-  ]
 }
 
 variable "EFI_MAX_SIZE" {
@@ -202,15 +202,44 @@ variable "GOLANG_VERSION" {
   default = "1.23"
 }
 
+variable "IS_CLOUD_IMAGE" {
+  type = bool
+  default = false
+}
+
+
+variable "DEBUG" {
+  type = bool
+  default = false
+}
+
 variable "BASE_IMAGE" {
   default = ""
 }
 
+variable "REGION" {}
+
+variable "S3_BUCKET" {}
+
+variable "S3_KEY" {}
+
+# Alpine base image provided by platform team
 variable "ALPINE_BASE_IMAGE" {
   default = FIPS_ENABLED ? "us-docker.pkg.dev/palette-images-fips/third-party/alpine:${ALPINE_TAG}-fips" : "us-docker.pkg.dev/palette-images/third-party/alpine:${ALPINE_TAG}"
 }
 
-variable "OSBUILDER_IMAGE" {}
+# Secrets for secure boot private keys - used by trustedboot-image and build-uki-iso
+variable "SECURE_BOOT_SECRETS" {
+  default = [
+    "id=db_key,src=secure-boot/private-keys/db.key",
+    "id=db_pem,src=secure-boot/public-keys/db.pem",
+    "id=kek_key,src=secure-boot/private-keys/KEK.key",
+    "id=kek_pem,src=secure-boot/public-keys/KEK.pem",
+    "id=pk_key,src=secure-boot/private-keys/PK.key",
+    "id=pk_pem,src=secure-boot/public-keys/PK.pem",
+    "id=tpm2_pcr_private,src=secure-boot/private-keys/tpm2-pcr-private.pem"
+  ]
+}
 
 variable "IS_JETSON" {
   type = bool
@@ -260,15 +289,6 @@ function "get_base_image" {
   )
 }
 
-target "stylus-image" {
-  dockerfile = "dockerfiles/Dockerfile.stylus-image"
-  target = "stylus-image"
-  args = {
-    STYLUS_BASE = STYLUS_BASE
-    ARCH = ARCH
-  }
-  platforms = ["linux/${ARCH}"]
-}
 
 target "base" {
   dockerfile = "Dockerfile"
@@ -279,6 +299,7 @@ target "base" {
     HTTP_PROXY = HTTP_PROXY
     HTTPS_PROXY = HTTPS_PROXY
     NO_PROXY = NO_PROXY
+    DRBD_VERSION = DRBD_VERSION
   }
 }
 
@@ -298,6 +319,7 @@ target "base-image" {
     DISABLE_SELINUX = DISABLE_SELINUX
     ARCH = ARCH
     FIPS_ENABLED = FIPS_ENABLED
+    IS_MAAS = IS_MAAS
   }
   secret = ["id=ubuntu_pro_key,env=UBUNTU_PRO_KEY"]
 }
@@ -305,31 +327,14 @@ target "base-image" {
 function "get_provider_base" {
   params = [k8s_distribution, spectro_pub_repo, kubeadm_version, k3s_version, rke2_version, nodeadm_version, canonical_version]
   result = (
-    k8s_distribution == "kubeadm" ? "${spectro_pub_repo}/edge/kairos-io/provider-kubeadm:${kubeadm_version}" :
-    k8s_distribution == "kubeadm-fips" ? "${spectro_pub_repo}/edge/kairos-io/provider-kubeadm:${kubeadm_version}" :
-    k8s_distribution == "k3s" ? "${spectro_pub_repo}/edge/kairos-io/provider-k3s:${k3s_version}" :
-    k8s_distribution == "rke2" ? "${spectro_pub_repo}/edge/kairos-io/provider-rke2:${rke2_version}" :
-    k8s_distribution == "nodeadm" ? "${spectro_pub_repo}/edge/kairos-io/provider-nodeadm:${nodeadm_version}" :
-    k8s_distribution == "canonical" ? "${spectro_pub_repo}/edge/kairos-io/provider-canonical:${canonical_version}" :
+    k8s_distribution == "kubeadm" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-kubeadm:${kubeadm_version}" :
+    k8s_distribution == "kubeadm-fips" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-kubeadm:${kubeadm_version}" :
+    k8s_distribution == "k3s" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-k3s:${k3s_version}" :
+    k8s_distribution == "rke2" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-rke2:${rke2_version}" :
+    k8s_distribution == "nodeadm" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-nodeadm:${nodeadm_version}" :
+    k8s_distribution == "canonical" ? "docker-image://${spectro_pub_repo}/edge/kairos-io/provider-canonical:${canonical_version}" :
     ""
   )
-}
-
-target "kairos-provider-image" {
-  dockerfile = "dockerfiles/Dockerfile.kairos-provider-image"
-  target = "kairos-provider-image"
-  platforms = ["linux/${ARCH}"]
-  args = {
-    PROVIDER_BASE = get_provider_base(
-      K8S_DISTRIBUTION,
-      SPECTRO_PUB_REPO,
-      KUBEADM_PROVIDER_VERSION,
-      K3S_PROVIDER_VERSION,
-      RKE2_PROVIDER_VERSION,
-      NODEADM_PROVIDER_VERSION,
-      CANONICAL_PROVIDER_VERSION,
-    )
-  }
 }
 
 target "install-k8s" {
@@ -340,7 +345,7 @@ target "install-k8s" {
     third-party-luet = "target:third-party-luet"
   }
   args = {
-    BASE_ALPINE_IMAGE = ALPINE_IMG
+    ALPINE_IMG = ALPINE_IMG
     ARCH = ARCH
     K8S_DISTRIBUTION = K8S_DISTRIBUTION
     K8S_VERSION = K8S_VERSION
@@ -357,8 +362,17 @@ target "provider-image" {
   platforms = ["linux/${ARCH}"]
   contexts = {
     base-image = "target:base-image"
-    kairos-provider-image = "target:kairos-provider-image"
-    stylus-image = "target:stylus-image"
+    // kairos-provider-image = "target:kairos-provider-image"
+    kairos-provider-image = get_provider_base(
+      K8S_DISTRIBUTION,
+      SPECTRO_PUB_REPO,
+      KUBEADM_PROVIDER_VERSION,
+      K3S_PROVIDER_VERSION,
+      RKE2_PROVIDER_VERSION,
+      NODEADM_PROVIDER_VERSION,
+      CANONICAL_PROVIDER_VERSION,
+    )
+    stylus-image = "docker-image://${STYLUS_BASE}"
     install-k8s = "target:install-k8s"
     third-party-luet = "target:third-party-luet"
     third-party-etcdctl = "target:third-party-etcdctl"
@@ -377,6 +391,7 @@ target "provider-image" {
     KINE_VERSION = KINE_VERSION
     IMAGE_PATH = IMAGE_PATH
     IS_UKI = IS_UKI
+    UPDATE_KERNEL = UPDATE_KERNEL
   }
   tags = [IMAGE_PATH]
   output = ["type=image,push=true"]
@@ -389,6 +404,7 @@ target "uki-provider-image" {
     third-party-luet = "target:third-party-luet"
     install-k8s = "target:install-k8s"
     trustedboot-image = "target:trustedboot-image"
+    stylus-image = "docker-image://${STYLUS_BASE}"
   }
   args = {
     BASE_IMAGE = get_base_image(BASE_IMAGE, OS_DISTRIBUTION, OS_VERSION, IS_UKI)
@@ -426,19 +442,23 @@ target "validate-user-data" {
   platforms = ["linux/${ARCH}"]
 }
 
+
 target "iso-image" {
   dockerfile = "dockerfiles/Dockerfile.iso-image"
   target = "iso-image"
   platforms = ["linux/${ARCH}"]
   contexts = {
     base-image = "target:base-image"
-    stylus-image = "target:stylus-image"
+    stylus-image = "docker-image://${STYLUS_BASE}"
   }
   args = {
     ARCH = ARCH
     IS_UKI = IS_UKI
+    IS_CLOUD_IMAGE = IS_CLOUD_IMAGE
   }
-  tags = ["palette-installer-image:${IMAGE_TAG}"]
+  # MAAS uses latest tag, non-MAAS uses version tag
+  tags = IS_MAAS ? ["palette-installer-image:latest"] : ["palette-installer-image:${IMAGE_TAG}"]
+  output = ["type=docker"]
 }
 
 target "build-iso" {
@@ -455,7 +475,7 @@ target "build-iso" {
     CLUSTERCONFIG = CLUSTERCONFIG
     EDGE_CUSTOM_CONFIG = EDGE_CUSTOM_CONFIG
     AURORABOOT_IMAGE = AURORABOOT_IMAGE
-    CONTAINER_IMAGE = "palette-installer-image:${IMAGE_TAG}"
+    FORCE_INTERACTIVE_INSTALL = FORCE_INTERACTIVE_INSTALL
   }
   output = ["type=local,dest=./build"]
 }
@@ -540,7 +560,6 @@ target "internal-slink" {
     GOOS = "linux"
     GOARCH = "amd64"
   }
-  tags = ["internal-slink:latest"]
   output = ["type=local,dest=build"]
 }
 
@@ -588,4 +607,54 @@ target "alpine-all" {
   }
   tags = [ALPINE_IMG]
   output = ["type=image,push=true"]
+}
+
+target "iso-efi-size-check" {
+  dockerfile = "dockerfiles/Dockerfile.iso-efi-size-check"
+  context = "."
+  target = "output"
+  platforms = ["linux/amd64"]
+  args = {
+    UBUNTU_IMAGE = get_ubuntu_image(FIPS_ENABLED, SPECTRO_PUB_REPO)
+    EFI_MAX_SIZE = EFI_MAX_SIZE
+    EFI_IMG_SIZE = EFI_IMG_SIZE
+  }
+  output = ["type=local,dest=./build/"]
+}
+
+target "cloud-image" {
+  dockerfile = "dockerfiles/Dockerfile.cloud-image"
+  context = "."
+  target = "output"
+  platforms = ["linux/${ARCH}"]
+  contexts = {
+    iso-image = "target:iso-image"
+  }
+  args = {
+    AURORABOOT_IMAGE = AURORABOOT_IMAGE
+    ARCH = ARCH
+  }
+  output = ["type=local,dest=./build/"]
+}
+
+target "aws-cloud-image" {
+  dockerfile = "dockerfiles/Dockerfile.aws-cloud-image"
+  context = "."
+  target = "output"
+  platforms = ["linux/${ARCH}"]
+  contexts = {
+    cloud-image = "target:cloud-image"
+  }
+  args = {
+    UBUNTU_IMAGE = get_ubuntu_image(FIPS_ENABLED, SPECTRO_PUB_REPO)
+    REGION = REGION
+    S3_BUCKET = S3_BUCKET
+    S3_KEY = S3_KEY
+  }
+  secret = [
+    "id=AWS_PROFILE,env=AWS_PROFILE",
+    "id=AWS_ACCESS_KEY_ID,env=AWS_ACCESS_KEY_ID",
+    "id=AWS_SECRET_ACCESS_KEY,env=AWS_SECRET_ACCESS_KEY"
+  ]
+  output = ["type=local,dest=./build/"]
 }

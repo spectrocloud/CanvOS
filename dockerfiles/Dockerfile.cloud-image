@@ -1,0 +1,46 @@
+ARG AURORABOOT_IMAGE
+
+FROM ${AURORABOOT_IMAGE} AS builder
+
+ARG ARCH=amd64
+
+# Copy the cloud-init config file
+COPY cloud-images/config/user-data.yaml /config.yaml
+
+# Copy the iso-image content
+COPY --from=iso-image / /iso-source/
+
+RUN mkdir -p /output
+
+# Run auroraboot to create the cloud image (raw disk)
+RUN /usr/bin/auroraboot \
+    --debug \
+    --set "disable_http_server=true" \
+    --set "container_image=oci:/iso-source" \
+    --set "disable_netboot=true" \
+    --set "disk.raw=true" \
+    --set "state_dir=/output" \
+    --set "arch=${ARCH}" \
+    --cloud-config /config.yaml
+
+FROM scratch AS output
+COPY --from=builder /output/ /
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

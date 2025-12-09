@@ -2,27 +2,24 @@ ARG AURORABOOT_IMAGE
 
 FROM ${AURORABOOT_IMAGE} AS builder
 
-ARG ARCH
+ARG ARCH=amd64
 ARG ISO_NAME
 ARG CLUSTERCONFIG
 ARG EDGE_CUSTOM_CONFIG
-ARG CONTAINER_IMAGE
+ARG FORCE_INTERACTIVE_INSTALL=false
 
 COPY overlay/files-iso/ /overlay/
 
-COPY --from=validate-user-data /tmp/context /tmp/validate-context
-RUN if [ -f /tmp/validate-context/user-data ]; then \
-        cp /tmp/validate-context/user-data /cloud-config.yaml; \
-    fi
+COPY --from=validate-user-data /validated /validated
 
 COPY --from=iso-image / /iso-source/
 
 COPY . /tmp/build-context/
 
-RUN mkdir -p /overlay/opt/spectrocloud/content
-RUN if [ -d /tmp/build-context/content-* ]; then \
-        find /tmp/build-context -name "content-*" -type d -exec cp -r {}/*.zst /overlay/opt/spectrocloud/content/ \; 2>/dev/null || true; \
-    fi
+RUN mkdir -p /overlay/opt/spectrocloud/content && \
+    for dir in /tmp/build-context/content-*/; do \
+        [ -d "$dir" ] && cp "$dir"*.zst /overlay/opt/spectrocloud/content/ 2>/dev/null || true; \
+    done
 
 RUN if [ -n "$EDGE_CUSTOM_CONFIG" ] && [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
         cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml; \
@@ -35,24 +32,34 @@ RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then 
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
 
-RUN if [ "$CLUSTERCONFIG" != "" ] && [ -f /tmp/build-context/"$CLUSTERCONFIG" ]; then \
+RUN if [ -n "$CLUSTERCONFIG" ] && [ -f /tmp/build-context/"$CLUSTERCONFIG" ]; then \
         mkdir -p /overlay/opt/spectrocloud/clusterconfig && \
         cp /tmp/build-context/"$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz; \
     fi
 
 RUN if [ -f /tmp/build-context/local-ui.tar ]; then \
-        mkdir -p /overlay/opt/spectrocloud && \
         tar -xf /tmp/build-context/local-ui.tar -C /overlay/opt/spectrocloud; \
+    fi
+
+# Generate grub.cfg based on FORCE_INTERACTIVE_INSTALL setting
+RUN if [ "$FORCE_INTERACTIVE_INSTALL" = "true" ]; then \
+        sed 's/{{DEFAULT_ENTRY}}/2/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
+        mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
+    else \
+        sed 's/{{DEFAULT_ENTRY}}/0/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
+        mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
     fi
 
 RUN mkdir -p /output
 
 RUN /usr/bin/auroraboot \
-    --debug build-iso \
+    --debug \
+    build-iso \
     --output /output \
     --override-name ${ISO_NAME} \
     --overlay-iso /overlay \
-    $(if [ -f /cloud-config.yaml ] && [ -s /cloud-config.yaml ]; then echo "--cloud-config /cloud-config.yaml"; fi) \
+    --set "arch=${ARCH}" \
+    $(if [ -f /validated/config.yaml ] && [ -s /validated/config.yaml ]; then echo "--cloud-config /validated/config.yaml"; fi) \
     dir:/iso-source
 
 RUN mkdir -p /iso && \

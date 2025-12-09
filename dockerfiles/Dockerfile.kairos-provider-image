@@ -1,3 +1,0 @@
-ARG PROVIDER_BASE
-
-FROM ${PROVIDER_BASE} AS kairos-provider-image

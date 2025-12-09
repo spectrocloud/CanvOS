@@ -1,6 +1,5 @@
 ARG UBUNTU_IMAGE
 ARG BASE_IMAGE
-ARG OSBUILDER_IMAGE
 
 FROM ${BASE_IMAGE} AS kairos-agent
 RUN mkdir -p /output
@@ -29,6 +28,17 @@ COPY --from=kairos-agent /output/kairos-agent /usr/bin/kairos-agent
 COPY --from=trust-boot-unpack /trusted-boot/ /trusted-boot/
 COPY --from=install-k8s /output/ /k8s/
 
-RUN if [ -f "$EDGE_CUSTOM_CONFIG" ]; then \
-        cp "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
+# Copy build context to handle optional files
+COPY . /tmp/build-context/
+RUN if [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
+        cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
     fi
+
+# Copy stylus-image to temp location to handle optional 80_stylus.yaml (Docker doesn't have --if-exists)
+COPY --from=stylus-image / /tmp/stylus-image/
+RUN if [ -f /tmp/stylus-image/system/oem/80_stylus.yaml ]; then \
+        mkdir -p /system/oem && \
+        cp /tmp/stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml; \
+    fi
+
+RUN rm -rf /tmp/stylus-image /tmp/build-context
