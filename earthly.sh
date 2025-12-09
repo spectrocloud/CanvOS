@@ -185,23 +185,42 @@ if [[ "$1" == "+maas-image" ]]; then
     
     # Check for files to add to content partition
     # The build script looks for:
-    # - Content files in ./content directory (.zst or .tar files)
+    # - Content files in ./content-* or ./content directory (.zst or .tar files)
     # - SPC file as ./spc.tgz or from CLUSTERCONFIG env var
     # Note: local-ui.tar is handled directly in iso-image build, not in content partition
     HAS_FILES=false
     
-    if [ -d "content" ] && [ -n "$(find content -type f \( -name "*.zst" -o -name "*.tar" \) 2>/dev/null | head -1)" ]; then
+    # Check for content-* directories first (e.g., content-3a456a58)
+    CONTENT_DIR=""
+    for dir in content-*; do
+        if [ -d "$dir" ] && [ -n "$(find "$dir" -type f \( -name "*.zst" -o -name "*.tar" \) 2>/dev/null | head -1)" ]; then
+            CONTENT_DIR="$dir"
+            CONTENT_FILES_COUNT=$(find "$dir" -type f \( -name "*.zst" -o -name "*.tar" \) 2>/dev/null | wc -l)
+            echo "Content files found in $dir: $CONTENT_FILES_COUNT file(s) (.zst or .tar)"
+            HAS_FILES=true
+            break
+        fi
+    done
+    
+    # Fallback to plain content directory if no content-* found
+    if [ -z "$CONTENT_DIR" ] && [ -d "content" ] && [ -n "$(find content -type f \( -name "*.zst" -o -name "*.tar" \) 2>/dev/null | head -1)" ]; then
         CONTENT_FILES_COUNT=$(find content -type f \( -name "*.zst" -o -name "*.tar" \) 2>/dev/null | wc -l)
-        echo "Content files found: $CONTENT_FILES_COUNT file(s) (.zst or .tar)"
+        echo "Content files found in content: $CONTENT_FILES_COUNT file(s) (.zst or .tar)"
         HAS_FILES=true
     fi
     
+    # Check for SPC file
     if [ -f "spc.tgz" ]; then
         echo "SPC file found (spc.tgz), will be added to content partition"
         HAS_FILES=true
-    elif [ -n "${CLUSTERCONFIG:-}" ] && [ -f "${CLUSTERCONFIG:-}" ]; then
-        echo "SPC file found (from CLUSTERCONFIG), will be added to content partition"
-        HAS_FILES=true
+    elif [ -n "${CLUSTERCONFIG:-}" ]; then
+        # CLUSTERCONFIG can be a relative or absolute path
+        if [ -f "${CLUSTERCONFIG}" ]; then
+            echo "SPC file found (from CLUSTERCONFIG): ${CLUSTERCONFIG}, will be added to content partition"
+            HAS_FILES=true
+        else
+            echo "Warning: CLUSTERCONFIG is set to '${CLUSTERCONFIG}' but file not found"
+        fi
     fi
     
     if [ "$HAS_FILES" = "true" ]; then

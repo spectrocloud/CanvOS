@@ -49,7 +49,21 @@ CONTENT_SIZE="2G"
 # Path to the curtin hooks script (relative to the original directory)
 CURTIN_HOOKS_SCRIPT="$ORIG_DIR/curtin-hooks"
 # Path to content directory (if content files are provided)
-CONTENT_DIR="$ORIG_DIR/content"
+# Look for content-* directories (e.g., content-3a456a58)
+CONTENT_DIR=""
+for dir in "$ORIG_DIR"/content-*; do
+    if [ -d "$dir" ]; then
+        CONTENT_DIR="$dir"
+        echo "Found content directory: $CONTENT_DIR"
+        break
+    fi
+done
+# Fallback to plain content directory if no content-* found
+if [ -z "$CONTENT_DIR" ] && [ -d "$ORIG_DIR/content" ]; then
+    CONTENT_DIR="$ORIG_DIR/content"
+    echo "Found content directory: $CONTENT_DIR"
+fi
+
 # Path to cluster config (SPC) file if provided
 CLUSTERCONFIG_FILE=""
 
@@ -123,12 +137,45 @@ echo "  Recovery: $(numfmt --to=iec $COS_RECOVERY_SIZE) ($COS_RECOVERY_SIZE byte
 echo ""
 
 # Check for SPC file
+# Note: We're in WORKDIR at this point, so we need to check ORIG_DIR for files
+echo "Checking for SPC file..."
+echo "  CLUSTERCONFIG env var: ${CLUSTERCONFIG:-<not set>}"
+echo "  ORIG_DIR: $ORIG_DIR"
+echo "  Current directory: $(pwd)"
+
+# First check for spc.tgz in ORIG_DIR
 if [ -f "$ORIG_DIR/spc.tgz" ]; then
     CLUSTERCONFIG_FILE="$ORIG_DIR/spc.tgz"
     echo "Found SPC file: $CLUSTERCONFIG_FILE"
-elif [ -n "${CLUSTERCONFIG:-}" ] && [ -f "$CLUSTERCONFIG" ]; then
-    CLUSTERCONFIG_FILE="$CLUSTERCONFIG"
-    echo "Found SPC file from CLUSTERCONFIG: $CLUSTERCONFIG_FILE"
+elif [ -n "${CLUSTERCONFIG:-}" ]; then
+    # CLUSTERCONFIG can be a relative or absolute path
+    # Try absolute path first
+    if [ -f "$CLUSTERCONFIG" ]; then
+        # Absolute path
+        CLUSTERCONFIG_FILE="$CLUSTERCONFIG"
+        echo "Found SPC file from CLUSTERCONFIG (absolute path): $CLUSTERCONFIG_FILE"
+    elif [ -f "$ORIG_DIR/$CLUSTERCONFIG" ]; then
+        # Path relative to ORIG_DIR (most common case)
+        CLUSTERCONFIG_FILE="$ORIG_DIR/$CLUSTERCONFIG"
+        echo "Found SPC file from CLUSTERCONFIG (relative to ORIG_DIR): $CLUSTERCONFIG_FILE"
+    else
+        echo "Warning: CLUSTERCONFIG is set to '$CLUSTERCONFIG' but file not found" >&2
+        echo "  Checked: $CLUSTERCONFIG" >&2
+        echo "  Checked: $ORIG_DIR/$CLUSTERCONFIG" >&2
+    fi
+else
+    echo "  No CLUSTERCONFIG environment variable set, skipping SPC file"
+fi
+
+if [ -n "$CLUSTERCONFIG_FILE" ]; then
+    echo "  Final SPC file path: $CLUSTERCONFIG_FILE"
+    if [ -f "$CLUSTERCONFIG_FILE" ]; then
+        echo "  SPC file exists and is readable"
+        ls -lh "$CLUSTERCONFIG_FILE" || true
+    else
+        echo "  ERROR: SPC file path is set but file does not exist!" >&2
+        CLUSTERCONFIG_FILE=""
+    fi
 fi
 
 # Check if content directory exists and calculate size needed
@@ -298,8 +345,20 @@ if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
     
     # Copy SPC file if it exists
     if [ -n "$CLUSTERCONFIG_FILE" ] && [ -f "$CLUSTERCONFIG_FILE" ]; then
+        echo "Copying SPC file from: $CLUSTERCONFIG_FILE"
         cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/spc.tgz"
-        echo "Copied SPC file to content partition"
+        if [ -f "$MNT_FINAL_CONTENT/spc.tgz" ]; then
+            echo "Successfully copied SPC file to content partition"
+            ls -lh "$MNT_FINAL_CONTENT/spc.tgz" || true
+        else
+            echo "ERROR: Failed to copy SPC file to content partition!" >&2
+        fi
+    else
+        echo "Warning: SPC file not found or CLUSTERCONFIG_FILE not set"
+        echo "  CLUSTERCONFIG_FILE: ${CLUSTERCONFIG_FILE:-<not set>}"
+        if [ -n "${CLUSTERCONFIG_FILE:-}" ]; then
+            echo "  File exists: $([ -f "$CLUSTERCONFIG_FILE" ] && echo "yes" || echo "no")"
+        fi
     fi
     
     CONTENT_COUNT=$(find "$MNT_FINAL_CONTENT" -type f | wc -l)
