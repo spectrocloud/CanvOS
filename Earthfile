@@ -366,15 +366,15 @@ build-iso:
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
-    # Add local-ui if provided (extract it)
-    COPY --if-exists local-ui.tar /overlay/opt/spectrocloud/
-    RUN if [ -f /overlay/opt/spectrocloud/local-ui.tar ]; then \
-        tar -xf /overlay/opt/spectrocloud/local-ui.tar -C /overlay/opt/spectrocloud && \
-        rm -f /overlay/opt/spectrocloud/local-ui.tar; \
-    fi
-
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+
+    # Add local-ui if provided (extract it)
+    COPY --if-exists local-ui.tar /build/image/opt/spectrocloud/
+    RUN if [ -f /build/image/opt/spectrocloud/local-ui.tar ]; then \
+        tar -xf /build/image/opt/spectrocloud/local-ui.tar -C /build/image/opt/spectrocloud && \
+        rm -f /build/image/opt/spectrocloud/local-ui.tar; \
+    fi
 
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
