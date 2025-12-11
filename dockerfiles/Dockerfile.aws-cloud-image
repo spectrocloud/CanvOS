@@ -44,23 +44,3 @@ RUN --mount=type=secret,id=AWS_PROFILE \
         echo "Proceeding with creation of AMI..."; \
     fi && \
     /workdir/create-raw-to-ami.sh "$RAW_FILE_PATH"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
