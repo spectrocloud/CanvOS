@@ -85,6 +85,15 @@ v4.5.11
 
 4. Checkout the desired tag
 
+> **Note:** If you have a dedicated or on-prem instance of Palette, identify the correct agent version and checkout the corresponding tag. For example, if your agent version is v4.6.16, checkout tag v4.6.16.
+>
+> ```shell
+> curl --location --request GET 'https://<palette-endpoint>/v1/services/stylus/version' --header 'Content-Type: application/json' --header 'Apikey: <api-key>'  | jq --raw-output '.spec.latestVersion.content | match("version: ([^\n]+)").captures[0].string'
+> # Sample Output
+> v4.6.16
+> 
+> ```
+
 ```shell
 git checkout <tag version>
 ```
@@ -103,7 +112,7 @@ If you want to create a new branch to retain commits you create, you may
 do so (now or later) by using -c with the switch command. Example:
 ```
 
-5. Copy the .arg.template file to .arg
+1. Copy the .arg.template file to .arg
 
 ```shell
 cp .arg.template .arg
@@ -140,9 +149,13 @@ cp .arg.template .arg
 | INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                     |
 | AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                     |
 | EDGE_CUSTOM_CONFIG          | Path to edge custom configuration file                                                                                                                                                                                                                                                                                                         | string  | `.edge-custom-config.yaml` |
+| MAAS_IMAGE_NAME             | Custom name for the final MAAS image (without .raw.gz extension). Only used when building MAAS images.                                                                                                                                                                         | string  | `kairos-ubuntu-maas`       |
+| IS_MAAS                     | Build MAAS-compatible disk images. Set to `true` when building for MAAS deployment.                                                                                                                                                                                                                                                           | boolean | `false`                    |
 
 >For use cases where UEFI installers are burned into a USB and then edge hosts are booted with the USB. Use the OSBUILDER_VERSION=0.300.4 in the .arg file with canvos when building the installer.
 Version 0.300.3 does not support UEFI builds loading from USB.
+
+> If there are certs to be added, place them in the `certs` folder.
 
 1. (Optional) If you are building the images behind a proxy server, you may need to modify your docker daemon settings to let it use your proxy server. You can refer this [tutorial](https://docs.docker.com/config/daemon/systemd/#httphttps-proxy).
 
@@ -290,6 +303,90 @@ AUTO_ENROLL_SECUREBOOT_KEYS=false # Auto enroll SecureBoot keys when device boot
 ```
 
 2. `./earthly.sh +build-all-images`
+
+### Building MAAS Images
+
+MAAS (Metal as a Service) is Canonical's bare-metal provisioning tool. CanvOS can build MAAS-compatible disk images in `dd.gz` format that can be uploaded directly to MAAS for deployment.
+
+#### Prerequisites
+
+- MAAS image builds only support Ubuntu (OS_DISTRIBUTION must be set to `ubuntu`)
+- The build process requires privileged mode (handled automatically by `earthly.sh`)
+
+#### Configuration
+
+1. In your `.arg` file, ensure the following settings:
+
+```shell
+OS_DISTRIBUTION=ubuntu
+OS_VERSION=22  # or 20, 24, etc.
+ARCH=amd64
+```
+
+2. (Optional) Set a custom name for the MAAS image:
+
+```shell
+MAAS_IMAGE_NAME=my-custom-maas-image
+```
+
+If not specified, the default name will be `kairos-ubuntu-maas`. The final output will be in `dd.gz` format (e.g., `my-custom-maas-image.raw.gz`).
+
+#### Building the MAAS Image
+
+Run the following command to build the MAAS image:
+
+```shell
+./earthly.sh +maas-image
+```
+
+The build process consists of two steps:
+1. **Step 1**: Generates the Kairos raw disk image from the installer image
+2. **Step 2**: Creates a composite MAAS image that includes:
+   - Kairos OS partitions (EFI, OEM, Recovery)
+   - Ubuntu root filesystem for MAAS deployment
+   - Curtin hooks for MAAS integration
+   - Cloud-init scripts for post-deployment configuration
+
+#### Output
+
+After a successful build, you will find the compressed MAAS image in the `build/` directory:
+
+```shell
+ls build/
+
+my-custom-maas-image.raw.gz
+my-custom-maas-image.raw.gz.sha256
+```
+
+The output includes:
+- **Compressed disk image** (`.raw.gz`): The MAAS-compatible disk image in `dd.gz` format
+- **SHA256 checksum** (`.sha256`): Checksum file for verification
+
+#### Uploading to MAAS
+
+1. Upload the `.raw.gz` file to MAAS as a custom image:
+   - Go to MAAS UI → Images → Custom Images
+   - Click "Upload custom image"
+   - Select the `.raw.gz` file
+   - Specify format as `dd.gz`
+   - MAAS will automatically decompress the image during upload
+
+2. The image is now ready to be deployed to bare-metal servers via MAAS.
+
+#### Image Contents
+
+The MAAS image includes:
+- **Content bundles**: Pre-staged container images and artifacts (if provided during build)
+- **Cluster config (SPC)**: Cluster definition files (if `CLUSTERCONFIG` is set in `.arg`)
+- **Local UI**: Local management interface (if `local-ui.tar` is provided)
+- **Curtin hooks**: Custom installation hooks for MAAS deployment
+- **Cloud-init integration**: Automatic userdata processing and recovery mode boot
+
+#### Troubleshooting
+
+- **Build fails with "OS_DISTRIBUTION is not set"**: Ensure `OS_DISTRIBUTION=ubuntu` is set in your `.arg` file
+- **Build fails with "OS_DISTRIBUTION is not ubuntu"**: MAAS images only support Ubuntu. Change `OS_DISTRIBUTION` to `ubuntu` in your `.arg` file
+- **Image not found after build**: Check that the build completed successfully and look for the `.raw.gz` file in the `build/` directory
 
 ### Building with private registry
 

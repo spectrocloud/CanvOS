@@ -17,21 +17,20 @@ END
 
 ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
-ARG LUET_PROJECT=luet-repo
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.6.16
-ARG SPECTRO_LUET_VERSION=v4.6.15
-ARG KAIROS_VERSION=v3.3.6
+ARG PE_VERSION=v4.8.1
+ARG KAIROS_VERSION=v3.5.9
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.300.4
+ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG K3S_PROVIDER_VERSION=v4.6.0
-ARG KUBEADM_PROVIDER_VERSION=v4.6.3
-ARG RKE2_PROVIDER_VERSION=v4.6.0
+ARG K3S_PROVIDER_VERSION=v4.7.1
+ARG KUBEADM_PROVIDER_VERSION=v4.7.3
+ARG RKE2_PROVIDER_VERSION=v4.7.1
 ARG NODEADM_PROVIDER_VERSION=v4.6.0
+ARG CANONICAL_PROVIDER_VERSION=v1.2.2
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -49,6 +48,8 @@ ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
 ARG UBUNTU_PRO_KEY
 
+# DRBD version for Piraeus pack
+ARG DRBD_VERSION="9.2.13"
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -64,6 +65,10 @@ ARG ETCD_VERSION="v3.5.13"
 ARG TWO_NODE=false
 ARG KINE_VERSION=0.11.4
 
+# MAAS Variables
+ARG IS_MAAS=false
+ARG MAAS_IMAGE_NAME=kairos-ubuntu-maas
+
 # UKI Variables
 ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
@@ -72,6 +77,7 @@ ARG UKI_BRING_YOUR_OWN_KEYS=false
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
+ARG FORCE_INTERACTIVE_INSTALL=false
 
 # EFI size check
 ARG EFI_MAX_SIZE=2048
@@ -151,7 +157,7 @@ build-provider-images:
     FROM $ALPINE_IMG
 
     IF [ !-n "$K8S_DISTRIBUTION"]
-        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, or rke2." && exit 1
+        RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, rke2 or canonical." && exit 1
     END
 
     IF [ "$IS_UKI" = "true" ]
@@ -179,13 +185,12 @@ BASE_ALPINE:
     COMMAND
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
-    RUN apk add curl
 
     SAVE IMAGE --push gcr.io/spectro-dev-public/canvos/alpine:$ALPINE_TAG
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
-    SAVE ARTIFACT --keep-own /. rootfs
+    SAVE ARTIFACT --keep-ts --keep-own /. rootfs
 
 uki-iso:
     WORKDIR /build
@@ -204,8 +209,9 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --platform=linux/${ARCH} +install-k8s/ /k8s
+    COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
+    COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -215,12 +221,12 @@ trust-boot-unpack:
         luet util unpack $FILE /trusted-boot
     SAVE ARTIFACT /trusted-boot/*
 
-stylus-image-pack:  
+stylus-image-pack:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
-    COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
+    COPY --keep-ts --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
     RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
-    SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
+    SAVE ARTIFACT --keep-ts stylus-image.tar AS LOCAL ./build/
 
 kairos-agent:
     FROM --platform=linux/${ARCH} $BASE_IMAGE
@@ -231,7 +237,7 @@ install-k8s:
     DO +BASE_ALPINE
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
+    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ] || [ "$K8S_DISTRIBUTION" = "canonical" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -244,29 +250,21 @@ install-k8s:
     WORKDIR /output
 
     IF [ "$ARCH" = "arm64" ]
-        LET LUET_REPO=$LUET_PROJECT-arm
+        LET LUET_REPO=luet-repo-arm
     ELSE IF [ "$ARCH" = "amd64" ]
-        LET LUET_REPO=$LUET_PROJECT
+        LET LUET_REPO=luet-repo-amd
     END
 
     RUN mkdir -p /etc/luet/repos.conf.d && \
-        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO/$SPECTRO_LUET_VERSION  --priority 1 -y
+        luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO  --priority 1 -y
     COPY --if-exists spectro-luet-auth.yaml spectro-luet-auth.yaml
     RUN --no-cache if [ -f spectro-luet-auth.yaml ]; then cat spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; fi
     RUN --no-cache luet repo update
 
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        RUN luet install -y container-runtime/containerd --system-target /output
-    END
-
-    IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-       RUN luet install -y container-runtime/containerd-fips --system-target /output
-    END
-
     RUN luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
 
     RUN rm -rf /output/var/cache/*
-    SAVE ARTIFACT /output/*
+    SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
     FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
@@ -275,21 +273,23 @@ build-uki-iso:
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
- 
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
+
+    # Add content files (split if > 3GB)
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
         done; \
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
-    
-    #check if clusterconfig is passed in
+
+    # Add cluster config (SPC) if provided
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
+    # Add local-ui if provided (extract it)
     COPY --if-exists local-ui.tar /overlay/opt/spectrocloud/
     RUN if [ -f /overlay/opt/spectrocloud/local-ui.tar ]; then \
         tar -xf /overlay/opt/spectrocloud/local-ui.tar -C /overlay/opt/spectrocloud && \
@@ -321,7 +321,7 @@ iso:
     IF [ "$IS_UKI" = "true" ]
         COPY --platform=linux/${ARCH} +build-uki-iso/ .
     ELSE
-        COPY --platform=linux/${ARCH} +build-iso/ .
+        COPY --keep-ts --platform=linux/${ARCH} +build-iso/ .
     END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
@@ -343,32 +343,45 @@ build-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
+
+    # Generate grub.cfg based on FORCE_INTERACTIVE_INSTALL setting (without modifying source)
+    RUN if [ "$FORCE_INTERACTIVE_INSTALL" = "true" ]; then \
+        sed 's/{{DEFAULT_ENTRY}}/2/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
+        mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
+    else \
+        sed 's/{{DEFAULT_ENTRY}}/0/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
+        mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
+    fi
+
+    # Add content files (split if > 3GB)
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
         done; \
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
-    #check if clusterconfig is passed in
+
+    # Add cluster config (SPC) if provided
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
     WORKDIR /build
-    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    COPY --platform=linux/${ARCH} --keep-ts --keep-own +iso-image-rootfs/rootfs /build/image
 
+    # Add local-ui if provided (extract it)
     COPY --if-exists local-ui.tar /build/image/opt/spectrocloud/
     RUN if [ -f /build/image/opt/spectrocloud/local-ui.tar ]; then \
         tar -xf /build/image/opt/spectrocloud/local-ui.tar -C /build/image/opt/spectrocloud && \
         rm -f /build/image/opt/spectrocloud/local-ui.tar; \
     fi
-    
+
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD 
+                $CMD
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch x86_64" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
@@ -376,7 +389,7 @@ build-iso:
     END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
-    SAVE ARTIFACT /iso/*
+    SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
 ## Generate UKI keys
@@ -452,7 +465,7 @@ uki-byok:
     RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl || true
     RUN [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true
     RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
-    
+
     WORKDIR /output
     RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  PK  PK.esl  PK.auth
     RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  KEK KEK.esl KEK.auth
@@ -493,7 +506,7 @@ provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-            RUN kernel=$(ls /lib/modules | tail -n1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
         END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -502,6 +515,43 @@ provider-image:
         ARG K8S_DISTRIBUTION_TAG=$RKE2_FLAVOR_TAG
         ARG BASE_K8S_VERSION=$K8S_VERSION-$K8S_DISTRIBUTION_TAG
     END
+    IF [ "$UPDATE_KERNEL" = true ]
+        IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+        ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
+            RUN zypper --non-interactive ref && \
+                kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                echo "kernel module: $kernel" && \
+                version=$(echo $kernel | sed 's/-default$//') && \
+                echo "kernel version: $version" && \
+                if ! zypper --non-interactive install --no-recommends kernel-default-devel-$version; then \
+                    echo "Exact kernel-default-devel-$version not found, searching for closest match..."; \
+                    match=$(zypper se -s kernel-default-devel | awk -F'|' '/kernel-default-devel/ && $3 ~ /^ *[0-9]/ {gsub(/^ +| +$/,"",$3); if (index($3,"'"$version"'")==1) print $3}' | sort -Vr | head -n1); \
+                    if [ -n "$match" ]; then \
+                        echo "Trying to install kernel-default-devel-$match"; \
+                        zypper --non-interactive install --no-recommends kernel-default-devel-$match || echo "Failed to install kernel-default-devel-$match"; \
+                    else \
+                        echo "No matching kernel-default-devel package found, trying generic kernel-devel"; \
+                        zypper --non-interactive install --no-recommends kernel-devel || echo "kernel development packages not available, continuing without them"; \
+                    fi \
+                fi
+        ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ]
+            RUN yum clean all && yum makecache && \
+                # Enable additional repositories that might contain kernel-devel packages
+                yum-config-manager --enable ubi-8-baseos-rpms ubi-8-appstream-rpms ubi-8-codeready-builder-rpms && \
+                # Try to add EPEL repository for additional packages
+                yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm || echo "EPEL repo not available" && \
+                yum makecache && \
+                kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && echo "kernel version: $kernel" && \
+                if ! yum install -y kernel-devel-$kernel; then \
+                    echo "kernel-devel-$kernel not available, trying alternative packages" && \
+                    yum install -y kernel-devel || \
+                    echo "Trying to install from different source..." && \
+                    yum install -y gcc make || echo "kernel development packages not available, continuing without them"; \
+                fi
+        END
+    END
+
 
     COPY --if-exists overlay/files/etc/ /etc/
     IF [ -f /etc/logrotate.d/stylus.conf ]
@@ -510,19 +560,20 @@ provider-image:
 
     COPY --platform=linux/${ARCH} +kairos-provider-image/ /
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
+    COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
 
     IF [ "$IS_UKI" = "true" ]
         COPY +internal-slink/slink /usr/bin/slink
-        COPY +install-k8s/ /k8s
+        COPY --keep-ts +install-k8s/output/ /k8s
         RUN slink --source /k8s/ --target /opt/k8s
         RUN rm -f /usr/bin/slink
         RUN rm -rf /k8s
         RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
     ELSE
-        COPY +install-k8s/ /
+        COPY --keep-ts +install-k8s/output/ /
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
@@ -551,12 +602,15 @@ provider-image:
     IF $TWO_NODE
         # Install postgresql 16
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-            RUN apt install -y ca-certificates curl && \
+            RUN apt-get update && \
+                echo "tzdata tzdata/Areas select Etc" | debconf-set-selections && \
+                echo "tzdata tzdata/Zones/Etc select UTC" | debconf-set-selections && \
+                DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl && \
                 install -d /usr/share/postgresql-common/pgdg && \
                 curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
                 echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-                apt update && \
-                apt install -y postgresql-16 postgresql-contrib-16 iputils-ping
+                apt-get update && \
+                DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-16 postgresql-contrib-16 iputils-ping
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
             RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
                 zypper --gpg-auto-import-keys ref && \
@@ -592,14 +646,14 @@ build-provider-trustedboot-image:
 
 stylus-image:
     FROM --platform=linux/${ARCH} $STYLUS_BASE
-    SAVE ARTIFACT --keep-own  ./*
+    SAVE ARTIFACT --keep-ts --keep-own  ./*
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
 
 stylus-package-image:
     FROM --platform=linux/${ARCH} $STYLUS_PACKAGE_BASE
-    SAVE ARTIFACT --keep-own  ./*
+    SAVE ARTIFACT --keep-ts --keep-own  ./*
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -614,23 +668,30 @@ kairos-provider-image:
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-rke2:$RKE2_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-nodeadm:$NODEADM_PROVIDER_VERSION
+    ELSE IF [ "$K8S_DISTRIBUTION" = "canonical" ]
+         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-canonical:$CANONICAL_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
 # base build image used to create the base image for all other image types
 base-image:
-    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE \ 
-    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \ 
+    FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE \
+    --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \
     --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
-    --build-arg NO_PROXY=$NO_PROXY .
+    --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION .
 
     IF [ "$IS_JETSON" = "true" ]
-        COPY cloudconfigs/mount.yaml /system/oem/mount.yaml
+        COPY cloudconfigs/mount.yaml /etc/kairos/mount.yaml
     END
 
     IF [ "$IS_UKI" = "true" ]
-        COPY cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml
+        # create empty boot directory to support services like longhorn which require /boot
+        COPY cloudconfigs/80_stylus_uki.yaml /etc/kairos/80_stylus_uki.yaml
+    END
+
+    IF [ "$IS_MAAS" = "true" ]
+        COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
     END
 
     # OS == Ubuntu
@@ -642,7 +703,7 @@ base-image:
         END
 
         RUN apt-get update && \
-            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -650,30 +711,59 @@ base-image:
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
+            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+                apt-get install -y linux-image-generic-hwe-$OS_VERSION
         END
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
-        
+
         IF [ "$IS_UKI" = "false" ]
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
-                latest_kernel=$(ls /lib/modules | tail -n1) && \
-                apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}") && \
+                apt-get install --no-install-recommends -y \
+                    util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
+                    parted \ # Used for creating and managing disk partitions.
+                    cloud-guest-utils \ # Includes utilities for cloud environments, such as resizing root partitions.
+                    gawk \ # Required for text processing and scripting in build scripts.
+                    fdisk \ # A partitioning tool for managing disk partitions.
+                    gdisk \ # GPT partitioning tool, complementing fdisk for modern systems.
+                    e2fsprogs \ # Provides tools for managing ext2/ext3/ext4 file systems.
+                    dosfstools \ # Utilities for creating and checking FAT file systems.
+                    rsync \ # Used for efficient file synchronization and transfer.
+                    cryptsetup-bin \ # Provides tools for setting up encrypted disks.
+                    udev && \ # Device manager for the Linux kernel, required for managing device nodes.
+                latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
+                if [ "$FIPS_ENABLED" = "true" ]; then \
+                    # When FIPS is enabled, we need to remove any non-FIPS kernel packages (e.g., 5.15 HWE) to avoid conflicts.
+                    # However, some kernel packages may be held (apt-mark hold), which causes `apt-get purge` to fail with:
+                    #   "E: Held packages were changed and -y was used without --allow-change-held-packages."
+                    # To fix this, we first unhold all matching non-FIPS and non-latest kernel packages before purging them.
+                    # This ensures a clean, FIPS-only environment without apt resolver errors.
+                    for pkg in $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' \
+                        | grep -v "$latest_kernel" | grep -v fips); do \
+                        apt-mark unhold "$pkg" || true; \
+                    done && \
+                    apt-get purge -y $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
+                else \
+                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}"); \
+                fi && \
                 apt-get autoremove -y && \
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
-            RUN kernel=$(ls /lib/modules | tail -n1) && \
-            	dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-            	ln -sf "initrd-${kernel}" /boot/initrd
-            RUN kernel=$(ls /lib/modules | tail -n1) && \
+            # Skip dracut when FIPS is enabled - the Dockerfile will include custom dracut modules.fips
+            IF [ "$FIPS_ENABLED" = "false" ]
+                RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                   dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+                   ln -sf "initrd-${kernel}" /boot/initrd
+            END
+            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
            	depmod -a "${kernel}"
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
-
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
@@ -695,8 +785,8 @@ base-image:
         RUN zypper refresh && zypper update -y
 
         IF [ -e "/usr/bin/dracut" ]
-            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && depmod -a "${kernel}"
-            RUN --no-cache kernel=$(ls /lib/modules | tail -n1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
+            RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && depmod -a "${kernel}"
+            RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
         END
 
         RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
@@ -721,11 +811,13 @@ base-image:
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
 
+    DO +KAIROS_RELEASE --OS_VERSION=$OS_VERSION --OS_DISTRIBUTION=$OS_DISTRIBUTION --ARCH=$ARCH --IS_MAAS=$IS_MAAS
+
     RUN rm -rf /var/cache/* && \
         journalctl --vacuum-size=1K && \
         rm -rf /etc/machine-id && \
         rm -rf /var/lib/dbus/machine-id
-    RUN touch /etc/machine-id && \ 
+    RUN touch /etc/machine-id && \
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
@@ -735,17 +827,60 @@ base-image:
             if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
     END
 
+KAIROS_RELEASE:
+    COMMAND
+    ARG OS_VERSION
+    ARG OS_DISTRIBUTION
+    ARG ARCH
+    ARG IS_MAAS=false
+    # Build dynamic KAIROS_IMAGE_LABEL based on OS version, arch, and MAAS flag
+    # Format: {OS_VERSION}-standard-{ARCH}-generic{MAAS_SUFFIX}
+    # For Ubuntu, OS_VERSION is the major version (e.g., "22"), so we format it as "22.04"
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
+        IF [ "$OS_VERSION" = "22" ] || [ "$OS_VERSION" = "20" ]
+            IF [ "$IS_MAAS" = "true" ]
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}.04-standard-${ARCH}-generic-maas"
+            ELSE
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}.04-standard-${ARCH}-generic"
+            END
+        ELSE
+            IF [ "$IS_MAAS" = "true" ]
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic-maas"
+            ELSE
+                LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic"
+            END
+        END
+    ELSE
+        IF [ "$IS_MAAS" = "true" ]
+            LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic-maas"
+        ELSE
+            LET KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic"
+        END
+    END
+    RUN if [ -f /etc/kairos-release ]; then \
+            sed -i 's/^KAIROS_NAME=.*/KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"/' /etc/kairos-release; \
+            sed -i '/^KAIROS_IMAGE_LABEL=/d' /etc/kairos-release; \
+            echo 'KAIROS_IMAGE_LABEL="'"$KAIROS_IMAGE_LABEL"'"' >> /etc/kairos-release; \
+        else \
+            echo 'KAIROS_NAME="kairos-core-'"$OS_DISTRIBUTION"'-'"$OS_VERSION"'"' >> /etc/kairos-release; \
+            echo 'KAIROS_IMAGE_LABEL="'"$KAIROS_IMAGE_LABEL"'"' >> /etc/kairos-release; \
+        fi
+
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
+<<<<<<< HEAD
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
     ARG IMAGE_TAG
     
+=======
+
+>>>>>>> main
     IF [ "$IS_UKI" = "false" ]
-        COPY --platform=linux/${ARCH} +stylus-image/ /
+        COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
     ELSE
-        COPY --platform=linux/${ARCH} +stylus-image/ /
+        COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
         RUN find /opt/spectrocloud/bin/. ! -name 'agent-provider-stylus' -type f -exec rm -f {} +
         RUN rm -f /usr/bin/luet
     END
@@ -758,11 +893,26 @@ iso-image:
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
-    
+
+    # For MAAS builds, install maas-content.sh script and handle local-ui
+    IF [ "$IS_MAAS" = "true" ]
+        RUN mkdir -p /opt/spectrocloud/scripts
+        COPY cloudconfigs/maas-content.sh /opt/spectrocloud/scripts/maas-content.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/maas-content.sh
+        
+        # Add local-ui if provided (extract it directly to the image)
+        COPY --if-exists local-ui.tar /opt/spectrocloud/
+        RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
+            tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
+            rm -f /opt/spectrocloud/local-ui.tar; \
+        fi
+    END
+
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
+<<<<<<< HEAD
     SAVE IMAGE --push $IMAGE_REGISTRY/palette-installer-image:$IMAGE_TAG
 
 cloud-image:
@@ -835,12 +985,104 @@ aws-cloud-image:
         --secret AWS_ACCESS_KEY_ID \
         --secret AWS_SECRET_ACCESS_KEY \
         /workdir/create-raw-to-ami.sh /workdir/kairos-ubuntu-22.04-core-amd64-generic-v3.3.6.raw
+=======
+    # Only push image if not building for MAAS (MAAS uses local image via --load)
+    IF [ "$IS_MAAS" = "false" ]
+        SAVE IMAGE palette-installer-image:$IMAGE_TAG
+    ELSE
+        SAVE IMAGE index.docker.io/library/palette-installer-image:latest
+    END
+>>>>>>> main
 
 iso-disk-image:
     FROM scratch
 
     COPY +iso/*.iso /disk/
     SAVE IMAGE --push $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
+
+# Generate just the Kairos raw image from the iso-image
+# This target converts the installer image to a raw disk image using auroraboot
+kairos-raw-image:
+    FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    
+    # Use Docker-in-Docker to convert iso-image to raw
+    WITH DOCKER \
+        --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
+        RUN echo "=== Setting up workdir ===" && \
+            mkdir -p /workdir && \
+            cd /workdir && \
+            echo "=== Verifying Docker image is available ===" && \
+            docker images | grep palette-installer-image || echo "Warning: palette-installer-image not found in docker images" && \
+            if ! docker inspect index.docker.io/library/palette-installer-image:latest >/dev/null 2>&1; then \
+                echo "Error: Image index.docker.io/library/palette-installer-image:latest not found"; \
+                echo "Available images:"; \
+                docker images || true; \
+                exit 1; \
+            fi && \
+            echo "=== Checking Docker image size ===" && \
+            IMAGE_SIZE=$(docker images --format "{{.Size}}" index.docker.io/library/palette-installer-image:latest 2>/dev/null || docker images --format "{{.Size}}" palette-installer-image:latest 2>/dev/null || echo "unknown") && \
+            echo "Image size: $IMAGE_SIZE" && \
+            if echo "$IMAGE_SIZE" | grep -qE '[0-9]+GB'; then \
+                SIZE_GB=$(echo "$IMAGE_SIZE" | sed 's/GB//' | awk '{print int($1)}'); \
+                if [ "$SIZE_GB" -gt 10 ]; then \
+                    echo "⚠️  WARNING: Image is very large (${IMAGE_SIZE}). This may cause auroraboot extraction issues."; \
+                    echo "Consider reducing content bundle size or excluding large files."; \
+                fi; \
+            fi && \
+            echo "=== Running auroraboot to convert image ===" && \
+            echo "Using auroraboot v0.15.0 (known working version)" && \
+            echo "=== Docker images available ===" && \
+            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.ID}}" | head -10 && \
+            echo "=== Running auroraboot (this may take a while for large images) ===" && \
+            docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.15.0 \
+                --debug \
+                --set "disable_http_server=true" \
+                --set "disable_netboot=true" \
+                --set "disk.efi=true" \
+                --set "container_image=palette-installer-image:latest"  \
+                --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
+            AURORABOOT_EXIT=$?; \
+            echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
+            echo "=== Auroraboot log size: $(wc -l < /workdir/auroraboot.log 2>/dev/null || echo '0') lines ===" && \
+            echo "=== Full auroraboot log ===" && \
+            cat /workdir/auroraboot.log 2>/dev/null || echo "Could not read log file" && \
+            echo "" && \
+            echo "=== Checking for errors/warnings in log ===" && \
+            grep -i "error\|fail\|panic\|warn" /workdir/auroraboot.log 2>/dev/null | head -20 || echo "No errors/warnings found" && \
+            echo "" && \
+            echo "=== Checking temp-rootfs contents ===" && \
+            if [ -d /workdir/temp-rootfs ]; then \
+                echo "temp-rootfs directory size: $(du -sh /workdir/temp-rootfs 2>/dev/null || echo 'unknown')"; \
+                echo "temp-rootfs file count: $(find /workdir/temp-rootfs -type f 2>/dev/null | wc -l || echo '0')"; \
+                find /workdir/temp-rootfs -type f 2>/dev/null | head -10 || echo "No files found in temp-rootfs"; \
+            fi && \
+            echo "" && \
+            echo "=== Finding raw image ===" && \
+            echo "Searching in /workdir and all subdirectories..." && \
+            find /workdir -type f \( -name "*.raw" -o -name "*.img" \) 2>/dev/null | head -20 && \
+            RAW_IMG=$(find /workdir -type f \( -name "*.raw" -o -name "*.img" \) | head -n1); \
+            if [ -z "$RAW_IMG" ]; then \
+                echo "❌ Error: No raw image found in /workdir"; \
+                echo "Auroraboot exit code: $AURORABOOT_EXIT"; \
+                echo "=== Auroraboot log (checking for errors) ==="; \
+                grep -i "error\|fail\|panic" /workdir/auroraboot.log 2>/dev/null || echo "No obvious errors in log"; \
+                echo "=== Contents of /workdir ==="; \
+                ls -laR /workdir || true; \
+                echo "=== Checking auroraboot state directory ==="; \
+                if [ -d /workdir/temp-rootfs ]; then \
+                    echo "temp-rootfs directory exists, size: $(du -sh /workdir/temp-rootfs 2>/dev/null || echo 'unknown')"; \
+                    find /workdir/temp-rootfs -type f | head -10 || true; \
+                fi; \
+                exit 1; \
+            fi && \
+            echo "✅ Found raw image: $RAW_IMG" && \
+            echo "Raw image size: $(du -h "$RAW_IMG" | cut -f1)" && \
+            cp "$RAW_IMG" /kairos.raw && \
+            echo "✅ Kairos raw image created: /kairos.raw"
+    END
+    
+    SAVE ARTIFACT /kairos.raw AS LOCAL ./build/
 
 go-deps:
     FROM $SPECTRO_PUB_REPO/third-party/golang:${GOLANG_VERSION}-alpine
@@ -858,7 +1100,7 @@ BUILD_GOLANG:
     ARG GOARCH
     ARG VERSION=dev
 
-    ENV GOOS=$GOOS 
+    ENV GOOS=$GOOS
     ENV GOARCH=$GOARCH
     ENV GO_LDFLAGS=" -X github.com/spectrocloud/stylus/pkg/version.Version=${VERSION} -w -s"
 
@@ -876,7 +1118,7 @@ internal-slink:
 
     ARG BUILD_DIR=/build/internal
     WORKDIR $BUILD_DIR
-    
+
     DO +BUILD_GOLANG --BIN=slink --SRC=cmd/slink/slink.go --WORKDIR=$BUILD_DIR
 
     SAVE ARTIFACT slink
@@ -941,10 +1183,6 @@ OS_RELEASE:
     ARG OS_NAME=kairos-core-${OS_DISTRIBUTION}
     ARG ARTIFACT=kairos-core-${OS_DISTRIBUTION}-$OS_VERSION
     ARG KAIROS_RELEASE=${OS_VERSION}
-
-    # update OS-release file
-    # RUN sed -i -n '/KAIROS_/!p' /etc/os-release
-    RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
 
 download-third-party:
     ARG TARGETPLATFORM

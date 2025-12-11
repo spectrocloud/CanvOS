@@ -1,8 +1,9 @@
-ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.10-12
+FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
+FROM registry.access.redhat.com/ubi8/ubi-init:8.7-10
 
-FROM $BASE_IMAGE 
 ARG USERNAME
 ARG PASSWORD
+ARG KAIROS_VERSION=v3.5.9
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm -y
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
@@ -11,63 +12,54 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && subscription-manager attach --auto \
   && subscription-manager repos --enable rhel-8-for-x86_64-appstream-rpms \
   && yum repolist
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug -m "generic" -t "false" --version "${KAIROS_VERSION}"
+
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
-    squashfs-tools \ 
-    dracut-live \
-    livecd-tools \
-    dracut-squash \
-    dracut-network \
-    efibootmgr \
-    dhclient \
-    audit \
-    sudo \
-    systemd \
-    systemd-networkd \
-    systemd-timesyncd \
-    parted \
-    dracut \
-    e2fsprogs \
-    dosfstools \
-    coreutils-single \
-    device-mapper \
-    grub2 \
-    which \
-    curl \
-    nano \
-    gawk \
-    haveged \
-    polkit \
-    ncurses \
-    tar \
-    kbd \
-    lvm2 \
-    zstd \
-    openssh-server \
-    openssh-clients \
-    shim-x64 \
-    grub2-pc \
-    grub2-efi-x64 \
-    grub2-efi-x64-modules \
-    open-vm-tools \
-    iscsi-initiator-utils \
-    gdisk \
-    mdadm \
-    biosdevname \
-    nvme-cli \
-    nfs-utils \
-    rpcbind \
-    e2fsprogs \
-    systemd-udev \
-    util-linux \
-    cloud-utils-growpart \
-    iptables ethtool socat iproute-tc conntrack \
-    kernel kernel-modules kernel-modules-extra \
-    rsync jq && dnf clean all
-
-
-COPY --from=quay.io/kairos/framework:v2.18.6 / /
+  squashfs-tools \
+  dracut-live \
+  livecd-tools \
+  dracut-squash \
+  dracut-network \
+  efibootmgr \
+  dhclient \
+  audit \
+  sudo \
+  systemd \
+  systemd-networkd \
+  systemd-timesyncd \
+  parted \
+  dracut \
+  e2fsprogs \
+  dosfstools \
+  coreutils-single \
+  device-mapper \
+  grub2 \
+  which \
+  curl \
+  nano \
+  gawk \
+  haveged \
+  polkit \
+  ncurses \
+  tar \
+  kbd \
+  lvm2 \
+  zstd \
+  openssh-server \
+  openssh-clients \
+  shim-x64 \
+  grub2-pc \
+  grub2-efi-x64 \
+  grub2-efi-x64-modules \
+  open-vm-tools \
+  iscsi-initiator-utils \
+  iptables ethtool socat iproute-tc conntrack \
+  kernel kernel-modules kernel-modules-extra \
+  rsync jq && dnf clean all
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
@@ -76,8 +68,7 @@ RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
 RUN mkdir -p /run/lock
 RUN touch /usr/libexec/.keep
 
-
-# Configure the box. The ubi image masks services for containers, we unmask them 
+# Configure the box. The ubi image masks services for containers, we unmask them
 RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
 RUN systemctl enable getty@tty1.service
 RUN systemctl enable getty@tty2.service
@@ -85,22 +76,21 @@ RUN systemctl enable getty@tty3.service
 RUN systemctl enable systemd-networkd
 RUN systemctl enable systemd-resolved
 RUN systemctl enable sshd
-RUN systemctl disable selinux-autorelabel-mark.service 
-#RUN systemctl enable tmp.mount
+RUN systemctl disable selinux-autorelabel-mark.service
 
 COPY overlay/rhel8/ /
 
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
-            ln -sf "${kernel#/boot/}" /boot/vmlinuz
+  ln -sf "${kernel#/boot/}" /boot/vmlinuz
 RUN kernel=$(ls /lib/modules | head -n1) && \
-            dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
-            ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+  dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
+  ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
 RUN rm -rf /boot/initramfs-*
 
-RUN envsubst >>/etc/os-release </usr/lib/os-release.tmpl
 RUN mkdir -p /etc/luet/repos.conf.d
 ## Clear cache
 RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
 
-
 RUN subscription-manager unregister
+
+RUN if [ ! -f /boot/efi/EFI/redhat/shim.efi ]; then cp /boot/efi/EFI/redhat/shimx64.efi /boot/efi/EFI/redhat/shim.efi; fi
