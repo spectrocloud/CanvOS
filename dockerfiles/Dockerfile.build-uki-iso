@@ -66,7 +66,6 @@ RUN --mount=type=secret,id=db_key,target=/keys/db.key \
             --output /iso \
             --override-name "${ISO_NAME}" \
             --overlay-iso /overlay \
-            --arch "$ARCH" \
             dir:/iso-source; \
     elif [ "$ARCH" = "amd64" ]; then \
         /usr/bin/auroraboot \

@@ -12,7 +12,7 @@ COPY internal /build/internal
 WORKDIR /build/internal
 
 ARG VERSION=dev
-ARG BIN=slink
+ARG BIN
 ARG SRC
 ARG GOOS
 ARG GOARCH
@@ -27,4 +27,5 @@ RUN go mod download
 RUN go-build-static.sh -a -o /build/bin/${BIN} ./${SRC}
 
 FROM scratch AS export
+ARG BIN
 COPY --from=build /build/bin/${BIN} /${BIN}

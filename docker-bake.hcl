@@ -8,7 +8,7 @@ variable "ARCH" {
 }
 
 variable "SPECTRO_PUB_REPO" {
-  default = FIPS_ENABLED ? "us-east1-docker.pkg.dev/spectro-images/dev-fips/arun" : "us-east1-docker.pkg.dev/spectro-images/dev/arun"
+  default = FIPS_ENABLED ? "us-docker.pkg.dev/palette-images-fips" : "us-docker.pkg.dev/palette-images"
 }
 
 variable "SPECTRO_THIRD_PARTY_IMAGE" {
@@ -564,13 +564,14 @@ target "uki-byok" {
 target "internal-slink" {
   dockerfile = "dockerfiles/Dockerfile.slink"
   context = "."
+  platforms = ["linux/${ARCH}"]
   args = {
     SPECTRO_PUB_REPO = SPECTRO_PUB_REPO
     GOLANG_VERSION = GOLANG_VERSION
     BIN = "slink"
     SRC = "cmd/slink/slink.go"
     GOOS = "linux"
-    GOARCH = "amd64"
+    GOARCH = ARCH
   }
   output = ["type=local,dest=build"]
 }

@@ -41,7 +41,7 @@ PUSH_ARGS = $(if $(filter true,$(PUSH)),--set *.output=type=image$(comma)push=$(
 # Dry run flag
 DRY_RUN_ARGS = $(if $(filter true,$(DRY_RUN)),--print,)
 # Progress output flag
-DOCKER_BUILD_OUT = $(if $(filter true,$(DEBUG)),--progress=plain,)
+DOCKER_BUILD_OUT = $(if $(filter true,$(DEBUG)),--progress=plain --debug,)
 # No cache flag
 DOCKER_NO_CACHE = $(if $(filter true,$(NO_CACHE)),--no-cache,)
 
