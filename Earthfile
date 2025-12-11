@@ -869,14 +869,11 @@ KAIROS_RELEASE:
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
-<<<<<<< HEAD
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
     ARG IMAGE_TAG
     
-=======
 
->>>>>>> main
     IF [ "$IS_UKI" = "false" ]
         COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
     ELSE
@@ -912,8 +909,12 @@ iso-image:
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
-<<<<<<< HEAD
-    SAVE IMAGE --push $IMAGE_REGISTRY/palette-installer-image:$IMAGE_TAG
+    # Only push image if not building for MAAS (MAAS uses local image via --load)
+    IF [ "$IS_MAAS" = "false" ]
+        SAVE IMAGE palette-installer-image:$IMAGE_TAG
+    ELSE
+        SAVE IMAGE index.docker.io/library/palette-installer-image:latest
+    END
 
 cloud-image:
     ARG IS_CLOUD_IMAGE=true
@@ -945,7 +946,7 @@ cloud-image:
 
     # RUN ls -al /create-raw-to-ami.sh
     WITH DOCKER \
-        --pull quay.io/kairos/auroraboot:v0.6.4 \
+        --pull quay.io/kairos/auroraboot:v0.16.0 \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)
         RUN mkdir -p /output && \
             docker run --rm \
@@ -954,7 +955,7 @@ cloud-image:
                 -v /output:/aurora \
                 --net host \
                 --privileged \
-                quay.io/kairos/auroraboot:v0.6.4 \
+                quay.io/kairos/auroraboot:v0.16.0 \
                 --debug \
                 --set "disable_http_server=true" \
                 --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
@@ -979,20 +980,21 @@ aws-cloud-image:
     ARG S3_KEY
 
     WORKDIR /workdir
+    RUN ls -laR /workdir
     COPY cloud-images/scripts/create-raw-to-ami.sh create-raw-to-ami.sh
     COPY +cloud-image/ /workdir/
     RUN --secret AWS_PROFILE \
         --secret AWS_ACCESS_KEY_ID \
         --secret AWS_SECRET_ACCESS_KEY \
-        /workdir/create-raw-to-ami.sh /workdir/kairos-ubuntu-22.04-core-amd64-generic-v3.3.6.raw
-=======
-    # Only push image if not building for MAAS (MAAS uses local image via --load)
-    IF [ "$IS_MAAS" = "false" ]
-        SAVE IMAGE palette-installer-image:$IMAGE_TAG
-    ELSE
-        SAVE IMAGE index.docker.io/library/palette-installer-image:latest
-    END
->>>>>>> main
+        RAW_FILE=$(find /workdir -type f \( -name "*.raw" \) | head -n1) && \
+        if [ -z "$RAW_FILE" ]; then \
+            echo "Error: No raw image file found in /workdir" >&2; \
+            echo "Contents of /workdir:" >&2; \
+            ls -laR /workdir >&2 || true; \
+            exit 1; \
+        fi && \
+        echo "Found raw image: $RAW_FILE" && \
+        /workdir/create-raw-to-ami.sh "$RAW_FILE"
 
 iso-disk-image:
     FROM scratch
