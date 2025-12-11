@@ -483,7 +483,6 @@ target "build-iso" {
     iso-image = "target:iso-image"
   }
   args = {
-    ARCH = ARCH
     ISO_NAME = ISO_NAME
     CLUSTERCONFIG = CLUSTERCONFIG
     EDGE_CUSTOM_CONFIG = EDGE_CUSTOM_CONFIG

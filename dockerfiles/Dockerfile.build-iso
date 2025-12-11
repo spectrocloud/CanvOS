@@ -2,7 +2,6 @@ ARG AURORABOOT_IMAGE
 
 FROM ${AURORABOOT_IMAGE} AS builder
 
-ARG ARCH=amd64
 ARG ISO_NAME
 ARG CLUSTERCONFIG
 ARG EDGE_CUSTOM_CONFIG
@@ -58,7 +57,6 @@ RUN /usr/bin/auroraboot \
     --output /output \
     --override-name ${ISO_NAME} \
     --overlay-iso /overlay \
-    --set "arch=${ARCH}" \
     $(if [ -f /validated/config.yaml ] && [ -s /validated/config.yaml ]; then echo "--cloud-config /validated/config.yaml"; fi) \
     dir:/iso-source
 
