@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Exit immediately if a command exits with a non-zero status.
-set -e
+set -ex
 # Treat unset variables as an error when substituting.
 set -u
 # Pipefail: the return value of a pipeline is the status of the last command to exit with a non-zero status,
