@@ -5,11 +5,11 @@ export
 # TARGETS
 # ==============================================================================
 .PHONY: build build-all-images iso build-provider-images iso-disk-image \
-	uki-genkey alpine-all validate-user-data raw-image aws-cloud-image \
+	uki-genkey secure-boot-dirs alpine-all validate-user-data raw-image aws-cloud-image \
 	iso-image-cloud internal-slink iso-efi-size-check \
 	clean clean-all clean-raw-image clean-keys help
 
-.SILENT: uki-genkey validate-user-data clean-raw-image
+.SILENT: uki-genkey validate-user-data clean-raw-image secure-boot-dirs help
 
 # ==============================================================================
 # CONSTANTS
@@ -128,6 +128,12 @@ uki-genkey:
 	$(MAKE) TARGET=uki-genkey build
 	./keys.sh secure-boot/
 
+secure-boot-dirs:
+	mkdir -p secure-boot/enrollment secure-boot/exported-keys secure-boot/private-keys secure-boot/public-keys
+	find secure-boot -type d -exec chmod 0700 {} \;
+	find secure-boot -type f -exec chmod 0600 {} \;
+	echo "Created secure-boot directory structure"
+
 validate-user-data:
 	$(MAKE) TARGET=validate-user-data build
 
@@ -156,22 +162,23 @@ clean-keys:
 
 # ==============================================================================
 help:
-	@echo "Available targets:"
-	@echo "  build-all-images      - Build all provider images and ISO"
-	@echo "  iso                   - Build ISO installer"
-	@echo "  iso-disk-image        - Build ISO disk image"
-	@echo "  build-provider-images - Build all provider images for configured K8S versions"
-	@echo "  raw-image             - Build raw cloud disk image(Requires root privileges)"
-	@echo "  aws-cloud-image       - Build AWS AMI from raw image(Requires root privileges)"
-	@echo "  uki-genkey            - Generate UKI secure boot keys"
-	@echo "  validate-user-data    - Validate user-data configuration"
-	@echo "  clean-all             - Remove the build directory and secure boot keys"
-	@echo "  clean                 - Remove the build directory"
-	@echo "  clean-raw-image       - Remove the $(RAW_IMAGE_DIR) build directory"
-	@echo "  clean-keys            - Clean secure boot keys"
-	@echo ""
-	@echo "Build specific configuration (set in .arg file or as make variables):"
-	@echo "  PUSH                  - Push images to registry (default: true)"
-	@echo "  DEBUG                 - Enable debug output (default: false)"
-	@echo "  NO_CACHE              - Disable build cache (default: false)"
-	@echo "  DRY_RUN               - Print build commands without executing (default: false)"
+	echo "Available targets:"
+	echo "  build-all-images      - Build all provider images and ISO"
+	echo "  iso                   - Build ISO installer"
+	echo "  iso-disk-image        - Build ISO disk image"
+	echo "  build-provider-images - Build all provider images for configured K8S versions"
+	echo "  raw-image             - Build raw cloud disk image(Requires root privileges)"
+	echo "  aws-cloud-image       - Build AWS AMI from raw image(Requires root privileges)"
+	echo "  uki-genkey            - Generate UKI secure boot keys"
+	echo "  secure-boot-dirs      - Create secure-boot directory structure for BYOK"
+	echo "  validate-user-data    - Validate user-data configuration"
+	echo "  clean-all             - Remove the build directory and secure boot keys"
+	echo "  clean                 - Remove the build directory"
+	echo "  clean-raw-image       - Remove the $(RAW_IMAGE_DIR) build directory"
+	echo "  clean-keys            - Clean secure boot keys"
+	echo ""
+	echo "Build specific configuration (set in .arg file or as make variables):"
+	echo "  PUSH                  - Push images to registry (default: true)"
+	echo "  DEBUG                 - Enable debug output (default: false)"
+	echo "  NO_CACHE              - Disable build cache (default: false)"
+	echo "  DRY_RUN               - Print build commands without executing (default: false)"
