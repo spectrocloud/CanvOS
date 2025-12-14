@@ -12,7 +12,7 @@ COPY certs/ /certs/
 RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
     cp -a /certs/. /usr/local/share/ca-certificates/ && \
     update-ca-certificates; \
-    fi 
+    fi
 RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ]; then \
     cp -a /certs/. /usr/share/pki/trust/anchors/ && \
     update-ca-certificates; \
@@ -23,6 +23,10 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     update-ca-trust; \
     fi
 RUN rm -rf /certs
+
+# This file provides the ability to extend or override GPU specifications in the default lookup table
+COPY overlay/files/usr/local/spectrocloud/custom-hardware-specs-lookup.json /usr/local/spectrocloud/custom-hardware-specs-lookup.json
+
 
 ########################### Add any other image customizations here #######################
 

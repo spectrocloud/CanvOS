@@ -30,6 +30,100 @@ From the base image, this image is used to provide the initial flashing of a dev
 
 For advanced use cases, there may be a need to add additional packages not included in the [Base Images](https://github.com/kairos-io/kairos/tree/master/images). If those packages or configuration elements need to be added, they can be included in the empty `Dockerfile` located in this repo and they will be included in the build process and output artifacts.
 
+### Custom Hardware Specs Lookup
+
+A custom hardware specs lookup file can be provided to extend or override the default GPU specifications. This is useful for adding custom hardware entries or overriding default specifications.
+
+#### Location
+
+Place the custom lookup file at:
+```
+overlay/files/usr/local/spectrocloud/custom-hardware-specs-lookup.json
+```
+
+This file will be copied to `/usr/local/spectrocloud/custom-hardware-specs-lookup.json` in the final image.
+
+#### Configuration
+
+The file must be a valid JSON array. These entries will be merged with the default hardware specs lookup table, with the custom entries taking precedence for matching `vendorID` and `deviceID` combinations.
+
+#### Sample Entry
+
+Here's an example entry structure:
+
+```json
+[
+  {
+    "marketingName": "NVIDIA Quadro RTX 6000",
+    "vRAM": 24,
+    "migCapable": false,
+    "vendor": "NVIDIA",
+    "vendorID": "10de",
+    "deviceID": [
+      "1e36",
+      "1e78"
+    ],
+    "architecture": "Turing"
+  }
+]
+```
+
+#### Field Descriptions
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `marketingName` | Display name for the hardware | `"NVIDIA Quadro RTX 6000"` |
+| `vRAM` | Video RAM in GB (decimal) | `24` |
+| `migCapable` | Whether Multi-Instance GPU is supported (for NVIDIA GPUs) | `false` |
+| `vendor` | Vendor name | `"NVIDIA"`, `"AMD"`, `"Intel"` |
+| `vendorID` | PCI vendor ID in hexadecimal (lowercase) | `"10de"` |
+| `deviceID` | Array of PCI device IDs in hexadecimal (can have multiple IDs for same model) | `["1e36", "1e78"]` |
+| `architecture` | GPU architecture name | `"Turing"`, `"Ampere"`, `"Hopper"`, `"Blackwell"` |
+
+#### Usage
+
+There are two ways to provide the custom hardware specs lookup file:
+
+##### Method 1: During CanvOS Build (Recommended for Pre-staged Images)
+
+1. Create the file at `overlay/files/usr/local/spectrocloud/custom-hardware-specs-lookup.json`
+2. Add custom entries as a JSON array
+3. Build the images - the custom lookup file will be included automatically
+4. Custom entries will override default entries for matching `vendorID`+`deviceID` combinations
+
+##### Method 2: Via user-data (Runtime Configuration)
+
+The custom hardware specs lookup file can be provided via user-data using the `initramfs.after` stage (recommended) or `boot` or `boot.after` stage.
+
+Add the following to the `user-data` file (replace the example entry with actual hardware specs):
+
+```yaml
+#cloud-config
+stages:
+  initramfs.after:
+    - files:
+        - path: "/usr/local/spectrocloud/custom-hardware-specs-lookup.json"
+          permissions: 0644
+          owner: 0
+          group: 0
+          content: |
+            [
+              {
+                "marketingName": "NVIDIA Quadro RTX 6000",
+                "vRAM": 24,
+                "migCapable": false,
+                "vendor": "NVIDIA",
+                "vendorID": "10de",
+                "deviceID": [
+                  "1e36",
+                  "1e78"
+                ],
+                "architecture": "Turing"
+              }
+            ]
+      name: "Configure custom hardware specs lookup"
+```
+
 ### Basic Usage
 
 1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
@@ -91,7 +185,7 @@ v4.5.11
 > curl --location --request GET 'https://<palette-endpoint>/v1/services/stylus/version' --header 'Content-Type: application/json' --header 'Apikey: <api-key>'  | jq --raw-output '.spec.latestVersion.content | match("version: ([^\n]+)").captures[0].string'
 > # Sample Output
 > v4.6.16
-> 
+>
 > ```
 
 ```shell
@@ -453,7 +547,7 @@ earthly --push +build-all-images
 
 #### Configuration
 
-rsyslog config file: `overlay/files/etc/rsyslog.d/49-stylus.conf` copied to `/etc/rsyslog.d/49-stylus.conf`  
+rsyslog config file: `overlay/files/etc/rsyslog.d/49-stylus.conf` copied to `/etc/rsyslog.d/49-stylus.conf`
 logrotate config file: `overlay/files/etc/logrotate.d/stylus.conf` copied to `/etc/logrotate.d/stylus.conf`
 
 #### Send stylus audit events to user file
