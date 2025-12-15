@@ -223,10 +223,34 @@ if [[ "$1" == "+maas-image" ]]; then
         fi
     fi
     
+    # Check for user-data file (edge registration config)
+    USER_DATA_FILE=""
+    if [ -f "user-data" ]; then
+        USER_DATA_FILE="user-data"
+        echo "user-data file found, will be added to content partition"
+        HAS_FILES=true
+    elif [ -n "${USER_DATA:-}" ] && [ -f "${USER_DATA}" ]; then
+        USER_DATA_FILE="${USER_DATA}"
+        echo "user-data file found (from USER_DATA env var): ${USER_DATA}, will be added to content partition"
+        HAS_FILES=true
+    fi
+    
+    # Check for EDGE_CUSTOM_CONFIG file (content signing key)
+    EDGE_CUSTOM_CONFIG_FILE=""
+    if [ -n "${EDGE_CUSTOM_CONFIG:-}" ]; then
+        if [ -f "${EDGE_CUSTOM_CONFIG}" ]; then
+            EDGE_CUSTOM_CONFIG_FILE="${EDGE_CUSTOM_CONFIG}"
+            echo "EDGE_CUSTOM_CONFIG file found: ${EDGE_CUSTOM_CONFIG}, will be added to content partition"
+            HAS_FILES=true
+        else
+            echo "Warning: EDGE_CUSTOM_CONFIG is set to '${EDGE_CUSTOM_CONFIG}' but file not found"
+        fi
+    fi
+    
     if [ "$HAS_FILES" = "true" ]; then
         echo "Files will be added to content partition"
     else
-        echo "No content files or SPC found, content partition will be skipped"
+        echo "No content files, SPC, user-data, or EDGE_CUSTOM_CONFIG found, content partition will be skipped"
     fi
     
     # Get custom MAAS image name from .arg file (sourced earlier) or use default
@@ -239,8 +263,22 @@ if [[ "$1" == "+maas-image" ]]; then
     # The script will look for curtin-hooks in ORIG_DIR (which will be the repo root)
     # The script will also look for content files in ./content directory
     # Pass the custom image name as the second parameter
-    # Export CLUSTERCONFIG to ensure it's available to the build script
+    # Export CLUSTERCONFIG, USER_DATA, and EDGE_CUSTOM_CONFIG to ensure they're available to the build script
     export CLUSTERCONFIG
+    if [ -n "$USER_DATA_FILE" ]; then
+        # USER_DATA_FILE is relative to current directory (repo root), so make it absolute
+        export USER_DATA="$(readlink -f "$USER_DATA_FILE")"
+    fi
+    if [ -n "$EDGE_CUSTOM_CONFIG_FILE" ]; then
+        # EDGE_CUSTOM_CONFIG_FILE may be relative or absolute, make it absolute
+        if [ "${EDGE_CUSTOM_CONFIG_FILE#/}" = "$EDGE_CUSTOM_CONFIG_FILE" ]; then
+            # Relative path
+            export EDGE_CUSTOM_CONFIG="$(readlink -f "$EDGE_CUSTOM_CONFIG_FILE")"
+        else
+            # Absolute path
+            export EDGE_CUSTOM_CONFIG="$EDGE_CUSTOM_CONFIG_FILE"
+        fi
+    fi
     bash "$BUILD_SCRIPT" "$KAIROS_RAW_IMAGE" "$MAAS_IMAGE_NAME"
     BUILD_EXIT=$?
     
