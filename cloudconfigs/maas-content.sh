@@ -77,10 +77,14 @@ copy_to_oem() {
     return 1
   fi
   
-  OEM_MOUNT="/mnt/oem_temp"
-  mkdir -p "$OEM_MOUNT"
+  # Use mktemp to create a temporary directory that's guaranteed to exist
+  OEM_MOUNT=$(mktemp -d) || {
+    log_error "Failed to create temporary mount point directory"
+    return 1
+  }
+  
   if ! mount -o rw "$OEM_PARTITION" "$OEM_MOUNT" 2>>"$LOG_FILE"; then
-    log_error "Failed to mount COS_OEM partition to copy $description"
+    log_error "Failed to mount COS_OEM partition ($OEM_PARTITION) to $OEM_MOUNT to copy $description"
     rmdir "$OEM_MOUNT" 2>>"$LOG_FILE" || true
     return 1
   fi
