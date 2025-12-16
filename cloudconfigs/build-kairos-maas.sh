@@ -583,6 +583,12 @@ echo "Compressed size: $COMP_SIZE"
 echo "Removing uncompressed image to save space..."
 rm -f "$FINAL_IMG_PATH"
 
+# Clean up the input kairos-raw image since we no longer need it
+if [ -f "$INPUT_IMG" ]; then
+    echo "Removing input kairos-raw image to save space: $INPUT_IMG"
+    rm -f "$INPUT_IMG"
+fi
+
 echo ""
 echo "✅ Composite image created and compressed successfully: $COMPRESSED_IMG"
 echo "You can now upload this compressed raw image to MAAS (MAAS will automatically decompress it)."
