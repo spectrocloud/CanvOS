@@ -153,6 +153,42 @@ elif [ -n "${CLUSTERCONFIG:-}" ]; then
     fi
 fi
 
+# Check for user-data file (edge registration config)
+USER_DATA_FILE=""
+if [ -n "${USER_DATA:-}" ]; then
+    # USER_DATA can be a relative or absolute path
+    if [ -f "$USER_DATA" ]; then
+        USER_DATA_FILE="$USER_DATA"
+        echo "user-data file found: $USER_DATA_FILE"
+    elif [ -f "$ORIG_DIR/$USER_DATA" ]; then
+        USER_DATA_FILE="$ORIG_DIR/$USER_DATA"
+        echo "user-data file found: $USER_DATA_FILE"
+    elif [ -f "$ORIG_DIR/user-data" ]; then
+        USER_DATA_FILE="$ORIG_DIR/user-data"
+        echo "user-data file found: $USER_DATA_FILE"
+    else
+        echo "Note: USER_DATA='$USER_DATA' but file not found"
+    fi
+elif [ -f "$ORIG_DIR/user-data" ]; then
+    USER_DATA_FILE="$ORIG_DIR/user-data"
+    echo "user-data file found: $USER_DATA_FILE"
+fi
+
+# Check for EDGE_CUSTOM_CONFIG file (content signing key)
+EDGE_CUSTOM_CONFIG_FILE=""
+if [ -n "${EDGE_CUSTOM_CONFIG:-}" ]; then
+    # EDGE_CUSTOM_CONFIG can be a relative or absolute path
+    if [ -f "$EDGE_CUSTOM_CONFIG" ]; then
+        EDGE_CUSTOM_CONFIG_FILE="$EDGE_CUSTOM_CONFIG"
+        echo "EDGE_CUSTOM_CONFIG file found: $EDGE_CUSTOM_CONFIG_FILE"
+    elif [ -f "$ORIG_DIR/$EDGE_CUSTOM_CONFIG" ]; then
+        EDGE_CUSTOM_CONFIG_FILE="$ORIG_DIR/$EDGE_CUSTOM_CONFIG"
+        echo "EDGE_CUSTOM_CONFIG file found: $EDGE_CUSTOM_CONFIG_FILE"
+    else
+        echo "Note: EDGE_CUSTOM_CONFIG='$EDGE_CUSTOM_CONFIG' but file not found"
+    fi
+fi
+
 # Check if content directory exists and calculate size needed
 CONTENT_SIZE_BYTES=0
 HAS_CONTENT=false
@@ -167,6 +203,18 @@ fi
 if [ -n "$CLUSTERCONFIG_FILE" ] && [ -f "$CLUSTERCONFIG_FILE" ]; then
     SPC_SIZE=$(du -cb "$CLUSTERCONFIG_FILE" 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
     CONTENT_FILES_SIZE=$(($CONTENT_FILES_SIZE + $SPC_SIZE))
+fi
+
+# Add size of user-data file if it exists
+if [ -n "$USER_DATA_FILE" ] && [ -f "$USER_DATA_FILE" ]; then
+    USER_DATA_SIZE=$(du -cb "$USER_DATA_FILE" 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
+    CONTENT_FILES_SIZE=$(($CONTENT_FILES_SIZE + $USER_DATA_SIZE))
+fi
+
+# Add size of EDGE_CUSTOM_CONFIG file if it exists
+if [ -n "$EDGE_CUSTOM_CONFIG_FILE" ] && [ -f "$EDGE_CUSTOM_CONFIG_FILE" ]; then
+    EDGE_CUSTOM_CONFIG_SIZE=$(du -cb "$EDGE_CUSTOM_CONFIG_FILE" 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
+    CONTENT_FILES_SIZE=$(($CONTENT_FILES_SIZE + $EDGE_CUSTOM_CONFIG_SIZE))
 fi
 
 # Create content partition if we have any files to store
@@ -310,27 +358,47 @@ echo "  Output recovery size: $(numfmt --to=iec $RECOVERY_OUT_SIZE)"
 
 # Copy content files and SPC to content partition if it exists
 if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
-    echo "--- Copying Files to Content Partition ---"
+    echo "--- Copying Files to Content Partition (Organized by Folders) ---"
     mkdir -p "$MNT_FINAL_CONTENT"
     
-    # Copy all content files (.zst and .tar files only)
+    # Create organized folder structure
+    mkdir -p "$MNT_FINAL_CONTENT/bundle-content"
+    mkdir -p "$MNT_FINAL_CONTENT/spc-config"
+    mkdir -p "$MNT_FINAL_CONTENT/userdata"
+    mkdir -p "$MNT_FINAL_CONTENT/edge-config"
+    
+    # Copy all content files (.zst and .tar files only) to bundle-content folder
     if [ -d "$CONTENT_DIR" ]; then
-        find "$CONTENT_DIR" -type f \( -name "*.zst" -o -name "*.tar" \) -exec cp -v {} "$MNT_FINAL_CONTENT/" \;
+        find "$CONTENT_DIR" -type f \( -name "*.zst" -o -name "*.tar" \) -exec cp -v {} "$MNT_FINAL_CONTENT/bundle-content/" \;
+        BUNDLE_COUNT=$(find "$MNT_FINAL_CONTENT/bundle-content" -type f | wc -l)
+        echo "Copied $BUNDLE_COUNT content file(s) to bundle-content folder"
     fi
     
-    # Copy SPC file if it exists (preserve original filename)
+    # Copy SPC file if it exists to spc-config folder (preserve original filename)
     if [ -n "$CLUSTERCONFIG_FILE" ] && [ -f "$CLUSTERCONFIG_FILE" ]; then
         SPC_FILENAME=$(basename "$CLUSTERCONFIG_FILE")
-        cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/$SPC_FILENAME"
-        echo "Copied SPC file to content partition: $SPC_FILENAME"
+        cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/spc-config/$SPC_FILENAME"
+        echo "Copied SPC file to spc-config folder: $SPC_FILENAME"
     elif [ -n "${CLUSTERCONFIG:-}" ]; then
         echo "Warning: CLUSTERCONFIG is set to '$CLUSTERCONFIG' but file not found at expected location"
         echo "  Checked: $ORIG_DIR/$CLUSTERCONFIG"
         echo "  Checked: $CLUSTERCONFIG"
     fi
     
+    # Copy user-data file if it exists to userdata folder (will be copied to /oem/config.yaml by maas-content.sh)
+    if [ -n "$USER_DATA_FILE" ] && [ -f "$USER_DATA_FILE" ]; then
+        cp -v "$USER_DATA_FILE" "$MNT_FINAL_CONTENT/userdata/user-data"
+        echo "Copied user-data file to userdata folder"
+    fi
+    
+    # Copy EDGE_CUSTOM_CONFIG file if it exists to edge-config folder (will be copied to /oem/.edge_custom_config.yaml by maas-content.sh)
+    if [ -n "$EDGE_CUSTOM_CONFIG_FILE" ] && [ -f "$EDGE_CUSTOM_CONFIG_FILE" ]; then
+        cp -v "$EDGE_CUSTOM_CONFIG_FILE" "$MNT_FINAL_CONTENT/edge-config/.edge_custom_config.yaml"
+        echo "Copied EDGE_CUSTOM_CONFIG file to edge-config folder"
+    fi
+    
     CONTENT_COUNT=$(find "$MNT_FINAL_CONTENT" -type f | wc -l)
-    echo "Copied $CONTENT_COUNT file(s) to content partition"
+    echo "Total files in content partition: $CONTENT_COUNT"
     echo "Content partition usage:"
     df -h "$MNT_FINAL_CONTENT" || true
 fi
@@ -366,33 +434,50 @@ fi
 
 # Create a temporary mount point and mount the partition
 mkdir -p /mnt/oem_temp
-mount -o rw "$OEM_PARTITION" /mnt/oem_temp
-
-# Check if the mount was successful
-if [ $? -ne 0 ]; then
+if ! mount -o rw "$OEM_PARTITION" /mnt/oem_temp; then
   echo "Error: Failed to mount COS_OEM partition." >&2
   rmdir /mnt/oem_temp
   exit 1
 fi
 
+# Track if all operations succeed
+SUCCESS=true
+
 # Copy the userdata file - cloud-init stores userdata at this location
+# Note: If file doesn't exist, it may be embedded in the Kairos image, so this is not a failure
 if [ -f "/var/lib/cloud/instance/user-data.txt" ]; then
-  cp /var/lib/cloud/instance/user-data.txt /mnt/oem_temp/userdata.yaml
-  echo "Userdata copied to COS_OEM partition"
+  if cp /var/lib/cloud/instance/user-data.txt /mnt/oem_temp/userdata.yaml; then
+    echo "Userdata copied to COS_OEM partition"
+  else
+    echo "Error: Failed to copy userdata to COS_OEM partition" >&2
+    SUCCESS=false
+  fi
 else
-  echo "Warning: /var/lib/cloud/instance/user-data.txt not found"
+  echo "Warning: /var/lib/cloud/instance/user-data.txt not found (userdata may be embedded in Kairos image)"
 fi
 
 # Update grubenv to set next_entry to 'recovery'
 # Use grub-editenv as it's the safe way to modify this file
-grub-editenv /mnt/oem_temp/grubenv set next_entry=recovery
+if ! grub-editenv /mnt/oem_temp/grubenv set next_entry=recovery; then
+  echo "Error: Failed to update grubenv" >&2
+  SUCCESS=false
+fi
 
 # Unmount the partition
-umount /mnt/oem_temp
+if ! umount /mnt/oem_temp; then
+  echo "Warning: Failed to unmount /mnt/oem_temp" >&2
+  SUCCESS=false
+fi
 rmdir /mnt/oem_temp
 
-echo "Script finished successfully."
-reboot
+# Only reboot if all operations succeeded
+if [ "$SUCCESS" = "true" ]; then
+  echo "Script finished successfully."
+  reboot
+else
+  echo "Error: Script failed. Not rebooting to allow debugging." >&2
+  exit 1
+fi
 EOF
 
 chmod +x "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/cloud/scripts/per-instance/setup-recovery.sh"
@@ -497,6 +582,12 @@ COMP_SIZE=$(du -h "$COMPRESSED_IMG" | cut -f1)
 echo "Compressed size: $COMP_SIZE"
 echo "Removing uncompressed image to save space..."
 rm -f "$FINAL_IMG_PATH"
+
+# Clean up the input kairos-raw image since we no longer need it
+if [ -f "$INPUT_IMG" ]; then
+    echo "Removing input kairos-raw image to save space: $INPUT_IMG"
+    rm -f "$INPUT_IMG"
+fi
 
 echo ""
 echo "✅ Composite image created and compressed successfully: $COMPRESSED_IMG"

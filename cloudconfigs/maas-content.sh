@@ -56,68 +56,141 @@ mkdir -p "$CONTENT_DEST"
 mkdir -p "$CLUSTER_CONFIG_COPY_DIR"
 log "Created destination directories: $CONTENT_DEST and $CLUSTER_CONFIG_COPY_DIR"
 
-# Extract .zst and .tar files from partition, copy .tgz files (SPC) directly
-log "Extracting files from content partition..."
+# Process organized folders from content partition
+log "Processing organized folders from content partition..."
 
 # Initialize counters
-ZST_COUNT=0
-TAR_COUNT=0
+BUNDLE_COUNT=0
 SPC_COUNT=0
+USER_DATA_COUNT=0
+EDGE_CONFIG_COUNT=0
 
-# Process all files in the content partition
-for file in "$CONTENT_MOUNT"/*; do
-  if [ -f "$file" ]; then
-    FILENAME=$(basename "$file")
-    EXTENSION="${FILENAME##*.}"
-    
-    # Handle .tgz files - these are SPC files, copy them directly (don't extract)
-    if [ "$EXTENSION" = "tgz" ] || [[ "$FILENAME" =~ \.tar\.gz$ ]]; then
-      log "Copying SPC file (.tgz): $FILENAME"
+# Helper function to mount and copy to OEM partition
+copy_to_oem() {
+  local source_file="$1"
+  local dest_filename="$2"
+  local description="$3"
+  
+  OEM_PARTITION=$(blkid -L COS_OEM 2>/dev/null || true)
+  if [ -z "$OEM_PARTITION" ]; then
+    log_error "COS_OEM partition not found, cannot copy $description"
+    return 1
+  fi
+  
+  # Use mktemp to create a temporary directory that's guaranteed to exist
+  OEM_MOUNT=$(mktemp -d) || {
+    log_error "Failed to create temporary mount point directory"
+    return 1
+  }
+  
+  if ! mount -o rw "$OEM_PARTITION" "$OEM_MOUNT" 2>>"$LOG_FILE"; then
+    log_error "Failed to mount COS_OEM partition ($OEM_PARTITION) to $OEM_MOUNT to copy $description"
+    rmdir "$OEM_MOUNT" 2>>"$LOG_FILE" || true
+    return 1
+  fi
+  
+  if cp "$source_file" "$OEM_MOUNT/$dest_filename" 2>>"$LOG_FILE"; then
+    log "Successfully copied $description to /oem/$dest_filename"
+    umount "$OEM_MOUNT" 2>>"$LOG_FILE" || true
+    rmdir "$OEM_MOUNT" 2>>"$LOG_FILE" || true
+    return 0
+  else
+    log_error "Failed to copy $description to /oem/$dest_filename"
+    umount "$OEM_MOUNT" 2>>"$LOG_FILE" || true
+    rmdir "$OEM_MOUNT" 2>>"$LOG_FILE" || true
+    return 1
+  fi
+}
+
+# Process bundle-content folder: extract .zst and .tar files
+BUNDLE_CONTENT_DIR="$CONTENT_MOUNT/bundle-content"
+if [ -d "$BUNDLE_CONTENT_DIR" ]; then
+  log "Processing bundle-content folder..."
+  for file in "$BUNDLE_CONTENT_DIR"/*; do
+    if [ -f "$file" ]; then
+      FILENAME=$(basename "$file")
+      EXTENSION="${FILENAME##*.}"
+      
+      # Handle .zst files - extract them to bundle directory
+      if [ "$EXTENSION" = "zst" ]; then
+        log "Extracting .zst file: $FILENAME"
+        if zstd -d -f "$file" -o "$CONTENT_DEST/${FILENAME%.zst}" 2>>"$LOG_FILE"; then
+          log "Successfully extracted $FILENAME"
+          BUNDLE_COUNT=$((BUNDLE_COUNT + 1))
+        else
+          log_error "Failed to extract $FILENAME, copying as-is"
+          cp "$file" "$CONTENT_DEST/$FILENAME" || {
+            log_error "Failed to copy $FILENAME"
+          }
+        fi
+      # Handle .tar files - extract them to bundle directory
+      elif [ "$EXTENSION" = "tar" ]; then
+        log "Extracting .tar file: $FILENAME"
+        if tar -xf "$file" -C "$CONTENT_DEST" 2>>"$LOG_FILE"; then
+          log "Successfully extracted $FILENAME"
+          BUNDLE_COUNT=$((BUNDLE_COUNT + 1))
+        else
+          log_error "Failed to extract $FILENAME, copying as-is"
+          cp "$file" "$CONTENT_DEST/$FILENAME" || {
+            log_error "Failed to copy $FILENAME"
+          }
+        fi
+      else
+        log "Skipping file with unknown extension in bundle-content: $FILENAME (extension: $EXTENSION)"
+      fi
+    fi
+  done
+  log "Processed $BUNDLE_COUNT file(s) from bundle-content folder"
+fi
+
+# Process spc-config folder: copy .tgz files directly
+SPC_CONFIG_DIR="$CONTENT_MOUNT/spc-config"
+if [ -d "$SPC_CONFIG_DIR" ]; then
+  log "Processing spc-config folder..."
+  for file in "$SPC_CONFIG_DIR"/*; do
+    if [ -f "$file" ]; then
+      FILENAME=$(basename "$file")
+      log "Copying SPC file: $FILENAME"
       if cp "$file" "$CLUSTER_CONFIG_COPY_DIR/$FILENAME" 2>>"$LOG_FILE"; then
         log "Successfully copied SPC file to $CLUSTER_CONFIG_COPY_DIR/$FILENAME"
         SPC_COUNT=$((SPC_COUNT + 1))
       else
         log_error "Failed to copy SPC file: $FILENAME"
       fi
-      continue
     fi
-    
-    # Handle .zst files - extract them to bundle directory
-    if [ "$EXTENSION" = "zst" ]; then
-      log "Extracting .zst file: $FILENAME"
-      if zstd -d -f "$file" -o "$CONTENT_DEST/${FILENAME%.zst}" 2>>"$LOG_FILE"; then
-        log "Successfully extracted $FILENAME"
-        ZST_COUNT=$((ZST_COUNT + 1))
-      else
-        log_error "Failed to extract $FILENAME, copying as-is"
-        cp "$file" "$CONTENT_DEST/$FILENAME" || {
-          log_error "Failed to copy $FILENAME"
-        }
-      fi
-      continue
-    fi
-    
-    # Handle .tar files - extract them to bundle directory
-    if [ "$EXTENSION" = "tar" ]; then
-      log "Extracting .tar file: $FILENAME"
-      if tar -xf "$file" -C "$CONTENT_DEST" 2>>"$LOG_FILE"; then
-        log "Successfully extracted $FILENAME"
-        TAR_COUNT=$((TAR_COUNT + 1))
-      else
-        log_error "Failed to extract $FILENAME, copying as-is"
-        cp "$file" "$CONTENT_DEST/$FILENAME" || {
-          log_error "Failed to copy $FILENAME"
-        }
-      fi
-      continue
-    fi
-    
-    # For any other files, log a warning but don't process
-    log "Skipping file with unknown extension: $FILENAME (extension: $EXTENSION)"
-  fi
-done
+  done
+  log "Processed $SPC_COUNT file(s) from spc-config folder"
+fi
 
-log "Extraction summary: $ZST_COUNT .zst file(s), $TAR_COUNT .tar file(s) extracted, $SPC_COUNT .tgz file(s) (SPC) copied"
+# Process userdata folder: copy user-data to /oem/config.yaml
+USERDATA_DIR="$CONTENT_MOUNT/userdata"
+if [ -d "$USERDATA_DIR" ]; then
+  log "Processing userdata folder..."
+  USER_DATA_FILE="$USERDATA_DIR/user-data"
+  if [ -f "$USER_DATA_FILE" ]; then
+    if copy_to_oem "$USER_DATA_FILE" "config.yaml" "user-data"; then
+      USER_DATA_COUNT=$((USER_DATA_COUNT + 1))
+    fi
+  else
+    log "No user-data file found in userdata folder"
+  fi
+fi
+
+# Process edge-config folder: copy EDGE_CUSTOM_CONFIG to /oem/.edge_custom_config.yaml
+EDGE_CONFIG_DIR="$CONTENT_MOUNT/edge-config"
+if [ -d "$EDGE_CONFIG_DIR" ]; then
+  log "Processing edge-config folder..."
+  EDGE_CONFIG_FILE="$EDGE_CONFIG_DIR/.edge_custom_config.yaml"
+  if [ -f "$EDGE_CONFIG_FILE" ]; then
+    if copy_to_oem "$EDGE_CONFIG_FILE" ".edge_custom_config.yaml" "EDGE_CUSTOM_CONFIG"; then
+      EDGE_CONFIG_COUNT=$((EDGE_CONFIG_COUNT + 1))
+    fi
+  else
+    log "No .edge_custom_config.yaml file found in edge-config folder"
+  fi
+fi
+
+log "Extraction summary: $BUNDLE_COUNT bundle file(s) extracted, $SPC_COUNT SPC file(s) copied, $USER_DATA_COUNT user-data file(s), $EDGE_CONFIG_COUNT EDGE_CUSTOM_CONFIG file(s)"
 
 # Unmount the content partition
 log "Unmounting content partition"
