@@ -502,7 +502,6 @@ if [ -f "$GRUB_ENV_PATH" ]; then
   # Change the next_entry to our new Ubuntu ID
   grub-editenv  "$GRUB_ENV_PATH" set next_entry="ubuntu-firstboot"
   echo "grubenv patched to boot Ubuntu first."
-else
 fi
 # --- Finalize ---
 echo "--- Verifying final image before unmounting ---"
