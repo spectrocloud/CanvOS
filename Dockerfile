@@ -25,7 +25,7 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
 RUN rm -rf /certs
 
 # This file provides the ability to extend or override GPU specifications in the default lookup table
-COPY overlay/files/usr/local/spectrocloud/custom-hardware-specs-lookup.json /usr/local/spectrocloud/custom-hardware-specs-lookup.json
+COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spectrocloud/custom-hardware-specs-lookup.json
 
 
 ########################### Add any other image customizations here #######################

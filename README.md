@@ -38,10 +38,10 @@ A custom hardware specs lookup file can be provided to extend or override the de
 
 Place the custom lookup file at:
 ```
-overlay/files/usr/local/spectrocloud/custom-hardware-specs-lookup.json
+overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json
 ```
 
-This file will be copied to `/usr/local/spectrocloud/custom-hardware-specs-lookup.json` in the final image.
+This file will be copied to `/etc/spectrocloud/custom-hardware-specs-lookup.json` in the final image.
 
 #### Configuration
 
@@ -86,23 +86,23 @@ There are two ways to provide the custom hardware specs lookup file:
 
 ##### Method 1: During CanvOS Build (Recommended for Pre-staged Images)
 
-1. Create the file at `overlay/files/usr/local/spectrocloud/custom-hardware-specs-lookup.json`
+1. Create the file at `overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json`
 2. Add custom entries as a JSON array
 3. Build the images - the custom lookup file will be included automatically
 4. Custom entries will override default entries for matching `vendorID`+`deviceID` combinations
 
 ##### Method 2: Via user-data (Runtime Configuration)
 
-The custom hardware specs lookup file can be provided via user-data using the `initramfs.after` stage (recommended) or `boot` or `boot.after` stage.
+The custom hardware specs lookup file can be provided via user-data using the `boot.after` stage (recommended) or `boot` stage. Note that `/etc` is read-only at runtime, but cloud-init can write files during boot stages.
 
 Add the following to the `user-data` file (replace the example entry with actual hardware specs):
 
 ```yaml
 #cloud-config
 stages:
-  initramfs.after:
+  boot.after:
     - files:
-        - path: "/usr/local/spectrocloud/custom-hardware-specs-lookup.json"
+        - path: "/etc/spectrocloud/custom-hardware-specs-lookup.json"
           permissions: 0644
           owner: 0
           group: 0
