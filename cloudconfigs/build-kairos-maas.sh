@@ -148,7 +148,6 @@ elif [ -n "${CLUSTERCONFIG:-}" ]; then
     # If not found, try as absolute path
     elif [ -f "$CLUSTERCONFIG" ]; then
         CLUSTERCONFIG_FILE="$CLUSTERCONFIG"
-    else
     fi
 fi
 
@@ -165,7 +164,6 @@ if [ -n "${USER_DATA:-}" ]; then
     elif [ -f "$ORIG_DIR/user-data" ]; then
         USER_DATA_FILE="$ORIG_DIR/user-data"
         echo "user-data file found: $USER_DATA_FILE"
-    else
     fi
 elif [ -f "$ORIG_DIR/user-data" ]; then
     USER_DATA_FILE="$ORIG_DIR/user-data"
@@ -182,7 +180,6 @@ if [ -n "${EDGE_CUSTOM_CONFIG:-}" ]; then
     elif [ -f "$ORIG_DIR/$EDGE_CUSTOM_CONFIG" ]; then
         EDGE_CUSTOM_CONFIG_FILE="$ORIG_DIR/$EDGE_CUSTOM_CONFIG"
         echo "EDGE_CUSTOM_CONFIG file found: $EDGE_CUSTOM_CONFIG_FILE"
-    else
     fi
 fi
 
@@ -370,7 +367,6 @@ if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
         SPC_FILENAME=$(basename "$CLUSTERCONFIG_FILE")
         cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/spc-config/$SPC_FILENAME"
         echo "Copied SPC file to spc-config folder: $SPC_FILENAME"
-    elif [ -n "${CLUSTERCONFIG:-}" ]; then
     fi
     
     
@@ -458,9 +454,6 @@ elif [ -f "$OEM_MOUNT/config.yaml" ]; then
     echo "Error: Failed to copy embedded userdata to userdata.yaml" >&2
     SUCCESS=false
   fi
-elif [ ! -f "$OEM_MOUNT/userdata.yaml" ]; then
-  # No userdata found, but this is not a failure - continue with grubenv update
-  :
 fi
 
 # Update grubenv to set next_entry to 'recovery'
@@ -622,11 +615,6 @@ fi
 echo ""
 echo "✅ Composite image created and compressed successfully: $COMPRESSED_IMG"
 echo "You can now upload this compressed raw image to MAAS (MAAS will automatically decompress it)."
-echo "📋 Cloud-init userdata processing script has been integrated - it will:"
-echo "   • Run once after cloud-init processes userdata"
-echo "   • Copy userdata to COS_OEM partition as userdata.yaml" 
-echo "   • Set grubenv to boot recovery mode"
-echo "   • Reboot the system"
 
 # Exit with success code
 exit 0

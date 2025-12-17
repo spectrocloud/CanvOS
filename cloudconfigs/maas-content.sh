@@ -161,9 +161,6 @@ if [ -d "$SPC_CONFIG_DIR" ]; then
   log "Processed $SPC_COUNT file(s) from spc-config folder"
 fi
 
-# Note: userdata is now handled directly in setup-recovery.sh script
-# It checks for both MAAS-provided userdata and embedded userdata from CanvOS build
-# This ensures embedded userdata stages are executed on first boot
 
 # Process edge-config folder: copy EDGE_CUSTOM_CONFIG to /oem/.edge_custom_config.yaml
 EDGE_CONFIG_DIR="$CONTENT_MOUNT/edge-config"
