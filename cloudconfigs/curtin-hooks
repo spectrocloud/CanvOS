@@ -51,7 +51,7 @@ def main():
         print("Calling handle_cloudconfig")
         if config.get('cloudconfig'):
             print("Found cloudconfig in config, processing...")
-            print(f"Cloud config content: {config['cloudconfig']}")
+            # Note: Not logging cloud config content to avoid exposing sensitive data
             handle_cloudconfig(
                 config['cloudconfig'],
                 base_dir=paths.target_path(target, 'etc/cloud/cloud.cfg.d')
