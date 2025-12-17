@@ -151,25 +151,6 @@ elif [ -n "${CLUSTERCONFIG:-}" ]; then
     fi
 fi
 
-# Check for user-data file (edge registration config)
-USER_DATA_FILE=""
-if [ -n "${USER_DATA:-}" ]; then
-    # USER_DATA can be a relative or absolute path
-    if [ -f "$USER_DATA" ]; then
-        USER_DATA_FILE="$USER_DATA"
-        echo "user-data file found: $USER_DATA_FILE"
-    elif [ -f "$ORIG_DIR/$USER_DATA" ]; then
-        USER_DATA_FILE="$ORIG_DIR/$USER_DATA"
-        echo "user-data file found: $USER_DATA_FILE"
-    elif [ -f "$ORIG_DIR/user-data" ]; then
-        USER_DATA_FILE="$ORIG_DIR/user-data"
-        echo "user-data file found: $USER_DATA_FILE"
-    fi
-elif [ -f "$ORIG_DIR/user-data" ]; then
-    USER_DATA_FILE="$ORIG_DIR/user-data"
-    echo "user-data file found: $USER_DATA_FILE"
-fi
-
 # Check for EDGE_CUSTOM_CONFIG file (content signing key)
 EDGE_CUSTOM_CONFIG_FILE=""
 if [ -n "${EDGE_CUSTOM_CONFIG:-}" ]; then
@@ -198,7 +179,6 @@ if [ -n "$CLUSTERCONFIG_FILE" ] && [ -f "$CLUSTERCONFIG_FILE" ]; then
     SPC_SIZE=$(du -cb "$CLUSTERCONFIG_FILE" 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
     CONTENT_FILES_SIZE=$(($CONTENT_FILES_SIZE + $SPC_SIZE))
 fi
-
 
 # Add size of EDGE_CUSTOM_CONFIG file if it exists
 if [ -n "$EDGE_CUSTOM_CONFIG_FILE" ] && [ -f "$EDGE_CUSTOM_CONFIG_FILE" ]; then
@@ -335,13 +315,6 @@ echo "Copying Ubuntu root filesystem..."
 rsync -aHAX --info=progress2 "$MNT_UBUNTU_ROOT_IMG/" "$MNT_FINAL_UBUNTU_ROOTFS/" || { echo "Error: Failed to copy Ubuntu root filesystem"; exit 1; }
 echo "Copying OEM partition..."
 rsync -aHAX --info=progress2 "$MNT_INPUT_OEM/" "$MNT_FINAL_OEM/" || { echo "Error: Failed to copy OEM partition"; exit 1; }
-
-# Copy embedded userdata to OEM partition as config.yaml (if it exists)
-# This is the userdata from CanvOS build that was embedded in the Kairos image
-if [ -n "$USER_DATA_FILE" ] && [ -f "$USER_DATA_FILE" ]; then
-    echo "Copying embedded userdata to OEM partition as config.yaml..."
-    cp -v "$USER_DATA_FILE" "$MNT_FINAL_OEM/config.yaml" || { echo "Error: Failed to copy embedded userdata to OEM partition"; exit 1; }
-fi
 echo "Copying Recovery partition (size: $(numfmt --to=iec $COS_RECOVERY_SIZE))..."
 rsync -aHAX --info=progress2 "$MNT_INPUT_RECOVERY/" "$MNT_FINAL_RECOVERY/" || { echo "Error: Failed to copy Recovery partition"; exit 1; }
 
@@ -375,7 +348,6 @@ if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
         cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/spc-config/$SPC_FILENAME"
         echo "Copied SPC file to spc-config folder: $SPC_FILENAME"
     fi
-    
     
     # Copy EDGE_CUSTOM_CONFIG file if it exists to edge-config folder (will be copied to /oem/.edge_custom_config.yaml by maas-content.sh)
     if [ -n "$EDGE_CUSTOM_CONFIG_FILE" ] && [ -f "$EDGE_CUSTOM_CONFIG_FILE" ]; then
@@ -413,8 +385,7 @@ cat > "$MNT_FINAL_UBUNTU_ROOTFS/opt/spectrocloud/scripts/setup-recovery.sh" << '
 set -euo pipefail
 
 # One-time setup script that runs on first boot
-# This script handles userdata from both MAAS UI and embedded CanvOS build
-# and ensures the system boots into recovery mode
+# This script copies MAAS UI userdata to OEM partition and ensures the system boots into recovery mode
 
 MARKER_FILE="/var/lib/setup-recovery-completed"
 
@@ -445,21 +416,7 @@ fi
 # Track if all operations succeed
 SUCCESS=true
 
-# Handle userdata from two sources:
-# 1. Embedded userdata from CanvOS build (already in OEM partition from rsync) -> config.yaml
-# 2. MAAS-provided userdata (from cloud-init) -> userdata.yaml
-
-# Ensure embedded userdata is available as config.yaml
-# Embedded userdata may already be at config.yaml or userdata.yaml from the build
-if [ -f "$OEM_MOUNT/userdata.yaml" ] && [ ! -f "$OEM_MOUNT/config.yaml" ]; then
-  # Copy embedded userdata.yaml to config.yaml
-  if ! cp "$OEM_MOUNT/userdata.yaml" "$OEM_MOUNT/config.yaml"; then
-    echo "Error: Failed to copy embedded userdata to config.yaml" >&2
-    SUCCESS=false
-  fi
-fi
-
-# Copy MAAS-provided userdata if it exists (cloud-init stores it here) to userdata.yaml
+# Handle MAAS-provided userdata (from cloud-init) -> userdata.yaml
 if [ -f "/var/lib/cloud/instance/user-data.txt" ]; then
   if ! cp /var/lib/cloud/instance/user-data.txt "$OEM_MOUNT/userdata.yaml"; then
     echo "Error: Failed to copy MAAS userdata to COS_OEM partition" >&2
