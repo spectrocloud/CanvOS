@@ -335,6 +335,13 @@ echo "Copying Ubuntu root filesystem..."
 rsync -aHAX --info=progress2 "$MNT_UBUNTU_ROOT_IMG/" "$MNT_FINAL_UBUNTU_ROOTFS/" || { echo "Error: Failed to copy Ubuntu root filesystem"; exit 1; }
 echo "Copying OEM partition..."
 rsync -aHAX --info=progress2 "$MNT_INPUT_OEM/" "$MNT_FINAL_OEM/" || { echo "Error: Failed to copy OEM partition"; exit 1; }
+
+# Copy embedded userdata to OEM partition as config.yaml (if it exists)
+# This is the userdata from CanvOS build that was embedded in the Kairos image
+if [ -n "$USER_DATA_FILE" ] && [ -f "$USER_DATA_FILE" ]; then
+    echo "Copying embedded userdata to OEM partition as config.yaml..."
+    cp -v "$USER_DATA_FILE" "$MNT_FINAL_OEM/config.yaml" || { echo "Error: Failed to copy embedded userdata to OEM partition"; exit 1; }
+fi
 echo "Copying Recovery partition (size: $(numfmt --to=iec $COS_RECOVERY_SIZE))..."
 rsync -aHAX --info=progress2 "$MNT_INPUT_RECOVERY/" "$MNT_FINAL_RECOVERY/" || { echo "Error: Failed to copy Recovery partition"; exit 1; }
 
@@ -439,19 +446,23 @@ fi
 SUCCESS=true
 
 # Handle userdata from two sources:
-# 1. MAAS-provided userdata (from cloud-init)
-# 2. Embedded userdata from CanvOS build (already in OEM partition)
+# 1. Embedded userdata from CanvOS build (already in OEM partition from rsync) -> config.yaml
+# 2. MAAS-provided userdata (from cloud-init) -> userdata.yaml
 
-# First, check for MAAS-provided userdata (cloud-init stores it here)
+# Ensure embedded userdata is available as config.yaml
+# Embedded userdata may already be at config.yaml or userdata.yaml from the build
+if [ -f "$OEM_MOUNT/userdata.yaml" ] && [ ! -f "$OEM_MOUNT/config.yaml" ]; then
+  # Copy embedded userdata.yaml to config.yaml
+  if ! cp "$OEM_MOUNT/userdata.yaml" "$OEM_MOUNT/config.yaml"; then
+    echo "Error: Failed to copy embedded userdata to config.yaml" >&2
+    SUCCESS=false
+  fi
+fi
+
+# Copy MAAS-provided userdata if it exists (cloud-init stores it here) to userdata.yaml
 if [ -f "/var/lib/cloud/instance/user-data.txt" ]; then
   if ! cp /var/lib/cloud/instance/user-data.txt "$OEM_MOUNT/userdata.yaml"; then
     echo "Error: Failed to copy MAAS userdata to COS_OEM partition" >&2
-    SUCCESS=false
-  fi
-# Second, check for embedded userdata from CanvOS build
-elif [ -f "$OEM_MOUNT/config.yaml" ]; then
-  if ! cp "$OEM_MOUNT/config.yaml" "$OEM_MOUNT/userdata.yaml"; then
-    echo "Error: Failed to copy embedded userdata to userdata.yaml" >&2
     SUCCESS=false
   fi
 fi
