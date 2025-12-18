@@ -882,10 +882,10 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
-    IF [ "$IS_CLOUD_IMAGE" = "true" ]
-        COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
-        COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
-    END
+    # IF [ "$IS_CLOUD_IMAGE" = "true" ]
+    #     COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
+    #     COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
+    # END
 
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
