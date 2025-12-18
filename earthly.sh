@@ -224,15 +224,10 @@ if [[ "$1" == "+maas-image" ]]; then
     fi
     
     # Check for user-data file (edge registration config)
-    USER_DATA_FILE=""
-    if [ -f "user-data" ]; then
-        USER_DATA_FILE="user-data"
-        echo "user-data file found, will be added to content partition"
-        HAS_FILES=true
-    elif [ -n "${USER_DATA:-}" ] && [ -f "${USER_DATA}" ]; then
-        USER_DATA_FILE="${USER_DATA}"
-        echo "user-data file found (from USER_DATA env var): ${USER_DATA}, will be added to content partition"
-        HAS_FILES=true
+    # Note: user-data is handled directly in setup-recovery.sh, not via content partition
+    # This ensures embedded userdata from CanvOS build is properly executed on first boot
+    if [ -f "user-data" ] || [ -n "${USER_DATA:-}" ]; then
+        echo "user-data file found (will be handled by setup-recovery.sh script)"
     fi
     
     # Check for EDGE_CUSTOM_CONFIG file (content signing key)
@@ -250,7 +245,7 @@ if [[ "$1" == "+maas-image" ]]; then
     if [ "$HAS_FILES" = "true" ]; then
         echo "Files will be added to content partition"
     else
-        echo "No content files, SPC, user-data, or EDGE_CUSTOM_CONFIG found, content partition will be skipped"
+        echo "No content files, SPC, or EDGE_CUSTOM_CONFIG found, content partition will be skipped"
     fi
     
     # Get custom MAAS image name from .arg file (sourced earlier) or use default
@@ -263,12 +258,9 @@ if [[ "$1" == "+maas-image" ]]; then
     # The script will look for curtin-hooks in ORIG_DIR (which will be the repo root)
     # The script will also look for content files in ./content directory
     # Pass the custom image name as the second parameter
-    # Export CLUSTERCONFIG, USER_DATA, and EDGE_CUSTOM_CONFIG to ensure they're available to the build script
+    # Export CLUSTERCONFIG and EDGE_CUSTOM_CONFIG to ensure they're available to the build script
+    # Note: USER_DATA is not exported as it's handled directly in setup-recovery.sh from the OEM partition
     export CLUSTERCONFIG
-    if [ -n "$USER_DATA_FILE" ]; then
-        # USER_DATA_FILE is relative to current directory (repo root), so make it absolute
-        export USER_DATA="$(readlink -f "$USER_DATA_FILE")"
-    fi
     if [ -n "$EDGE_CUSTOM_CONFIG_FILE" ]; then
         # EDGE_CUSTOM_CONFIG_FILE may be relative or absolute, make it absolute
         if [ "${EDGE_CUSTOM_CONFIG_FILE#/}" = "$EDGE_CUSTOM_CONFIG_FILE" ]; then

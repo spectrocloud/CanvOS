@@ -917,6 +917,9 @@ iso-disk-image:
 kairos-raw-image:
     FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
     
+    # Copy user-data if it exists (for embedded userdata in MAAS builds)
+    COPY --if-exists +validate-user-data/user-data /workdir/user-data
+
     # Use Docker-in-Docker to convert iso-image to raw
     WITH DOCKER \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
@@ -946,14 +949,19 @@ kairos-raw-image:
             echo "=== Docker images available ===" && \
             docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.ID}}" | head -10 && \
             echo "=== Running auroraboot (this may take a while for large images) ===" && \
-            docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
+            AURORABOOT_CMD="docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
                 -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.15.0 \
                 --debug \
-                --set "disable_http_server=true" \
-                --set "disable_netboot=true" \
-                --set "disk.efi=true" \
-                --set "container_image=palette-installer-image:latest"  \
-                --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
+                --set \"disable_http_server=true\" \
+                --set \"disable_netboot=true\" \
+                --set \"disk.efi=true\" \
+                --set \"container_image=palette-installer-image:latest\" \
+                --set \"state_dir=/aurora\"" && \
+            if [ -f /workdir/user-data ]; then \
+                echo "Found user-data file, passing to AuroraBoot as cloud-config" && \
+                AURORABOOT_CMD="$AURORABOOT_CMD --cloud-config /aurora/user-data"; \
+            fi && \
+            eval $AURORABOOT_CMD 2>&1 | tee /workdir/auroraboot.log; \
             AURORABOOT_EXIT=$?; \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
             echo "=== Auroraboot log size: $(wc -l < /workdir/auroraboot.log 2>/dev/null || echo '0') lines ===" && \

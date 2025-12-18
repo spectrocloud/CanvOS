@@ -148,30 +148,7 @@ elif [ -n "${CLUSTERCONFIG:-}" ]; then
     # If not found, try as absolute path
     elif [ -f "$CLUSTERCONFIG" ]; then
         CLUSTERCONFIG_FILE="$CLUSTERCONFIG"
-    else
-        echo "Note: CLUSTERCONFIG='$CLUSTERCONFIG' but file not found at $ORIG_DIR/$CLUSTERCONFIG or $CLUSTERCONFIG"
     fi
-fi
-
-# Check for user-data file (edge registration config)
-USER_DATA_FILE=""
-if [ -n "${USER_DATA:-}" ]; then
-    # USER_DATA can be a relative or absolute path
-    if [ -f "$USER_DATA" ]; then
-        USER_DATA_FILE="$USER_DATA"
-        echo "user-data file found: $USER_DATA_FILE"
-    elif [ -f "$ORIG_DIR/$USER_DATA" ]; then
-        USER_DATA_FILE="$ORIG_DIR/$USER_DATA"
-        echo "user-data file found: $USER_DATA_FILE"
-    elif [ -f "$ORIG_DIR/user-data" ]; then
-        USER_DATA_FILE="$ORIG_DIR/user-data"
-        echo "user-data file found: $USER_DATA_FILE"
-    else
-        echo "Note: USER_DATA='$USER_DATA' but file not found"
-    fi
-elif [ -f "$ORIG_DIR/user-data" ]; then
-    USER_DATA_FILE="$ORIG_DIR/user-data"
-    echo "user-data file found: $USER_DATA_FILE"
 fi
 
 # Check for EDGE_CUSTOM_CONFIG file (content signing key)
@@ -184,8 +161,6 @@ if [ -n "${EDGE_CUSTOM_CONFIG:-}" ]; then
     elif [ -f "$ORIG_DIR/$EDGE_CUSTOM_CONFIG" ]; then
         EDGE_CUSTOM_CONFIG_FILE="$ORIG_DIR/$EDGE_CUSTOM_CONFIG"
         echo "EDGE_CUSTOM_CONFIG file found: $EDGE_CUSTOM_CONFIG_FILE"
-    else
-        echo "Note: EDGE_CUSTOM_CONFIG='$EDGE_CUSTOM_CONFIG' but file not found"
     fi
 fi
 
@@ -203,12 +178,6 @@ fi
 if [ -n "$CLUSTERCONFIG_FILE" ] && [ -f "$CLUSTERCONFIG_FILE" ]; then
     SPC_SIZE=$(du -cb "$CLUSTERCONFIG_FILE" 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
     CONTENT_FILES_SIZE=$(($CONTENT_FILES_SIZE + $SPC_SIZE))
-fi
-
-# Add size of user-data file if it exists
-if [ -n "$USER_DATA_FILE" ] && [ -f "$USER_DATA_FILE" ]; then
-    USER_DATA_SIZE=$(du -cb "$USER_DATA_FILE" 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
-    CONTENT_FILES_SIZE=$(($CONTENT_FILES_SIZE + $USER_DATA_SIZE))
 fi
 
 # Add size of EDGE_CUSTOM_CONFIG file if it exists
@@ -364,7 +333,6 @@ if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
     # Create organized folder structure
     mkdir -p "$MNT_FINAL_CONTENT/bundle-content"
     mkdir -p "$MNT_FINAL_CONTENT/spc-config"
-    mkdir -p "$MNT_FINAL_CONTENT/userdata"
     mkdir -p "$MNT_FINAL_CONTENT/edge-config"
     
     # Copy all content files (.zst and .tar files only) to bundle-content folder
@@ -379,16 +347,6 @@ if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
         SPC_FILENAME=$(basename "$CLUSTERCONFIG_FILE")
         cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/spc-config/$SPC_FILENAME"
         echo "Copied SPC file to spc-config folder: $SPC_FILENAME"
-    elif [ -n "${CLUSTERCONFIG:-}" ]; then
-        echo "Warning: CLUSTERCONFIG is set to '$CLUSTERCONFIG' but file not found at expected location"
-        echo "  Checked: $ORIG_DIR/$CLUSTERCONFIG"
-        echo "  Checked: $CLUSTERCONFIG"
-    fi
-    
-    # Copy user-data file if it exists to userdata folder (will be copied to /oem/config.yaml by maas-content.sh)
-    if [ -n "$USER_DATA_FILE" ] && [ -f "$USER_DATA_FILE" ]; then
-        cp -v "$USER_DATA_FILE" "$MNT_FINAL_CONTENT/userdata/user-data"
-        echo "Copied user-data file to userdata folder"
     fi
     
     # Copy EDGE_CUSTOM_CONFIG file if it exists to edge-config folder (will be copied to /oem/.edge_custom_config.yaml by maas-content.sh)
@@ -415,15 +373,26 @@ chmod 750 "$MNT_FINAL_UBUNTU_ROOTFS/curtin/curtin-hooks"
 echo "Curtin hooks script installed at /curtin/curtin-hooks with 750 permissions"
 
 
-# --- Install cloud-init userdata processing script ---
-echo "--- Installing cloud-init userdata processing script ---"
-# Create the cloud-init per-instance scripts directory
-mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/cloud/scripts/per-instance"
+# --- Install one-time setup script ---
+echo "--- Installing one-time setup script ---"
+# Create systemd service directory
+mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/etc/systemd/system"
 
-# Create the userdata processing script
-cat > "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/cloud/scripts/per-instance/setup-recovery.sh" << 'EOF'
+# Create the setup script
+mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/opt/spectrocloud/scripts"
+cat > "$MNT_FINAL_UBUNTU_ROOTFS/opt/spectrocloud/scripts/setup-recovery.sh" << 'EOF'
 #!/bin/bash
 set -euo pipefail
+
+# One-time setup script that runs on first boot
+# This script copies MAAS UI userdata to OEM partition and ensures the system boots into recovery mode
+
+MARKER_FILE="/var/lib/setup-recovery-completed"
+
+# Check if this script has already run successfully
+if [ -f "$MARKER_FILE" ]; then
+  exit 0
+fi
 
 # Find the partition with the label COS_OEM
 OEM_PARTITION=$(blkid -L COS_OEM)
@@ -433,46 +402,45 @@ if [ -z "$OEM_PARTITION" ]; then
 fi
 
 # Create a temporary mount point and mount the partition
-mkdir -p /mnt/oem_temp
-if ! mount -o rw "$OEM_PARTITION" /mnt/oem_temp; then
+OEM_MOUNT=$(mktemp -d) || {
+  echo "Error: Failed to create temporary mount point" >&2
+  exit 1
+}
+
+if ! mount -o rw "$OEM_PARTITION" "$OEM_MOUNT"; then
   echo "Error: Failed to mount COS_OEM partition." >&2
-  rmdir /mnt/oem_temp
+  rmdir "$OEM_MOUNT"
   exit 1
 fi
 
 # Track if all operations succeed
 SUCCESS=true
 
-# Copy the userdata file - cloud-init stores userdata at this location
-# Note: If file doesn't exist, it may be embedded in the Kairos image, so this is not a failure
+# Handle MAAS-provided userdata (from cloud-init) -> userdata.yaml
 if [ -f "/var/lib/cloud/instance/user-data.txt" ]; then
-  if cp /var/lib/cloud/instance/user-data.txt /mnt/oem_temp/userdata.yaml; then
-    echo "Userdata copied to COS_OEM partition"
-  else
-    echo "Error: Failed to copy userdata to COS_OEM partition" >&2
+  if ! cp /var/lib/cloud/instance/user-data.txt "$OEM_MOUNT/userdata.yaml"; then
+    echo "Error: Failed to copy MAAS userdata to COS_OEM partition" >&2
     SUCCESS=false
   fi
-else
-  echo "Warning: /var/lib/cloud/instance/user-data.txt not found (userdata may be embedded in Kairos image)"
 fi
 
 # Update grubenv to set next_entry to 'recovery'
-# Use grub-editenv as it's the safe way to modify this file
-if ! grub-editenv /mnt/oem_temp/grubenv set next_entry=recovery; then
+if ! grub-editenv "$OEM_MOUNT/grubenv" set next_entry=recovery; then
   echo "Error: Failed to update grubenv" >&2
   SUCCESS=false
 fi
 
 # Unmount the partition
-if ! umount /mnt/oem_temp; then
-  echo "Warning: Failed to unmount /mnt/oem_temp" >&2
+if ! umount "$OEM_MOUNT"; then
+  echo "Error: Failed to unmount OEM partition" >&2
   SUCCESS=false
 fi
-rmdir /mnt/oem_temp
+rmdir "$OEM_MOUNT"
 
-# Only reboot if all operations succeeded
+# Mark script as completed if successful
 if [ "$SUCCESS" = "true" ]; then
-  echo "Script finished successfully."
+  mkdir -p "$(dirname "$MARKER_FILE")"
+  touch "$MARKER_FILE"
   reboot
 else
   echo "Error: Script failed. Not rebooting to allow debugging." >&2
@@ -480,8 +448,32 @@ else
 fi
 EOF
 
-chmod +x "$MNT_FINAL_UBUNTU_ROOTFS/var/lib/cloud/scripts/per-instance/setup-recovery.sh"
-echo "Cloud-init userdata processing script installed at /var/lib/cloud/scripts/per-instance/setup-recovery.sh"
+chmod +x "$MNT_FINAL_UBUNTU_ROOTFS/opt/spectrocloud/scripts/setup-recovery.sh"
+
+# Create systemd service that runs once on first boot
+cat > "$MNT_FINAL_UBUNTU_ROOTFS/etc/systemd/system/setup-recovery.service" << 'EOF'
+[Unit]
+Description=One-time setup script for MAAS deployment
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/setup-recovery-completed
+
+[Service]
+Type=oneshot
+ExecStart=/opt/spectrocloud/scripts/setup-recovery.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable the service
+mkdir -p "$MNT_FINAL_UBUNTU_ROOTFS/etc/systemd/system/multi-user.target.wants"
+ln -sf /etc/systemd/system/setup-recovery.service "$MNT_FINAL_UBUNTU_ROOTFS/etc/systemd/system/multi-user.target.wants/setup-recovery.service"
+
+echo "One-time setup script and systemd service installed"
 
 # --- Patch GRUB Configuration ---
 echo "--- Patching GRUB Configuration for Ubuntu boot ---"
@@ -510,8 +502,6 @@ if [ -f "$GRUB_ENV_PATH" ]; then
   # Change the next_entry to our new Ubuntu ID
   grub-editenv  "$GRUB_ENV_PATH" set next_entry="ubuntu-firstboot"
   echo "grubenv patched to boot Ubuntu first."
-else
-  echo "Warning: $GRUB_ENV_PATH not found, skipping grubenv patch." >&2
 fi
 # --- Finalize ---
 echo "--- Verifying final image before unmounting ---"
@@ -531,7 +521,7 @@ echo ""
 
 # Check recovery partition filesystem
 echo "Checking recovery partition filesystem integrity..."
-e2fsck -n "$FINAL_RECOVERY_DEV" 2>&1 | head -20 || echo "Note: e2fsck check completed"
+e2fsck -n "$FINAL_RECOVERY_DEV" 2>&1 | head -20 || true
 echo ""
 
 echo "--- Unmounting all mount points and cleaning up loop devices and temp directory ---"
@@ -592,11 +582,6 @@ fi
 echo ""
 echo "✅ Composite image created and compressed successfully: $COMPRESSED_IMG"
 echo "You can now upload this compressed raw image to MAAS (MAAS will automatically decompress it)."
-echo "📋 Cloud-init userdata processing script has been integrated - it will:"
-echo "   • Run once after cloud-init processes userdata"
-echo "   • Copy userdata to COS_OEM partition as userdata.yaml" 
-echo "   • Set grubenv to boot recovery mode"
-echo "   • Reboot the system"
 
 # Exit with success code
 exit 0

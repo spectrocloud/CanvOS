@@ -62,7 +62,6 @@ log "Processing organized folders from content partition..."
 # Initialize counters
 BUNDLE_COUNT=0
 SPC_COUNT=0
-USER_DATA_COUNT=0
 EDGE_CONFIG_COUNT=0
 
 # Helper function to mount and copy to OEM partition
@@ -162,19 +161,6 @@ if [ -d "$SPC_CONFIG_DIR" ]; then
   log "Processed $SPC_COUNT file(s) from spc-config folder"
 fi
 
-# Process userdata folder: copy user-data to /oem/config.yaml
-USERDATA_DIR="$CONTENT_MOUNT/userdata"
-if [ -d "$USERDATA_DIR" ]; then
-  log "Processing userdata folder..."
-  USER_DATA_FILE="$USERDATA_DIR/user-data"
-  if [ -f "$USER_DATA_FILE" ]; then
-    if copy_to_oem "$USER_DATA_FILE" "config.yaml" "user-data"; then
-      USER_DATA_COUNT=$((USER_DATA_COUNT + 1))
-    fi
-  else
-    log "No user-data file found in userdata folder"
-  fi
-fi
 
 # Process edge-config folder: copy EDGE_CUSTOM_CONFIG to /oem/.edge_custom_config.yaml
 EDGE_CONFIG_DIR="$CONTENT_MOUNT/edge-config"
@@ -190,7 +176,7 @@ if [ -d "$EDGE_CONFIG_DIR" ]; then
   fi
 fi
 
-log "Extraction summary: $BUNDLE_COUNT bundle file(s) extracted, $SPC_COUNT SPC file(s) copied, $USER_DATA_COUNT user-data file(s), $EDGE_CONFIG_COUNT EDGE_CUSTOM_CONFIG file(s)"
+log "Extraction summary: $BUNDLE_COUNT bundle file(s) extracted, $SPC_COUNT SPC file(s) copied, $EDGE_CONFIG_COUNT EDGE_CUSTOM_CONFIG file(s)"
 
 # Unmount the content partition
 log "Unmounting content partition"
