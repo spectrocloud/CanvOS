@@ -268,6 +268,29 @@ To build just the installer image
 ./earthly.sh +iso --ARCH=amd64
 ```
 
+To build public cloud images(currently only aws is supported)
+aws cloud credentials should be passed in the `.secret` file on the repo dir
+example:
+```shell
+/workspace/spectrocloud/CanvOS$ cat .secret
+AWS_PROFILE=""
+AWS_ACCESS_KEY_ID="xxxxxx"
+AWS_SECRET_ACCESS_KEY="xxxxxxx"
+```
+Also region and bucket details need to be passed in .arg file
+```shell
+#aws cloud
+REGION="us-east-1"
+S3_BUCKET="test-bkp"
+S3_KEY=""
+```
+user-data should be kept under `cloud-images/config/user-data.yaml`
+
+To build AWS cloud image:
+```shell
+./earthly.sh -P +aws-cloud-image --ARCH=amd64
+```
+
 To build the provider images
 
 ```shell
