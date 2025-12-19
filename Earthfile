@@ -920,28 +920,43 @@ cloud-image:
     ARG IS_CLOUD_IMAGE=true
 
     FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
-    # Copy the config file first
-    COPY cloud-images/config/user-data.yaml /config.yaml
+    # Copy the config file first if it exists
+    COPY --if-exists +validate-user-data/user-data /config.yaml
     WORKDIR /output
 
     WITH DOCKER \
         --pull quay.io/kairos/auroraboot:v0.16.0 \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)
         RUN mkdir -p /output && \
-            docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /config.yaml:/config.yaml:ro \
-                -v /output:/aurora \
-                --net host \
-                --privileged \
-                quay.io/kairos/auroraboot:v0.16.0 \
-                --debug \
-                --set "disable_http_server=true" \
-                --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
-                --set "disable_netboot=true" \
-                --set "disk.raw=true" \
-                --set "state_dir=/aurora" \
-                --cloud-config /config.yaml
+            if [ -f /config.yaml ]; then \
+                docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    -v /config.yaml:/config.yaml:ro \
+                    -v /output:/aurora \
+                    --net host \
+                    --privileged \
+                    quay.io/kairos/auroraboot:v0.16.0 \
+                    --debug \
+                    --set "disable_http_server=true" \
+                    --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
+                    --set "disable_netboot=true" \
+                    --set "disk.raw=true" \
+                    --set "state_dir=/aurora" \
+                    --cloud-config /config.yaml; \
+            else \
+                docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    -v /output:/aurora \
+                    --net host \
+                    --privileged \
+                    quay.io/kairos/auroraboot:v0.16.0 \
+                    --debug \
+                    --set "disable_http_server=true" \
+                    --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
+                    --set "disable_netboot=true" \
+                    --set "disk.raw=true" \
+                    --set "state_dir=/aurora"; \
+            fi
     END
     SAVE ARTIFACT /output/* AS LOCAL ./build/
 
