@@ -871,7 +871,6 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
-    ARG IMAGE_TAG
     
 
     IF [ "$IS_UKI" = "false" ]
