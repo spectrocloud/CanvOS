@@ -9,15 +9,22 @@ stages:
           if [ -n "$UBUNTU_PARTITION" ]; then
             echo "Found Ubuntu rootfs partition: $UBUNTU_PARTITION"
             # Get the partition number
-            # Handle both standard (/dev/sda5) and NVMe (/dev/nvme0n1p5) formats
+            # Handle various disk device types:
+            # - NVMe: /dev/nvme0n1p5
+            # - Virtio (KVM/QEMU/LXD): /dev/vda5
+            # - Xen: /dev/xvda5
+            # - SCSI/SATA (physical or VM): /dev/sda5
             if [[ "$UBUNTU_PARTITION" =~ ^/dev/nvme[0-9]+n[0-9]+p[0-9]+$ ]]; then
               # NVMe format: /dev/nvme0n1p5
               UBUNTU_PART_NUM=$(echo "$UBUNTU_PARTITION" | grep -oE '[0-9]+$')
               DISK_DEV=$(echo "$UBUNTU_PARTITION" | sed 's/p[0-9]*$//')
-            else
-              # Standard format: /dev/sda5
+            elif [[ "$UBUNTU_PARTITION" =~ ^/dev/vd[a-z][0-9]+$ ]] || [[ "$UBUNTU_PARTITION" =~ ^/dev/xvd[a-z][0-9]+$ ]] || [[ "$UBUNTU_PARTITION" =~ ^/dev/[a-z]+[0-9]+$ ]]; then
+              # Virtio, Xen, or standard format: /dev/vda5, /dev/xvda5, /dev/sda5
               UBUNTU_PART_NUM=$(echo "$UBUNTU_PARTITION" | grep -oE '[0-9]+$')
               DISK_DEV=$(echo "$UBUNTU_PARTITION" | sed 's/[0-9]*$//')
+            else
+              echo "Error: Unknown disk device format: $UBUNTU_PARTITION"
+              exit 1
             fi
             
             echo "Wiping filesystem signatures from Ubuntu partition: $UBUNTU_PARTITION"
@@ -29,9 +36,18 @@ stages:
             fi
             
             echo "Removing Ubuntu partition $UBUNTU_PART_NUM from $DISK_DEV"
-            # Remove the Ubuntu partition - Kairos will handle the remaining space allocation
-            parted -s "$DISK_DEV" rm "$UBUNTU_PART_NUM" || echo "Failed to remove partition $UBUNTU_PART_NUM"
-            echo "Ubuntu rootfs partition removed - Kairos will create state and persistent partitions with remaining space"
+            # Get the Ubuntu partition size before removal (for logging)
+            UBUNTU_PART_INFO=$(parted -s "$DISK_DEV" unit MiB print | grep "^[[:space:]]*${UBUNTU_PART_NUM}[[:space:]]" || true)
+            if [ -n "$UBUNTU_PART_INFO" ]; then
+              UBUNTU_PART_START=$(echo "$UBUNTU_PART_INFO" | awk '{print $2}' | sed 's/MiB//')
+              UBUNTU_PART_END=$(echo "$UBUNTU_PART_INFO" | awk '{print $3}' | sed 's/MiB//')
+              echo "Ubuntu partition: ${UBUNTU_PART_START}MiB to ${UBUNTU_PART_END}MiB"
+            fi
+            
+            # Remove the Ubuntu partition
+            # Note: Partition extension will be handled by maas-extend-persistent.sh after content extraction
+            parted -s "$DISK_DEV" rm "$UBUNTU_PART_NUM" || { echo "Failed to remove partition $UBUNTU_PART_NUM"; exit 1; }
+            echo "Ubuntu rootfs partition removed (will be extended to persistent partition after content extraction)"
           else
             echo "No Ubuntu rootfs partition found with label UBUNTU_ROOTFS"
           fi
@@ -40,3 +56,7 @@ stages:
       name: "extract content from content partition"
       commands:
         - bash /opt/spectrocloud/scripts/maas-content.sh
+    - if: '[ -f "/run/cos/active_mode" ]'
+      name: "extend persistent partition and reclaim space"
+      commands:
+        - bash /opt/spectrocloud/scripts/maas-extend-persistent.sh

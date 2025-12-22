@@ -187,49 +187,8 @@ umount "$CONTENT_MOUNT" || {
 rmdir "$CONTENT_MOUNT" || true
 log "Successfully unmounted content partition"
 
-# Delete the content partition after successful extraction
-log "Deleting content partition: $CONTENT_PARTITION"
-# Get the disk device and partition number
-# For /dev/sda5 -> DISK_DEVICE=/dev/sda, PARTITION_NUM=5
-# For /dev/nvme0n1p5 -> DISK_DEVICE=/dev/nvme0n1, PARTITION_NUM=5
-# Extract partition number (last sequence of digits)
-PARTITION_NUM=$(echo "$CONTENT_PARTITION" | grep -oE '[0-9]+$')
-# Extract disk device by removing the partition number
-if [[ "$CONTENT_PARTITION" =~ ^(/dev/nvme[0-9]+n[0-9]+)p[0-9]+$ ]]; then
-  # NVMe format: /dev/nvme0n1p5
-  DISK_DEVICE=$(echo "$CONTENT_PARTITION" | sed 's/p[0-9]*$//')
-else
-  # Standard format: /dev/sda5
-  DISK_DEVICE=$(echo "$CONTENT_PARTITION" | sed 's/[0-9]*$//')
-fi
-
-if [ -n "$DISK_DEVICE" ] && [ -n "$PARTITION_NUM" ]; then
-  log "Disk device: $DISK_DEVICE, Partition number: $PARTITION_NUM"
-  
-  # Wipe filesystem signatures from the partition
-  if command -v wipefs >/dev/null 2>&1; then
-    log "Wiping filesystem signatures from partition"
-    wipefs -a "$CONTENT_PARTITION" 2>>"$LOG_FILE" || {
-      log_error "Failed to wipe filesystem signatures"
-    }
-  fi
-  
-  # Delete the partition from the partition table using parted
-  if command -v parted >/dev/null 2>&1; then
-    log "Deleting partition $PARTITION_NUM from $DISK_DEVICE"
-    if parted -s "$DISK_DEVICE" rm "$PARTITION_NUM" 2>>"$LOG_FILE"; then
-      log "Successfully deleted partition $PARTITION_NUM from partition table"
-    else
-      log_error "Failed to delete partition from partition table (this may be expected if partition is in use)"
-    fi
-  else
-    log "parted command not found, skipping partition table deletion"
-  fi
-else
-  log_error "Could not determine disk device or partition number from $CONTENT_PARTITION"
-fi
-
 log "Content extraction completed successfully"
+log "Note: Content partition deletion and persistent partition extension will be handled by maas-extend-persistent.sh"
 log "Content files in $CONTENT_DEST:"
 ls -lh "$CONTENT_DEST" >> "$LOG_FILE" 2>&1 || true
 

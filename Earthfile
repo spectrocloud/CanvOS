@@ -888,11 +888,13 @@ iso-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    # For MAAS builds, install maas-content.sh script and handle local-ui
+    # For MAAS builds, install maas-content.sh and maas-extend-persistent.sh scripts and handle local-ui
     IF [ "$IS_MAAS" = "true" ]
         RUN mkdir -p /opt/spectrocloud/scripts
         COPY cloudconfigs/maas-content.sh /opt/spectrocloud/scripts/maas-content.sh
         RUN chmod 755 /opt/spectrocloud/scripts/maas-content.sh
+        COPY cloudconfigs/maas-extend-persistent.sh /opt/spectrocloud/scripts/maas-extend-persistent.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/maas-extend-persistent.sh
         
         # Add local-ui if provided (extract it directly to the image)
         COPY --if-exists local-ui.tar /opt/spectrocloud/
