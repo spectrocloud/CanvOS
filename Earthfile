@@ -879,10 +879,21 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
-    # IF [ "$IS_CLOUD_IMAGE" = "true" ]
-    #     COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
-    #     COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
-    # END
+    IF [ "$IS_CLOUD_IMAGE" = "true" ]
+        COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
+        COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
+        RUN mkdir -p /opt/spectrocloud/scripts
+        COPY cloudconfigs/cloud-content.sh /opt/spectrocloud/scripts/cloud-content.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/cloud-content.sh
+
+        # Add local-ui if provided (extract it directly to the image)
+        # Note: local-ui is handled directly in the iso-image build, not via content partition
+        COPY --if-exists local-ui.tar /opt/spectrocloud/
+        RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
+            tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
+            rm -f /opt/spectrocloud/local-ui.tar; \
+        fi
+    END
 
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
@@ -919,7 +930,18 @@ cloud-image:
     FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
     # Copy the config file first if it exists
     COPY --if-exists +validate-user-data/user-data /config.yaml
-    WORKDIR /output
+    # Copy content partition script
+    COPY cloud-images/scripts/add-content-partition.sh /add-content-partition.sh
+    RUN chmod +x /add-content-partition.sh && \
+        ls -la /add-content-partition.sh && \
+        head -n 1 /add-content-partition.sh
+    # Copy content files, SPC, and edge-config if they exist
+    # Note: content-* directories need to be copied preserving their names
+    # Note: local-ui is handled directly in the iso-image build, not via content partition
+    COPY --if-exists content-*/ /workdir/
+    COPY --if-exists "$CLUSTERCONFIG" /workdir/spc.tgz
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /workdir/edge_custom_config.yaml
+    WORKDIR /workdir
 
     WITH DOCKER \
         --pull quay.io/kairos/auroraboot:v0.16.0 \
@@ -953,7 +975,49 @@ cloud-image:
                     --set "disable_netboot=true" \
                     --set "disk.raw=true" \
                     --set "state_dir=/aurora"; \
-            fi
+            fi && \
+            echo "=== Finding raw image created by auroraboot ===" && \
+            RAW_IMG=$(find /output -type f \( -name "*.raw" -o -name "*.img" \) | head -n1) && \
+            if [ -z "$RAW_IMG" ]; then \
+                echo "Error: No raw image found in /output" >&2; \
+                ls -laR /output; \
+                exit 1; \
+            fi && \
+            echo "Found raw image: $RAW_IMG" && \
+            echo "=== Adding COS_CONTENT partition ===" && \
+            apk add --no-cache qemu-img parted multipath-tools dosfstools e2fsprogs util-linux coreutils device-mapper bash rsync gptfdisk && \
+            echo "=== Debug: Checking for content files ===" && \
+            echo "Current directory: $(pwd)" && \
+            echo "Content directories:" && \
+            ls -la /workdir/content-* 2>/dev/null || echo "No content-* directories found" && \
+            echo "Files in /workdir:" && \
+            ls -la /workdir/ 2>/dev/null || echo "Cannot list /workdir" && \
+            CLUSTERCONFIG_FILE="" && \
+            if [ -f /workdir/spc.tgz ]; then CLUSTERCONFIG_FILE="/workdir/spc.tgz"; echo "Found SPC file: $CLUSTERCONFIG_FILE"; fi && \
+            EDGE_CUSTOM_CONFIG_FILE="" && \
+            if [ -f /workdir/edge_custom_config.yaml ]; then EDGE_CUSTOM_CONFIG_FILE="/workdir/edge_custom_config.yaml"; echo "Found EDGE_CUSTOM_CONFIG: $EDGE_CUSTOM_CONFIG_FILE"; fi && \
+            echo "=== Running add-content-partition.sh ===" && \
+            echo "Checking script location..." && \
+            ls -la /add-content-partition.sh 2>&1 || echo "Script not found at /add-content-partition.sh" && \
+            if [ ! -f /add-content-partition.sh ]; then \
+                echo "Error: Script /add-content-partition.sh not found" >&2; \
+                echo "Checking for script in common locations:" >&2; \
+                find / -name "add-content-partition.sh" 2>/dev/null | head -5 || echo "Script not found anywhere" >&2; \
+                exit 1; \
+            fi && \
+            echo "Script found, checking permissions..." && \
+            ls -la /add-content-partition.sh && \
+            CLUSTERCONFIG="$CLUSTERCONFIG_FILE" \
+            EDGE_CUSTOM_CONFIG="$EDGE_CUSTOM_CONFIG_FILE" \
+            bash /add-content-partition.sh "$RAW_IMG" || { \
+                echo "Error: Failed to add content partition. Build cannot continue." >&2; \
+                echo "Debug info:" >&2; \
+                echo "  RAW_IMG: $RAW_IMG" >&2; \
+                echo "  Current dir: $(pwd)" >&2; \
+                echo "  Script exists: $([ -f /add-content-partition.sh ] && echo 'yes' || echo 'no')" >&2; \
+                echo "  Script location: $(ls -la /add-content-partition.sh 2>&1 || echo 'not found')" >&2; \
+                exit 1; \
+            }
     END
     SAVE ARTIFACT /output/* AS LOCAL ./build/
 
