@@ -21,7 +21,7 @@ RUN zypper -n in \
   growpart gptfdisk haveged htop iproute2 iputils issue-generator lsscsi mdadm multipath-tools \
   nfs-client open-iscsi openssh open-vm-tools pigz policycoreutils polkit procps \
   qemu-guest-agent strace systemd systemd-network timezone tmux vim which tpm* nethogs patch shim iw \
-  grub2-i386-pc grub2-x86_64-efi kernel-firmware-all dracut squashfs dhcp-client rsyslog logrotate
+  grub2-i386-pc grub2-x86_64-efi kernel-firmware-all dracut squashfs dhcp-client apparmor-parser apparmor-profiles rsyslog logrotate
 
 RUN systemctl disable NetworkManager.service NetworkManager-wait-online.service
 
