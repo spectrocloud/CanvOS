@@ -994,7 +994,23 @@ UPX:
 # - A curtin-hooks script for MAAS deployment
 # - cloud-init for first-boot configuration
 
-# Build raw dd image from iso-image using auroraboot
+# Build MAAS-specific iso-image (clean Kairos image without content)
+# Content will be added to Ubuntu rootfs and copied to target disk after Kairos deployment
+# This keeps the Kairos image small and avoids requiring larger state partition
+maas-iso-image:
+    FROM --platform=linux/${ARCH} +iso-image
+    
+    # Note: Content, edge-config, and clusterconfig are NOT embedded in Kairos image
+    # They will be added to Ubuntu rootfs and copied to target disk after Kairos dd image is written
+    # This keeps the Kairos image small and avoids requiring larger state partition
+    
+    # Add embedded userdata if provided (will be merged with MAAS userdata by curtin-hooks)
+    # This allows build-time userdata to be combined with MAAS UI userdata
+    COPY --if-exists +validate-user-data/user-data /usr/share/kairos/userdata.yaml
+    
+    SAVE IMAGE palette-installer-image:maas
+
+# Build raw dd image from maas-iso-image using auroraboot
 # This creates a raw disk image that contains the full Kairos OS with A/B partitions
 # Uses Docker-in-Docker approach similar to the existing kairos-raw-image target
 build-kairos-dd-image:
@@ -1003,25 +1019,25 @@ build-kairos-dd-image:
     # Install required tools
     RUN apk add --no-cache bash findutils
     
-    # Use Docker-in-Docker to convert iso-image to raw disk image
+    # Use Docker-in-Docker to convert maas-iso-image to raw disk image
     WITH DOCKER \
-        --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
+        --load index.docker.io/library/palette-installer-image:maas=(+maas-iso-image)
         RUN set -e && \
             echo "=== Setting up workdir ===" && \
             mkdir -p /workdir && \
             cd /workdir && \
             echo "=== Verifying Docker image is available ===" && \
             docker images | grep palette-installer-image || echo "Warning: palette-installer-image not found" && \
-            if ! docker inspect index.docker.io/library/palette-installer-image:latest >/dev/null 2>&1; then \
-                echo "Error: Image palette-installer-image:latest not found"; \
+            if ! docker inspect index.docker.io/library/palette-installer-image:maas >/dev/null 2>&1; then \
+                echo "Error: Image palette-installer-image:maas not found"; \
                 docker images || true; \
                 exit 1; \
             fi && \
             echo "=== Checking for KAIROS_IMAGE_LABEL in /etc/kairos-release ===" && \
-            docker run --rm index.docker.io/library/palette-installer-image:latest cat /etc/kairos-release 2>/dev/null | grep KAIROS_IMAGE_LABEL || \
+            docker run --rm index.docker.io/library/palette-installer-image:maas cat /etc/kairos-release 2>/dev/null | grep KAIROS_IMAGE_LABEL || \
             (echo "ERROR: KAIROS_IMAGE_LABEL not found in /etc/kairos-release" && \
              echo "Contents of /etc/kairos-release:" && \
-             docker run --rm index.docker.io/library/palette-installer-image:latest cat /etc/kairos-release 2>/dev/null || echo "File not found" && \
+             docker run --rm index.docker.io/library/palette-installer-image:maas cat /etc/kairos-release 2>/dev/null || echo "File not found" && \
              exit 1) && \
             echo "=== Running auroraboot to convert image to raw disk ===" && \
             docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
@@ -1030,7 +1046,7 @@ build-kairos-dd-image:
                 --set "disable_http_server=true" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
-                --set "container_image=index.docker.io/library/palette-installer-image:latest" \
+                --set "container_image=index.docker.io/library/palette-installer-image:maas" \
                 --set "state_dir=/aurora" > /workdir/auroraboot.log 2>&1; \
             AURORABOOT_EXIT=$?; \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
@@ -1085,6 +1101,33 @@ build-maas-rootfs:
     # Copy the raw dd image into the rootfs
     # This image will be written to disk by the curtin-hooks script during MAAS deployment
     COPY --platform=linux/${ARCH} +build-kairos-dd-image/kairos-dd.img /usr/share/kairos/kairos-dd.img
+    
+    # Add content files to Ubuntu rootfs (will be copied to Kairos image after deployment)
+    # Content is stored in Ubuntu rootfs, not in Kairos image, to keep Kairos image small
+    RUN mkdir -p /usr/share/kairos/content
+    COPY --if-exists content-*/*.zst /usr/share/kairos/content/
+    RUN if [ -n "$(ls /usr/share/kairos/content/*.zst 2>/dev/null)" ]; then \
+        for file in /usr/share/kairos/content/*.zst; do \
+            split --bytes=3GB --numeric-suffixes "$file" /usr/share/kairos/content/$(basename "$file")_part; \
+        done; \
+        rm -f /usr/share/kairos/content/*.zst; \
+    fi
+    
+    # Add edge-config to Ubuntu rootfs (will be copied to Kairos OEM partition after deployment)
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /usr/share/kairos/.edge_custom_config.yaml
+    
+    # Add clusterconfig to Ubuntu rootfs (will be copied to Kairos image after deployment)
+    IF [ "$CLUSTERCONFIG" != "" ]
+        RUN mkdir -p /usr/share/kairos/clusterconfig
+        COPY --if-exists "$CLUSTERCONFIG" /usr/share/kairos/clusterconfig/spc.tgz
+    END
+    
+    # Add local-ui to Ubuntu rootfs (will be copied to Kairos image after deployment)
+    COPY --if-exists local-ui.tar /usr/share/kairos/
+    RUN if [ -f /usr/share/kairos/local-ui.tar ]; then \
+        tar -xf /usr/share/kairos/local-ui.tar -C /usr/share/kairos && \
+        rm -f /usr/share/kairos/local-ui.tar; \
+    fi
     
     # Verify the dd image was copied
     RUN if [ ! -f /usr/share/kairos/kairos-dd.img ]; then \

@@ -8,6 +8,7 @@ Responsibilities:
 - dd the Kairos disk image onto the target disk (preserving A/B layout + boot menu).
 - If MAAS user-data (cloudconfig) is present, write it into the Kairos OEM
   partition as /oem/userdata.yaml (via OEM label) so Kairos picks it up.
+- If embedded userdata exists in the rootfs, merge it with MAAS userdata.
 - Drop an 'apt' shim into the temporary /target so MAAS late extra_modules
   step ("apt install linux-modules-extra-...") always succeeds.
 """
@@ -165,10 +166,84 @@ def find_oem_partition(target_disk):
     return None
 
 
-def write_kairos_user_data(oem_dev, cloudconfig):
+def find_embedded_userdata(target_root):
+    """Look for embedded userdata in the rootfs (e.g., from build-time)."""
+    candidates = [
+        os.path.join(target_root, "usr/share/kairos/userdata.yaml"),
+        "/usr/share/kairos/userdata.yaml",
+        os.path.join(target_root, "etc/kairos/userdata.yaml"),
+        "/etc/kairos/userdata.yaml",
+    ]
+    
+    for path in candidates:
+        if os.path.exists(path):
+            LOG.info("Found embedded userdata at %s", path)
+            try:
+                with open(path, "r") as f:
+                    return f.read()
+            except Exception as e:
+                LOG.warning("Failed to read embedded userdata from %s: %s", path, e)
+    
+    return None
+
+
+def merge_cloudconfig(embedded, maas_config):
+    """
+    Merge embedded userdata with MAAS userdata.
+    MAAS userdata takes precedence for conflicting keys.
+    """
+    if not embedded:
+        return maas_config
+    if not maas_config:
+        return embedded
+    
+    try:
+        import yaml
+        
+        # Parse both configs
+        embedded_dict = yaml.safe_load(embedded) if isinstance(embedded, str) else embedded
+        maas_dict = yaml.safe_load(maas_config) if isinstance(maas_config, str) else maas_config
+        
+        if not isinstance(embedded_dict, dict):
+            embedded_dict = {}
+        if not isinstance(maas_dict, dict):
+            maas_dict = {}
+        
+        # Merge: MAAS config takes precedence
+        merged = embedded_dict.copy()
+        merged.update(maas_dict)
+        
+        # Special handling for stages: merge lists if both have stages
+        if "stages" in embedded_dict and "stages" in maas_dict:
+            # Merge stages: combine stage lists, MAAS stages come after embedded
+            merged["stages"] = {}
+            merged["stages"].update(embedded_dict.get("stages", {}))
+            # MAAS stages override embedded stages with the same name
+            merged["stages"].update(maas_dict.get("stages", {}))
+        
+        return yaml.safe_dump(merged, default_flow_style=False)
+    except Exception as e:
+        LOG.warning("Failed to merge userdata configs, using MAAS config only: %s", e)
+        return maas_config
+
+
+def write_kairos_user_data(oem_dev, cloudconfig, target_root):
     """Write MAAS user-data (cloudconfig) into the Kairos OEM partition."""
-    if not cloudconfig:
-        LOG.info("No cloudconfig provided by MAAS; skipping Kairos config injection")
+    # Check for embedded userdata
+    embedded_userdata = find_embedded_userdata(target_root)
+    
+    # Merge embedded and MAAS userdata if both exist
+    if embedded_userdata and cloudconfig:
+        LOG.info("Both embedded and MAAS userdata found, merging...")
+        final_config = merge_cloudconfig(embedded_userdata, cloudconfig)
+    elif embedded_userdata:
+        LOG.info("Only embedded userdata found, using it")
+        final_config = embedded_userdata
+    elif cloudconfig:
+        LOG.info("Only MAAS userdata found, using it")
+        final_config = cloudconfig
+    else:
+        LOG.info("No userdata provided (neither embedded nor MAAS); skipping Kairos config injection")
         return
 
     if not oem_dev:
@@ -185,16 +260,16 @@ def write_kairos_user_data(oem_dev, cloudconfig):
 
     try:
         cfg_path = os.path.join(OEM_MOUNTPOINT, OEM_CONFIG_PATH)
-        LOG.info("Writing MAAS user-data to %s", cfg_path)
+        LOG.info("Writing user-data to %s", cfg_path)
 
-        if isinstance(cloudconfig, str):
-            payload = cloudconfig
+        if isinstance(final_config, str):
+            payload = final_config
         else:
             try:
                 import yaml
-                payload = yaml.safe_dump(cloudconfig)
+                payload = yaml.safe_dump(final_config)
             except Exception:
-                payload = str(cloudconfig)
+                payload = str(final_config)
 
         payload = textwrap.dedent(payload).lstrip("\n")
 
@@ -206,6 +281,129 @@ def write_kairos_user_data(oem_dev, cloudconfig):
     finally:
         LOG.info("Unmounting OEM partition %s", oem_dev)
         subp(["umount", OEM_MOUNTPOINT])
+
+
+def find_persistent_partition(target_disk):
+    """Find the persistent partition by label."""
+    LOG.info("Searching for persistent partition with label COS_PERSISTENT")
+    try:
+        subp(["partprobe", target_disk])
+        subp(["udevadm", "settle"])
+    except Exception as e:
+        LOG.warning("Failed to refresh partition table: %s", e)
+    
+    try:
+        out, _ = subp(
+            ["blkid", "-t", "LABEL=COS_PERSISTENT", "-o", "device"],
+            capture=True
+        )
+        dev = out.strip()
+        if dev:
+            LOG.info("Found persistent partition %s", dev)
+            return dev
+    except Exception as e:
+        LOG.warning("blkid search for COS_PERSISTENT failed: %s", e)
+    
+    return None
+
+
+def copy_content_to_kairos(target_root, target_disk):
+    """
+    Copy content, edge-config, clusterconfig, and local-ui from Ubuntu rootfs
+    to the Kairos image on the target disk.
+    """
+    content_source = os.path.join(target_root, "usr/share/kairos/content")
+    edge_config_source = os.path.join(target_root, "usr/share/kairos/.edge_custom_config.yaml")
+    clusterconfig_source = os.path.join(target_root, "usr/share/kairos/clusterconfig")
+    local_ui_source = os.path.join(target_root, "usr/share/kairos")
+    
+    has_content = os.path.exists(content_source) and os.listdir(content_source)
+    has_edge_config = os.path.exists(edge_config_source)
+    has_clusterconfig = os.path.exists(clusterconfig_source) and os.listdir(clusterconfig_source)
+    has_local_ui = os.path.exists(os.path.join(local_ui_source, "local-ui")) or \
+                   os.path.exists(os.path.join(local_ui_source, "opt/spectrocloud"))
+    
+    if not (has_content or has_edge_config or has_clusterconfig or has_local_ui):
+        LOG.info("No content files found in Ubuntu rootfs, skipping content copy")
+        return
+    
+    # Find OEM and persistent partitions
+    oem_dev = find_oem_partition(target_disk)
+    persistent_dev = find_persistent_partition(target_disk)
+    
+    if not persistent_dev:
+        LOG.warning("Persistent partition not found, cannot copy content")
+        return
+    
+    # Mount persistent partition
+    persistent_mount = "/mnt/kairos-persistent"
+    os.makedirs(persistent_mount, exist_ok=True)
+    
+    try:
+        LOG.info("Mounting persistent partition %s to %s", persistent_dev, persistent_mount)
+        subp(["mount", persistent_dev, persistent_mount])
+        
+        # Copy content to persistent partition
+        # Content goes to /usr/local/spectrocloud/bundle (persistent partition is mounted at /usr/local)
+        if has_content:
+            content_dest = os.path.join(persistent_mount, "spectrocloud/bundle")
+            os.makedirs(content_dest, exist_ok=True)
+            LOG.info("Copying content from %s to %s", content_source, content_dest)
+            subp(["cp", "-a", f"{content_source}/.", content_dest])
+            LOG.info("Content copied successfully to persistent partition")
+        
+        # Copy clusterconfig to persistent partition
+        # Clusterconfig goes to /usr/local/spectrocloud/clusterconfig
+        if has_clusterconfig:
+            clusterconfig_dest = os.path.join(persistent_mount, "spectrocloud/clusterconfig")
+            os.makedirs(clusterconfig_dest, exist_ok=True)
+            LOG.info("Copying clusterconfig from %s to %s", clusterconfig_source, clusterconfig_dest)
+            subp(["cp", "-a", f"{clusterconfig_source}/.", clusterconfig_dest])
+            LOG.info("Clusterconfig copied successfully to persistent partition")
+        
+        # Copy local-ui to persistent partition
+        # Local-ui goes to /usr/local/spectrocloud (which is /opt/spectrocloud via overlayfs)
+        if has_local_ui:
+            local_ui_dest = os.path.join(persistent_mount, "spectrocloud")
+            os.makedirs(local_ui_dest, exist_ok=True)
+            # Check if local-ui directory exists
+            local_ui_dir = os.path.join(local_ui_source, "local-ui")
+            if os.path.exists(local_ui_dir):
+                LOG.info("Copying local-ui from %s to %s", local_ui_dir, local_ui_dest)
+                subp(["cp", "-a", f"{local_ui_dir}/.", local_ui_dest])
+            # Check if opt/spectrocloud exists (extracted local-ui)
+            opt_spectrocloud = os.path.join(local_ui_source, "opt/spectrocloud")
+            if os.path.exists(opt_spectrocloud):
+                LOG.info("Copying opt/spectrocloud from %s to %s", opt_spectrocloud, local_ui_dest)
+                subp(["cp", "-a", f"{opt_spectrocloud}/.", local_ui_dest])
+            LOG.info("Local-ui copied successfully to persistent partition")
+        
+        subp(["sync"])
+        
+    finally:
+        LOG.info("Unmounting persistent partition")
+        try:
+            subp(["umount", persistent_mount])
+        except Exception as e:
+            LOG.warning("Failed to unmount persistent partition: %s", e)
+    
+    # Copy edge-config to OEM partition
+    if has_edge_config and oem_dev:
+        os.makedirs(OEM_MOUNTPOINT, exist_ok=True)
+        try:
+            LOG.info("Mounting OEM partition %s to %s", oem_dev, OEM_MOUNTPOINT)
+            subp(["mount", oem_dev, OEM_MOUNTPOINT])
+            
+            edge_config_dest = os.path.join(OEM_MOUNTPOINT, ".edge_custom_config.yaml")
+            LOG.info("Copying edge-config from %s to %s", edge_config_source, edge_config_dest)
+            subp(["cp", edge_config_source, edge_config_dest])
+            subp(["sync"])
+            LOG.info("Edge-config copied successfully")
+        finally:
+            try:
+                subp(["umount", OEM_MOUNTPOINT])
+            except Exception as e:
+                LOG.warning("Failed to unmount OEM partition: %s", e)
 
 
 def install_apt_shim(target_root):
@@ -249,7 +447,10 @@ def main():
     image_path = find_kairos_image(state, target_root)
     write_kairos_image(image_path, target_disk)
 
-    # 2. Inject MAAS cloudconfig into Kairos OEM if available
+    # 2. Copy content, edge-config, clusterconfig, and local-ui from Ubuntu rootfs to Kairos image
+    copy_content_to_kairos(target_root, target_disk)
+
+    # 3. Inject MAAS cloudconfig (and embedded userdata if present) into Kairos OEM if available
     oem_dev = find_oem_partition(target_disk)
     cloudconfig = cfg.get("cloudconfig")
     if cloudconfig:
@@ -257,9 +458,9 @@ def main():
     else:
         LOG.info("No cloudconfig found in curtin config")
 
-    write_kairos_user_data(oem_dev, cloudconfig)
+    write_kairos_user_data(oem_dev, cloudconfig, target_root)
 
-    # 3. Install apt shim in temporary /target so that MAAS late extra_modules
+    # 4. Install apt shim in temporary /target so that MAAS late extra_modules
     #    step ('apt install linux-modules-extra-...') does not fail.
     install_apt_shim(target_root)
 
