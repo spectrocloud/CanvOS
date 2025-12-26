@@ -57,3 +57,116 @@ stages:
         name: "extract content from content partition"
         commands:
           - bash /opt/spectrocloud/scripts/cloud-content.sh
+      - if: '[ -f "/run/cos/active_mode" ]'
+        name: "extend persistent partition to use full disk (after content partition deletion)"
+        commands:
+          - |
+            # Find the persistent partition
+            PERSISTENT_PARTITION=$(blkid -L COS_PERSISTENT 2>/dev/null || findfs PARTLABEL=persistent 2>/dev/null || true)
+            if [ -z "$PERSISTENT_PARTITION" ]; then
+              echo "No persistent partition found, skipping extension"
+              exit 0
+            fi
+            
+            echo "Found persistent partition: $PERSISTENT_PARTITION"
+            
+            # Extract disk device and partition number
+            if [[ "$PERSISTENT_PARTITION" =~ ^/dev/nvme[0-9]+n[0-9]+p([0-9]+)$ ]]; then
+              # NVMe format: /dev/nvme0n1p5
+              PARTITION_NUM="${BASH_REMATCH[1]}"
+              DISK_DEV=$(echo "$PERSISTENT_PARTITION" | sed 's/p[0-9]*$//')
+            elif [[ "$PERSISTENT_PARTITION" =~ ^/dev/([a-z]+)([0-9]+)$ ]]; then
+              # Standard format: /dev/sda5
+              DISK_BASE="${BASH_REMATCH[1]}"
+              PARTITION_NUM="${BASH_REMATCH[2]}"
+              DISK_DEV="/dev/$DISK_BASE"
+            else
+              echo "Could not parse partition device: $PERSISTENT_PARTITION"
+              exit 0
+            fi
+            
+            echo "Disk device: $DISK_DEV, Partition number: $PARTITION_NUM"
+            echo "Note: Content partition has been deleted, persistent can now use full disk space"
+            
+            # Extend partition to use full available space
+            # Try growpart first (simpler), fallback to parted if not available
+            EXTENDED=false
+            if command -v growpart >/dev/null 2>&1; then
+              echo "Extending partition $PARTITION_NUM on $DISK_DEV using growpart..."
+              if growpart "$DISK_DEV" "$PARTITION_NUM" 2>&1; then
+                echo "Partition extended successfully using growpart"
+                EXTENDED=true
+              else
+                echo "growpart failed, trying parted..."
+              fi
+            fi
+            
+            # Fallback to parted if growpart not available or failed
+            if [ "$EXTENDED" = "false" ] && command -v parted >/dev/null 2>&1; then
+              echo "Extending partition $PARTITION_NUM on $DISK_DEV using parted..."
+              # Get current partition end
+              CURRENT_END=$(parted -s "$DISK_DEV" unit s print | grep "^ *$PARTITION_NUM" | awk '{print $3}' | sed 's/s$//')
+              # Get disk end (last usable sector)
+              DISK_END=$(parted -s "$DISK_DEV" unit s print | grep "Disk $DISK_DEV" | awk '{print $3}' | sed 's/s$//')
+              # Leave some space for GPT backup (34 sectors is standard)
+              NEW_END=$(($DISK_END - 34))
+              
+              if [ "$NEW_END" -gt "$CURRENT_END" ]; then
+                if parted -s "$DISK_DEV" resizepart "$PARTITION_NUM" "${NEW_END}s" 2>&1; then
+                  echo "Partition extended successfully using parted"
+                  EXTENDED=true
+                else
+                  echo "Warning: Failed to extend partition using parted"
+                fi
+              else
+                echo "Partition already at maximum size"
+                EXTENDED=true  # Consider it done if already at max
+              fi
+            fi
+            
+            if [ "$EXTENDED" = "true" ]; then
+              # Resize filesystem to use extended partition
+              echo "Resizing filesystem on $PERSISTENT_PARTITION..."
+              # Unmount if mounted
+              if mount | grep -q "$PERSISTENT_PARTITION"; then
+                MOUNT_POINT=$(mount | grep "$PERSISTENT_PARTITION" | awk '{print $3}')
+                echo "Unmounting $PERSISTENT_PARTITION from $MOUNT_POINT"
+                umount "$PERSISTENT_PARTITION" 2>/dev/null || true
+              fi
+              
+              # Get filesystem type
+              FSTYPE=$(blkid -s TYPE -o value "$PERSISTENT_PARTITION" 2>/dev/null || echo "ext2")
+              echo "Filesystem type: $FSTYPE"
+              
+              # Resize filesystem based on type
+              case "$FSTYPE" in
+                ext2|ext3|ext4)
+                  if command -v resize2fs >/dev/null 2>&1; then
+                    resize2fs "$PERSISTENT_PARTITION" 2>&1 || echo "Warning: Failed to resize ext filesystem"
+                  else
+                    echo "resize2fs not found, cannot resize ext filesystem"
+                  fi
+                  ;;
+                xfs)
+                  if command -v xfs_growfs >/dev/null 2>&1; then
+                    xfs_growfs "$PERSISTENT_PARTITION" 2>&1 || echo "Warning: Failed to resize xfs filesystem"
+                  else
+                    echo "xfs_growfs not found, cannot resize xfs filesystem"
+                  fi
+                  ;;
+                *)
+                  echo "Unknown filesystem type $FSTYPE, skipping resize"
+                  ;;
+              esac
+              
+              # Remount if it was mounted
+              if [ -n "${MOUNT_POINT:-}" ] && [ -d "$MOUNT_POINT" ]; then
+                echo "Remounting $PERSISTENT_PARTITION to $MOUNT_POINT"
+                mount "$PERSISTENT_PARTITION" "$MOUNT_POINT" 2>/dev/null || true
+              fi
+              
+              echo "Persistent partition extension completed - now using full disk space (including space from deleted content partition)"
+            else
+              echo "growpart and parted not available, cannot extend partition automatically"
+              echo "To extend manually, run: growpart $DISK_DEV $PARTITION_NUM && resize2fs $PERSISTENT_PARTITION"
+            fi
