@@ -885,6 +885,8 @@ iso-image:
         RUN mkdir -p /opt/spectrocloud/scripts
         COPY cloudconfigs/cloud-content.sh /opt/spectrocloud/scripts/cloud-content.sh
         RUN chmod 755 /opt/spectrocloud/scripts/cloud-content.sh
+        COPY cloudconfigs/cloud-extend-persistent.sh /opt/spectrocloud/scripts/cloud-extend-persistent.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/cloud-extend-persistent.sh
 
         # Add local-ui if provided (extract it directly to the image)
         # Note: local-ui is handled directly in the iso-image build, not via content partition
