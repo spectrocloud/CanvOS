@@ -667,7 +667,7 @@ kairos-provider-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "nodeadm" ]
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-nodeadm:$NODEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "canonical" ]
-         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-canonical:$CANONICAL_PROVIDER_VERSION
+         ARG PROVIDER_BASE=us-east1-docker.pkg.dev/spectro-images/dev/arun/provider/provider-canonical:v0.0.0-5bb68041-amd64
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
