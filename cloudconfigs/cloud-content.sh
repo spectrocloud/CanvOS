@@ -1,12 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# Script to extract content and SPC from COS_CONTENT partition
-# This script is called from 80_stylus_maas.yaml during the network stage
+# Script to extract content, SPC, and edge-config from COS_CONTENT partition
+# This script is called during the network stage for cloud images
 # Note: local-ui is handled directly in the iso-image build, not via content partition
 
 # Log file path
-LOG_FILE="/var/log/stylus-maas-content-script.log"
+LOG_FILE="/var/log/stylus-cloud-content-script.log"
 
 # Function to log messages to both stdout and log file
 log() {
@@ -114,19 +114,77 @@ if [ -d "$BUNDLE_CONTENT_DIR" ]; then
       if [ "$EXTENSION" = "zst" ]; then
         log "Extracting .zst file: $FILENAME"
         DEST_FILE="$CONTENT_DEST/${FILENAME%.zst}"
-        log "Source: $file, Destination: $DEST_FILE"
+        log "Source: $file, Destination: $CONTENT_DEST"
         
-        # Run extraction with explicit error handling
-        # Temporarily disable exit on error to handle extraction failures gracefully
-        /opt/spectrocloud/bin/palette-agent content-extract --source "$file" --destination "$CONTENT_DEST" >> "$LOG_FILE" 2>&1
+        # Check if palette-agent exists and is executable
+        PALETTE_AGENT="/opt/spectrocloud/bin/palette-agent"
+        if [ ! -f "$PALETTE_AGENT" ]; then
+          log_error "palette-agent not found at $PALETTE_AGENT"
+          log_error "Falling back to copying file as-is"
+          cp "$file" "$CONTENT_DEST/$FILENAME" || {
+            log_error "Failed to copy $FILENAME"
+          }
+          continue
+        fi
+        
+        if [ ! -x "$PALETTE_AGENT" ]; then
+          log_error "palette-agent is not executable: $PALETTE_AGENT"
+          log_error "File permissions: $(ls -l "$PALETTE_AGENT" 2>&1)"
+          log_error "Falling back to copying file as-is"
+          cp "$file" "$CONTENT_DEST/$FILENAME" || {
+            log_error "Failed to copy $FILENAME"
+          }
+          continue
+        fi
+        
+        # Check palette-agent version/help to verify it works
+        log "Checking palette-agent availability..."
+        if ! "$PALETTE_AGENT" --version >> "$LOG_FILE" 2>&1 && ! "$PALETTE_AGENT" --help >> "$LOG_FILE" 2>&1; then
+          log_error "palette-agent command test failed, checking if it's a valid binary"
+          file "$PALETTE_AGENT" >> "$LOG_FILE" 2>&1 || true
+          log_error "Falling back to copying file as-is"
+          cp "$file" "$CONTENT_DEST/$FILENAME" || {
+            log_error "Failed to copy $FILENAME"
+          }
+          continue
+        fi
+        
+        # Log the exact command being run
+        log "Running palette-agent command: $PALETTE_AGENT content-extract --source \"$file\" --destination \"$CONTENT_DEST\""
+        log "Source file exists: $([ -f "$file" ] && echo 'yes' || echo 'no')"
+        log "Source file size: $(stat -c%s "$file" 2>/dev/null || echo 'unknown') bytes"
+        log "Destination directory exists: $([ -d "$CONTENT_DEST" ] && echo 'yes' || echo 'no')"
+        log "Destination directory writable: $([ -w "$CONTENT_DEST" ] && echo 'yes' || echo 'no')"
+        
+        # Temporarily disable exit on error to capture the exit code properly
+        set +e
+        "$PALETTE_AGENT" content-extract --source "$file" --destination "$CONTENT_DEST" >> "$LOG_FILE" 2>&1
         EXTRACT_EXIT_CODE=$?
+        set -e
+        
+        log "palette-agent command completed with exit code: $EXTRACT_EXIT_CODE"
         
         # Verify extraction succeeded by checking exit code and destination
         if [ $EXTRACT_EXIT_CODE -eq 0 ]; then
-          log "Successfully extracted $FILENAME to $DEST_FILE"
-          BUNDLE_COUNT=$((BUNDLE_COUNT + 1))
+          # Check if extraction actually created files
+          if [ -f "$DEST_FILE" ] || [ -d "$DEST_FILE" ] || [ "$(ls -A "$CONTENT_DEST" 2>/dev/null | wc -l)" -gt 0 ]; then
+            log "Successfully extracted $FILENAME"
+            BUNDLE_COUNT=$((BUNDLE_COUNT + 1))
+          else
+            log_error "Extraction reported success but destination not found: $DEST_FILE"
+            log_error "Destination directory contents: $(ls -la "$CONTENT_DEST" 2>&1 | head -10)"
+            log_error "Falling back to copying file as-is"
+            cp "$file" "$CONTENT_DEST/$FILENAME" || {
+              log_error "Failed to copy $FILENAME"
+            }
+          fi
         else
-          log_error "Extraction failed (exit code: $EXTRACT_EXIT_CODE) for $FILENAME, copying as-is"
+          log_error "Extraction failed with exit code: $EXTRACT_EXIT_CODE"
+          log_error "Last 20 lines of log file for debugging:"
+          tail -20 "$LOG_FILE" | while IFS= read -r line; do
+            log_error "  $line"
+          done
+          log_error "Falling back to copying file as-is"
           cp "$file" "$CONTENT_DEST/$FILENAME" || {
             log_error "Failed to copy $FILENAME"
           }
@@ -170,6 +228,8 @@ if [ -d "$SPC_CONFIG_DIR" ]; then
   log "Processed $SPC_COUNT file(s) from spc-config folder"
 fi
 
+# Note: local-ui is handled directly in the iso-image build, not via content partition
+# So we don't process it here
 
 # Process edge-config folder: copy EDGE_CUSTOM_CONFIG to /oem/.edge_custom_config.yaml
 EDGE_CONFIG_DIR="$CONTENT_MOUNT/edge-config"
