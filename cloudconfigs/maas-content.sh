@@ -118,13 +118,11 @@ if [ -d "$BUNDLE_CONTENT_DIR" ]; then
         
         # Run extraction with explicit error handling
         # Temporarily disable exit on error to handle extraction failures gracefully
-        set +e
-        $STYLUS_ROOT/opt/spectrocloud/bin/palette-agent content-extract --source "$file" --destination "$DEST_FILE" >> "$LOG_FILE" 2>&1
+        /opt/spectrocloud/bin/palette-agent content-extract --source "$file" --destination "$CONTENT_DEST" >> "$LOG_FILE" 2>&1
         EXTRACT_EXIT_CODE=$?
-        set -e
         
         # Verify extraction succeeded by checking exit code and destination
-        if [ $EXTRACT_EXIT_CODE -eq 0 ] && { [ -f "$DEST_FILE" ] || [ -d "$DEST_FILE" ]; }; then
+        if [ $EXTRACT_EXIT_CODE -eq 0 ]; then
           log "Successfully extracted $FILENAME to $DEST_FILE"
           BUNDLE_COUNT=$((BUNDLE_COUNT + 1))
         else

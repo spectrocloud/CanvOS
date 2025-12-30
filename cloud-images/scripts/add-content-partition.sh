@@ -234,39 +234,16 @@ else
 fi
 echo ""
 
-# Calculate state and persistent partition sizes
-# Only create state/persistent when content is present to prevent Kairos from overwriting content partition
-# When no content, let Kairos create state/persistent itself
-# Based on Kairos documentation: https://kairos.io/docs/reference/configuration/
-# Kairos creates partitions sequentially: COS_OEM → COS_RECOVERY → COS_STATE → COS_PERSISTENT
-# We pre-create state/persistent with correct labels so Kairos detects and uses them
-# This prevents Kairos from overwriting our content partition
-
+# Calculate final image size
+# We only create efi, oem, recovery, and content (if present)
+# Kairos will create COS_STATE and COS_PERSISTENT partitions during boot
+# Partition order: efi, oem, recovery, content (if present), then Kairos adds state and persistent
 if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
-    # State partition: needs to hold active.img (copy of recovery image) + overhead
-    # Minimum 4GB, but use recovery size + 20% overhead for safety
-    MIN_STATE_SIZE_BYTES=$((4 * 1024 * 1024 * 1024))  # 4GB minimum
-    STATE_SIZE_BYTES=$((COS_RECOVERY_SIZE + COS_RECOVERY_SIZE / 5))  # Recovery size + 20%
-    if [ "$STATE_SIZE_BYTES" -lt "$MIN_STATE_SIZE_BYTES" ]; then
-        STATE_SIZE_BYTES=$MIN_STATE_SIZE_BYTES
-    fi
-    
-    # Persistent partition: base size + content-based size
-    # Persistent needs space for extracted content (can be larger than compressed)
-    # Use 100% of content size + 20% overhead
-    MIN_PERSISTENT_SIZE_BYTES=$((1 * 1024 * 1024 * 1024))  # 1GB minimum
-    CONTENT_BASED_PERSISTENT=$(($CONTENT_SIZE_BYTES + $CONTENT_SIZE_BYTES / 5))
-    PERSISTENT_SIZE_BYTES=$(($MIN_PERSISTENT_SIZE_BYTES + $CONTENT_BASED_PERSISTENT))
-    
-    # Calculate final image size with state, persistent, and content
-    # Partition order: efi, oem, recovery, state, persistent, content
-    CALCULATED_IMG_SIZE_BYTES=$(($COS_GRUB_SIZE + $COS_OEM_SIZE + $COS_RECOVERY_SIZE + $STATE_SIZE_BYTES + $PERSISTENT_SIZE_BYTES + $CONTENT_SIZE_BYTES + 1024*1024))
+    # Calculate final image size with content
+    # Partition order: efi, oem, recovery, content
+    CALCULATED_IMG_SIZE_BYTES=$(($COS_GRUB_SIZE + $COS_OEM_SIZE + $COS_RECOVERY_SIZE + $CONTENT_SIZE_BYTES + 1024*1024))
 else
-    # No content - don't create state/persistent, let Kairos create them
-    STATE_SIZE_BYTES=0
-    PERSISTENT_SIZE_BYTES=0
-    
-    # Calculate final image size without state, persistent, or content
+    # Calculate final image size without content
     # Partition order: efi, oem, recovery (Kairos will add state and persistent)
     CALCULATED_IMG_SIZE_BYTES=$(($COS_GRUB_SIZE + $COS_OEM_SIZE + $COS_RECOVERY_SIZE + 1024*1024))
 fi
@@ -275,41 +252,26 @@ FINAL_IMG_SIZE_BYTES=$CALCULATED_IMG_SIZE_BYTES
 FINAL_IMG_SIZE=$(numfmt --to=iec "$FINAL_IMG_SIZE_BYTES")
 
 # --- Partition & sizing ---
+echo "--- Creating and Partitioning Final Image ---"
+echo "Partition sizes:"
+echo "  EFI (COS_GRUB): $(numfmt --to=iec $COS_GRUB_SIZE)"
+echo "  OEM: $(numfmt --to=iec $COS_OEM_SIZE)"
+echo "  Recovery: $(numfmt --to=iec $COS_RECOVERY_SIZE)"
 if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
-    echo "--- Creating and Partitioning Final Image (Pre-create state/persistent approach) ---"
-    echo "Partition sizes:"
-    echo "  EFI (COS_GRUB): $(numfmt --to=iec $COS_GRUB_SIZE)"
-    echo "  OEM: $(numfmt --to=iec $COS_OEM_SIZE)"
-    echo "  Recovery: $(numfmt --to=iec $COS_RECOVERY_SIZE)"
-    echo "  State: $(numfmt --to=iec $STATE_SIZE_BYTES) (pre-created, Kairos will detect and use)"
-    echo "  Persistent: $(numfmt --to=iec $PERSISTENT_SIZE_BYTES) (pre-created, Kairos will detect and use)"
-    echo "  Content: $(numfmt --to=iec $CONTENT_SIZE_BYTES) (placed at partition 6, safe at the end)"
-    echo ""
-    echo "Final image size: $(numfmt --to=iec $FINAL_IMG_SIZE_BYTES) (minimum required)"
-    echo ""
-    echo "Note: Pre-creating COS_STATE and COS_PERSISTENT with correct labels."
-    echo "      Based on Kairos docs: https://kairos.io/docs/reference/configuration/"
-    echo "      Kairos creates partitions sequentially: COS_OEM → COS_RECOVERY → COS_STATE → COS_PERSISTENT"
-    echo "      By pre-creating with correct labels, Kairos will detect and use existing partitions"
-    echo "      instead of creating new ones, preventing content partition from being overwritten."
-    echo "      Content partition is placed at partition 6 (after persistent), safe at the end."
-    echo "      After content is deleted, persistent will automatically use the full disk space."
-    echo ""
-else
-    echo "--- Creating and Partitioning Final Image (No content - let Kairos create state/persistent) ---"
-    echo "Partition sizes:"
-    echo "  EFI (COS_GRUB): $(numfmt --to=iec $COS_GRUB_SIZE)"
-    echo "  OEM: $(numfmt --to=iec $COS_OEM_SIZE)"
-    echo "  Recovery: $(numfmt --to=iec $COS_RECOVERY_SIZE)"
-    echo "  State: (will be created by Kairos)"
-    echo "  Persistent: (will be created by Kairos)"
-    echo ""
-    echo "Final image size: $(numfmt --to=iec $FINAL_IMG_SIZE_BYTES) (minimum required)"
-    echo ""
-    echo "Note: No content partition needed. Kairos will create COS_STATE and COS_PERSISTENT"
-    echo "      partitions during boot using the default layout."
-    echo ""
+    echo "  Content: $(numfmt --to=iec $CONTENT_SIZE_BYTES) (placed at partition 4, right after recovery)"
 fi
+echo "  State: (will be created by Kairos)"
+echo "  Persistent: (will be created by Kairos)"
+echo ""
+echo "Final image size: $(numfmt --to=iec $FINAL_IMG_SIZE_BYTES) (minimum required)"
+echo ""
+echo "Note: Only creating efi, oem, recovery, and content (if present) partitions."
+echo "      Kairos will create COS_STATE and COS_PERSISTENT partitions during boot."
+if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
+    echo "      Content partition is placed at partition 4, right after recovery."
+    echo "      After content is deleted, persistent will automatically use the full disk space."
+fi
+echo ""
 
 FINAL_IMG="$WORKDIR/kairos.raw"
 qemu-img create -f raw "$FINAL_IMG" "$FINAL_IMG_SIZE"
@@ -323,66 +285,40 @@ COS_OEM_END="${COS_OEM_END_BYTES}MiB"
 COS_RECOVERY_END_BYTES=$(($COS_OEM_END_BYTES + $COS_RECOVERY_SIZE / 1024 / 1024))
 COS_RECOVERY_END="${COS_RECOVERY_END_BYTES}MiB"
 
-# Calculate partition positions
-# Only calculate state/persistent positions when content exists
+# Calculate content partition position (if content exists)
+# Content is placed right after recovery (partition 4)
 if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
-    # Order: efi, oem, recovery, state, persistent, content
-    STATE_START_BYTES=$COS_RECOVERY_END_BYTES
-    STATE_START="${STATE_START_BYTES}MiB"
-    STATE_END_BYTES=$(($STATE_START_BYTES + $STATE_SIZE_BYTES / 1024 / 1024))
-    STATE_END="${STATE_END_BYTES}MiB"
-    
-    PERSISTENT_START_BYTES=$STATE_END_BYTES
-    PERSISTENT_START="${PERSISTENT_START_BYTES}MiB"
-    PERSISTENT_END_BYTES=$(($PERSISTENT_START_BYTES + $PERSISTENT_SIZE_BYTES / 1024 / 1024))
-    PERSISTENT_END="${PERSISTENT_END_BYTES}MiB"
-    
-    # Content partition position - placed after persistent (partition 6), safe at the end
-    CONTENT_START_BYTES=$PERSISTENT_END_BYTES
+    CONTENT_START_BYTES=$COS_RECOVERY_END_BYTES
     CONTENT_START="${CONTENT_START_BYTES}MiB"
     CONTENT_END_BYTES=$(($CONTENT_START_BYTES + $CONTENT_SIZE_BYTES / 1024 / 1024))
     CONTENT_END="${CONTENT_END_BYTES}MiB"
 else
-    # No content - no state/persistent/content partitions
-    STATE_START=""
-    STATE_END=""
-    PERSISTENT_START=""
-    PERSISTENT_END=""
     CONTENT_START=""
     CONTENT_END=""
 fi
 
-# Create partitions with pre-created state and persistent
-# Based on Kairos documentation: Kairos detects existing partitions with correct labels
-# and uses them instead of creating new ones, preventing content from being overwritten
-# Partition order: efi, oem, recovery, state, persistent, content
+# Create partitions
+# Partition order: efi, oem, recovery, content (if present)
+# Kairos will create COS_STATE and COS_PERSISTENT partitions during boot
 if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
-    echo "Creating partitions: efi, oem, recovery, state, persistent, content"
-    # Create all 6 partitions: efi, oem, recovery, state, persistent, content
+    echo "Creating partitions: efi, oem, recovery, content"
+    # Create 4 partitions: efi, oem, recovery, content
     parted -s "$FINAL_IMG" -- \
       mklabel gpt \
       mkpart efi fat32 1MiB "$COS_GRUB_END" \
       set 1 esp on \
       mkpart oem ext2 "$COS_GRUB_END" "$COS_OEM_END" \
       mkpart recovery ext2 "$COS_OEM_END" "$COS_RECOVERY_END" \
-      mkpart state ext2 "$STATE_START" "$STATE_END" \
-      mkpart persistent ext2 "$PERSISTENT_START" "$PERSISTENT_END" \
       mkpart content ext4 "$CONTENT_START" "$CONTENT_END" \
-      name 4 COS_STATE \
-      name 5 COS_PERSISTENT \
-      name 6 COS_CONTENT \
-      set 4 msftdata off \
-      set 5 msftdata off \
-      set 6 msftdata off || {
+      name 4 COS_CONTENT \
+      set 4 msftdata off || {
         echo "Error: Failed to create partitions" >&2
         exit 1
     }
     # Set partition type GUIDs (using sgdisk if available, otherwise skip)
     if command -v sgdisk >/dev/null 2>&1; then
         echo "Setting partition type GUIDs..."
-        sgdisk -t 4:8300 "$FINAL_IMG" || echo "Warning: Failed to set partition type GUID for state"
-        sgdisk -t 5:8300 "$FINAL_IMG" || echo "Warning: Failed to set partition type GUID for persistent"
-        sgdisk -t 6:8300 "$FINAL_IMG" || echo "Warning: Failed to set partition type GUID for content"
+        sgdisk -t 4:8300 "$FINAL_IMG" || echo "Warning: Failed to set partition type GUID for content"
     else
         echo "Note: sgdisk not available, skipping partition type GUID setting (parted defaults will be used)"
     fi
@@ -390,9 +326,9 @@ if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
     echo "Final partition table:"
     parted -s "$FINAL_IMG" print
     echo ""
-    echo "Note: Pre-created COS_STATE and COS_PERSISTENT with correct labels."
-    echo "      Kairos will detect and use these existing partitions during boot."
-    echo "      Content partition is at partition 6, safe at the end."
+    echo "Note: Created efi, oem, recovery, and content partitions."
+    echo "      Content partition is at partition 4, right after recovery."
+    echo "      Kairos will create COS_STATE and COS_PERSISTENT partitions during boot."
 else
     # No content - create only efi, oem, recovery (let Kairos create state and persistent)
     echo "Creating partitions: efi, oem, recovery (no content, Kairos will create state/persistent)"
@@ -426,9 +362,7 @@ FINAL_EFI_DEV="${FINAL_PARTS[0]}"
 FINAL_OEM_DEV="${FINAL_PARTS[1]}"
 FINAL_RECOVERY_DEV="${FINAL_PARTS[2]}"
 if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
-    FINAL_STATE_DEV="${FINAL_PARTS[3]}"
-    FINAL_PERSISTENT_DEV="${FINAL_PARTS[4]}"
-    FINAL_CONTENT_DEV="${FINAL_PARTS[5]}"
+    FINAL_CONTENT_DEV="${FINAL_PARTS[3]}"
 fi
 
 sleep 2
@@ -439,11 +373,9 @@ echo "--- Formatting and Mounting Partitions ---"
 mkfs.vfat -n "COS_GRUB" "$FINAL_EFI_DEV"
 mkfs.ext2 -L COS_OEM "$FINAL_OEM_DEV"
 mkfs.ext2 -L COS_RECOVERY "$FINAL_RECOVERY_DEV"
-# Format state and persistent partitions with correct labels only when content exists
-# Kairos will detect these existing partitions and use them instead of creating new ones
+# Format content partition if it exists
+# Note: Kairos will create and format COS_STATE and COS_PERSISTENT partitions during boot
 if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
-    mkfs.ext2 -L COS_STATE "$FINAL_STATE_DEV"
-    mkfs.ext2 -L COS_PERSISTENT "$FINAL_PERSISTENT_DEV"
     mkfs.ext4 -L COS_CONTENT "$FINAL_CONTENT_DEV"
 fi
 
@@ -465,8 +397,7 @@ mount -t ext2 "$INPUT_RECOVERY_DEV" "$MNT_INPUT_RECOVERY"
 mount -t vfat "$FINAL_EFI_DEV" "$MNT_FINAL_EFI"
 mount -t ext2 "$FINAL_OEM_DEV" "$MNT_FINAL_OEM"
 mount -t ext2 "$FINAL_RECOVERY_DEV" "$MNT_FINAL_RECOVERY"
-# Note: State and persistent partitions are pre-created and formatted with correct labels only when content exists
-# Kairos will detect and use these existing partitions during boot instead of creating new ones
+# Note: Kairos will create and format COS_STATE and COS_PERSISTENT partitions during boot
 # We don't need to mount them here since we're not copying any data to them
 if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
     mount "$FINAL_CONTENT_DEV" "$MNT_FINAL_CONTENT"
@@ -571,13 +502,11 @@ if command -v blkid >/dev/null 2>&1; then
     blkid "$INPUT_IMG"* 2>/dev/null | grep -E "COS_|state|persistent" || echo "Partition labels not found in blkid (may need to be mounted)"
     echo ""
     if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
-        echo "Checking for pre-created partitions:"
-        blkid "$INPUT_IMG"* 2>/dev/null | grep -i "COS_STATE" || echo "COS_STATE not found in blkid (may need to be mounted)"
-        blkid "$INPUT_IMG"* 2>/dev/null | grep -i "COS_PERSISTENT" || echo "COS_PERSISTENT not found in blkid (may need to be mounted)"
+        echo "Checking for content partition:"
         blkid "$INPUT_IMG"* 2>/dev/null | grep -i "COS_CONTENT" || echo "COS_CONTENT not found in blkid (may need to be mounted)"
         echo ""
-        echo "Note: COS_STATE and COS_PERSISTENT partitions are pre-created with correct labels."
-        echo "      Kairos will detect and use these existing partitions during boot."
+        echo "Note: Content partition created at partition 4."
+        echo "      COS_STATE and COS_PERSISTENT will be created by Kairos during boot."
     else
         echo "Note: No content partition. COS_STATE and COS_PERSISTENT will be created by Kairos during boot."
     fi

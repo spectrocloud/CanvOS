@@ -57,7 +57,3 @@ stages:
         name: "extract content from content partition"
         commands:
           - bash /opt/spectrocloud/scripts/cloud-content.sh
-      - if: '[ -f "/run/cos/active_mode" ]'
-        name: "extend persistent partition to use full disk (after content partition deletion)"
-        commands:
-          - bash /opt/spectrocloud/scripts/cloud-extend-persistent.sh
