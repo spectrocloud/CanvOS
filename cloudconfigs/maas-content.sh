@@ -113,11 +113,22 @@ if [ -d "$BUNDLE_CONTENT_DIR" ]; then
       # Handle .zst files - extract them to bundle directory
       if [ "$EXTENSION" = "zst" ]; then
         log "Extracting .zst file: $FILENAME"
-        if zstd -d -f "$file" -o "$CONTENT_DEST/${FILENAME%.zst}" 2>>"$LOG_FILE"; then
-          log "Successfully extracted $FILENAME"
+        DEST_FILE="$CONTENT_DEST/${FILENAME%.zst}"
+        log "Source: $file, Destination: $DEST_FILE"
+        
+        # Run extraction with explicit error handling
+        # Temporarily disable exit on error to handle extraction failures gracefully
+        set +e
+        $STYLUS_ROOT/opt/spectrocloud/bin/palette-agent content-extract --source "$file" --destination "$DEST_FILE" >> "$LOG_FILE" 2>&1
+        EXTRACT_EXIT_CODE=$?
+        set -e
+        
+        # Verify extraction succeeded by checking exit code and destination
+        if [ $EXTRACT_EXIT_CODE -eq 0 ] && { [ -f "$DEST_FILE" ] || [ -d "$DEST_FILE" ]; }; then
+          log "Successfully extracted $FILENAME to $DEST_FILE"
           BUNDLE_COUNT=$((BUNDLE_COUNT + 1))
         else
-          log_error "Failed to extract $FILENAME, copying as-is"
+          log_error "Extraction failed (exit code: $EXTRACT_EXIT_CODE) for $FILENAME, copying as-is"
           cp "$file" "$CONTENT_DEST/$FILENAME" || {
             log_error "Failed to copy $FILENAME"
           }
