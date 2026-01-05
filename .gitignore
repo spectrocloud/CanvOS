@@ -19,7 +19,7 @@ two-node-create.json
 two-node-update.json
 
 build/
-local/
+/local/
 keys/
 secure-boot/
 sb-private-ca/*.pem

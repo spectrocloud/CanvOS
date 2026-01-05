@@ -30,6 +30,100 @@ From the base image, this image is used to provide the initial flashing of a dev
 
 For advanced use cases, there may be a need to add additional packages not included in the [Base Images](https://github.com/kairos-io/kairos/tree/master/images). If those packages or configuration elements need to be added, they can be included in the empty `Dockerfile` located in this repo and they will be included in the build process and output artifacts.
 
+### Custom Hardware Specs Lookup
+
+A custom hardware specs lookup file can be provided to extend or override the default GPU specifications. This is useful for adding custom hardware entries or overriding default specifications.
+
+#### Location
+
+Place the custom lookup file at:
+```
+overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json
+```
+
+This file will be copied to `/etc/spectrocloud/custom-hardware-specs-lookup.json` in the final image.
+
+#### Configuration
+
+The file must be a valid JSON array. These entries will be merged with the default hardware specs lookup table, with the custom entries taking precedence for matching `vendorID` and `deviceID` combinations.
+
+#### Sample Entry
+
+Here's an example entry structure:
+
+```json
+[
+  {
+    "marketingName": "NVIDIA Quadro RTX 6000",
+    "vRAM": 24,
+    "migCapable": false,
+    "vendor": "NVIDIA",
+    "vendorID": "10de",
+    "deviceID": [
+      "1e36",
+      "1e78"
+    ],
+    "architecture": "Turing"
+  }
+]
+```
+
+#### Field Descriptions
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `marketingName` | Display name for the hardware | `"NVIDIA Quadro RTX 6000"` |
+| `vRAM` | Video RAM in GB (decimal) | `24` |
+| `migCapable` | Whether Multi-Instance GPU is supported (for NVIDIA GPUs) | `false` |
+| `vendor` | Vendor name | `"NVIDIA"`, `"AMD"`, `"Intel"` |
+| `vendorID` | PCI vendor ID in hexadecimal (lowercase) | `"10de"` |
+| `deviceID` | Array of PCI device IDs in hexadecimal (can have multiple IDs for same model) | `["1e36", "1e78"]` |
+| `architecture` | GPU architecture name | `"Turing"`, `"Ampere"`, `"Hopper"`, `"Blackwell"` |
+
+#### Usage
+
+There are two ways to provide the custom hardware specs lookup file:
+
+##### Method 1: During CanvOS Build (Recommended for Pre-staged Images)
+
+1. Create the file at `overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json`
+2. Add custom entries as a JSON array
+3. Build the images - the custom lookup file will be included automatically
+4. Custom entries will override default entries for matching `vendorID`+`deviceID` combinations
+
+##### Method 2: Via user-data (Runtime Configuration)
+
+The custom hardware specs lookup file can be provided via user-data using the `boot.after` stage (recommended) or `boot` stage. Note that `/etc` is read-only at runtime, but cloud-init can write files during boot stages.
+
+Add the following to the `user-data` file (replace the example entry with actual hardware specs):
+
+```yaml
+#cloud-config
+stages:
+  boot.after:
+    - files:
+        - path: "/etc/spectrocloud/custom-hardware-specs-lookup.json"
+          permissions: 0644
+          owner: 0
+          group: 0
+          content: |
+            [
+              {
+                "marketingName": "NVIDIA Quadro RTX 6000",
+                "vRAM": 24,
+                "migCapable": false,
+                "vendor": "NVIDIA",
+                "vendorID": "10de",
+                "deviceID": [
+                  "1e36",
+                  "1e78"
+                ],
+                "architecture": "Turing"
+              }
+            ]
+      name: "Configure custom hardware specs lookup"
+```
+
 ### Basic Usage
 
 1. Clone the repo at [CanvOS](https://github.com/spectrocloud/CanvOS.git)
@@ -91,7 +185,7 @@ v4.5.11
 > curl --location --request GET 'https://<palette-endpoint>/v1/services/stylus/version' --header 'Content-Type: application/json' --header 'Apikey: <api-key>'  | jq --raw-output '.spec.latestVersion.content | match("version: ([^\n]+)").captures[0].string'
 > # Sample Output
 > v4.6.16
-> 
+>
 > ```
 
 ```shell
@@ -149,6 +243,8 @@ cp .arg.template .arg
 | INCLUDE_MS_SECUREBOOT_KEYS  | Include Microsoft 3rd Party UEFI CA certificate in generated keys                                                                                                                                                                                                                                                                              | boolean | `true`                     |
 | AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                     |
 | EDGE_CUSTOM_CONFIG          | Path to edge custom configuration file                                                                                                                                                                                                                                                                                                         | string  | `.edge-custom-config.yaml` |
+| MAAS_IMAGE_NAME             | Custom name for the final MAAS image (without .raw.gz extension). Only used when building MAAS images.                                                                                                                                                                         | string  | `kairos-ubuntu-maas`       |
+| IS_MAAS                     | Build MAAS-compatible disk images. Set to `true` when building for MAAS deployment.                                                                                                                                                                                                                                                           | boolean | `false`                    |
 
 >For use cases where UEFI installers are burned into a USB and then edge hosts are booted with the USB. Use the OSBUILDER_VERSION=0.300.4 in the .arg file with canvos when building the installer.
 Version 0.300.3 does not support UEFI builds loading from USB.
@@ -325,6 +421,90 @@ AUTO_ENROLL_SECUREBOOT_KEYS=false # Auto enroll SecureBoot keys when device boot
 
 2. `./earthly.sh +build-all-images`
 
+### Building MAAS Images
+
+MAAS (Metal as a Service) is Canonical's bare-metal provisioning tool. CanvOS can build MAAS-compatible disk images in `dd.gz` format that can be uploaded directly to MAAS for deployment.
+
+#### Prerequisites
+
+- MAAS image builds only support Ubuntu (OS_DISTRIBUTION must be set to `ubuntu`)
+- The build process requires privileged mode (handled automatically by `earthly.sh`)
+
+#### Configuration
+
+1. In your `.arg` file, ensure the following settings:
+
+```shell
+OS_DISTRIBUTION=ubuntu
+OS_VERSION=22  # or 20, 24, etc.
+ARCH=amd64
+```
+
+2. (Optional) Set a custom name for the MAAS image:
+
+```shell
+MAAS_IMAGE_NAME=my-custom-maas-image
+```
+
+If not specified, the default name will be `kairos-ubuntu-maas`. The final output will be in `dd.gz` format (e.g., `my-custom-maas-image.raw.gz`).
+
+#### Building the MAAS Image
+
+Run the following command to build the MAAS image:
+
+```shell
+./earthly.sh +maas-image
+```
+
+The build process consists of two steps:
+1. **Step 1**: Generates the Kairos raw disk image from the installer image
+2. **Step 2**: Creates a composite MAAS image that includes:
+   - Kairos OS partitions (EFI, OEM, Recovery)
+   - Ubuntu root filesystem for MAAS deployment
+   - Curtin hooks for MAAS integration
+   - Cloud-init scripts for post-deployment configuration
+
+#### Output
+
+After a successful build, you will find the compressed MAAS image in the `build/` directory:
+
+```shell
+ls build/
+
+my-custom-maas-image.raw.gz
+my-custom-maas-image.raw.gz.sha256
+```
+
+The output includes:
+- **Compressed disk image** (`.raw.gz`): The MAAS-compatible disk image in `dd.gz` format
+- **SHA256 checksum** (`.sha256`): Checksum file for verification
+
+#### Uploading to MAAS
+
+1. Upload the `.raw.gz` file to MAAS as a custom image:
+   - Go to MAAS UI → Images → Custom Images
+   - Click "Upload custom image"
+   - Select the `.raw.gz` file
+   - Specify format as `dd.gz`
+   - MAAS will automatically decompress the image during upload
+
+2. The image is now ready to be deployed to bare-metal servers via MAAS.
+
+#### Image Contents
+
+The MAAS image includes:
+- **Content bundles**: Pre-staged container images and artifacts (if provided during build)
+- **Cluster config (SPC)**: Cluster definition files (if `CLUSTERCONFIG` is set in `.arg`)
+- **Local UI**: Local management interface (if `local-ui.tar` is provided)
+- **Curtin hooks**: Custom installation hooks for MAAS deployment
+- **Cloud-init integration**: Automatic userdata processing and recovery mode boot
+
+#### Troubleshooting
+
+- **Build fails with "OS_DISTRIBUTION is not set"**: Ensure `OS_DISTRIBUTION=ubuntu` is set in your `.arg` file
+- **Build fails with "OS_DISTRIBUTION is not ubuntu"**: MAAS images only support Ubuntu. Change `OS_DISTRIBUTION` to `ubuntu` in your `.arg` file
+- **Image not found after build**: Check that the build completed successfully and look for the `.raw.gz` file in the `build/` directory
+
 ### Building with private registry
 
 1. Make sure you have logged into your registry using docker login
@@ -390,7 +570,7 @@ earthly --push +build-all-images
 
 #### Configuration
 
-rsyslog config file: `overlay/files/etc/rsyslog.d/49-stylus.conf` copied to `/etc/rsyslog.d/49-stylus.conf`  
+rsyslog config file: `overlay/files/etc/rsyslog.d/49-stylus.conf` copied to `/etc/rsyslog.d/49-stylus.conf`
 logrotate config file: `overlay/files/etc/logrotate.d/stylus.conf` copied to `/etc/logrotate.d/stylus.conf`
 
 #### Send stylus audit events to user file

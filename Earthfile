@@ -28,9 +28,9 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG K3S_PROVIDER_VERSION=v4.7.1
 ARG KUBEADM_PROVIDER_VERSION=v4.7.3
-ARG RKE2_PROVIDER_VERSION=v4.7.1
+ARG RKE2_PROVIDER_VERSION=v4.8.1
 ARG NODEADM_PROVIDER_VERSION=v4.6.0
-ARG CANONICAL_PROVIDER_VERSION=v1.2.2
+ARG CANONICAL_PROVIDER_VERSION=v1.2.4
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -67,6 +67,7 @@ ARG KINE_VERSION=0.11.4
 
 # MAAS Variables
 ARG IS_MAAS=false
+ARG MAAS_IMAGE_NAME=kairos-ubuntu-maas
 
 # UKI Variables
 ARG IS_UKI=false
@@ -187,7 +188,7 @@ BASE_ALPINE:
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
-    SAVE ARTIFACT --keep-own /. rootfs
+    SAVE ARTIFACT --keep-ts --keep-own /. rootfs
 
 uki-iso:
     WORKDIR /build
@@ -220,10 +221,10 @@ trust-boot-unpack:
 
 stylus-image-pack:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
-    COPY --platform=linux/${ARCH} +stylus-package-image/ /stylus
+    COPY --keep-ts --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
     RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
-    SAVE ARTIFACT stylus-image.tar AS LOCAL ./build/
+    SAVE ARTIFACT --keep-ts stylus-image.tar AS LOCAL ./build/
 
 kairos-agent:
     FROM --platform=linux/${ARCH} $BASE_IMAGE
@@ -270,9 +271,10 @@ build-uki-iso:
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
-
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
+
+    # Add content files (split if > 3GB)
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
@@ -280,11 +282,12 @@ build-uki-iso:
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
 
-    #check if clusterconfig is passed in
+    # Add cluster config (SPC) if provided
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
+    # Add local-ui if provided (extract it)
     COPY --if-exists local-ui.tar /overlay/opt/spectrocloud/
     RUN if [ -f /overlay/opt/spectrocloud/local-ui.tar ]; then \
         tar -xf /overlay/opt/spectrocloud/local-ui.tar -C /overlay/opt/spectrocloud && \
@@ -316,7 +319,7 @@ iso:
     IF [ "$IS_UKI" = "true" ]
         COPY --platform=linux/${ARCH} +build-uki-iso/ .
     ELSE
-        COPY --platform=linux/${ARCH} +build-iso/ .
+        COPY --keep-ts --platform=linux/${ARCH} +build-iso/ .
     END
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
@@ -338,7 +341,6 @@ build-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
-    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
 
     # Generate grub.cfg based on FORCE_INTERACTIVE_INSTALL setting (without modifying source)
@@ -349,20 +351,25 @@ build-iso:
         sed 's/{{DEFAULT_ENTRY}}/0/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
         mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
     fi
+
+    # Add content files (split if > 3GB)
+    COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
         for file in /overlay/opt/spectrocloud/content/*.zst; do \
             split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
         done; \
         rm -f /overlay/opt/spectrocloud/content/*.zst; \
     fi
-    #check if clusterconfig is passed in
+
+    # Add cluster config (SPC) if provided
     IF [ "$CLUSTERCONFIG" != "" ]
         COPY --if-exists "$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz
     END
 
     WORKDIR /build
-    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    COPY --platform=linux/${ARCH} --keep-ts --keep-own +iso-image-rootfs/rootfs /build/image
 
+    # Add local-ui if provided (extract it)
     COPY --if-exists local-ui.tar /build/image/opt/spectrocloud/
     RUN if [ -f /build/image/opt/spectrocloud/local-ui.tar ]; then \
         tar -xf /build/image/opt/spectrocloud/local-ui.tar -C /build/image/opt/spectrocloud && \
@@ -380,7 +387,7 @@ build-iso:
     END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
-    SAVE ARTIFACT /iso/*
+    SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
 ## Generate UKI keys
@@ -637,14 +644,14 @@ build-provider-trustedboot-image:
 
 stylus-image:
     FROM --platform=linux/${ARCH} $STYLUS_BASE
-    SAVE ARTIFACT --keep-own  ./*
+    SAVE ARTIFACT --keep-ts --keep-own  ./*
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
 
 stylus-package-image:
     FROM --platform=linux/${ARCH} $STYLUS_PACKAGE_BASE
-    SAVE ARTIFACT --keep-own  ./*
+    SAVE ARTIFACT --keep-ts --keep-own  ./*
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
@@ -860,18 +867,52 @@ KAIROS_RELEASE:
 # Used to build the installer image. The installer ISO will be created from this.
 iso-image:
     FROM --platform=linux/${ARCH} +base-image
+    ARG IS_CLOUD_IMAGE=false
+    ARG IMAGE_REGISTRY
+    
 
     IF [ "$IS_UKI" = "false" ]
-        COPY --platform=linux/${ARCH} +stylus-image/ /
+        COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
     ELSE
-        COPY --platform=linux/${ARCH} +stylus-image/ /
+        COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
         RUN find /opt/spectrocloud/bin/. ! -name 'agent-provider-stylus' -type f -exec rm -f {} +
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+    IF [ "$IS_CLOUD_IMAGE" = "true" ]
+        COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
+        COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
+        RUN mkdir -p /opt/spectrocloud/scripts
+        COPY cloudconfigs/cloud-content.sh /opt/spectrocloud/scripts/cloud-content.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/cloud-content.sh
+        COPY cloudconfigs/cloud-extend-persistent.sh /opt/spectrocloud/scripts/cloud-extend-persistent.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/cloud-extend-persistent.sh
+
+        # Add local-ui if provided (extract it directly to the image)
+        # Note: local-ui is handled directly in the iso-image build, not via content partition
+        COPY --if-exists local-ui.tar /opt/spectrocloud/
+        RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
+            tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
+            rm -f /opt/spectrocloud/local-ui.tar; \
+        fi
+    END
 
     IF [ -f /etc/logrotate.d/stylus.conf ]
         RUN chmod 644 /etc/logrotate.d/stylus.conf
+    END
+
+    # For MAAS builds, install maas-content.sh script and handle local-ui
+    IF [ "$IS_MAAS" = "true" ]
+        RUN mkdir -p /opt/spectrocloud/scripts
+        COPY cloudconfigs/maas-content.sh /opt/spectrocloud/scripts/maas-content.sh
+        RUN chmod 755 /opt/spectrocloud/scripts/maas-content.sh
+        
+        # Add local-ui if provided (extract it directly to the image)
+        COPY --if-exists local-ui.tar /opt/spectrocloud/
+        RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
+            tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
+            rm -f /opt/spectrocloud/local-ui.tar; \
+        fi
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
@@ -885,6 +926,137 @@ iso-image:
         SAVE IMAGE index.docker.io/library/palette-installer-image:latest
     END
 
+cloud-image:
+    ARG IS_CLOUD_IMAGE=true
+
+    FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    # Copy the config file first if it exists
+    COPY --if-exists +validate-user-data/user-data /config.yaml
+    # Copy content partition script
+    COPY cloud-images/scripts/add-content-partition.sh /add-content-partition.sh
+    RUN chmod +x /add-content-partition.sh && \
+        ls -la /add-content-partition.sh && \
+        head -n 1 /add-content-partition.sh
+    # Copy content files, SPC, and edge-config if they exist
+    # Note: content-* directories need to be copied preserving their names
+    # Note: local-ui is handled directly in the iso-image build, not via content partition
+    COPY --if-exists content-*/ /workdir/
+    COPY --if-exists "$CLUSTERCONFIG" /workdir/spc.tgz
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /workdir/edge_custom_config.yaml
+    WORKDIR /workdir
+
+    WITH DOCKER \
+        --pull quay.io/kairos/auroraboot:v0.16.0 \
+        --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)
+        RUN mkdir -p /output && \
+            if [ -f /config.yaml ]; then \
+                docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    -v /config.yaml:/config.yaml:ro \
+                    -v /output:/aurora \
+                    --net host \
+                    --privileged \
+                    quay.io/kairos/auroraboot:v0.16.0 \
+                    --debug \
+                    --set "disable_http_server=true" \
+                    --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
+                    --set "disable_netboot=true" \
+                    --set "disk.raw=true" \
+                    --set "state_dir=/aurora" \
+                    --cloud-config /config.yaml; \
+            else \
+                docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    -v /output:/aurora \
+                    --net host \
+                    --privileged \
+                    quay.io/kairos/auroraboot:v0.16.0 \
+                    --debug \
+                    --set "disable_http_server=true" \
+                    --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
+                    --set "disable_netboot=true" \
+                    --set "disk.raw=true" \
+                    --set "state_dir=/aurora"; \
+            fi && \
+            echo "=== Finding raw image created by auroraboot ===" && \
+            RAW_IMG=$(find /output -type f \( -name "*.raw" -o -name "*.img" \) | head -n1) && \
+            if [ -z "$RAW_IMG" ]; then \
+                echo "Error: No raw image found in /output" >&2; \
+                ls -laR /output; \
+                exit 1; \
+            fi && \
+            echo "Found raw image: $RAW_IMG" && \
+            echo "=== Adding COS_CONTENT partition ===" && \
+            apk add --no-cache qemu-img parted multipath-tools dosfstools e2fsprogs util-linux coreutils device-mapper bash rsync gptfdisk && \
+            echo "=== Debug: Checking for content files ===" && \
+            echo "Current directory: $(pwd)" && \
+            echo "Content directories:" && \
+            ls -la /workdir/content-* 2>/dev/null || echo "No content-* directories found" && \
+            echo "Files in /workdir:" && \
+            ls -la /workdir/ 2>/dev/null || echo "Cannot list /workdir" && \
+            CLUSTERCONFIG_FILE="" && \
+            if [ -f /workdir/spc.tgz ]; then CLUSTERCONFIG_FILE="/workdir/spc.tgz"; echo "Found SPC file: $CLUSTERCONFIG_FILE"; fi && \
+            EDGE_CUSTOM_CONFIG_FILE="" && \
+            if [ -f /workdir/edge_custom_config.yaml ]; then EDGE_CUSTOM_CONFIG_FILE="/workdir/edge_custom_config.yaml"; echo "Found EDGE_CUSTOM_CONFIG: $EDGE_CUSTOM_CONFIG_FILE"; fi && \
+            echo "=== Running add-content-partition.sh ===" && \
+            echo "Checking script location..." && \
+            ls -la /add-content-partition.sh 2>&1 || echo "Script not found at /add-content-partition.sh" && \
+            if [ ! -f /add-content-partition.sh ]; then \
+                echo "Error: Script /add-content-partition.sh not found" >&2; \
+                echo "Checking for script in common locations:" >&2; \
+                find / -name "add-content-partition.sh" 2>/dev/null | head -5 || echo "Script not found anywhere" >&2; \
+                exit 1; \
+            fi && \
+            echo "Script found, checking permissions..." && \
+            ls -la /add-content-partition.sh && \
+            CLUSTERCONFIG="$CLUSTERCONFIG_FILE" \
+            EDGE_CUSTOM_CONFIG="$EDGE_CUSTOM_CONFIG_FILE" \
+            bash /add-content-partition.sh "$RAW_IMG" || { \
+                echo "Error: Failed to add content partition. Build cannot continue." >&2; \
+                echo "Debug info:" >&2; \
+                echo "  RAW_IMG: $RAW_IMG" >&2; \
+                echo "  Current dir: $(pwd)" >&2; \
+                echo "  Script exists: $([ -f /add-content-partition.sh ] && echo 'yes' || echo 'no')" >&2; \
+                echo "  Script location: $(ls -la /add-content-partition.sh 2>&1 || echo 'not found')" >&2; \
+                exit 1; \
+            }
+    END
+    SAVE ARTIFACT /output/* AS LOCAL ./build/
+
+aws-cloud-image:
+    FROM +ubuntu
+
+    RUN apt-get update && apt-get install -y unzip ca-certificates curl
+    RUN curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+        unzip -q awscliv2.zip -d aws_install_temp && \  
+        ./aws_install_temp/aws/install && \
+        rm -rf awscliv2.zip aws_install_temp
+
+    ARG REGION
+    ARG S3_BUCKET
+    ARG S3_KEY
+    # Get the base image name from the BASE_IMAGE variable
+
+    WORKDIR /workdir
+    RUN ls -laR /workdir
+    COPY cloud-images/scripts/create-raw-to-ami.sh create-raw-to-ami.sh
+    COPY +cloud-image/ /workdir/
+
+    RUN --secret AWS_PROFILE \
+    --secret AWS_ACCESS_KEY_ID \
+    --secret AWS_SECRET_ACCESS_KEY \
+    RAW_FILE_PATH=$(ls /workdir/*.raw) && \
+    echo "RAW_FILE_PATH: $RAW_FILE_PATH" && \
+    if [ ! -f "$RAW_FILE_PATH" ]; then \
+        echo "Error: RAW file '/workdir/$RAW_FILE_PATH' not found." && \
+        ls -la /workdir/ && \
+        exit 1; \
+    else \
+        echo "RAW file '$RAW_FILE_PATH' found." && \
+        echo "Proceeding with creation of AMI..."; \
+    fi && \
+    /workdir/create-raw-to-ami.sh $RAW_FILE_PATH
+
 iso-disk-image:
     FROM scratch
 
@@ -896,6 +1068,9 @@ iso-disk-image:
 kairos-raw-image:
     FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
     
+    # Copy user-data if it exists (for embedded userdata in MAAS builds)
+    COPY --if-exists +validate-user-data/user-data /workdir/user-data
+
     # Use Docker-in-Docker to convert iso-image to raw
     WITH DOCKER \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
@@ -910,16 +1085,34 @@ kairos-raw-image:
                 docker images || true; \
                 exit 1; \
             fi && \
+            echo "=== Checking Docker image size ===" && \
+            IMAGE_SIZE=$(docker images --format "{{.Size}}" index.docker.io/library/palette-installer-image:latest 2>/dev/null || docker images --format "{{.Size}}" palette-installer-image:latest 2>/dev/null || echo "unknown") && \
+            echo "Image size: $IMAGE_SIZE" && \
+            if echo "$IMAGE_SIZE" | grep -qE '[0-9]+GB'; then \
+                SIZE_GB=$(echo "$IMAGE_SIZE" | sed 's/GB//' | awk '{print int($1)}'); \
+                if [ "$SIZE_GB" -gt 10 ]; then \
+                    echo "⚠️  WARNING: Image is very large (${IMAGE_SIZE}). This may cause auroraboot extraction issues."; \
+                    echo "Consider reducing content bundle size or excluding large files."; \
+                fi; \
+            fi && \
             echo "=== Running auroraboot to convert image ===" && \
-            echo "Using auroraboot v0.6.4 (known working version)" && \
-            docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
+            echo "Using auroraboot v0.15.0 (known working version)" && \
+            echo "=== Docker images available ===" && \
+            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.ID}}" | head -10 && \
+            echo "=== Running auroraboot (this may take a while for large images) ===" && \
+            AURORABOOT_CMD="docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.15.0 \
                 --debug \
-                --set "disable_http_server=true" \
-                --set "disable_netboot=true" \
-                --set "disk.efi=true" \
-                --set "container_image=index.docker.io/library/palette-installer-image:latest"  \
-                --set "state_dir=/aurora" 2>&1 | tee /workdir/auroraboot.log; \
+                --set \"disable_http_server=true\" \
+                --set \"disable_netboot=true\" \
+                --set \"disk.efi=true\" \
+                --set \"container_image=palette-installer-image:latest\" \
+                --set \"state_dir=/aurora\"" && \
+            if [ -f /workdir/user-data ]; then \
+                echo "Found user-data file, passing to AuroraBoot as cloud-config" && \
+                AURORABOOT_CMD="$AURORABOOT_CMD --cloud-config /aurora/user-data"; \
+            fi && \
+            eval $AURORABOOT_CMD 2>&1 | tee /workdir/auroraboot.log; \
             AURORABOOT_EXIT=$?; \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
             echo "=== Auroraboot log size: $(wc -l < /workdir/auroraboot.log 2>/dev/null || echo '0') lines ===" && \
@@ -1087,4 +1280,3 @@ UPX:
     COMMAND
     ARG bin
     RUN upx -1 $bin
-

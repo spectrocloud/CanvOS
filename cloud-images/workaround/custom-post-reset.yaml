@@ -52,3 +52,8 @@ stages:
         - if mount | grep /oem >/dev/null; then umount /oem || /bin/true; fi
         - if [ -e /dev/mapper/oem ]; then cryptsetup close /dev/mapper/oem; fi
       name: "Run uki copy public key after install commands"
+    network:
+      - if: '[ -f "/run/cos/active_mode" ]'
+        name: "extract content from content partition"
+        commands:
+          - bash /opt/spectrocloud/scripts/cloud-content.sh
