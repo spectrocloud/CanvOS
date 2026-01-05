@@ -1,0 +1,15 @@
+ARG SPECTRO_THIRD_PARTY_IMAGE
+ARG TARGETPLATFORM
+
+FROM --platform=${TARGETPLATFORM} ${SPECTRO_THIRD_PARTY_IMAGE} AS source
+
+FROM --platform=${TARGETPLATFORM} alpine-certs AS third-party
+
+ARG ARCH
+ARG BIN_TYPE
+ARG binary
+
+WORKDIR /WORKDIR
+COPY --from=source /binaries/${binary}/latest/${BIN_TYPE}/${ARCH}/${binary} /WORKDIR/${binary}
+COPY --from=source /binaries/${binary}/latest/${BIN_TYPE}/${ARCH}/${binary}.version /WORKDIR/${binary}.version
+RUN upx -1 /WORKDIR/${binary}
