@@ -1062,6 +1062,7 @@ kairos-raw-image:
 
     # Use Docker-in-Docker to convert iso-image to raw
     WITH DOCKER \
+        --pull $AURORABOOT_IMAGE \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image)
         RUN echo "=== Setting up workdir ===" && \
             mkdir -p /workdir && \
@@ -1084,22 +1085,19 @@ kairos-raw-image:
                     echo "Consider reducing content bundle size or excluding large files."; \
                 fi; \
             fi && \
-            echo "=== Running auroraboot to convert image ===" && \
-            echo "Using auroraboot v0.15.0 (known working version)" && \
-            echo "=== Docker images available ===" && \
-            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.ID}}" | head -10 && \
             echo "=== Running auroraboot (this may take a while for large images) ===" && \
             AURORABOOT_CMD="docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.15.0 \
+                -v /workdir:/aurora --net host --rm $AURORABOOT_IMAGE \
                 --debug \
                 --set \"disable_http_server=true\" \
                 --set \"disable_netboot=true\" \
                 --set \"disk.efi=true\" \
                 --set \"container_image=palette-installer-image:latest\" \
-                --set \"state_dir=/aurora\"" && \
-            if [ -f /workdir/user-data ]; then \
-                echo "Found user-data file, passing to AuroraBoot as cloud-config" && \
-                AURORABOOT_CMD="$AURORABOOT_CMD --cloud-config /aurora/user-data"; \
+                --set \"state_dir=/aurora\"
+                --cloud-config /aurora/user-data" && \
+            if [ ! -f /workdir/user-data ]; then \
+                echo "No user-data file found, creating a dummy cloud-config" && \
+                echo "#cloud-config" > /aurora/user-data; \
             fi && \
             eval $AURORABOOT_CMD 2>&1 | tee /workdir/auroraboot.log; \
             AURORABOOT_EXIT=$?; \
