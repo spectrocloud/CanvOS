@@ -1097,7 +1097,7 @@ kairos-raw-image:
                 --cloud-config /aurora/user-data" && \
             if [ ! -f /workdir/user-data ]; then \
                 echo "No user-data file found, creating a dummy cloud-config" && \
-                echo "#cloud-config" > /aurora/user-data; \
+                echo "#cloud-config" > /workdir/user-data; \
             fi && \
             eval $AURORABOOT_CMD 2>&1 | tee /workdir/auroraboot.log; \
             AURORABOOT_EXIT=$?; \
