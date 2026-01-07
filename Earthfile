@@ -26,6 +26,8 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
+ARG AURORABOOT_VERSION=v0.16.0
+ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.7.1
 ARG KUBEADM_PROVIDER_VERSION=v4.7.3
 ARG RKE2_PROVIDER_VERSION=v4.8.1
@@ -948,7 +950,7 @@ cloud-image:
     # Create a default config.yaml if it doesn't exist. This is needed to avoid auroraboot from creating its own default cloud-config.
     RUN [ ! -f /config.yaml ] && echo "#cloud-config" > /config.yaml
     WITH DOCKER \
-        --pull quay.io/kairos/auroraboot:v0.16.0 \
+        --pull $AURORABOOT_IMAGE \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)
         RUN mkdir -p /output && \
             docker run --rm \
@@ -957,7 +959,7 @@ cloud-image:
                 -v /output:/aurora \
                 --net host \
                 --privileged \
-                quay.io/kairos/auroraboot:v0.16.0 \
+                $AURORABOOT_IMAGE \
                 --debug \
                 --set "disable_http_server=true" \
                 --set "container_image=docker://index.docker.io/library/palette-installer-image:latest" \
