@@ -436,7 +436,7 @@ MAAS (Metal as a Service) is Canonical's bare-metal provisioning tool. CanvOS ca
 
 ```shell
 OS_DISTRIBUTION=ubuntu
-OS_VERSION=22  # or 20, 24, etc.
+OS_VERSION=22  # or 24
 ARCH=amd64
 ```
 
@@ -487,6 +487,17 @@ The output includes:
    - Select the `.raw.gz` file
    - Specify format as `dd.gz`
    - MAAS will automatically decompress the image during upload
+  Or
+  Use maas command to upload the custom image to MAAS 
+  Example:
+  maas login admin http://<MAAS_URL>:5240/MAAS <API_KEY>
+  maas admin boot-resources create \
+    name='custom/my-raw-image' \
+    title='My Custom RAW Image' \
+    architecture='amd64/generic' \
+    filetype='ddgz' \
+    content@=/path/to/image.raw.gz
+  
 
 2. The image is now ready to be deployed to bare-metal servers via MAAS.
 
