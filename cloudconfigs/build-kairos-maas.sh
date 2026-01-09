@@ -345,7 +345,7 @@ if [ "$HAS_CONTENT" = "true" ] && [ "$CONTENT_SIZE_BYTES" -gt 0 ]; then
     # Copy SPC file if it exists to spc-config folder (preserve original filename)
     if [ -n "$CLUSTERCONFIG_FILE" ] && [ -f "$CLUSTERCONFIG_FILE" ]; then
         SPC_FILENAME=$(basename "$CLUSTERCONFIG_FILE")
-        cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/spc-config/$SPC_FILENAME"
+        cp -v "$CLUSTERCONFIG_FILE" "$MNT_FINAL_CONTENT/spc-config/spc.tgz"
         echo "Copied SPC file to spc-config folder: $SPC_FILENAME"
     fi
     
