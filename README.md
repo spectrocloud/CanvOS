@@ -268,28 +268,98 @@ To build just the installer image
 ./earthly.sh +iso --ARCH=amd64
 ```
 
-To build public cloud images(currently only aws is supported)
-aws cloud credentials should be passed in the `.secret` file on the repo dir
-example:
-```shell
-/workspace/spectrocloud/CanvOS$ cat .secret
-AWS_PROFILE=""
-AWS_ACCESS_KEY_ID="xxxxxx"
-AWS_SECRET_ACCESS_KEY="xxxxxxx"
-```
-Also region and bucket details need to be passed in .arg file
-```shell
-#aws cloud
-REGION="us-east-1"
-S3_BUCKET="test-bkp"
-S3_KEY=""
-```
-user-data should be kept under `cloud-images/config/user-data.yaml`
+### Building AWS Cloud Images
 
-To build AWS cloud image:
+CanvOS can build Amazon Machine Images (AMIs) for AWS EC2 deployment. The build process converts the raw disk image into an AMI that can be launched directly in AWS.
+
+#### Prerequisites
+
+1. **AWS Credentials**: Configure AWS credentials in the `.secret` file in the repo directory.
+
+   **Option 1: Using AWS Profile (Recommended)**
+   ```shell
+   AWS_PROFILE="production"
+   ```
+
+   **Option 2: Using Access Keys**
+   ```shell
+   AWS_PROFILE=""
+   AWS_ACCESS_KEY_ID="ACCESS_EXAMPLE_KEY"
+   AWS_SECRET_ACCESS_KEY="SECRET_EXAMPLE_KEY"
+   ```
+
+2. **AWS Configuration**: Add the following to your `.arg` file:
+   ```shell
+   # AWS Cloud Image Configuration
+   REGION="us-east-1"
+   S3_BUCKET="my-canvos-images"
+   S3_KEY=""  # Optional: defaults to raw file name if not set
+   ```
+
+3. **User Data Configuration**: Create or update `user-data` in the CanvOS root directory with your cloud-init configuration:
+   ```yaml
+   #cloud-config
+   install:
+     device: /dev/sda
+     reboot: true
+     poweroff: false
+   stylus:
+     debug: true
+     site:
+       paletteEndpoint: xxxx.spectrocloud.com
+       autoRegister: true
+       edgeHostToken: xxxxxxxxxxx
+       insecureSkipVerify: false
+   ```
+
+#### Building the AWS Cloud Image
+
+Run the following command to build the AWS cloud image:
+
 ```shell
-./earthly.sh -P +aws-cloud-image --ARCH=amd64
+earthly -P +aws-cloud-image --ARCH=amd64
 ```
+
+The `-P` flag enables privileged mode (required for Docker-in-Docker operations).
+
+#### Build Process
+
+The AWS cloud image build consists of two steps:
+
+1. **Step 1**: Builds the cloud image (raw disk image) using auroraboot
+   - Creates a raw disk image from the installer image
+   - Includes user-data configuration
+   - Supports content bundles and cluster configs
+
+2. **Step 2**: Converts raw image to AMI
+   - Uploads raw image to S3 bucket
+   - Imports snapshot from S3
+   - Registers AMI in EC2
+   - Returns AMI ID upon completion
+
+#### Output
+
+After a successful build, the AMI will be registered in your AWS account. The build output will display:
+- AMI ID (e.g., `ami-0123456789abcdef0`)
+- AMI Name (based on `S3_KEY` or auto-generated)
+- Snapshot ID (created during import)
+
+#### IAM Permissions Required
+
+The AWS credentials must have the following permissions:
+- `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` on the S3 bucket
+- `ec2:ImportSnapshot`, `ec2:DescribeImportSnapshotTasks`
+- `ec2:DescribeSnapshots`, `ec2:RegisterImage`
+- `ec2:DescribeImages`, `ec2:CreateTags`
+
+#### Troubleshooting
+
+- **"RAW file not found"**: Ensure `+cloud-image` target completed successfully
+- **"Missing required configuration variables"**: Verify `REGION` and `S3_BUCKET` are set in `.arg` file
+- **"AWS credentials not found"**: Check `.secret` file has valid AWS credentials
+- **"Snapshot import failed"**: Verify IAM permissions and S3 bucket accessibility
+
+For more detailed information, see [AWS Cloud Image Design Document](docs/aws-cloud-image-design.md).
 
 To build the provider images
 
