@@ -948,7 +948,7 @@ cloud-image:
     WORKDIR /workdir
 
     # Create a default config.yaml if it doesn't exist. This is needed to avoid auroraboot from creating its own default cloud-config.
-    RUN [ ! -f /config.yaml ] && echo "#cloud-config" > /config.yaml
+    RUN if [ ! -f /config.yaml ]; then echo "#cloud-config" > /config.yaml; fi
     WITH DOCKER \
         --pull $AURORABOOT_IMAGE \
         --load index.docker.io/library/palette-installer-image:latest=(+iso-image --IS_CLOUD_IMAGE=true)

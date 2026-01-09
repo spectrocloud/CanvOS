@@ -174,7 +174,7 @@ AWS_SECRET_ACCESS_KEY=<secret-key>
 
 #### Dependencies
 - `+cloud-image` target must be executed first (provides raw image)
-- `cloud-images/config/user-data.yaml` must exist (used by cloud-image)
+- `user-data` must exist in the CanvOS root directory (used by cloud-image)
 
 ### 4.2 Outputs
 
@@ -223,7 +223,7 @@ AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
 ### 5.3 user-data.yaml Configuration
 
-Located at: `cloud-images/config/user-data.yaml`
+Located at: `user-data` (in the CanvOS root directory)
 
 ```yaml
 #cloud-config
@@ -378,7 +378,7 @@ The AWS credentials must have the following permissions:
 
 ```bash
 # Build AWS cloud image
-./earthly.sh -P +aws-cloud-image \
+earthly -P +aws-cloud-image \
   --REGION=us-east-1 \
   --S3_BUCKET=my-canvos-images \
   --S3_KEY=canvos-image.raw \
@@ -393,7 +393,7 @@ cat > .secret <<EOF
 AWS_PROFILE=production
 EOF
 
-./earthly.sh -P +aws-cloud-image \
+earthly -P +aws-cloud-image \
   --REGION=us-east-1 \
   --S3_BUCKET=my-canvos-images \
   --ARCH=amd64
@@ -408,7 +408,7 @@ AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
 AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 EOF
 
-./earthly.sh -P +aws-cloud-image \
+earthly -P +aws-cloud-image \
   --REGION=us-east-1 \
   --S3_BUCKET=my-canvos-images \
   --ARCH=amd64
@@ -418,13 +418,13 @@ EOF
 
 ```bash
 # Step 1: Build installer image
-./earthly.sh +iso-image --ARCH=amd64
+earthly +iso-image --ARCH=amd64
 
 # Step 2: Build cloud image (creates raw file)
-./earthly.sh +cloud-image --ARCH=amd64
+earthly +cloud-image --ARCH=amd64
 
 # Step 3: Convert to AMI
-./earthly.sh -P +aws-cloud-image \
+earthly -P +aws-cloud-image \
   --REGION=us-east-1 \
   --S3_BUCKET=my-canvos-images \
   --ARCH=amd64
@@ -526,7 +526,7 @@ EOF
 **Cause**: `+cloud-image` target didn't produce a raw file
 **Solution**: 
 - Verify `+cloud-image` target completed successfully
-- Check that `cloud-images/config/user-data.yaml` exists
+- Check that `user-data` exists in the CanvOS root directory
 - Review auroraboot logs in build output
 
 #### Issue: "Missing required configuration variables"
@@ -604,7 +604,7 @@ Enable debug output by checking:
 
 - `Earthfile`: Main build definition
 - `cloud-images/scripts/create-raw-to-ami.sh`: Conversion script
-- `cloud-images/config/user-data.yaml`: Cloud-init configuration
+- `user-data`: Cloud-init configuration (in the CanvOS root directory)
 - `.arg.template`: Argument template file
 - `README.md`: Project documentation
 
