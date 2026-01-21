@@ -1,0 +1,31 @@
+ARG SPECTRO_PUB_REPO
+ARG GOLANG_VERSION
+
+FROM ${SPECTRO_PUB_REPO}/third-party/golang:${GOLANG_VERSION}-alpine AS go-deps
+
+RUN apk add libc-dev binutils-gold clang
+
+FROM go-deps AS build
+
+COPY internal /build/internal
+
+WORKDIR /build/internal
+
+ARG VERSION=dev
+ARG BIN
+ARG SRC
+ARG GOOS
+ARG GOARCH
+
+ENV GOOS=${GOOS}
+ENV GOARCH=${GOARCH}
+ENV GO_LDFLAGS="-X github.com/spectrocloud/stylus/pkg/version.Version=${VERSION} -w -s"
+ENV CC=clang
+
+RUN go mod download
+
+RUN go-build-static.sh -a -o /build/bin/${BIN} ./${SRC}
+
+FROM scratch AS export
+ARG BIN
+COPY --from=build /build/bin/${BIN} /${BIN}
