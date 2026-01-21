@@ -720,7 +720,7 @@ base-image:
 
         IF [ "$IS_UKI" = "false" ]
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-                apt-get upgrade $APT_UPGRADE_FLAGS && \
+                apt-get upgrade $APT_UPGRADE_FLAGS --fix-missing && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
                     parted \ # Used for creating and managing disk partitions.
