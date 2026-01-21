@@ -1216,7 +1216,7 @@ iso-efi-size-check:
     RUN mcopy -i fat.img esp/ABC ::
     RUN mkdir -p iso
     RUN cp fat.img iso
-    RUN xorriso -as mkisofs -e fat.img -no-emul-boot -o efi-size-check.iso iso
+    RUN xorriso -as mkisofs -e fat.img -no-emul-boot -isohybrid-gpt-basdat -o efi-size-check.iso iso
 
     SAVE ARTIFACT efi-size-check.iso AS LOCAL ./build/
 
