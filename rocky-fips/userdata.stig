@@ -1,16 +1,22 @@
 #cloud-config
-install:
-  reboot: true
-  poweroff: false
 stylus:
-  vip:
-    skip: false
   managementMode: local
   featureGate: UserDataForm
-  installationMode: airgap
-stages:
   
+install:
+  poweroff: true
+
+  # Set grub options
+  grub_options:
+    # additional Kernel option cmdline to apply
+    extra_cmdline: "fips=1"
+
+stages:
   after-install:
+    - name: "Disable NetworkManager Enable Systemd Networkd"
+      commands: |
+          systemctl disable --now NetworkManager
+          systemctl enable -- systemd-networkd
     - name: "Copy in security rule files"
       files:
       - path: "/var/lib/spectro/new-palette-agent.te"
@@ -90,6 +96,12 @@ stages:
           allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=1
           allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=0
           allow perm=execute exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=1
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.8/opt/spectrocloud/bin/palette-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.8/opt/spectrocloud/bin/palette-agent trust=0 : dir=/system/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.8/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.8/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/bin/ trust=1
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.8/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=0
+          allow perm=execute exe=/opt/spectrocloud/updates/4.8.8/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/usr/sbin/ trust=1
           allow perm=execute exe=/system/providers/agent-provider-kubeadm trust=0 : dir=/usr/bin/ trust=0
           allow perm=execute exe=/system/providers/agent-provider-kubeadm trust=0 : dir=/opt/spectrocloud/ trust=0
           allow perm=execute exe=/usr/bin/k9s trust=0 : dir=/usr/bin/ trust=0
@@ -107,6 +119,7 @@ stages:
           allow perm=open exe=/opt/spectrocloud/updates/4.7.13/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
           allow perm=open exe=/opt/spectrocloud/updates/4.7.16/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
           allow perm=open exe=/opt/spectrocloud/updates/4.8.1/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
+          allow perm=open exe=/opt/spectrocloud/updates/4.8.8/opt/spectrocloud/bin/stylus-agent trust=0 : dir=/opt/spectrocloud/ trust=0
           allow perm=open exe=/usr/local/nvidia/toolkit/nvidia-container-cli.real trust=0 : dir=/usr/local/nvidia/toolkit/ trust=0
       - path: "/var/lib/spectro/configure-firewalld.sh"
         permissions: 0700
@@ -166,30 +179,6 @@ stages:
           
           # Reload firewalld cache
           firewall-cmd --reload
-      - path: "/etc/NetworkManager/system-connections/scbr-100.nmconnection"
-        permissions: 0600
-        owner: 0
-        group: 0
-        content: |
-          [connection]
-          id=scbr-100
-          uuid=144787b5-4b3a-33f1-addb-dcf19859d7f6
-          type=vxlan
-          interface-name=scbr-100
-          timestamp=1759919846
-          [ethernet]
-          cloned-mac-address=7A:22:F5:3B:76:B1
-          [vxlan]
-          id=2
-          local=100.64.192.2
-          [ipv4]
-          address1=100.64.192.2/23
-          address2=100.64.192.1/23
-          method=manual
-          [ipv6]
-          addr-gen-mode=default
-          method=auto
-          [proxy]
       - path: "/etc/sysctl.d/99-zzz-override_cilium.conf"
         permissions: 0600
         owner: 0
@@ -283,8 +272,10 @@ stages:
     - name: "Harden OS"
       commands:
         - |
+          # Ensure EPEL repository is available for scap-security-guide and openscap
+          dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm || true
           dnf -y install scap-security-guide openscap
-          oscap xccdf eval --remediate --profile xccdf_org.ssgproject.content_profile_stig  /usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml
+          oscap xccdf eval --remediate --profile xccdf_org.ssgproject.content_profile_stig  /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
           fips-mode-setup --enable
           sed -i -e 's/# ec2-user/ec2-user/g' /etc/sudoers.d/90-cloud-init-users
           sed -i -e 's/# azureuser/azureuser/g' /etc/sudoers.d/90-cloud-init-users
@@ -313,13 +304,13 @@ stages:
           cp -f /var/lib/spectro/00-palette.rules /etc/fapolicyd/rules.d/00-palette.rules
           nmcli connection reload
           sysctl --system
-  initramfs:  
+  initramfs:
     - users:
-       kairos:
-         groups:
-           - wheel
-         passwd: kairos
-      name: "Configure user"
+        kairos:
+          groups:
+            - sudo
+          passwd: kairos
+      name: Create user and assign to sudo group
     - name: "Update kernel parameter to allow GPU operator to run."
       commands:
         - |
