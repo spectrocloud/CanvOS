@@ -14,9 +14,9 @@ install:
 stages:
   after-install:
     - name: "Disable NetworkManager Enable Systemd Networkd"
-      commands: |
-          systemctl disable --now NetworkManager
-          systemctl enable -- systemd-networkd
+      commands:
+        - systemctl disable --now NetworkManager
+        - systemctl enable --now systemd-networkd
     - name: "Copy in security rule files"
       files:
       - path: "/var/lib/spectro/new-palette-agent.te"
@@ -273,8 +273,8 @@ stages:
       commands:
         - |
           # Ensure EPEL repository is available for scap-security-guide and openscap
-          dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm || true
-          dnf -y install scap-security-guide openscap
+          # (can't do this on an immutable OS) dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm || true
+          # (can't do this on an immutable OS) dnf -y install scap-security-guide openscap
           oscap xccdf eval --remediate --profile xccdf_org.ssgproject.content_profile_stig  /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
           fips-mode-setup --enable
           sed -i -e 's/# ec2-user/ec2-user/g' /etc/sudoers.d/90-cloud-init-users
@@ -285,7 +285,7 @@ stages:
         - |
           setenforce 0
           systemctl stop fapolicyd
-          dnf -y install selinux-policy-devel kernel-headers kernel-devel jq zstd conntrack
+          # (can't do this on an immutable OS) dnf -y install selinux-policy-devel kernel-headers kernel-devel jq zstd conntrack
           mkdir /oem /system
           semanage fcontext -a -t etc_runtime_t "/oem(/.*)?"
           semanage fcontext -a -t etc_runtime_t "/system(/.*)?"

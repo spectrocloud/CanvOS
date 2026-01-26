@@ -1,7 +1,7 @@
 # Kairos init image
 FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
 
-FROM rockylinux/rockylinux:9.6 as base
+FROM rockylinux/rockylinux:9.6 AS base
 
 # Generate os-release file
 ARG KAIROS_VERSION=v3.5.9
@@ -9,7 +9,7 @@ ARG KAIROS_VERSION=v3.5.9
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
+RUN dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 # Rocky Linux doesn't require subscription manager, repos are available by default
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
@@ -62,6 +62,11 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     iscsi-initiator-utils \
     iptables ethtool socat iproute-tc conntrack \
     kernel kernel-modules kernel-modules-extra \
+    #cuff added -->
+    scap-security-guide \
+    openscap \
+    selinux-policy-devel kernel-headers kernel-devel jq zstd conntrack \
+    #cuff added <--
     rsync jq && dnf clean all
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
