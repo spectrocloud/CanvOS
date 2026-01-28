@@ -136,6 +136,146 @@ def write_kairos_image(image_path, target_disk):
     LOG.info("Kairos dd image successfully written to %s", target_disk)
 
 
+def fix_bootloader(target_disk):
+    """
+    Fix UEFI bootloader after dd operation.
+    This ensures the UEFI firmware recognizes the boot entries.
+    """
+    LOG.info("Fixing bootloader for %s", target_disk)
+    
+    # Refresh partition table
+    try:
+        subp(["partprobe", target_disk])
+        subp(["udevadm", "settle"])
+    except Exception as e:
+        LOG.warning("Failed to refresh partition table: %s", e)
+    
+    # Find EFI system partition (COS_GRUB label)
+    efi_partition = None
+    try:
+        out, _ = subp(
+            ["blkid", "-t", "LABEL=COS_GRUB", "-o", "device"],
+            capture=True
+        )
+        efi_partition = out.strip()
+        if efi_partition:
+            LOG.info("Found EFI system partition: %s", efi_partition)
+    except Exception as e:
+        LOG.warning("blkid search for COS_GRUB failed: %s", e)
+    
+    if not efi_partition:
+        LOG.warning("EFI system partition (COS_GRUB) not found, skipping bootloader fix")
+        return
+    
+    # Mount EFI partition
+    efi_mount = "/mnt/kairos-efi"
+    os.makedirs(efi_mount, exist_ok=True)
+    
+    try:
+        LOG.info("Mounting EFI partition %s to %s", efi_partition, efi_mount)
+        subp(["mount", efi_partition, efi_mount])
+        
+        # Look for GRUB EFI file
+        # Common locations: EFI/BOOT/bootx64.efi, EFI/kairos/grubx64.efi, etc.
+        efi_paths = [
+            os.path.join(efi_mount, "EFI/BOOT/bootx64.efi"),
+            os.path.join(efi_mount, "EFI/kairos/grubx64.efi"),
+            os.path.join(efi_mount, "EFI/BOOT/grubx64.efi"),
+        ]
+        
+        grub_efi = None
+        for path in efi_paths:
+            if os.path.exists(path):
+                grub_efi = path
+                # Get relative path from EFI mount
+                grub_efi_rel = os.path.relpath(path, efi_mount)
+                LOG.info("Found GRUB EFI file: %s (relative: %s)", path, grub_efi_rel)
+                break
+        
+        if not grub_efi:
+            LOG.warning("GRUB EFI file not found in common locations, skipping efibootmgr")
+            # Still try to reinstall GRUB if grub-install is available
+            try:
+                # Determine disk device (remove partition number)
+                if "nvme" in target_disk:
+                    # /dev/nvme0n1p1 -> /dev/nvme0n1
+                    disk_dev = target_disk.rsplit("p", 1)[0]
+                else:
+                    # /dev/sda1 -> /dev/sda, /dev/vda1 -> /dev/vda
+                    disk_dev = target_disk.rstrip("0123456789")
+                
+                LOG.info("Attempting to reinstall GRUB to %s", disk_dev)
+                # Try grub-install (if available in the deployment environment)
+                try:
+                    subp(["grub-install", "--target=x86_64-efi", "--efi-directory=" + efi_mount, "--bootloader-id=kairos", "--removable", disk_dev])
+                    LOG.info("GRUB reinstalled successfully")
+                except Exception as e:
+                    LOG.warning("grub-install failed (may not be available in deployment environment): %s", e)
+            except Exception as e:
+                LOG.warning("Failed to reinstall GRUB: %s", e)
+        else:
+            # Use efibootmgr to create/update UEFI boot entry
+            try:
+                # Determine disk device and partition number for efibootmgr
+                # Use efi_partition (e.g., /dev/sda1) not target_disk (e.g., /dev/sda)
+                if "nvme" in efi_partition:
+                    # /dev/nvme0n1p1 -> /dev/nvme0n1, partition 1
+                    disk_dev = efi_partition.rsplit("p", 1)[0]
+                    part_num = efi_partition.rsplit("p", 1)[1]
+                else:
+                    # /dev/sda1 -> /dev/sda, partition 1
+                    disk_dev = efi_partition.rstrip("0123456789")
+                    part_num = efi_partition[len(disk_dev):]
+                
+                # Get relative path from EFI mount
+                grub_efi_rel = os.path.relpath(grub_efi, efi_mount)
+                
+                # Create UEFI boot entry using efibootmgr
+                # Format: efibootmgr -c -d /dev/sda -p 1 -L "Kairos" -l "\EFI\BOOT\bootx64.efi"
+                # Note: Windows-style path separators in -l parameter
+                efi_path_windows = grub_efi_rel.replace("/", "\\")
+                
+                LOG.info("Creating UEFI boot entry: disk=%s, partition=%s, path=%s", disk_dev, part_num, efi_path_windows)
+                
+                # Remove existing entries with same label (if any)
+                try:
+                    out, _ = subp(["efibootmgr"], capture=True)
+                    for line in out.splitlines():
+                        if "Kairos" in line or "kairos" in line:
+                            # Extract boot number (e.g., "Boot0001")
+                            import re
+                            match = re.search(r"Boot(\d{4})", line)
+                            if match:
+                                boot_num = match.group(1)
+                                LOG.info("Removing existing boot entry: Boot%s", boot_num)
+                                subp(["efibootmgr", "-b", boot_num, "-B"], capture=True)
+                except Exception as e:
+                    LOG.warning("Failed to check/remove existing boot entries: %s", e)
+                
+                # Create new boot entry
+                subp([
+                    "efibootmgr",
+                    "-c",
+                    "-d", disk_dev,
+                    "-p", part_num,
+                    "-L", "Kairos",
+                    "-l", efi_path_windows
+                ])
+                LOG.info("UEFI boot entry created successfully")
+            except Exception as e:
+                LOG.warning("efibootmgr failed (may not be available or firmware issue): %s", e)
+                LOG.info("Bootloader files are in place, but UEFI boot entry may need manual configuration")
+        
+        subp(["sync"])
+        
+    finally:
+        LOG.info("Unmounting EFI partition")
+        try:
+            subp(["umount", efi_mount])
+        except Exception as e:
+            LOG.warning("Failed to unmount EFI partition: %s", e)
+
+
 def find_oem_partition(target_disk):
     """Refresh partition table and locate the OEM partition by label."""
     LOG.info("Refreshing partition table for %s", target_disk)
@@ -446,6 +586,9 @@ def main():
     # 1. Locate and write the Kairos dd image
     image_path = find_kairos_image(state, target_root)
     write_kairos_image(image_path, target_disk)
+    
+    # 1a. Fix bootloader after dd (ensure UEFI boot entries are recognized)
+    fix_bootloader(target_disk)
 
     # 2. Copy content, edge-config, clusterconfig, and local-ui from Ubuntu rootfs to Kairos image
     copy_content_to_kairos(target_root, target_disk)

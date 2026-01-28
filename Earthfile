@@ -1079,19 +1079,22 @@ build-kairos-dd-image:
 build-maas-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     
-    # Ensure cloud-init is installed (required by MAAS for first-boot configuration)
+    # Ensure cloud-init and bootloader tools are installed (required by MAAS for first-boot configuration)
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ]
-        RUN if ! command -v cloud-init >/dev/null 2>&1; then \
+        RUN if ! command -v cloud-init >/dev/null 2>&1 || ! command -v efibootmgr >/dev/null 2>&1; then \
             # Set timezone to UTC to avoid interactive prompts
             export DEBIAN_FRONTEND=noninteractive && \
             echo "tzdata tzdata/Areas select Etc" | debconf-set-selections && \
             echo "tzdata tzdata/Zones/Etc select UTC" | debconf-set-selections && \
             apt-get update && \
             apt-get install -y --no-install-recommends cloud-init && \
+            IF [ "$ARCH" = "amd64" ] \
+                apt-get install -y --no-install-recommends efibootmgr grub-efi-amd64-bin || true; \
+            END \
             apt-get clean && \
             rm -rf /var/lib/apt/lists/*; \
         else \
-            echo "cloud-init already installed"; \
+            echo "cloud-init and bootloader tools already installed"; \
         fi
     END
     
