@@ -1013,8 +1013,11 @@ maas-iso-image:
 # Build raw dd image from maas-iso-image using auroraboot
 # This creates a raw disk image that contains the full Kairos OS with A/B partitions
 # Uses Docker-in-Docker approach similar to the existing kairos-raw-image target
+# ARG AURORABOOT_VERSION: use v0.6.4 for known-good; v0.15.0+ may use different output paths
 build-kairos-dd-image:
     FROM --platform=linux/${ARCH} --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    
+    ARG AURORABOOT_VERSION=v0.6.4
     
     # Install required tools
     RUN apk add --no-cache bash findutils
@@ -1039,9 +1042,9 @@ build-kairos-dd-image:
              echo "Contents of /etc/kairos-release:" && \
              docker run --rm index.docker.io/library/palette-installer-image:maas cat /etc/kairos-release 2>/dev/null || echo "File not found" && \
              exit 1) && \
-            echo "=== Running auroraboot to convert image to raw disk ===" && \
+            echo "=== Running auroraboot (version: ${AURORABOOT_VERSION}) to convert image to raw disk ===" && \
             docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:v0.6.4 \
+                -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:${AURORABOOT_VERSION} \
                 --debug \
                 --set "disable_http_server=true" \
                 --set "disable_netboot=true" \
@@ -1050,18 +1053,18 @@ build-kairos-dd-image:
                 --set "state_dir=/aurora" > /workdir/auroraboot.log 2>&1; \
             AURORABOOT_EXIT=$?; \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
-            if [ $AURORABOOT_EXIT -ne 0 ]; then \
+            echo "=== Auroraboot log (always shown for debugging) ===" && \
+            cat /workdir/auroraboot.log || true && \
+            echo "=== Workdir contents after auroraboot ===" && \
+            ls -laR /workdir/ || true && \
+            if [ "$AURORABOOT_EXIT" -ne 0 ]; then \
                 echo "ERROR: Auroraboot failed with exit code $AURORABOOT_EXIT"; \
-                echo "=== Full Auroraboot log ==="; \
-                cat /workdir/auroraboot.log || true; \
                 exit 1; \
             fi && \
             echo "=== Finding raw image ===" && \
-            RAW_IMG=$(find /workdir -type f \( -name "*.raw" -o -name "*.img" \) -not -name "*.iso" | head -n1) && \
+            RAW_IMG=$(find /workdir -type f \( -name "*.raw" -o -name "*.img" -o -name "disk.raw" \) ! -name "*.iso" 2>/dev/null | head -n1) && \
             if [ -z "$RAW_IMG" ]; then \
-                echo "ERROR: No raw image found in /workdir"; \
-                echo "Contents of /workdir:"; \
-                ls -laR /workdir/ || true; \
+                echo "ERROR: No raw image found in /workdir (searched for *.raw, *.img, disk.raw)"; \
                 echo "=== Auroraboot log ==="; \
                 cat /workdir/auroraboot.log || true; \
                 exit 1; \
