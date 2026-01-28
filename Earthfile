@@ -1043,15 +1043,17 @@ build-kairos-dd-image:
              docker run --rm index.docker.io/library/palette-installer-image:maas cat /etc/kairos-release 2>/dev/null || echo "File not found" && \
              exit 1) && \
             echo "=== Running auroraboot (version: ${AURORABOOT_VERSION}) to convert image to raw disk ===" && \
+            ( set +e; \
             docker run --privileged -v /var/run/docker.sock:/var/run/docker.sock \
                 -v /workdir:/aurora --net host --rm quay.io/kairos/auroraboot:${AURORABOOT_VERSION} \
                 --debug \
                 --set "disable_http_server=true" \
                 --set "disable_netboot=true" \
                 --set "disk.efi=true" \
-                --set "container_image=index.docker.io/library/palette-installer-image:maas" \
+                --set "container_image=oci:index.docker.io/library/palette-installer-image:maas" \
                 --set "state_dir=/aurora" > /workdir/auroraboot.log 2>&1; \
-            AURORABOOT_EXIT=$?; \
+            echo $? > /workdir/auroraboot.exit; ) && \
+            AURORABOOT_EXIT=$(cat /workdir/auroraboot.exit) && \
             echo "=== Auroraboot finished with exit code: $AURORABOOT_EXIT ===" && \
             echo "=== Auroraboot log (always shown for debugging) ===" && \
             cat /workdir/auroraboot.log || true && \
