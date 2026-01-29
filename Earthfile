@@ -1074,7 +1074,13 @@ build-kairos-dd-image:
             echo "✅ Found raw image: $RAW_IMG" && \
             echo "Raw image size: $(du -h "$RAW_IMG" | cut -f1)" && \
             cp "$RAW_IMG" /kairos-dd.img && \
-            echo "✅ Kairos dd image created: /kairos-dd.img"
+            echo "✅ Kairos dd image created: /kairos-dd.img" && \
+            echo "=== Verifying EFI binary (optional; helps diagnose 'Platform does not support this image') ===" && \
+            ( apk add --no-cache file util-linux 2>/dev/null || true ) && \
+            ( LOOP=$$(losetup -f 2>/dev/null) && [ -n "$$LOOP" ] && losetup -P "$$LOOP" /kairos-dd.img 2>/dev/null && \
+              mkdir -p /mnt-efi && mount "$$LOOP"p1 /mnt-efi 2>/dev/null && \
+              ( [ -f /mnt-efi/EFI/BOOT/bootx64.efi ] && file /mnt-efi/EFI/BOOT/bootx64.efi || [ -f /mnt-efi/EFI/BOOT/shimx64.efi ] && file /mnt-efi/EFI/BOOT/shimx64.efi || echo "No bootx64.efi/shimx64.efi in ESP" ) && \
+              umount /mnt-efi 2>/dev/null; losetup -d "$$LOOP" 2>/dev/null ) || echo "EFI verification skipped (loop mount not available)"
     END
     
     SAVE ARTIFACT /kairos-dd.img AS LOCAL kairos-dd.img

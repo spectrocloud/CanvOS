@@ -14,6 +14,7 @@ Responsibilities:
 """
 
 import os
+import re
 import sys
 import textwrap
 
@@ -175,9 +176,12 @@ def fix_bootloader(target_disk):
         LOG.info("Mounting EFI partition %s to %s", efi_partition, efi_mount)
         subp(["mount", efi_partition, efi_mount])
         
-        # Look for GRUB EFI file
-        # Common locations: EFI/BOOT/bootx64.efi, EFI/kairos/grubx64.efi, etc.
+        # Look for EFI boot file. Prefer signed shim for Secure Boot compatibility.
+        # "Platform does not support this image" on reboot-after-deploy is often
+        # Secure Boot rejecting an unsigned loader; using shimx64.efi when present
+        # ensures the signed chain (shim -> grub -> kernel) is used.
         efi_paths = [
+            os.path.join(efi_mount, "EFI/BOOT/shimx64.efi"),
             os.path.join(efi_mount, "EFI/BOOT/bootx64.efi"),
             os.path.join(efi_mount, "EFI/kairos/grubx64.efi"),
             os.path.join(efi_mount, "EFI/BOOT/grubx64.efi"),
@@ -241,9 +245,8 @@ def fix_bootloader(target_disk):
                 try:
                     out, _ = subp(["efibootmgr"], capture=True)
                     for line in out.splitlines():
-                        if "Kairos" in line or "kairos" in line:
+                            if "Kairos" in line or "kairos" in line:
                             # Extract boot number (e.g., "Boot0001")
-                            import re
                             match = re.search(r"Boot(\d{4})", line)
                             if match:
                                 boot_num = match.group(1)
@@ -252,16 +255,36 @@ def fix_bootloader(target_disk):
                 except Exception as e:
                     LOG.warning("Failed to check/remove existing boot entries: %s", e)
                 
-                # Create new boot entry
-                subp([
+                # Create new boot entry (efibootmgr -c prints the new BootXXXX line)
+                out, _ = subp([
                     "efibootmgr",
                     "-c",
                     "-d", disk_dev,
                     "-p", part_num,
                     "-L", "Kairos",
                     "-l", efi_path_windows
-                ])
-                LOG.info("UEFI boot entry created successfully")
+                ], capture=True)
+                LOG.info("UEFI boot entry created: %s", out.strip() if out else "")
+
+                # Set this entry first in boot order so firmware uses it (avoids booting
+                # another ESP with wrong/unsupported EFI and "Platform does not support this image")
+                match = re.search(r"Boot(\d{4})", out or "")
+                if match:
+                    new_boot = match.group(1)
+                    try:
+                        order_out, _ = subp(["efibootmgr"], capture=True)
+                        # Build new order: our entry first, then existing order without our entry
+                        existing = []
+                        for line in (order_out or "").splitlines():
+                            m = re.search(r"BootOrder is (.+)", line)
+                            if m:
+                                existing = [b for b in m.group(1).split(",") if b != new_boot]
+                                break
+                        new_order = ",".join([new_boot] + existing[:9])
+                        subp(["efibootmgr", "-o", new_order])
+                        LOG.info("Set Kairos (Boot%s) as first boot option", new_boot)
+                    except Exception as e:
+                        LOG.warning("Could not set boot order: %s", e)
             except Exception as e:
                 LOG.warning("efibootmgr failed (may not be available or firmware issue): %s", e)
                 LOG.info("Bootloader files are in place, but UEFI boot entry may need manual configuration")
