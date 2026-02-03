@@ -1,0 +1,14 @@
+#!/bin/bash
+
+USERNAME=$1
+PASSWORD=$2
+BASE_IMAGE="${3:-rhel9-byoi-stig}"
+FIPS_ENABLED="${4:-false}"
+
+if [ "$FIPS_ENABLED" = "true" ]; then
+    echo "Building RHEL 9 STIG FIPS image..."
+    docker build --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" -f Dockerfile.rhel9-fips .
+else
+    echo "Building RHEL 9 STIG image..."
+    docker build --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
+fi

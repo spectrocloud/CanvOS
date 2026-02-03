@@ -212,10 +212,11 @@ do so (now or later) by using -c with the switch command. Example:
 cp .arg.template .arg
 ```
 
-6. To build RHEL core, RHEL FIPS or Ubuntu fips, sles base images switch to respective directories and build the base image.
+6. To build RHEL core, RHEL FIPS, RHEL 9 STIG, or Ubuntu fips, sles base images switch to respective directories and build the base image.
    The base image built can be passed as argument to build the installer and provider images.
-   Follow the instructions in the respective sub-folders (rhel-fips, ubuntu-fips) to create base images.
+   Follow the instructions in the respective sub-folders (rhel-fips, rhel-stig, ubuntu-fips) to create base images.
    For ubuntu-fips, this image can be used as base image - `gcr.io/spectro-images-public/ubuntu-fips:v3.0.11`
+   For RHEL 9 STIG, see `rhel-stig/README.md` for build instructions.
    Skip this step if your base image is ubuntu or opensuse-leap. If you are building ubuntu or opensuse-leap installer images, do not pass the BASE_IMAGE attribute as an arg to build command.
 
 7. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
@@ -372,6 +373,20 @@ To build the fips enabled ubuntu installer image
 ```shell
 ./earthly.sh +iso --BASE_IMAGE=gcr.io/spectro-images-public/ubuntu-fips:v3.0.11 --FIPS_ENABLED=true --ARCH=amd64 --PE_VERSION=v4.4.0
 ```
+
+To build the RHEL 9 STIG installer image (non-FIPS)
+
+```shell
+./earthly.sh +iso --BASE_IMAGE=rhel9-byoi-stig --OS_DISTRIBUTION=rhel --ARCH=amd64
+```
+
+To build the RHEL 9 STIG FIPS installer image
+
+```shell
+./earthly.sh +iso --BASE_IMAGE=rhel9-byoi-stig-fips --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
+```
+
+**Note**: For RHEL 9 STIG images, you must first build the base image using the instructions in `rhel-stig/README.md`. RHEL 9 STIG images require Red Hat subscription credentials and apply DISA STIG security hardening. Firewall rules must be configured at runtime for Palette cluster operations - see `rhel-stig/README.md` for firewall configuration details.
 
 Output
 
