@@ -112,11 +112,12 @@ upgrade_packages() {
 		apt-get update
 		apt-get -y upgrade
 		check_error $? "Failed upgrading packages" 1
-		apt-get install -y auditd apparmor-utils libpam-pwquality
+		# CIS 1.3.1 - Install AIDE for file integrity monitoring
+		apt-get install -y auditd apparmor-utils libpam-pwquality aide
 		if  $? -ne 0 ; then
 			echo 'deb http://archive.ubuntu.com/ubuntu focal main restricted' > /etc/apt/sources.list.d/repotmp.list
 			apt-get update
-			apt-get install -y auditd apparmor-utils libpam-pwquality
+			apt-get install -y auditd apparmor-utils libpam-pwquality aide
 			check_error $? "Failed installing audit packages" 1
 			rm -f /etc/apt/sources.list.d/repotmp.list
 			apt-get update
@@ -251,6 +252,8 @@ harden_ssh() {
 	update_config_files 'TCPKeepAlive' 'TCPKeepAlive no' ${config_file}
 	update_config_files 'AllowAgentForwarding' 'AllowAgentForwarding no' ${config_file}
 	update_config_files 'DisableForwarding' 'DisableForwarding yes' ${config_file}
+	# CIS 5.2.6 - Ensure SSH access is configured with pubkey authentication
+	update_config_files 'PubkeyAuthentication' 'PubkeyAuthentication yes' ${config_file}
 
 	#############Shell timeout policy##################
 
@@ -373,6 +376,14 @@ harden_audit() {
 		"-w /var/log/tallylog -p wa -k logins"
 	)
 
+	# CIS 4.1.3.* - Session initiation information audit rules
+	local file_path_sessionrules="/etc/audit/rules.d/50-session.rules"
+	local content_sessionrules=(
+		"-w /var/run/utmp -p wa -k session"
+		"-w /var/log/wtmp -p wa -k session"
+		"-w /var/log/btmp -p wa -k session"
+	)
+
 	local content_DACrules=(
 		"-a always,exit -F arch=b64 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod"
 		"-a always,exit -F arch=b32 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod"
@@ -452,6 +463,11 @@ harden_audit() {
 		# Create or append to the DAC rules
 	for line in "${content_DACrules[@]}"; do
 		echo "$line" | sudo tee -a "$file_path_DACrules" >/dev/null
+	done
+
+	# CIS 4.1.3.* - Create or append to the session rules
+	for line in "${content_sessionrules[@]}"; do
+		echo "$line" | sudo tee -a "$file_path_sessionrules" >/dev/null
 	done
 
 
@@ -630,6 +646,11 @@ remove_services() {
 		systemctl disable bluetooth 2>/dev/null || true
 		systemctl disable apport 2>/dev/null || true
 		systemctl disable autofs 2>/dev/null || true
+
+		# CIS 1.6.1 - Disable kdump service
+		echo "Disabling kdump service"
+		systemctl disable kdump-tools 2>/dev/null || true
+		systemctl mask kdump-tools 2>/dev/null || true
 	fi
 
 	if [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
