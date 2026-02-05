@@ -40,16 +40,43 @@ bash build.sh.rhel9 myuser@example.com mypassword rhel9-byoi-stig-fips true
 
 ## Using the Base Image
 
-After building the base image, use it as input in installer generation with `earthly +iso`:
+After building the base image, you need to make it available to Earthly. Earthly requires the image to be in a Docker registry (not just locally). You have two options:
 
+### Option 1: Push to a Docker Registry (Recommended)
+
+1. Tag the image with your registry:
+   ```bash
+   # For non-FIPS
+   docker tag rhel9-byoi-stig <your-registry>/rhel9-byoi-stig:latest
+   docker push <your-registry>/rhel9-byoi-stig:latest
+   
+   # For FIPS
+   docker tag rhel9-byoi-stig-fips <your-registry>/rhel9-byoi-stig-fips:latest
+   docker push <your-registry>/rhel9-byoi-stig-fips:latest
+   ```
+
+2. Use the full registry path in Earthly:
+   ```bash
+   # For non-FIPS
+   ./earthly.sh +iso --BASE_IMAGE=<your-registry>/rhel9-byoi-stig:latest --OS_DISTRIBUTION=rhel --ARCH=amd64
+   
+   # For FIPS
+   ./earthly.sh +iso --BASE_IMAGE=<your-registry>/rhel9-byoi-stig-fips:latest --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
+   ```
+
+### Option 2: Use Local Registry or Docker Hub
+
+If using Docker Hub:
 ```bash
-./earthly.sh +iso --BASE_IMAGE=rhel9-byoi-stig --ARCH=amd64
+# Tag and push to Docker Hub
+docker tag rhel9-byoi-stig <your-dockerhub-username>/rhel9-byoi-stig:latest
+docker push <your-dockerhub-username>/rhel9-byoi-stig:latest
+
+# Then use in Earthly
+./earthly.sh +iso --BASE_IMAGE=<your-dockerhub-username>/rhel9-byoi-stig:latest --OS_DISTRIBUTION=rhel --ARCH=amd64
 ```
 
-For FIPS variant:
-```bash
-./earthly.sh +iso --BASE_IMAGE=rhel9-byoi-stig-fips --FIPS_ENABLED=true --ARCH=amd64
-```
+**Important**: Earthly cannot use local-only Docker images. The image must be pushed to a registry that Earthly can access.
 
 ## STIG Compliance
 

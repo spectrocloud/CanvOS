@@ -377,16 +377,25 @@ To build the fips enabled ubuntu installer image
 To build the RHEL 9 STIG installer image (non-FIPS)
 
 ```shell
-./earthly.sh +iso --BASE_IMAGE=rhel9-byoi-stig --OS_DISTRIBUTION=rhel --ARCH=amd64
+# First, build and push the base image (see rhel-stig/README.md)
+# Then use the full registry path:
+./earthly.sh +iso --BASE_IMAGE=<your-registry>/rhel9-byoi-stig:latest --OS_DISTRIBUTION=rhel --ARCH=amd64
 ```
 
 To build the RHEL 9 STIG FIPS installer image
 
 ```shell
-./earthly.sh +iso --BASE_IMAGE=rhel9-byoi-stig-fips --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
+# First, build and push the base image (see rhel-stig/README.md)
+# Then use the full registry path:
+./earthly.sh +iso --BASE_IMAGE=<your-registry>/rhel9-byoi-stig-fips:latest --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
 ```
 
-**Note**: For RHEL 9 STIG images, you must first build the base image using the instructions in `rhel-stig/README.md`. RHEL 9 STIG images require Red Hat subscription credentials and apply DISA STIG security hardening. Firewall rules must be configured at runtime for Palette cluster operations - see `rhel-stig/README.md` for firewall configuration details.
+**Note**: For RHEL 9 STIG images, you must:
+1. First build the base image using `rhel-stig/build.sh.rhel9` (see `rhel-stig/README.md`)
+2. Tag and push the image to a Docker registry (Earthly cannot use local-only images)
+3. Use the full registry path in the `BASE_IMAGE` argument
+
+RHEL 9 STIG images require Red Hat subscription credentials and apply DISA STIG security hardening. Firewall rules must be configured at runtime for Palette cluster operations - see `rhel-stig/README.md` for firewall configuration details.
 
 Output
 

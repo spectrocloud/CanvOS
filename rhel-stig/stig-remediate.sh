@@ -75,6 +75,38 @@ if [ $REMEDIATION_EXIT -ne 0 ]; then
     echo "Review /tmp/stig-remediation.log for details"
 fi
 
+# Ensure critical boot directories are preserved after STIG remediation
+# STIG remediation might remove or modify directories needed for boot
+echo "Ensuring boot-critical directories and configurations are preserved..."
+
+# Ensure /run structure is preserved (needed for overlayfs during boot)
+# Create tmpfiles.d entry to ensure /run/rootfsbase is created during boot
+mkdir -p /usr/lib/tmpfiles.d
+cat > /usr/lib/tmpfiles.d/kairos-rootfsbase.conf <<'EOF'
+# Create /run/rootfsbase directory for overlayfs during live CD boot
+# This is required by dracut-live module for overlayfs root filesystem
+d /run/rootfsbase 0755 root root -
+EOF
+
+# Ensure dracut-live module is not disabled
+# Check if dracut.conf exists and ensure dracut-live is included
+if [ -f /etc/dracut.conf ]; then
+    # Ensure dracut-live is not in omit_dracutmodules
+    sed -i 's/^omit_dracutmodules.*dracut-live.*//g' /etc/dracut.conf || true
+    # Ensure dracut-live is in add_dracutmodules if not already
+    if ! grep -q "add_dracutmodules.*dracut-live" /etc/dracut.conf; then
+        echo "add_dracutmodules+=\" dracut-live \"" >> /etc/dracut.conf
+    fi
+fi
+
+# Ensure dracut-live is included in all dracut.conf.d files
+for conf_file in /etc/dracut.conf.d/*.conf; do
+    if [ -f "$conf_file" ]; then
+        # Remove any lines that omit dracut-live
+        sed -i '/omit_dracutmodules.*dracut-live/d' "$conf_file" || true
+    fi
+done
+
 # Clean up
 rm -f "$REMEDIATION_SCRIPT"
 

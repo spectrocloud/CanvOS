@@ -95,10 +95,6 @@ RUN systemctl enable systemd-udevd
 RUN systemctl unmask systemd-logind.service
 RUN systemctl enable systemd-logind.service
 
-# Apply STIG remediation
-COPY stig-remediate.sh /tmp/stig-remediate.sh
-RUN chmod +x /tmp/stig-remediate.sh && /tmp/stig-remediate.sh && rm /tmp/stig-remediate.sh
-
 COPY overlay/rhel9/ /
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
@@ -106,6 +102,11 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all
+
+# Apply STIG remediation AFTER kairos-init but BEFORE initramfs regeneration
+# This ensures the base system is set up correctly before applying STIG rules
+COPY stig-remediate.sh /tmp/stig-remediate.sh
+RUN chmod +x /tmp/stig-remediate.sh && /tmp/stig-remediate.sh && rm /tmp/stig-remediate.sh
 
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac || true
 
