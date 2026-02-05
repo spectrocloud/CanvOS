@@ -23,6 +23,11 @@ RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel9/ /
 
+# Copy dracut module early to ensure it's available for initramfs generation
+COPY overlay/rhel9/usr/lib/dracut/modules.d/90rootfsbase /usr/lib/dracut/modules.d/90rootfsbase
+RUN chmod +x /usr/lib/dracut/modules.d/90rootfsbase/*.sh 2>/dev/null || true
+
+# Copy dracut.conf early so the rootfsbase module is included in initramfs
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
 COPY --from=kairos-init /kairos-init /kairos-init
