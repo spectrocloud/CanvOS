@@ -114,15 +114,30 @@ upgrade_packages() {
 		apt-get -y upgrade
 		check_error $? "Failed upgrading packages" 1
 		# CIS 1.3.1 - Install AIDE for file integrity monitoring
-		DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor-utils libpam-pwquality aide
+		# CIS 5.5.1 - Install vlock for screen locking
+		DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor apparmor-utils libpam-pwquality aide vlock
 		if  $? -ne 0 ; then
 			echo 'deb http://archive.ubuntu.com/ubuntu focal main restricted' > /etc/apt/sources.list.d/repotmp.list
 			apt-get update
-			DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor-utils libpam-pwquality aide
+			DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor apparmor-utils libpam-pwquality aide vlock
 			check_error $? "Failed installing audit packages" 1
 			rm -f /etc/apt/sources.list.d/repotmp.list
 			apt-get update
 		fi
+
+		# CIS 1.3.2 - Initialize AIDE database
+		echo "Initializing AIDE database..."
+		if [[ -x /usr/sbin/aideinit ]]; then
+			/usr/sbin/aideinit -y -f 2>/dev/null || true
+		fi
+
+		# CIS 1.7.1.2 - Enable AppArmor
+		echo "Enabling AppArmor..."
+		systemctl enable apparmor 2>/dev/null || true
+
+		# CIS 4.2.1.2 - Enable rsyslog
+		echo "Enabling rsyslog..."
+		systemctl enable rsyslog 2>/dev/null || true
 	fi
 
 	if [[ ${OS_FLAVOUR} == "centos" ]]; then
