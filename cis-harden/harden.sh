@@ -109,17 +109,16 @@ get_os() {
 ##########################################################################
 upgrade_packages() {
 	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		export DEBIAN_FRONTEND=noninteractive
 		apt-get update
 		apt-get -y upgrade
 		check_error $? "Failed upgrading packages" 1
-		# CIS 1.3.1 - Install AIDE for file integrity monitoring (--no-install-recommends to avoid postfix)
-		apt-get install -y auditd apparmor-utils libpam-pwquality
-		apt-get install -y --no-install-recommends aide
+		# CIS 1.3.1 - Install AIDE for file integrity monitoring
+		DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor-utils libpam-pwquality aide
 		if  $? -ne 0 ; then
 			echo 'deb http://archive.ubuntu.com/ubuntu focal main restricted' > /etc/apt/sources.list.d/repotmp.list
 			apt-get update
-			apt-get install -y auditd apparmor-utils libpam-pwquality
-			apt-get install -y --no-install-recommends aide
+			DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor-utils libpam-pwquality aide
 			check_error $? "Failed installing audit packages" 1
 			rm -f /etc/apt/sources.list.d/repotmp.list
 			apt-get update
