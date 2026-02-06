@@ -2,11 +2,16 @@
 
 #
 # This script is to harden Kairos, use in the CanvOS Dockerfile
-# Benchmark targeted: CIS Ubuntu Linux 22.04 LTS Benchmark Level 2 - Server
+# Benchmark targeted: CIS Ubuntu Linux 22.04 LTS Benchmark - Server
+# Also supports: Ubuntu 20.04 LTS with appropriate fallbacks
 # Based on CIS Benchmark v2.0.0, released 2024-03-28
 #
 # This script is designed to run during ISO build (not on a live system)
 # It writes configuration files that will be applied at boot time
+#
+# Key version differences:
+# - Ubuntu 22.04+: Uses pam_faillock.so and yescrypt encryption
+# - Ubuntu 20.04: Uses pam_tally2.so and SHA512 encryption
 #
 
 
@@ -976,22 +981,49 @@ harden_auth() {
 
 	##############Password lockout policies##################
 	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
-		# Ubuntu/Debian uses common-auth, common-account, common-password
-		if [[ -f /etc/pam.d/common-auth ]]; then
-			cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
-			{
-				echo "auth required                   pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600"
-				echo "auth [success=1 default=ignore] pam_unix.so nullok"
-				echo "auth [default=die]              pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600"
-				echo "auth sufficient                 pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600"
-				echo "auth requisite                  pam_deny.so"
-				echo "auth required                   pam_permit.so"
-			} >> /etc/pam.d/common-auth
+		# Get Ubuntu version for compatibility checks
+		ubuntu_version="22"
+		if [[ -f /etc/os-release ]]; then
+			. /etc/os-release
+			ubuntu_version=$(echo "$VERSION_ID" | cut -d. -f1)
 		fi
 
-		if [[ -f /etc/pam.d/common-account ]]; then
-			cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
-			echo "account required                        pam_faillock.so" >> /etc/pam.d/common-account
+		# Ubuntu/Debian uses common-auth, common-account, common-password
+		# pam_faillock.so is only available in Ubuntu 22.04+
+		if [[ "$ubuntu_version" -ge 22 ]]; then
+			if [[ -f /etc/pam.d/common-auth ]]; then
+				cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+				{
+					echo "auth required                   pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600"
+					echo "auth [success=1 default=ignore] pam_unix.so nullok"
+					echo "auth [default=die]              pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600"
+					echo "auth sufficient                 pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600"
+					echo "auth requisite                  pam_deny.so"
+					echo "auth required                   pam_permit.so"
+				} >> /etc/pam.d/common-auth
+			fi
+
+			if [[ -f /etc/pam.d/common-account ]]; then
+				cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+				echo "account required                        pam_faillock.so" >> /etc/pam.d/common-account
+			fi
+			echo "Ubuntu 22.04+ PAM faillock configuration applied"
+		else
+			# Ubuntu 20.04 uses pam_tally2 instead of pam_faillock
+			echo "Ubuntu $ubuntu_version detected - using pam_tally2 for account lockout"
+			if [[ -f /etc/pam.d/common-auth ]]; then
+				cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+				# Only add if not already present
+				if ! grep -q "pam_tally2" /etc/pam.d/common-auth; then
+					sed -i '/^auth.*pam_unix.so/i auth required pam_tally2.so deny=4 onerr=fail unlock_time=600' /etc/pam.d/common-auth
+				fi
+			fi
+			if [[ -f /etc/pam.d/common-account ]]; then
+				cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+				if ! grep -q "pam_tally2" /etc/pam.d/common-account; then
+					echo "account required pam_tally2.so" >> /etc/pam.d/common-account
+				fi
+			fi
 		fi
 
 		##############Password reuse policy##################
@@ -1091,9 +1123,21 @@ harden_auth() {
 	config_file='/etc/login.defs'
 
 	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
-		# Ubuntu 22.04+ supports yescrypt
-		update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
-		echo "Password encryption method set to yescrypt"
+		# Check Ubuntu version for encryption method support
+		ubuntu_version="22"
+		if [[ -f /etc/os-release ]]; then
+			. /etc/os-release
+			ubuntu_version=$(echo "$VERSION_ID" | cut -d. -f1)
+		fi
+		if [[ "$ubuntu_version" -ge 22 ]]; then
+			# Ubuntu 22.04+ supports yescrypt
+			update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
+			echo "Password encryption method set to yescrypt"
+		else
+			# Ubuntu 20.04 and earlier use SHA512
+			update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
+			echo "Password encryption method set to SHA512 (Ubuntu $ubuntu_version)"
+		fi
 	elif [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
 		# Check OS version for encryption method support
 		if [[ -f /etc/os-release ]]; then
