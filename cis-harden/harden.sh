@@ -140,18 +140,33 @@ upgrade_packages() {
 		systemctl enable rsyslog 2>/dev/null || true
 	fi
 
-	if [[ ${OS_FLAVOUR} == "centos" ]]; then
+	if [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
 		yum -y update
-		yum install -y audit libpwquality
 		check_error $? "Failed upgrading packages" 1
+		# CIS packages for RHEL/CentOS
+		yum install -y audit libpwquality aide
+		check_error $? "Failed installing security packages" 1
+		# vlock may be in EPEL or kbd package
+		yum install -y kbd 2>/dev/null || true
 		yum clean all
-	fi
 
-	if [[ ${OS_FLAVOUR} == "rhel" ]]; then
-		yum -y update
-		yum install -y audit libpwquality
-		check_error $? "Failed upgrading packages" 1
-		yum clean all
+		# CIS 1.3.2 - Initialize AIDE database
+		echo "Initializing AIDE database..."
+		if [[ -x /usr/sbin/aide ]]; then
+			/usr/sbin/aide --init 2>/dev/null || true
+			[[ -f /var/lib/aide/aide.db.new.gz ]] && mv /var/lib/aide/aide.db.new.gz /var/lib/aide/aide.db.gz
+		fi
+
+		# CIS 4.2.1.2 - Enable rsyslog
+		echo "Enabling rsyslog..."
+		systemctl enable rsyslog 2>/dev/null || true
+
+		# Note: RHEL/CentOS uses SELinux instead of AppArmor
+		# SELinux should be enabled by default
+		echo "Verifying SELinux is enabled..."
+		if [[ -f /etc/selinux/config ]]; then
+			sed -i 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config 2>/dev/null || true
+		fi
 	fi
 
 	# Placeholder for supporting other linux OS
@@ -670,15 +685,34 @@ remove_services() {
 	fi
 
 	if [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
-		echo "Disable setrouble shoot service if enabled"
-		chkconfig setroubleshoot off
+		echo "Disable setroubleshoot service if enabled"
+		systemctl disable setroubleshoot 2>/dev/null || true
+		chkconfig setroubleshoot off 2>/dev/null || true
 
 		echo "Removing legacy networking services"
-		yum erase -y inetd xinetd ypserv tftp-server telnet-server rsh-server gdm3 telnet vim vim-common vim-runtime vim-tiny
+		yum erase -y inetd xinetd ypserv tftp-server telnet-server rsh-server telnet 2>/dev/null || true
 
 		echo "Removing X packages"
-		yum groupremove -y "X Window System"
-		yum remove -y xorg-x11*
+		yum groupremove -y "X Window System" 2>/dev/null || true
+		yum remove -y xorg-x11* 2>/dev/null || true
+
+		# CIS Level 2 - Additional packages to remove
+		echo "Removing additional CIS Level 2 packages"
+		yum remove -y avahi avahi-daemon cups rpcbind nfs-utils vsftpd httpd nginx samba squid net-snmp 2>/dev/null || true
+
+		# CIS Level 2 - Disable additional services
+		echo "Disabling additional CIS Level 2 services"
+		systemctl disable avahi-daemon 2>/dev/null || true
+		systemctl disable cups 2>/dev/null || true
+		systemctl disable rpcbind 2>/dev/null || true
+		systemctl disable nfs-server 2>/dev/null || true
+		systemctl disable bluetooth 2>/dev/null || true
+		systemctl disable autofs 2>/dev/null || true
+
+		# CIS 1.6.1 - Disable kdump service
+		echo "Disabling kdump service"
+		systemctl disable kdump 2>/dev/null || true
+		systemctl mask kdump 2>/dev/null || true
 	fi
 
   	# Placeholder for supporting other linux OS
@@ -923,47 +957,125 @@ harden_auth() {
 		echo "File /etc/security/pwquality.conf not found."
 	fi
 
-	# Configuration lines to add to /etc/pam.d/su
-	config_lines="auth required pam_wheel.so use_uid group=admin"
+	##############Restrict su command access##################
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		# Ubuntu uses 'admin' or 'sudo' group
+		config_lines="auth required pam_wheel.so use_uid group=sudo"
+	elif [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
+		# RHEL/CentOS uses 'wheel' group
+		config_lines="auth required pam_wheel.so use_uid group=wheel"
+	else
+		config_lines="auth required pam_wheel.so use_uid"
+	fi
 
 	# Add configuration lines to the top of the file
-	echo -e "$config_lines\n$(cat /etc/pam.d/su)" > /etc/pam.d/su
-
-	echo "Configuration to ensure access to the su command is restricted have been made"
+	if [[ -f /etc/pam.d/su ]]; then
+		echo -e "$config_lines\n$(cat /etc/pam.d/su)" > /etc/pam.d/su
+		echo "Configuration to ensure access to the su command is restricted have been made"
+	fi
 
 	##############Password lockout policies##################
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		# Ubuntu/Debian uses common-auth, common-account, common-password
+		if [[ -f /etc/pam.d/common-auth ]]; then
+			cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+			{
+				echo "auth required                   pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600"
+				echo "auth [success=1 default=ignore] pam_unix.so nullok"
+				echo "auth [default=die]              pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600"
+				echo "auth sufficient                 pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600"
+				echo "auth requisite                  pam_deny.so"
+				echo "auth required                   pam_permit.so"
+			} >> /etc/pam.d/common-auth
+		fi
 
-	# Backup the original file
-	cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+		if [[ -f /etc/pam.d/common-account ]]; then
+			cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+			echo "account required                        pam_faillock.so" >> /etc/pam.d/common-account
+		fi
 
-	{
-		echo "auth required                   pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600"
-		echo "auth [success=1 default=ignore] pam_unix.so nullok"
-		echo "auth [default=die]              pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600"
-		echo "auth sufficient                 pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600"
-		echo "auth requisite                  pam_deny.so"
-		echo "auth required                   pam_permit.so"
-	} >> /etc/pam.d/common-auth
+		##############Password reuse policy##################
+		if [[ -f /etc/pam.d/common-password ]]; then
+			cp /etc/pam.d/common-password /etc/pam.d/common-password.bak
+			{
+				echo "password requisite pam_pwquality.so retry=3"
+				echo "password [success=1 default=ignore] pam_unix.so obscure use_authtok try_first_pass remember=5"
+				echo "password requisite pam_deny.so"
+				echo "password required pam_permit.so"
+			} >> /etc/pam.d/common-password
+		fi
+		echo "Ubuntu PAM configuration updated for password lockout and reuse policies"
 
-	# Backup the original file
-	cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+	elif [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
+		# RHEL/CentOS uses system-auth and password-auth
+		# Configure faillock.conf if it exists (RHEL 8+)
+		if [[ -f /etc/security/faillock.conf ]]; then
+			echo "Configuring /etc/security/faillock.conf"
+			sed -i 's/^#\s*deny\s*=.*/deny = 4/' /etc/security/faillock.conf 2>/dev/null || echo "deny = 4" >> /etc/security/faillock.conf
+			sed -i 's/^#\s*fail_interval\s*=.*/fail_interval = 900/' /etc/security/faillock.conf 2>/dev/null || echo "fail_interval = 900" >> /etc/security/faillock.conf
+			sed -i 's/^#\s*unlock_time\s*=.*/unlock_time = 600/' /etc/security/faillock.conf 2>/dev/null || echo "unlock_time = 600" >> /etc/security/faillock.conf
+			sed -i 's/^#\s*audit/audit/' /etc/security/faillock.conf 2>/dev/null || echo "audit" >> /etc/security/faillock.conf
+			sed -i 's/^#\s*silent/silent/' /etc/security/faillock.conf 2>/dev/null || echo "silent" >> /etc/security/faillock.conf
+		fi
 
-	echo "account required                        pam_faillock.so" >> /etc/pam.d/common-account
+		# Configure system-auth
+		if [[ -f /etc/pam.d/system-auth ]]; then
+			cp /etc/pam.d/system-auth /etc/pam.d/system-auth.bak
+			# Check if using authselect (RHEL 8+)
+			if command -v authselect &>/dev/null; then
+				echo "Using authselect to enable faillock"
+				authselect enable-feature with-faillock 2>/dev/null || true
+				authselect apply-changes 2>/dev/null || true
+			else
+				# Manual PAM configuration for RHEL 7
+				if ! grep -q "pam_faillock.so" /etc/pam.d/system-auth; then
+					sed -i '/^auth.*pam_env.so/a auth        required      pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/system-auth
+					sed -i '/^auth.*pam_unix.so/a auth        [default=die] pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/system-auth
+					sed -i '/^auth.*pam_faillock.so.*authfail/a auth        sufficient    pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/system-auth
+				fi
+				if ! grep -q "pam_faillock.so" /etc/pam.d/system-auth | grep -q "account"; then
+					sed -i '/^account.*pam_unix.so/i account     required      pam_faillock.so' /etc/pam.d/system-auth
+				fi
+			fi
+		fi
 
-	##############Password reuse policy##################
+		# Configure password-auth (for remote logins)
+		if [[ -f /etc/pam.d/password-auth ]]; then
+			cp /etc/pam.d/password-auth /etc/pam.d/password-auth.bak
+			if ! command -v authselect &>/dev/null; then
+				# Manual PAM configuration for RHEL 7
+				if ! grep -q "pam_faillock.so" /etc/pam.d/password-auth; then
+					sed -i '/^auth.*pam_env.so/a auth        required      pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/password-auth
+					sed -i '/^auth.*pam_unix.so/a auth        [default=die] pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/password-auth
+					sed -i '/^auth.*pam_faillock.so.*authfail/a auth        sufficient    pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/password-auth
+				fi
+				if ! grep -q "pam_faillock.so" /etc/pam.d/password-auth | grep -q "account"; then
+					sed -i '/^account.*pam_unix.so/i account     required      pam_faillock.so' /etc/pam.d/password-auth
+				fi
+			fi
+		fi
 
-	# Backup the original file
-	cp /etc/pam.d/common-password /etc/pam.d/common-password.bak
+		##############Password reuse policy for RHEL/CentOS##################
+		# Configure password history in system-auth
+		if [[ -f /etc/pam.d/system-auth ]] && ! grep -q "remember=5" /etc/pam.d/system-auth; then
+			sed -i 's/^\(password.*pam_unix.so.*\)/\1 remember=5/' /etc/pam.d/system-auth
+		fi
+		if [[ -f /etc/pam.d/password-auth ]] && ! grep -q "remember=5" /etc/pam.d/password-auth; then
+			sed -i 's/^\(password.*pam_unix.so.*\)/\1 remember=5/' /etc/pam.d/password-auth
+		fi
 
-	{
-		echo "password requisite pam_pwquality.so retry=3"
-		echo "password [success=1 default=ignore] pam_unix.so obscure use_authtok try_first_pass remember=5"
-		echo "password requisite pam_deny.so"
-		echo "password required pam_permit.so"
-	} >> /etc/pam.d/common-password
+		# Add pam_pwquality if not present
+		if [[ -f /etc/pam.d/system-auth ]] && ! grep -q "pam_pwquality.so" /etc/pam.d/system-auth; then
+			sed -i '/^password.*pam_unix.so/i password    requisite     pam_pwquality.so retry=3' /etc/pam.d/system-auth
+		fi
+		if [[ -f /etc/pam.d/password-auth ]] && ! grep -q "pam_pwquality.so" /etc/pam.d/password-auth; then
+			sed -i '/^password.*pam_unix.so/i password    requisite     pam_pwquality.so retry=3' /etc/pam.d/password-auth
+		fi
+
+		echo "RHEL/CentOS PAM configuration updated for password lockout and reuse policies"
+	fi
 
 	#####################Password expiry policy#################
-
 	#Define the destination file
 	config_file='/etc/login.defs'
 
@@ -976,31 +1088,57 @@ harden_auth() {
 	echo "Password expiry policy updated to PASS_MIN_DAYS 1 & PASS_MAX_DAYS 365 & PASS_WARN_AGE 7"
 
 	#####################Password encryption standards##########
-
 	config_file='/etc/login.defs'
 
-	update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
-
-	echo "Password encryption method set to yescrypt"
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		# Ubuntu 22.04+ supports yescrypt
+		update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
+		echo "Password encryption method set to yescrypt"
+	elif [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
+		# Check OS version for encryption method support
+		if [[ -f /etc/os-release ]]; then
+			. /etc/os-release
+			major_version=$(echo "$VERSION_ID" | cut -d. -f1)
+			if [[ "$major_version" -ge 9 ]]; then
+				# RHEL 9+ supports yescrypt
+				update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
+				echo "Password encryption method set to yescrypt"
+			else
+				# RHEL 7/8 use SHA512
+				update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
+				echo "Password encryption method set to SHA512"
+			fi
+		else
+			# Default to SHA512 for unknown versions
+			update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
+			echo "Password encryption method set to SHA512"
+		fi
+	else
+		# Default for other OS
+		update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
+		echo "Password encryption method set to SHA512"
+	fi
 
 	####################Inactive password lock################
-
 	#Define the destination file
 	config_file='/etc/default/useradd'
 
-	echo "" >> ${config_file}
-
-	update_config_files 'INACTIVE' 'INACTIVE=30' ${config_file}
-	echo "Inactive password lock policy updated to 30 days"
+	if [[ -f ${config_file} ]]; then
+		echo "" >> ${config_file}
+		update_config_files 'INACTIVE' 'INACTIVE=30' ${config_file}
+		echo "Inactive password lock policy updated to 30 days"
+	fi
 
 	#################Session expiry policy#####################
 	# Configuration lines to add to /etc/profile
 	config_lines="readonly TMOUT=900 ; export TMOUT"
 
-	# Add configuration lines to the top of the file
-	echo "$config_lines" >> /etc/profile
+	# Add configuration lines to the file
+	if [[ -f /etc/profile ]]; then
+		echo "$config_lines" >> /etc/profile
+		echo "Configuration added to /etc/profile for shell timeout policy"
+	fi
 
-	echo "Configuration added to /etc/profile for shell timeout policy"
 	return 0
 }
 
