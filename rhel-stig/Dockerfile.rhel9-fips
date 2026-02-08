@@ -102,24 +102,33 @@ COPY overlay/rhel9/ /
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
+# Patch dracut-live module BEFORE kairos-init runs so the patch is included in initramfs
+# The error is: overlayfs: failed to resolve '/run/overlayfs': -2
+# This must happen before kairos-init -s init generates the initramfs
+RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client && \
+    DRACUT_LIVE_DIR="/usr/lib/dracut/modules.d/90dmsquash-live" && \
+    for script in "$DRACUT_LIVE_DIR"/*.sh; do \
+        if [ -f "$script" ] && grep -qE "overlayfs|rd\.live\.overlay" "$script" 2>/dev/null; then \
+            cp "$script" "${script}.bak" && \
+            if head -1 "$script" | grep -q "^#!"; then \
+                sed -i '1a\
+# STIG fix: Ensure /run/overlayfs exists before overlayfs mount\
+mkdir -p /run/overlayfs 2>/dev/null || true\
+chmod 755 /run/overlayfs 2>/dev/null || true' "$script"; \
+            else \
+                sed -i '1i\
+# STIG fix: Ensure /run/overlayfs exists before overlayfs mount\
+mkdir -p /run/overlayfs 2>/dev/null || true\
+chmod 755 /run/overlayfs 2>/dev/null || true' "$script"; \
+            fi; \
+        fi; \
+    done || true && \
+    dnf clean all
+
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
 
-RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
-    && dnf clean all
-
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
-
-# Patch dracut-live module to ensure /run/rootfsbase exists
-RUN LIVE_ROOT_SCRIPT="/usr/lib/dracut/modules.d/90dmsquash-live/dmsquash-live-root.sh" && \
-    if [ -f "$LIVE_ROOT_SCRIPT" ]; then \
-        cp "$LIVE_ROOT_SCRIPT" "${LIVE_ROOT_SCRIPT}.bak" && \
-        if head -1 "$LIVE_ROOT_SCRIPT" | grep -q "^#!"; then \
-            sed -i '1a# STIG fix: Ensure /run/rootfsbase exists before overlayfs\nmkdir -p /run/rootfsbase 2>/dev/null || true\nchmod 755 /run/rootfsbase 2>/dev/null || true' "$LIVE_ROOT_SCRIPT"; \
-        else \
-            sed -i '1i# STIG fix: Ensure /run/rootfsbase exists before overlayfs\nmkdir -p /run/rootfsbase 2>/dev/null || true\nchmod 755 /run/rootfsbase 2>/dev/null || true' "$LIVE_ROOT_SCRIPT"; \
-        fi; \
-    fi
 
 # Apply STIG remediation AFTER kairos-init but BEFORE initramfs regeneration
 # This ensures the base system is set up correctly before applying STIG rules

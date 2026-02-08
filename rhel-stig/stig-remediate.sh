@@ -80,12 +80,13 @@ fi
 echo "Ensuring boot-critical directories and configurations are preserved..."
 
 # Ensure /run structure is preserved (needed for overlayfs during boot)
-# Create tmpfiles.d entry to ensure /run/rootfsbase is created during boot
+# Create tmpfiles.d entry to ensure /run/overlayfs is created during boot
+# Note: The actual path needed is /run/overlayfs (for rd.live.overlay.overlayfs)
 mkdir -p /usr/lib/tmpfiles.d
-cat > /usr/lib/tmpfiles.d/kairos-rootfsbase.conf <<'EOF'
-# Create /run/rootfsbase directory for overlayfs during live CD boot
+cat > /usr/lib/tmpfiles.d/kairos-overlayfs.conf <<'EOF'
+# Create /run/overlayfs directory for overlayfs during live CD boot
 # This is required by dracut-live module for overlayfs root filesystem
-d /run/rootfsbase 0755 root root -
+d /run/overlayfs 0755 root root -
 EOF
 
 # Ensure dracut-live module is not disabled
