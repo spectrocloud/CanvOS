@@ -112,6 +112,30 @@ RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
 # Copy dracut.conf again after kairos-init init (like FIPS does)
 COPY dracut.conf.stig /etc/dracut.conf.d/kairos-stig.conf
 
+# Patch dracut-live module scripts to ensure /run/rootfsbase exists
+# Find and patch all dracut-live scripts that might need /run/rootfsbase
+RUN for script in /usr/lib/dracut/modules.d/90dmsquash-live/*.sh; do \
+    if [ -f "$script" ]; then \
+        # Add directory creation at the start of the script if it references rootfsbase
+        if grep -q "rootfsbase\|overlayfs" "$script" 2>/dev/null; then \
+            sed -i '1a\
+# Ensure /run/rootfsbase exists for overlayfs\
+if [ ! -d /run/rootfsbase ]; then\
+    mkdir -p /run/rootfsbase && chmod 755 /run/rootfsbase\
+fi' "$script"; \
+        fi; \
+    fi; \
+done || true
+
+# Also ensure /run/rootfsbase creation in the live-root hook
+RUN if [ -f /usr/lib/dracut/modules.d/90dmsquash-live/dmsquash-live-root.sh ]; then \
+    # Add at the very beginning of the script
+    sed -i '1i\
+# STIG fix: Ensure /run/rootfsbase exists before overlayfs\
+mkdir -p /run/rootfsbase && chmod 755 /run/rootfsbase || true' \
+    /usr/lib/dracut/modules.d/90dmsquash-live/dmsquash-live-root.sh; \
+fi
+
 # Apply STIG remediation AFTER kairos-init but BEFORE initramfs regeneration
 # This ensures the base system is set up correctly before applying STIG rules
 COPY stig-remediate.sh /tmp/stig-remediate.sh

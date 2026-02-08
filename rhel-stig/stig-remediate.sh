@@ -104,14 +104,14 @@ for conf_file in /etc/dracut.conf.d/*.conf; do
     if [ -f "$conf_file" ]; then
         # Remove any lines that omit dracut-live
         sed -i '/omit_dracutmodules.*dracut-live/d' "$conf_file" || true
-        # Ensure rootfsbase module is included
-        if ! grep -q "add_dracutmodules.*rootfsbase" "$conf_file"; then
-            # Add rootfsbase if add_dracutmodules line exists, otherwise add new line
+        # Ensure 90rootfsbase module is included
+        if ! grep -q "add_dracutmodules.*90rootfsbase" "$conf_file"; then
+            # Add 90rootfsbase if add_dracutmodules line exists, otherwise add new line
             if grep -q "add_dracutmodules" "$conf_file"; then
-                sed -i 's/add_dracutmodules+="\(.*\)"/add_dracutmodules+="\1 rootfsbase "/' "$conf_file" || \
-                sed -i '/add_dracutmodules/ s/$/ rootfsbase/' "$conf_file" || true
+                sed -i 's/add_dracutmodules+="\(.*\)"/add_dracutmodules+="\1 90rootfsbase "/' "$conf_file" || \
+                sed -i '/add_dracutmodules/ s/$/ 90rootfsbase/' "$conf_file" || true
             else
-                echo "add_dracutmodules+=\" rootfsbase \"" >> "$conf_file"
+                echo "add_dracutmodules+=\" 90rootfsbase \"" >> "$conf_file"
             fi
         fi
     fi
