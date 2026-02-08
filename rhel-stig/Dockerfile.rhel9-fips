@@ -111,31 +111,15 @@ RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
 # Patch dracut-live module to ensure /run/rootfsbase exists
-# Create a patch file and apply it to avoid sed syntax issues
-RUN cat > /tmp/rootfsbase-patch.sh <<'PATCH_EOF'
-#!/bin/bash
-# Patch dmsquash-live-root.sh to create /run/rootfsbase early
-LIVE_ROOT_SCRIPT="/usr/lib/dracut/modules.d/90dmsquash-live/dmsquash-live-root.sh"
-if [ -f "$LIVE_ROOT_SCRIPT" ]; then
-    # Create backup
-    cp "$LIVE_ROOT_SCRIPT" "${LIVE_ROOT_SCRIPT}.bak"
-    # Add directory creation at the very start, after shebang
-    if head -1 "$LIVE_ROOT_SCRIPT" | grep -q "^#!"; then
-        # Script has shebang, add after line 1
-        sed -i '1a\
-# STIG fix: Ensure /run/rootfsbase exists before overlayfs\
-mkdir -p /run/rootfsbase 2>/dev/null || true\
-chmod 755 /run/rootfsbase 2>/dev/null || true' "$LIVE_ROOT_SCRIPT"
-    else
-        # No shebang, add at start
-        sed -i '1i\
-# STIG fix: Ensure /run/rootfsbase exists before overlayfs\
-mkdir -p /run/rootfsbase 2>/dev/null || true\
-chmod 755 /run/rootfsbase 2>/dev/null || true' "$LIVE_ROOT_SCRIPT"
+RUN LIVE_ROOT_SCRIPT="/usr/lib/dracut/modules.d/90dmsquash-live/dmsquash-live-root.sh" && \
+    if [ -f "$LIVE_ROOT_SCRIPT" ]; then \
+        cp "$LIVE_ROOT_SCRIPT" "${LIVE_ROOT_SCRIPT}.bak" && \
+        if head -1 "$LIVE_ROOT_SCRIPT" | grep -q "^#!"; then \
+            sed -i '1a# STIG fix: Ensure /run/rootfsbase exists before overlayfs\nmkdir -p /run/rootfsbase 2>/dev/null || true\nchmod 755 /run/rootfsbase 2>/dev/null || true' "$LIVE_ROOT_SCRIPT"; \
+        else \
+            sed -i '1i# STIG fix: Ensure /run/rootfsbase exists before overlayfs\nmkdir -p /run/rootfsbase 2>/dev/null || true\nchmod 755 /run/rootfsbase 2>/dev/null || true' "$LIVE_ROOT_SCRIPT"; \
+        fi; \
     fi
-fi
-PATCH_EOF
-chmod +x /tmp/rootfsbase-patch.sh && /tmp/rootfsbase-patch.sh && rm -f /tmp/rootfsbase-patch.sh
 
 # Apply STIG remediation AFTER kairos-init but BEFORE initramfs regeneration
 # This ensures the base system is set up correctly before applying STIG rules
