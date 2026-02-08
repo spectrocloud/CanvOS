@@ -1,4 +1,3 @@
 omit_dracutmodules+=" iscsi iscsiroot "
-add_dracutmodules+=" 90rootfsbase "
 install_items+="/usr/lib/udev/rules.d/60-persistent-storage.rules"
 install_items+="/usr/lib/udev/rules.d/13-dm-disk.rules"

@@ -110,29 +110,32 @@ RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
-# Patch dracut-live module scripts to ensure /run/rootfsbase exists
-# Find and patch all dracut-live scripts that might need /run/rootfsbase
-RUN for script in /usr/lib/dracut/modules.d/90dmsquash-live/*.sh; do \
-    if [ -f "$script" ]; then \
-        # Add directory creation at the start of the script if it references rootfsbase
-        if grep -q "rootfsbase\|overlayfs" "$script" 2>/dev/null; then \
-            sed -i '1a\
-# Ensure /run/rootfsbase exists for overlayfs\
-if [ ! -d /run/rootfsbase ]; then\
-    mkdir -p /run/rootfsbase && chmod 755 /run/rootfsbase\
-fi' "$script"; \
-        fi; \
-    fi; \
-done || true
-
-# Also ensure /run/rootfsbase creation in the live-root hook
-RUN if [ -f /usr/lib/dracut/modules.d/90dmsquash-live/dmsquash-live-root.sh ]; then \
-    # Add at the very beginning of the script
-    sed -i '1i\
+# Patch dracut-live module to ensure /run/rootfsbase exists
+# Create a patch file and apply it to avoid sed syntax issues
+RUN cat > /tmp/rootfsbase-patch.sh <<'PATCH_EOF'
+#!/bin/bash
+# Patch dmsquash-live-root.sh to create /run/rootfsbase early
+LIVE_ROOT_SCRIPT="/usr/lib/dracut/modules.d/90dmsquash-live/dmsquash-live-root.sh"
+if [ -f "$LIVE_ROOT_SCRIPT" ]; then
+    # Create backup
+    cp "$LIVE_ROOT_SCRIPT" "${LIVE_ROOT_SCRIPT}.bak"
+    # Add directory creation at the very start, after shebang
+    if head -1 "$LIVE_ROOT_SCRIPT" | grep -q "^#!"; then
+        # Script has shebang, add after line 1
+        sed -i '1a\
 # STIG fix: Ensure /run/rootfsbase exists before overlayfs\
-mkdir -p /run/rootfsbase && chmod 755 /run/rootfsbase || true' \
-    /usr/lib/dracut/modules.d/90dmsquash-live/dmsquash-live-root.sh; \
+mkdir -p /run/rootfsbase 2>/dev/null || true\
+chmod 755 /run/rootfsbase 2>/dev/null || true' "$LIVE_ROOT_SCRIPT"
+    else
+        # No shebang, add at start
+        sed -i '1i\
+# STIG fix: Ensure /run/rootfsbase exists before overlayfs\
+mkdir -p /run/rootfsbase 2>/dev/null || true\
+chmod 755 /run/rootfsbase 2>/dev/null || true' "$LIVE_ROOT_SCRIPT"
+    fi
 fi
+PATCH_EOF
+chmod +x /tmp/rootfsbase-patch.sh && /tmp/rootfsbase-patch.sh && rm -f /tmp/rootfsbase-patch.sh
 
 # Apply STIG remediation AFTER kairos-init but BEFORE initramfs regeneration
 # This ensures the base system is set up correctly before applying STIG rules
