@@ -494,10 +494,35 @@ harden_audit() {
 	# Define the desired value for max_log_file
 	max_log_file_value=100
 
-	# Set the max_log_file parameter in auditd.conf
-	sed -i "s/^max_log_file = 8/max_log_file = ${max_log_file_value}/" /etc/audit/auditd.conf
+	# Configure audit log rotation in auditd.conf
+	echo "Configuring audit log rotation..."
+	
+	# Set max log file size to 100 MB
+	sed -i "s/^max_log_file = .*/max_log_file = ${max_log_file_value}/" /etc/audit/auditd.conf
+	
+	# Set max_log_file_action to ROTATE (rotate logs when max size reached)
+	sed -i "s/^max_log_file_action = .*/max_log_file_action = ROTATE/" /etc/audit/auditd.conf
+	
+	# Keep 10 rotated log files (10 x 100MB = 1GB total)
+	sed -i "s/^num_logs = .*/num_logs = 10/" /etc/audit/auditd.conf
+	
+	# Set space_left to 25% of partition (warning threshold)
+	sed -i "s/^space_left = .*/space_left = 250/" /etc/audit/auditd.conf
+	sed -i "s/^space_left_action = .*/space_left_action = SYSLOG/" /etc/audit/auditd.conf
+	
+	# Set admin_space_left to 10% (critical threshold - rotate aggressively)
+	sed -i "s/^admin_space_left = .*/admin_space_left = 100/" /etc/audit/auditd.conf
+	sed -i "s/^admin_space_left_action = .*/admin_space_left_action = ROTATE/" /etc/audit/auditd.conf
+	
+	# When disk is full, keep old logs (don't stop auditing)
+	sed -i "s/^disk_full_action = .*/disk_full_action = ROTATE/" /etc/audit/auditd.conf
+	sed -i "s/^disk_error_action = .*/disk_error_action = SYSLOG/" /etc/audit/auditd.conf
 
-	echo "The max_log_file parameter has been set to ${max_log_file_value}."
+	echo "Audit log rotation configured:"
+	echo "  - Max log file size: ${max_log_file_value} MB"
+	echo "  - Number of rotated logs: 10 (total ~1GB)"
+	echo "  - Rotation trigger: ROTATE on max size"
+	echo "  - Space warnings enabled at 250 MB and 100 MB remaining"
 
 	# Enable auditd service
 	systemctl enable auditd
