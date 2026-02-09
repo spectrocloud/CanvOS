@@ -13,6 +13,12 @@ ARG KAIROS_VERSION=v3.5.9
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
+# Disable EPEL openh264 repository - GPG signature file doesn't exist (404 error)
+# This repository is not needed for STIG builds
+RUN if [ -f /etc/yum.repos.d/epel-cisco-openh264.repo ]; then \
+        sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/epel-cisco-openh264.repo || true; \
+        sed -i 's/^gpgcheck=1/gpgcheck=0/' /etc/yum.repos.d/epel-cisco-openh264.repo || true; \
+    fi || true
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
 RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
     && yum repolist \
@@ -103,23 +109,28 @@ COPY overlay/rhel9/ /
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
 # Patch dracut-live module BEFORE kairos-init runs so the patch is included in initramfs
-# The error is: overlayfs: failed to resolve '/run/overlayfs': -2
-# Patch ALL dracut-live scripts to ensure /run/overlayfs exists early
+# The error is: overlayfs: failed to resolve '/run/rootfsbase': -2
+# Patch ALL dracut-live scripts to ensure /run/rootfsbase exists early
+# Also create /run/overlayfs for compatibility
 RUN DRACUT_LIVE_DIR="/usr/lib/dracut/modules.d/90dmsquash-live" && \
     for script in "$DRACUT_LIVE_DIR"/*.sh; do \
         if [ -f "$script" ]; then \
             cp "$script" "${script}.bak" && \
             if head -1 "$script" | grep -q "^#!"; then \
                 sed -i '1a\
-# STIG fix: Ensure /run and /run/overlayfs exist before overlayfs mount\
+# STIG fix: Ensure /run, /run/rootfsbase, and /run/overlayfs exist before overlayfs mount\
 mkdir -p /run 2>/dev/null || true\
+mkdir -p /run/rootfsbase 2>/dev/null || true\
 mkdir -p /run/overlayfs 2>/dev/null || true\
+chmod 755 /run/rootfsbase 2>/dev/null || true\
 chmod 755 /run/overlayfs 2>/dev/null || true' "$script"; \
             else \
                 sed -i '1i\
-# STIG fix: Ensure /run and /run/overlayfs exist before overlayfs mount\
+# STIG fix: Ensure /run, /run/rootfsbase, and /run/overlayfs exist before overlayfs mount\
 mkdir -p /run 2>/dev/null || true\
+mkdir -p /run/rootfsbase 2>/dev/null || true\
 mkdir -p /run/overlayfs 2>/dev/null || true\
+chmod 755 /run/rootfsbase 2>/dev/null || true\
 chmod 755 /run/overlayfs 2>/dev/null || true' "$script"; \
             fi; \
         fi; \
