@@ -112,7 +112,7 @@ upgrade_packages() {
 		# CIS 1.3.1 - Install AIDE for file integrity monitoring
 		# CIS 5.5.1 - Install vlock for screen locking
 		DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor apparmor-utils libpam-pwquality aide vlock
-		if  $? -ne 0 ; then
+		if [[ $? -ne 0 ]]; then
 			echo 'deb http://archive.ubuntu.com/ubuntu focal main restricted' > /etc/apt/sources.list.d/repotmp.list
 			apt-get update
 			DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor apparmor-utils libpam-pwquality aide vlock
@@ -237,7 +237,7 @@ harden_ssh() {
 	chmod og-rwx ${config_file}
 
 	echo "" >> ${config_file}
-	update_config_files 'Protocol ' 'Protocol 2' ${config_file}
+	# Note: Protocol 2 is deprecated in OpenSSH 7.4+ (SSH1 removed), skip on modern systems
 	update_config_files 'LogLevel ' 'LogLevel INFO' ${config_file}
 	update_config_files 'PermitEmptyPasswords ' 'PermitEmptyPasswords no' ${config_file}
 	update_config_files 'X11Forwarding ' 'X11Forwarding no' ${config_file}
@@ -381,6 +381,8 @@ harden_audit() {
 		"-w /etc/apparmor/ -p wa -k MAC-policy"
 	)
 
+	# Note: /var/log/tallylog only exists on systems using pam_tally2 (Ubuntu <22.04)
+	# The rule is harmless on newer systems but won't match anything
 	local content_logineventsrules=(
 		"-w /var/log/faillog -p wa -k logins"
 		"-w /var/log/lastlog -p wa -k logins"
@@ -564,7 +566,7 @@ harden_system() {
 
 	echo "Error out if there are users with empty password"
 	cat /etc/shadow |awk -F : '($2 == "" ){ exit 1}'
-	if $? -ne 0 ; then
+	if [[ $? -ne 0 ]]; then
 		echo "Users present with empty password. Remove the user or set password for the users"
 		exit 1
 	fi
@@ -581,7 +583,7 @@ harden_system() {
 	for each in ${cron_files}; do
 		if [[ -e ${each} ]]; then
 			stat -L -c "%a %u %g" "${each}" | grep -E ".00 0 0"
-			if $? -ne 0 ; then
+			if [[ $? -ne 0 ]]; then
 				chown root:root "${each}"
 				chmod og-rwx "${each}"
 			fi
