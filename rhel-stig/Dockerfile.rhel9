@@ -23,7 +23,7 @@ RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel9/ /
 
-# Copy dracut.conf early so the rootfsbase module is included in initramfs
+# Copy dracut.conf early so it's available for initramfs generation
 COPY dracut.conf.stig /etc/dracut.conf.d/kairos-stig.conf
 
 COPY --from=kairos-init /kairos-init /kairos-init
@@ -105,34 +105,37 @@ COPY dracut.conf.stig /etc/dracut.conf.d/kairos-stig.conf
 
 # Patch dracut-live module BEFORE kairos-init runs so the patch is included in initramfs
 # The error is: overlayfs: failed to resolve '/run/overlayfs': -2
-# This must happen before kairos-init -s init generates the initramfs
-RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client && \
-    DRACUT_LIVE_DIR="/usr/lib/dracut/modules.d/90dmsquash-live" && \
+# Patch ALL dracut-live scripts to ensure /run/overlayfs exists early
+RUN DRACUT_LIVE_DIR="/usr/lib/dracut/modules.d/90dmsquash-live" && \
     for script in "$DRACUT_LIVE_DIR"/*.sh; do \
-        if [ -f "$script" ] && grep -qE "overlayfs|rd\.live\.overlay" "$script" 2>/dev/null; then \
+        if [ -f "$script" ]; then \
             cp "$script" "${script}.bak" && \
             if head -1 "$script" | grep -q "^#!"; then \
                 sed -i '1a\
-# STIG fix: Ensure /run/overlayfs exists before overlayfs mount\
+# STIG fix: Ensure /run and /run/overlayfs exist before overlayfs mount\
+mkdir -p /run 2>/dev/null || true\
 mkdir -p /run/overlayfs 2>/dev/null || true\
 chmod 755 /run/overlayfs 2>/dev/null || true' "$script"; \
             else \
                 sed -i '1i\
-# STIG fix: Ensure /run/overlayfs exists before overlayfs mount\
+# STIG fix: Ensure /run and /run/overlayfs exist before overlayfs mount\
+mkdir -p /run 2>/dev/null || true\
 mkdir -p /run/overlayfs 2>/dev/null || true\
 chmod 755 /run/overlayfs 2>/dev/null || true' "$script"; \
             fi; \
         fi; \
-    done || true && \
-    dnf clean all
+    done || true
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
 
+RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
+    && dnf clean all
+
 # Copy dracut.conf again after kairos-init init (like FIPS does)
 COPY dracut.conf.stig /etc/dracut.conf.d/kairos-stig.conf
 
-# Apply STIG remediation AFTER kairos-init but BEFORE initramfs regeneration
+# Apply STIG remediation AFTER kairos-init
 # This ensures the base system is set up correctly before applying STIG rules
 COPY stig-remediate.sh /tmp/stig-remediate.sh
 RUN chmod +x /tmp/stig-remediate.sh && /tmp/stig-remediate.sh && rm /tmp/stig-remediate.sh

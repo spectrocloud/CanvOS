@@ -79,15 +79,23 @@ fi
 # STIG remediation might remove or modify directories needed for boot
 echo "Ensuring boot-critical directories and configurations are preserved..."
 
-# Ensure /run structure is preserved (needed for overlayfs during boot)
-# Create tmpfiles.d entry to ensure /run/overlayfs is created during boot
-# Note: The actual path needed is /run/overlayfs (for rd.live.overlay.overlayfs)
+# STIG remediation may remove or restrict /run directory creation
+# Ensure /run and /run/overlayfs can be created during boot
+# Note: /run is tmpfs, but we need to ensure dracut-live can create /run/overlayfs
+# Create tmpfiles.d entry as backup (though this runs after initramfs)
 mkdir -p /usr/lib/tmpfiles.d
 cat > /usr/lib/tmpfiles.d/kairos-overlayfs.conf <<'EOF'
 # Create /run/overlayfs directory for overlayfs during live CD boot
 # This is required by dracut-live module for overlayfs root filesystem
+# Note: This is a backup - the actual fix is patching dracut-live scripts
 d /run/overlayfs 0755 root root -
 EOF
+
+# Ensure STIG remediation didn't break /run directory permissions
+# Some STIG rules might restrict /run creation
+if [ -d /run ]; then
+    chmod 755 /run 2>/dev/null || true
+fi
 
 # Ensure dracut-live module is not disabled
 # Check if dracut.conf exists and ensure dracut-live is included
