@@ -1,17 +1,9 @@
 #!/bin/bash
 
 #
+#
 # This script is to harden Kairos, use in the CanvOS Dockerfile
-# Benchmark targeted: CIS Ubuntu Linux 22.04 LTS Benchmark - Server
-# Also supports: Ubuntu 20.04 LTS with appropriate fallbacks
-# Based on CIS Benchmark v2.0.0, released 2024-03-28
-#
-# This script is designed to run during ISO build (not on a live system)
-# It writes configuration files that will be applied at boot time
-#
-# Ubuntu version differences:
-# - Ubuntu 22.04+: Uses pam_faillock.so and yescrypt encryption
-# - Ubuntu 20.04: Uses pam_tally2.so and SHA512 encryption
+# Benchmark targeted: CIS Linux Benchmark
 #
 
 
