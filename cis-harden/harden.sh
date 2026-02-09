@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#
+
 #
 # This script is to harden Kairos, use in the CanvOS Dockerfile
 # Benchmark targeted: CIS Linux Benchmark
