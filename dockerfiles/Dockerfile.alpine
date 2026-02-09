@@ -13,12 +13,10 @@ RUN update-ca-certificates || true
 
 FROM alpine-base AS alpine-certs
 
-COPY . /tmp/build-context/
-
-# Copy custom certs if present, update CA store
+# Use bind mount to conditionally copy certs without adding to image layers
 # Note: update-ca-certificates may fail in FIPS mode due to OpenSSL constraints
-RUN if [ -d "/tmp/build-context/certs" ]; then \
-        cp -r /tmp/build-context/certs/. /etc/ssl/certs/; \
+RUN --mount=type=bind,target=/build-context \
+    if [ -d "/build-context/certs" ]; then \
+        cp -r /build-context/certs/. /etc/ssl/certs/; \
     fi && \
-    update-ca-certificates || true && \
-    rm -rf /tmp/build-context
+    update-ca-certificates || true

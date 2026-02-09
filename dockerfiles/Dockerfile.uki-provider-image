@@ -28,10 +28,11 @@ COPY --from=kairos-agent /output/kairos-agent /usr/bin/kairos-agent
 COPY --from=trust-boot-unpack /trusted-boot/ /trusted-boot/
 COPY --from=install-k8s /output/ /k8s/
 
-# Copy build context to handle optional files
-COPY . /tmp/build-context/
-RUN if [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
-        cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
+# Use bind mount to conditionally copy EDGE_CUSTOM_CONFIG without adding to image layers
+RUN --mount=type=bind,target=/build-context \
+    if [ -n "$EDGE_CUSTOM_CONFIG" ] && [ -f /build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
+        mkdir -p /oem && \
+        cp /build-context/"$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
     fi
 
 # Copy stylus-image to temp location to handle optional 80_stylus.yaml (Docker doesn't have --if-exists)
@@ -39,6 +40,5 @@ COPY --from=stylus-image / /tmp/stylus-image/
 RUN if [ -f /tmp/stylus-image/system/oem/80_stylus.yaml ]; then \
         mkdir -p /system/oem && \
         cp /tmp/stylus-image/system/oem/80_stylus.yaml /system/oem/80_stylus.yaml; \
-    fi
-
-RUN rm -rf /tmp/stylus-image /tmp/build-context
+    fi && \
+    rm -rf /tmp/stylus-image

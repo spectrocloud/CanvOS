@@ -1,11 +1,5 @@
-variable "FIPS_ENABLED" {
-  type = bool
-  default = false
-}
-
-variable "ARCH" {
-  default = "amd64"
-}
+# Note: FIPS_ENABLED and ARCH are defined in docker-bake-common.hcl
+# Include with: docker buildx bake -f docker-bake-common.hcl -f docker-bake.hcl <target>
 
 variable "SPECTRO_PUB_REPO" {
   default = FIPS_ENABLED ? "us-docker.pkg.dev/palette-images-fips" : "us-docker.pkg.dev/palette-images"
@@ -31,17 +25,19 @@ variable "KAIROS_BASE_IMAGE_URL" {
   default = "${SPECTRO_PUB_REPO}/edge"
 }
 
+variable AURORABOOT_VERSION {
+  default = "v0.19.0"
+}
+
 variable AURORABOOT_IMAGE {
-  default = "quay.io/kairos/auroraboot:v0.14.0"
+  default = "quay.io/kairos/auroraboot:${AURORABOOT_VERSION}"
 }
 
 variable "PE_VERSION" {
   default = "v4.8.1"
 }
 
-variable "KAIROS_VERSION" {
-  default = "v3.5.9"
-}
+# Note: KAIROS_VERSION is defined in docker-bake-common.hcl
 
 variable "K3S_FLAVOR_TAG" {
   default = "k3s1"
@@ -315,6 +311,7 @@ target "base" {
 
 target "base-image" {
   dockerfile = "dockerfiles/Dockerfile.base-image"
+  context = "."
   contexts = {
     base = "target:base"
   }
@@ -353,6 +350,7 @@ function "get_provider_base" {
 
 target "install-k8s" {
   dockerfile = "dockerfiles/Dockerfile.install-k8s"
+  context = "."
   target = "install-k8s"
   platforms = ["linux/${ARCH}"]
   contexts = {
@@ -372,6 +370,7 @@ target "install-k8s" {
 
 target "provider-image" {
   dockerfile = "dockerfiles/Dockerfile.provider-image"
+  context = "."
   target = "provider-image"
   platforms = ["linux/${ARCH}"]
   contexts = {
@@ -411,6 +410,7 @@ target "provider-image" {
 
 target "uki-provider-image" {
   dockerfile = "dockerfiles/Dockerfile.uki-provider-image"
+  context = "."
   platforms = ["linux/${ARCH}"]
   contexts = {
     third-party-luet = "target:third-party-luet"
@@ -459,6 +459,7 @@ target "validate-user-data" {
 
 target "iso-image" {
   dockerfile = "dockerfiles/Dockerfile.iso-image"
+  context = "."
   target = "iso-image"
   platforms = ["linux/${ARCH}"]
   contexts = {
@@ -469,6 +470,7 @@ target "iso-image" {
     ARCH = ARCH
     IS_UKI = IS_UKI
     IS_CLOUD_IMAGE = IS_CLOUD_IMAGE
+    IS_MAAS = IS_MAAS
   }
   tags = ["palette-installer-image:${IMAGE_TAG}"]
   output = ["type=docker"]
@@ -654,21 +656,42 @@ target "iso-efi-size-check" {
   output = ["type=local,dest=./build/"]
 }
 
-variable "RAW_IMAGE_DIR" {
-  default = "./build/raw-image"
+variable "CLOUD_IMAGE_DIR" {
+  default = "./build/cloud-image"
 }
 
+# Build installer image and load to Docker daemon
+# Used by: make cloud-image (which then runs auroraboot to create raw disk)
 target "iso-image-cloud" {
   inherits = ["iso-image"]
+  args = {
+    IS_CLOUD_IMAGE = true
+  }
   tags = ["palette-installer-image-cloud:latest"]
+  output = ["type=docker"]
 }
+
+# Build MAAS installer image and load to Docker daemon
+# Used by: make maas-image (which then runs auroraboot to create raw disk)
+target "iso-image-maas" {
+  inherits = ["iso-image"]
+  args = {
+    IS_MAAS = true
+  }
+  tags = ["palette-installer-image-maas:latest"]
+  output = ["type=docker"]
+}
+
+
+
+
 
 target "aws-cloud-image" {
   dockerfile = "dockerfiles/Dockerfile.aws-cloud-image"
   context = "."
   platforms = ["linux/${ARCH}"]
   contexts = {
-    raw-image = RAW_IMAGE_DIR
+    raw-image = CLOUD_IMAGE_DIR
   }
   args = {
     UBUNTU_IMAGE = get_ubuntu_image(FIPS_ENABLED, SPECTRO_PUB_REPO)
@@ -682,4 +705,18 @@ target "aws-cloud-image" {
     "id=AWS_ACCESS_KEY_ID,env=AWS_ACCESS_KEY_ID",
     "id=AWS_SECRET_ACCESS_KEY,env=AWS_SECRET_ACCESS_KEY"
   ]
+}
+
+// Tools image for cloud/MAAS disk operations (content partition for cloud image, MAAS builder)
+target "cloud-image-tools" {
+  dockerfile = "dockerfiles/Dockerfile.cloud-image-tools"
+  context = "."
+  platforms = ["linux/${ARCH}"]
+  args = {
+    BASE_IMAGE = ALPINE_BASE_IMAGE
+  }
+  tags = [
+    "${SPECTRO_PUB_REPO}/edge/canvos/cloud-image-tools:latest"
+  ]
+  output = ["type=docker"]
 }

@@ -20,34 +20,32 @@ COPY --from=stylus-image-pack /stylus-image.tar /overlay/stylus-image.tar
 
 COPY --from=third-party-luet /WORKDIR/luet /overlay/luet
 
-COPY . /tmp/build-context/
-
-RUN mkdir -p /overlay/opt/spectrocloud/content && \
-    for dir in /tmp/build-context/content-*/; do \
-        [ -d "$dir" ] && cp "$dir"*.zst /overlay/opt/spectrocloud/content/ 2>/dev/null || true; \
-    done
-
-RUN if [ -n "$EDGE_CUSTOM_CONFIG" ] && [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
-        cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml; \
-    fi
-
-RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
-    for file in /overlay/opt/spectrocloud/content/*.zst; do \
-        split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
-    done; \
-    rm -f /overlay/opt/spectrocloud/content/*.zst; \
-fi
-
-RUN if [ -n "$CLUSTERCONFIG" ] && [ -f /tmp/build-context/"$CLUSTERCONFIG" ]; then \
-        mkdir -p /overlay/opt/spectrocloud/clusterconfig && \
-        cp /tmp/build-context/"$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz; \
-    fi
-
-RUN if [ -f /tmp/build-context/local-ui.tar ]; then \
-    tar -xf /tmp/build-context/local-ui.tar -C /overlay/opt/spectrocloud; \
-fi
-
 COPY --from=iso-image / /iso-source/
+
+RUN --mount=type=bind,target=/build-context \
+    mkdir -p /overlay/opt/spectrocloud/content && \
+    for dir in /build-context/content-*/; do \
+        [ -d "$dir" ] && cp "$dir"*.zst /overlay/opt/spectrocloud/content/ 2>/dev/null || true; \
+    done && \
+    if [ -n "$EDGE_CUSTOM_CONFIG" ] && [ -f /build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
+        cp /build-context/"$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml; \
+    fi && \
+    if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
+        for file in /overlay/opt/spectrocloud/content/*.zst; do \
+            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
+        done; \
+        rm -f /overlay/opt/spectrocloud/content/*.zst; \
+    fi && \
+    if [ -n "$CLUSTERCONFIG" ] && [ -f /build-context/"$CLUSTERCONFIG" ]; then \
+        mkdir -p /overlay/opt/spectrocloud/clusterconfig && \
+        cp /build-context/"$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz; \
+    fi
+
+# For UKI: move local-ui from squashfs to overlay to reduce EFI size
+RUN if [ -d /iso-source/opt/spectrocloud/local-ui ]; then \
+        mkdir -p /overlay/opt/spectrocloud && \
+        mv /iso-source/opt/spectrocloud/local-ui /overlay/opt/spectrocloud/ ; \
+    fi
 
 COPY secure-boot/enrollment/ /keys/
 

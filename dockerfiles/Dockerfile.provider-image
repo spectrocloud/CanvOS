@@ -76,9 +76,11 @@ RUN if [ -f /tmp/stylus-image/system/oem/80_stylus.yaml ]; then \
     fi && \
     rm -rf /tmp/stylus-image
 
-COPY . /tmp/build-context/
-RUN if [ -f /tmp/build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
-        cp /tmp/build-context/"$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
+# Use bind mount to conditionally copy EDGE_CUSTOM_CONFIG without adding to image layers
+RUN --mount=type=bind,target=/build-context \
+    if [ -n "$EDGE_CUSTOM_CONFIG" ] && [ -f /build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
+        mkdir -p /oem && \
+        cp /build-context/"$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml; \
     fi
 
 COPY --from=install-k8s /output/ /k8s
@@ -133,5 +135,3 @@ RUN if [ "$TWO_NODE" = "true" ]; then \
         sed -i 's/After=network.target/After=network-online.target/' /lib/systemd/system/postgresql@.service && \
         systemctl disable postgresql; \
     fi
-
-RUN rm -rf /tmp/build-context

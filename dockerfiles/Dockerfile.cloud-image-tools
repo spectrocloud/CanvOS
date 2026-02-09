@@ -1,0 +1,49 @@
+ARG BASE_IMAGE=alpine:3.20
+
+FROM ${BASE_IMAGE}
+
+# Install all required tools for disk operations
+# Grouped by purpose for clarity
+RUN apk add --no-cache \
+    # Core utilities
+    bash \
+    coreutils \
+    util-linux \
+    # Partitioning tools
+    parted \
+    gptfdisk \
+    multipath-tools \
+    # Filesystem tools
+    e2fsprogs \
+    dosfstools \
+    # Disk image tools
+    qemu-img \
+    # File operations
+    rsync \
+    tar \
+    gzip \
+    # Docker CLI for auroraboot
+    docker-cli \
+    # Utilities
+    jq \
+    curl \
+    wget \
+    # GRUB tools (for MAAS)
+    grub \
+    && rm -rf /var/cache/apk/*
+
+# Create scripts directory
+RUN mkdir -p /scripts
+
+# Copy all disk operation scripts
+COPY cloud-images/scripts/add-content-partition.sh /scripts/
+COPY cloudconfigs/build-kairos-maas.sh /scripts/
+COPY cloudconfigs/curtin-hooks /scripts/
+
+# Make scripts executable
+RUN chmod +x /scripts/*.sh
+
+# Set working directory
+WORKDIR /workdir
+
+ENTRYPOINT ["/bin/bash"]

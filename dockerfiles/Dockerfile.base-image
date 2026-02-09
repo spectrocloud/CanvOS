@@ -13,18 +13,21 @@ ARG ARCH=amd64
 ARG FIPS_ENABLED=false
 ARG IS_MAAS=false
 
-COPY . /tmp/build-context
-
-RUN if [ "$IS_JETSON" = "true" ]; then \
-        cp /tmp/build-context/cloudconfigs/mount.yaml /system/oem/mount.yaml; \
-    fi
-
-RUN if [ "$IS_UKI" = "true" ]; then \
-        cp /tmp/build-context/cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml; \
+# Copy platform-specific OEM configurations
+RUN --mount=type=bind,target=/build-context \
+    if [ "$IS_JETSON" = "true" ]; then \
+        cp /build-context/cloudconfigs/mount.yaml /system/oem/mount.yaml; \
+    fi && \
+    if [ "$IS_UKI" = "true" ]; then \
+        cp /build-context/cloudconfigs/80_stylus_uki.yaml /system/oem/80_stylus_uki.yaml; \
+    fi && \
+    if [ "$IS_MAAS" = "true" ]; then \
+        cp /build-context/cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml; \
     fi
 
 # Use secret for UBUNTU_PRO_KEY - not cached, not stored in image layers
 RUN --mount=type=secret,id=ubuntu_pro_key,target=/run/secrets/ubuntu_pro_key \
+    --mount=type=bind,target=/build-context \
     if [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ]; then \
         if [ -f /run/secrets/ubuntu_pro_key ] && [ -s /run/secrets/ubuntu_pro_key ]; then \
             sed -i '/^[[:space:]]*$/d' /etc/os-release && \
@@ -100,7 +103,7 @@ RUN --mount=type=secret,id=ubuntu_pro_key,target=/run/secrets/ubuntu_pro_key \
         fi && \
         \
         if [ "$CIS_HARDENING" = "true" ]; then \
-            cp /tmp/build-context/cis-harden/harden.sh /tmp/harden.sh && \
+            cp /build-context/cis-harden/harden.sh /tmp/harden.sh && \
             /tmp/harden.sh && rm /tmp/harden.sh; \
         fi && \
         \
@@ -148,7 +151,9 @@ RUN if [ "$OS_DISTRIBUTION" = "sles" ]; then \
         fi; \
     fi
 
-RUN export OS_ID=${OS_DISTRIBUTION} && \
+# Generate os-release using bind mount for template
+RUN --mount=type=bind,target=/build-context \
+    export OS_ID=${OS_DISTRIBUTION} && \
     export OS_VERSION=${OS_VERSION} && \
     export OS_LABEL=latest && \
     export VARIANT=${OS_DISTRIBUTION} && \
@@ -159,7 +164,7 @@ RUN export OS_ID=${OS_DISTRIBUTION} && \
     export OS_NAME=${kairos-core-${OS_DISTRIBUTION}} && \
     export ARTIFACT=${kairos-core-${OS_DISTRIBUTION}-${OS_VERSION}} && \
     export KAIROS_RELEASE=${KAIROS_VERSION} && \
-    envsubst >>/etc/os-release < /tmp/build-context/overlay/files/usr/lib/os-release.tmpl
+    envsubst >>/etc/os-release < /build-context/overlay/files/usr/lib/os-release.tmpl
 
 RUN  KAIROS_IMAGE_LABEL="${OS_VERSION}-standard-${ARCH}-generic" && \
     if [ "$IS_MAAS" = "true" ]; then \
@@ -190,5 +195,3 @@ RUN if [ "$DISABLE_SELINUX" = "true" ]; then \
             sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; \
         fi; \
     fi
-
-RUN rm -rf /tmp/build-context

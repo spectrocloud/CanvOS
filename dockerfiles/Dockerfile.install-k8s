@@ -14,12 +14,13 @@ COPY --from=third-party-luet /WORKDIR/luet /usr/bin/luet
 
 WORKDIR /output
 
-
 RUN mkdir -p /etc/luet/repos.conf.d && \
     luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y
 
-RUN if [ -f /tmp/build-context/spectro-luet-auth.yaml ]; then \
-    cat /tmp/build-context/spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; \
+# Use bind mount for optional luet auth config
+RUN --mount=type=bind,target=/build-context \
+    if [ -f /build-context/spectro-luet-auth.yaml ]; then \
+        cat /build-context/spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; \
     fi
 
 RUN luet repo update
