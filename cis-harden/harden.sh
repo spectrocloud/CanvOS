@@ -9,7 +9,7 @@
 # This script is designed to run during ISO build (not on a live system)
 # It writes configuration files that will be applied at boot time
 #
-# Key version differences:
+# Ubuntu version differences:
 # - Ubuntu 22.04+: Uses pam_faillock.so and yescrypt encryption
 # - Ubuntu 20.04: Uses pam_tally2.so and SHA512 encryption
 #
@@ -145,33 +145,18 @@ upgrade_packages() {
 		systemctl enable rsyslog 2>/dev/null || true
 	fi
 
-	if [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
+	if [[ ${OS_FLAVOUR} == "centos" ]]; then
 		yum -y update
+		yum install -y audit libpwquality
 		check_error $? "Failed upgrading packages" 1
-		# CIS packages for RHEL/CentOS
-		yum install -y audit libpwquality aide
-		check_error $? "Failed installing security packages" 1
-		# vlock may be in EPEL or kbd package
-		yum install -y kbd 2>/dev/null || true
 		yum clean all
+	fi
 
-		# CIS 1.3.2 - Initialize AIDE database
-		echo "Initializing AIDE database..."
-		if [[ -x /usr/sbin/aide ]]; then
-			/usr/sbin/aide --init 2>/dev/null || true
-			[[ -f /var/lib/aide/aide.db.new.gz ]] && mv /var/lib/aide/aide.db.new.gz /var/lib/aide/aide.db.gz
-		fi
-
-		# CIS 4.2.1.2 - Enable rsyslog
-		echo "Enabling rsyslog..."
-		systemctl enable rsyslog 2>/dev/null || true
-
-		# Note: RHEL/CentOS uses SELinux instead of AppArmor
-		# SELinux should be enabled by default
-		echo "Verifying SELinux is enabled..."
-		if [[ -f /etc/selinux/config ]]; then
-			sed -i 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config 2>/dev/null || true
-		fi
+	if [[ ${OS_FLAVOUR} == "rhel" ]]; then
+		yum -y update
+		yum install -y audit libpwquality
+		check_error $? "Failed upgrading packages" 1
+		yum clean all
 	fi
 
 	# Placeholder for supporting other linux OS
@@ -232,14 +217,13 @@ harden_sysctl() {
 	update_config_files 'net.ipv6.conf.all.accept_ra' 'net.ipv6.conf.all.accept_ra=0'  ${config_file}
 	update_config_files 'net.ipv6.conf.default.accept_ra' 'net.ipv6.conf.default.accept_ra=0' ${config_file}
 
-	# CIS Level 2 - Additional kernel hardening
-	update_config_files 'kernel.yama.ptrace_scope' 'kernel.yama.ptrace_scope=1' ${config_file}
-	update_config_files 'kernel.dmesg_restrict' 'kernel.dmesg_restrict=1' ${config_file}
-	update_config_files 'kernel.kptr_restrict' 'kernel.kptr_restrict=2' ${config_file}
-	update_config_files 'kernel.perf_event_paranoid' 'kernel.perf_event_paranoid=3' ${config_file}
-
-	# CIS Level 2 - IPv6 forwarding (disabled for non-routers)
-	update_config_files 'net.ipv6.conf.all.forwarding' 'net.ipv6.conf.all.forwarding=0' ${config_file}
+	# CIS Level 2 - Additional kernel hardening (Ubuntu only)
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		update_config_files 'kernel.yama.ptrace_scope' 'kernel.yama.ptrace_scope=1' ${config_file}
+		update_config_files 'kernel.dmesg_restrict' 'kernel.dmesg_restrict=1' ${config_file}
+		update_config_files 'kernel.kptr_restrict' 'kernel.kptr_restrict=2' ${config_file}
+		update_config_files 'kernel.perf_event_paranoid' 'kernel.perf_event_paranoid=3' ${config_file}
+	fi
 
 	# To restrict core dumps
 	config_file='/etc/security/limits.conf'
@@ -690,34 +674,15 @@ remove_services() {
 	fi
 
 	if [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
-		echo "Disable setroubleshoot service if enabled"
-		systemctl disable setroubleshoot 2>/dev/null || true
-		chkconfig setroubleshoot off 2>/dev/null || true
+		echo "Disable setrouble shoot service if enabled"
+		chkconfig setroubleshoot off
 
 		echo "Removing legacy networking services"
-		yum erase -y inetd xinetd ypserv tftp-server telnet-server rsh-server telnet 2>/dev/null || true
+		yum erase -y inetd xinetd ypserv tftp-server telnet-server rsh-server gdm3 telnet vim vim-common vim-runtime vim-tiny
 
 		echo "Removing X packages"
-		yum groupremove -y "X Window System" 2>/dev/null || true
-		yum remove -y xorg-x11* 2>/dev/null || true
-
-		# CIS Level 2 - Additional packages to remove
-		echo "Removing additional CIS Level 2 packages"
-		yum remove -y avahi avahi-daemon cups rpcbind nfs-utils vsftpd httpd nginx samba squid net-snmp 2>/dev/null || true
-
-		# CIS Level 2 - Disable additional services
-		echo "Disabling additional CIS Level 2 services"
-		systemctl disable avahi-daemon 2>/dev/null || true
-		systemctl disable cups 2>/dev/null || true
-		systemctl disable rpcbind 2>/dev/null || true
-		systemctl disable nfs-server 2>/dev/null || true
-		systemctl disable bluetooth 2>/dev/null || true
-		systemctl disable autofs 2>/dev/null || true
-
-		# CIS 1.6.1 - Disable kdump service
-		echo "Disabling kdump service"
-		systemctl disable kdump 2>/dev/null || true
-		systemctl mask kdump 2>/dev/null || true
+		yum groupremove -y "X Window System"
+		yum remove -y xorg-x11*
 	fi
 
   	# Placeholder for supporting other linux OS
@@ -765,9 +730,14 @@ disable_modules() {
 }
 
 ##########################################################################
-#  CIS Level 2 - Journald Hardening
+#  CIS Level 2 - Journald Hardening (Ubuntu only)
 ##########################################################################
 harden_journald() {
+	# Only apply to Ubuntu
+	if [[ ${OS_FLAVOUR} != "ubuntu" ]]; then
+		return 0
+	fi
+
 	echo "Configuring journald for CIS Level 2 compliance"
 
 	local journald_conf="/etc/systemd/journald.conf"
@@ -778,13 +748,6 @@ harden_journald() {
 			sed -i "s/^Compress=.*/Compress=yes/" ${journald_conf}
 		else
 			echo "Compress=yes" >> ${journald_conf}
-		fi
-
-		# Ensure journald is configured to write logfiles to persistent disk
-		if grep -q "^Storage=" ${journald_conf}; then
-			sed -i "s/^Storage=.*/Storage=persistent/" ${journald_conf}
-		else
-			echo "Storage=persistent" >> ${journald_conf}
 		fi
 
 		# Ensure journald is not configured to send logs to rsyslog
@@ -1038,73 +1001,6 @@ harden_auth() {
 		fi
 		echo "Ubuntu PAM configuration updated for password lockout and reuse policies"
 
-	elif [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
-		# RHEL/CentOS uses system-auth and password-auth
-		# Configure faillock.conf if it exists (RHEL 8+)
-		if [[ -f /etc/security/faillock.conf ]]; then
-			echo "Configuring /etc/security/faillock.conf"
-			sed -i 's/^#\s*deny\s*=.*/deny = 4/' /etc/security/faillock.conf 2>/dev/null || echo "deny = 4" >> /etc/security/faillock.conf
-			sed -i 's/^#\s*fail_interval\s*=.*/fail_interval = 900/' /etc/security/faillock.conf 2>/dev/null || echo "fail_interval = 900" >> /etc/security/faillock.conf
-			sed -i 's/^#\s*unlock_time\s*=.*/unlock_time = 600/' /etc/security/faillock.conf 2>/dev/null || echo "unlock_time = 600" >> /etc/security/faillock.conf
-			sed -i 's/^#\s*audit/audit/' /etc/security/faillock.conf 2>/dev/null || echo "audit" >> /etc/security/faillock.conf
-			sed -i 's/^#\s*silent/silent/' /etc/security/faillock.conf 2>/dev/null || echo "silent" >> /etc/security/faillock.conf
-		fi
-
-		# Configure system-auth
-		if [[ -f /etc/pam.d/system-auth ]]; then
-			cp /etc/pam.d/system-auth /etc/pam.d/system-auth.bak
-			# Check if using authselect (RHEL 8+)
-			if command -v authselect &>/dev/null; then
-				echo "Using authselect to enable faillock"
-				authselect enable-feature with-faillock 2>/dev/null || true
-				authselect apply-changes 2>/dev/null || true
-			else
-				# Manual PAM configuration for RHEL 7
-				if ! grep -q "pam_faillock.so" /etc/pam.d/system-auth; then
-					sed -i '/^auth.*pam_env.so/a auth        required      pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/system-auth
-					sed -i '/^auth.*pam_unix.so/a auth        [default=die] pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/system-auth
-					sed -i '/^auth.*pam_faillock.so.*authfail/a auth        sufficient    pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/system-auth
-				fi
-				if ! grep -q "pam_faillock.so" /etc/pam.d/system-auth | grep -q "account"; then
-					sed -i '/^account.*pam_unix.so/i account     required      pam_faillock.so' /etc/pam.d/system-auth
-				fi
-			fi
-		fi
-
-		# Configure password-auth (for remote logins)
-		if [[ -f /etc/pam.d/password-auth ]]; then
-			cp /etc/pam.d/password-auth /etc/pam.d/password-auth.bak
-			if ! command -v authselect &>/dev/null; then
-				# Manual PAM configuration for RHEL 7
-				if ! grep -q "pam_faillock.so" /etc/pam.d/password-auth; then
-					sed -i '/^auth.*pam_env.so/a auth        required      pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/password-auth
-					sed -i '/^auth.*pam_unix.so/a auth        [default=die] pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/password-auth
-					sed -i '/^auth.*pam_faillock.so.*authfail/a auth        sufficient    pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600' /etc/pam.d/password-auth
-				fi
-				if ! grep -q "pam_faillock.so" /etc/pam.d/password-auth | grep -q "account"; then
-					sed -i '/^account.*pam_unix.so/i account     required      pam_faillock.so' /etc/pam.d/password-auth
-				fi
-			fi
-		fi
-
-		##############Password reuse policy for RHEL/CentOS##################
-		# Configure password history in system-auth
-		if [[ -f /etc/pam.d/system-auth ]] && ! grep -q "remember=5" /etc/pam.d/system-auth; then
-			sed -i 's/^\(password.*pam_unix.so.*\)/\1 remember=5/' /etc/pam.d/system-auth
-		fi
-		if [[ -f /etc/pam.d/password-auth ]] && ! grep -q "remember=5" /etc/pam.d/password-auth; then
-			sed -i 's/^\(password.*pam_unix.so.*\)/\1 remember=5/' /etc/pam.d/password-auth
-		fi
-
-		# Add pam_pwquality if not present
-		if [[ -f /etc/pam.d/system-auth ]] && ! grep -q "pam_pwquality.so" /etc/pam.d/system-auth; then
-			sed -i '/^password.*pam_unix.so/i password    requisite     pam_pwquality.so retry=3' /etc/pam.d/system-auth
-		fi
-		if [[ -f /etc/pam.d/password-auth ]] && ! grep -q "pam_pwquality.so" /etc/pam.d/password-auth; then
-			sed -i '/^password.*pam_unix.so/i password    requisite     pam_pwquality.so retry=3' /etc/pam.d/password-auth
-		fi
-
-		echo "RHEL/CentOS PAM configuration updated for password lockout and reuse policies"
 	fi
 
 	#####################Password expiry policy#################
@@ -1138,29 +1034,10 @@ harden_auth() {
 			update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
 			echo "Password encryption method set to SHA512 (Ubuntu $ubuntu_version)"
 		fi
-	elif [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
-		# Check OS version for encryption method support
-		if [[ -f /etc/os-release ]]; then
-			. /etc/os-release
-			major_version=$(echo "$VERSION_ID" | cut -d. -f1)
-			if [[ "$major_version" -ge 9 ]]; then
-				# RHEL 9+ supports yescrypt
-				update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
-				echo "Password encryption method set to yescrypt"
-			else
-				# RHEL 7/8 use SHA512
-				update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
-				echo "Password encryption method set to SHA512"
-			fi
-		else
-			# Default to SHA512 for unknown versions
-			update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
-			echo "Password encryption method set to SHA512"
-		fi
 	else
-		# Default for other OS
-		update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
-		echo "Password encryption method set to SHA512"
+		# Default for other OS (original behavior)
+		update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
+		echo "Password encryption method set to yescrypt"
 	fi
 
 	####################Inactive password lock################
