@@ -3,24 +3,39 @@ FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
 
 FROM rockylinux/rockylinux:9.6 AS base
 
+# Metadata labels
+LABEL version="1.0"
+LABEL maintainer="Spectro Cloud <support@spectrocloud.com>"
+LABEL description="Rocky Linux 9.6 FIPS base image for EdgeForge with Kairos v3.5.9"
+LABEL kairos.version="v3.5.9"
+LABEL os.version="9.6"
+LABEL fips.enabled="true"
+
+# Build arguments
 # Generate os-release file
 ARG KAIROS_VERSION=v3.5.9
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-# Rocky Linux doesn't require subscription manager, repos are available by default
+# Disable weak dependencies BEFORE any package installation
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
-COPY overlay/rocky9/ /
+# Enable fips-mode-setup
+RUN fips-mode-setup --enable
 
+# Install EPEL repository
+RUN dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+
+# Copy overlay files and dracut configuration ONCE
+COPY overlay/rocky9/ /
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
+# Run Kairos install stage with FIPS
 COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
+RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"s
 
-# Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+# Generate machine-id and install all required packages in ONE layer
 RUN uuidgen > /etc/machine-id && dnf install -y \
     squashfs-tools \
     dracut-live \
@@ -29,6 +44,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     dracut-network \
     efibootmgr \
     dhclient \
+    dhcp-client \
     audit \
     sudo \
     systemd \
@@ -60,54 +76,60 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     grub2-efi-x64-modules \
     open-vm-tools \
     iscsi-initiator-utils \
-    iptables ethtool socat iproute-tc conntrack \
-    kernel kernel-modules kernel-modules-extra \
-    #cuff added -->
+    iptables \
+    ethtool \
+    socat \
+    iproute-tc \
+    conntrack \
+    kernel \
+    kernel-modules \
+    kernel-modules-extra \
     scap-security-guide \
     openscap \
-    selinux-policy-devel kernel-headers kernel-devel jq zstd conntrack \
-    #cuff added <--
-    rsync jq && dnf clean all
-
-RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
-RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
-RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
-
-RUN mkdir -p /run/lock
-RUN touch /usr/libexec/.keep
-
-# Configure the box. The ubi image masks services for containers, we unmask them
-RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs -r systemctl unmask || true
-RUN systemctl enable getty@tty1.service
-RUN systemctl enable getty@tty2.service
-RUN systemctl enable getty@tty3.service
-RUN systemctl enable systemd-networkd
-RUN systemctl enable systemd-resolved
-RUN systemctl enable sshd
-RUN systemctl disable selinux-autorelabel-mark.service
-RUN systemctl unmask systemd-udevd
-RUN systemctl enable systemd-udevd
-RUN systemctl unmask systemd-logind.service
-RUN systemctl enable systemd-logind.service
-
-COPY overlay/rocky9/ /
-
-COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
-
-RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
-
-RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
+    selinux-policy-devel \
+    kernel-headers \
+    kernel-devel \
+    jq \
+    rsync \
     && dnf clean all
 
-COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+# Fix shell script syntax in OEM files
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml && \
+    sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml && \
+    sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
 
-RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+# Create required directories
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep 
+RUN mkdir -p /usr/share/pki/trust/anchors && \
+    chmod 755 /usr/share/pki/trust && \
+    chmod 755 /usr/share/pki/trust/anchors
+RUN mkdir /usr/lib/extensions
 
-# Disable SELinux
+# Configure systemd services
+RUN systemctl list-unit-files | grep masked | cut -f 1 -d " " | xargs -r systemctl unmask || true && \
+    systemctl enable getty@tty1.service && \
+    systemctl enable getty@tty2.service && \
+    systemctl enable getty@tty3.service && \
+    systemctl enable systemd-networkd && \
+    systemctl enable systemd-resolved && \
+    systemctl enable sshd && \
+    systemctl disable selinux-autorelabel-mark.service && \
+    systemctl unmask systemd-udevd && \
+    systemctl enable systemd-udevd && \
+    systemctl unmask systemd-logind.service && \
+    systemctl enable systemd-logind.service
+
+# Run Kairos init stage with FIPS
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --fips --version "${KAIROS_VERSION}"
+
+# Create kernel HMAC symlink for FIPS
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+    ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+# Set SELinux to permissive (user-data will enforce it after policy configuration)
 RUN echo "SELINUX=disabled" > /etc/selinux/config
+# RUN echo "SELINUX=permissive" > /etc/selinux/config
 
-RUN rm -rf /boot/initramfs-*
-
-COPY overlay/rocky9/ /
-
+RUN oscap xccdf eval --remediate --profile xccdf_org.ssgproject.content_profile_stig  /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml

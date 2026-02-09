@@ -1,0 +1,127 @@
+# Kairos init image
+FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
+
+FROM rockylinux/rockylinux:9.6 AS base
+
+# Generate os-release file
+ARG KAIROS_VERSION=v3.5.9
+
+# Don't get asked while running apt commands
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+# Rocky Linux doesn't require subscription manager, repos are available by default
+RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
+COPY overlay/rocky9/ /
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+COPY --from=kairos-init /kairos-init /kairos-init
+RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
+
+# Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+RUN uuidgen > /etc/machine-id && dnf install -y \
+    squashfs-tools \
+    dracut-live \
+    livecd-tools \
+    dracut-squash \
+    dracut-network \
+    efibootmgr \
+    #fixed spelling below from dhclient
+    dhcp-client \
+    audit \
+    sudo \
+    systemd \
+    systemd-networkd \
+    systemd-timesyncd \
+    systemd-resolved \
+    parted \
+    dracut \
+    e2fsprogs \
+    dosfstools \
+    coreutils-single \
+    device-mapper \
+    grub2 \
+    which \
+    nano \
+    gawk \
+    haveged \
+    polkit \
+    ncurses \
+    tar \
+    kbd \
+    lvm2 \
+    zstd \
+    openssh-server \
+    openssh-clients \
+    shim-x64 \
+    grub2-pc \
+    grub2-efi-x64 \
+    grub2-efi-x64-modules \
+    open-vm-tools \
+    iscsi-initiator-utils \
+    iptables ethtool socat iproute-tc conntrack \
+    kernel kernel-modules kernel-modules-extra \
+    #cuff added -->
+    scap-security-guide \
+    openscap \
+    selinux-policy-devel kernel-headers kernel-devel jq zstd conntrack \
+    #cuff added <--
+    rsync jq && dnf clean all
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
+
+# Configure the box. The ubi image masks services for containers, we unmask them
+RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs -r systemctl unmask || true
+RUN systemctl enable getty@tty1.service
+RUN systemctl enable getty@tty2.service
+RUN systemctl enable getty@tty3.service
+RUN systemctl enable systemd-networkd
+RUN systemctl enable systemd-resolved
+RUN systemctl enable sshd
+RUN systemctl disable selinux-autorelabel-mark.service
+RUN systemctl unmask systemd-udevd
+RUN systemctl enable systemd-udevd
+RUN systemctl unmask systemd-logind.service
+RUN systemctl enable systemd-logind.service
+
+COPY overlay/rocky9/ /
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
+# Duplicate entry below
+# RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
+#     && dnf clean all
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+# Disable SELinux
+RUN echo "SELINUX=disabled" > /etc/selinux/config
+
+RUN rm -rf /boot/initramfs-*
+
+COPY overlay/rocky9/ /
+
+
+
+sha256:a437a761fee0b08ca52d764ca799ba1a43077eebe638e4318bdc0f27146eb462
+sha256:f191680940404bf1ab359cb189e2edc847a99263f9e9643d99b8b508c7173718
+sha256:02feb29841fc81174a3b04f1e325c00b28b98cca184e4e750ee8cf438f2d9e86
+sha256:94cd87d8c29b81edde3f485957d719f3a75d8a1f9eb013b510e2dd92c80b0fbf
+sha256:f7d3be5989ddd4697f1b9e562087e7ed638cbf5b62784b102a067744a21884f2
+sha256:fe9d8f2bc32f3cad35ef2a3057bb4d3d7b3d9cc37c0ef54b93770600b8826694
+sha256:66659ed0197ac09a0eae2a7726fe5e5062f9b24757567c55c9185fc3f7e5cc79
+sha256:23c12747e3d704929ceeadf8acd75fdd23475930ce868cb2f0fb6ff76086f9c9
+sha256:23c12747e3d704929ceeadf8acd75fdd23475930ce868cb2f0fb6ff76086f9c9
+sha256:cc30925b65e6b0c730736c54aaff2b13832cc4713056b5c710fbac31e29312cc
+sha256:a4b9d3ea82e32b3f5277c0a949442d86886b4a8ef207857dff094a4639813b11
