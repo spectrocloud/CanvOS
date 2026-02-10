@@ -52,7 +52,7 @@ ARG CIS_HARDENING=false
 ARG UBUNTU_PRO_KEY
 
 # DRBD version for Piraeus pack
-ARG DRBD_VERSION="9.2.13"
+ARG DRBD_VERSION="9.2.15"
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -61,7 +61,7 @@ ARG http_proxy=${HTTP_PROXY}
 ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 
-ARG UPDATE_KERNEL=false
+ARG UPDATE_KERNEL=true
 ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
