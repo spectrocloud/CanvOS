@@ -153,6 +153,7 @@ done
 echo "Ensuring required filesystem modules are not blacklisted..."
 
 # Check for and remove blacklist entries for required modules
+# This prevents STIG rules from disabling modules needed for boot
 for mod in squashfs overlay loop; do
     # Remove blacklist entries from all modprobe.d configs
     for conf in /etc/modprobe.d/*.conf; do
@@ -165,11 +166,6 @@ for mod in squashfs overlay loop; do
             sed -i "/^install.*${mod}.*\/bin\/false/d" "$conf" || true
         fi
     done
-    
-    # Ensure module is explicitly allowed (create allowlist if needed)
-    if ! grep -rq "^allow.*${mod}" /etc/modprobe.d/ 2>/dev/null; then
-        echo "allow ${mod}" >> /etc/modprobe.d/kairos-required-modules.conf || true
-    fi
 done
 
 # Ensure kernel.modules_disabled is not set to 1 (would prevent module loading)
@@ -179,12 +175,16 @@ if [ -f /etc/sysctl.conf ]; then
     sed -i 's/^kernel\.modules_disabled.*/# STIG exception: kernel.modules_disabled delayed for Kairos boot\n# &/' /etc/sysctl.conf || true
 fi
 
-# Ensure required drivers are in dracut config (backup in case STIG removed them)
+# Ensure required drivers and modules are in dracut config (backup in case STIG removed them)
 for conf_file in /etc/dracut.conf.d/*.conf; do
     if [ -f "$conf_file" ]; then
         # Add drivers if not present
         if ! grep -q "add_drivers.*squashfs" "$conf_file"; then
             echo 'add_drivers+=" squashfs overlay loop "' >> "$conf_file" || true
+        fi
+        # Ensure rootfsbase module is included
+        if ! grep -q "add_dracutmodules.*rootfsbase" "$conf_file"; then
+            echo 'add_dracutmodules+=" rootfsbase "' >> "$conf_file" || true
         fi
     fi
 done
@@ -193,6 +193,9 @@ done
 if [ -f /etc/dracut.conf ]; then
     if ! grep -q "add_drivers.*squashfs" /etc/dracut.conf; then
         echo 'add_drivers+=" squashfs overlay loop "' >> /etc/dracut.conf || true
+    fi
+    if ! grep -q "add_dracutmodules.*rootfsbase" /etc/dracut.conf; then
+        echo 'add_dracutmodules+=" rootfsbase "' >> /etc/dracut.conf || true
     fi
 fi
 
