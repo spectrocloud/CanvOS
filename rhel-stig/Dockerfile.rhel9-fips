@@ -109,8 +109,9 @@ COPY overlay/rhel9/ /
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
 # Patch dracut-live module BEFORE kairos-init runs so the patch is included in initramfs
-# The error is: overlayfs: failed to resolve '/run/rootfsbase': -2
-# Patch ALL dracut-live scripts to ensure /run/rootfsbase exists early
+# The error is: overlayfs: failed to resolve '/run/rootfs': -2
+# /run may not exist during early initramfs boot, so we need to mount it as tmpfs first
+# Patch ALL dracut-live scripts to mount /run and create required directories
 RUN DRACUT_LIVE_DIR="/usr/lib/dracut/modules.d/90dmsquash-live" && \
     if [ -d "$DRACUT_LIVE_DIR" ]; then \
         echo "Patching dracut-live scripts in $DRACUT_LIVE_DIR" && \
@@ -121,19 +122,27 @@ RUN DRACUT_LIVE_DIR="/usr/lib/dracut/modules.d/90dmsquash-live" && \
                 cp "$script" "${script}.bak" && \
                 if head -1 "$script" | grep -q "^#!"; then \
                     sed -i '1a\
-# STIG fix: Ensure /run and /run/rootfsbase exist before overlayfs mount\
-mkdir -p /run 2>/dev/null || true\
+# STIG fix: Mount /run as tmpfs and create required directories before overlayfs mount\
+# /run may not exist during early initramfs boot\
+if [ ! -d /run ]; then mkdir -p /run 2>/dev/null || true; fi\
+if ! mountpoint -q /run 2>/dev/null; then mount -t tmpfs -o mode=0755 tmpfs /run 2>/dev/null || true; fi\
+mkdir -p /run/rootfs 2>/dev/null || true\
 mkdir -p /run/rootfsbase 2>/dev/null || true\
+chmod 755 /run/rootfs 2>/dev/null || true\
 chmod 755 /run/rootfsbase 2>/dev/null || true' "$script"; \
                 else \
                     sed -i '1i\
-# STIG fix: Ensure /run and /run/rootfsbase exist before overlayfs mount\
-mkdir -p /run 2>/dev/null || true\
+# STIG fix: Mount /run as tmpfs and create required directories before overlayfs mount\
+# /run may not exist during early initramfs boot\
+if [ ! -d /run ]; then mkdir -p /run 2>/dev/null || true; fi\
+if ! mountpoint -q /run 2>/dev/null; then mount -t tmpfs -o mode=0755 tmpfs /run 2>/dev/null || true; fi\
+mkdir -p /run/rootfs 2>/dev/null || true\
 mkdir -p /run/rootfsbase 2>/dev/null || true\
+chmod 755 /run/rootfs 2>/dev/null || true\
 chmod 755 /run/rootfsbase 2>/dev/null || true' "$script"; \
                 fi && \
                 echo "Patched: $script" && \
-                head -5 "$script" || true; \
+                head -8 "$script" || true; \
             fi; \
         done; \
     else \

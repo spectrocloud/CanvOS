@@ -1,36 +1,28 @@
 #!/bin/sh
-# Early initramfs script to create /run/rootfsbase for overlayfs
-# This runs in pre-mount hook (priority 10) before overlayfs tries to mount
+# Early initramfs script to mount /run as tmpfs and create required directories
+# This runs in cmdline and pre-mount hooks (priority 10) before overlayfs tries to mount
 # Works in vSphere, VMware, and other virtualization environments
-# The error is: overlayfs: failed to resolve '/run/rootfsbase': -2
+# The error is: overlayfs: failed to resolve '/run/rootfs': -2 or '/run/rootfsbase': -2
 
-# Ensure /run exists - it should be a tmpfs mount, but create it if needed
-# In some virtualization environments, /run might not be mounted yet
+# Mount /run as tmpfs if it doesn't exist or isn't mounted
+# /run may not exist during early initramfs boot
 if [ ! -d /run ]; then
-    mkdir -p /run
-    # If /run is not a mount point, ensure it's accessible
-    if ! mountpoint -q /run 2>/dev/null; then
-        # /run might not be mounted yet, but we can still create subdirectories
-        # The directory will be created in the root filesystem temporarily
-        mkdir -p /run
-    fi
+    mkdir -p /run 2>/dev/null || true
 fi
 
-# Create /run/rootfsbase directory required by overlayfs
-# Try multiple times in case /run is being mounted asynchronously
-for i in 1 2 3; do
-    if [ ! -d /run/rootfsbase ]; then
-        mkdir -p /run/rootfsbase 2>/dev/null && break || sleep 0.1
-    fi
-done
-
-# Verify it was created and set permissions
-if [ -d /run/rootfsbase ]; then
-    chmod 755 /run/rootfsbase
-    echo "rootfsbase: Created /run/rootfsbase for overlayfs"
-else
-    # Last resort: try creating in initramfs root if /run isn't available
-    mkdir -p /run/rootfsbase 2>/dev/null || true
-    chmod 755 /run/rootfsbase 2>/dev/null || true
-    echo "rootfsbase: Created /run/rootfsbase (fallback)"
+# Mount /run as tmpfs if not already mounted
+if ! mountpoint -q /run 2>/dev/null; then
+    mount -t tmpfs -o mode=0755 tmpfs /run 2>/dev/null || {
+        # If mount fails, at least ensure directory exists
+        mkdir -p /run 2>/dev/null || true
+    }
 fi
+
+# Create both /run/rootfs and /run/rootfsbase directories
+# Different dracut-live versions may use different paths
+mkdir -p /run/rootfs 2>/dev/null || true
+mkdir -p /run/rootfsbase 2>/dev/null || true
+chmod 755 /run/rootfs 2>/dev/null || true
+chmod 755 /run/rootfsbase 2>/dev/null || true
+
+echo "rootfsbase: Mounted /run and created /run/rootfs and /run/rootfsbase"
