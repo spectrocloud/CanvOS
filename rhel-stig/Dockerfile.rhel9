@@ -112,30 +112,34 @@ COPY dracut.conf.stig /etc/dracut.conf.d/kairos-stig.conf
 # Patch dracut-live module BEFORE kairos-init runs so the patch is included in initramfs
 # The error is: overlayfs: failed to resolve '/run/rootfsbase': -2
 # Patch ALL dracut-live scripts to ensure /run/rootfsbase exists early
-# Also create /run/overlayfs for compatibility
 RUN DRACUT_LIVE_DIR="/usr/lib/dracut/modules.d/90dmsquash-live" && \
-    for script in "$DRACUT_LIVE_DIR"/*.sh; do \
-        if [ -f "$script" ]; then \
-            cp "$script" "${script}.bak" && \
-            if head -1 "$script" | grep -q "^#!"; then \
-                sed -i '1a\
-# STIG fix: Ensure /run, /run/rootfsbase, and /run/overlayfs exist before overlayfs mount\
+    if [ -d "$DRACUT_LIVE_DIR" ]; then \
+        echo "Patching dracut-live scripts in $DRACUT_LIVE_DIR" && \
+        ls -la "$DRACUT_LIVE_DIR"/*.sh 2>/dev/null || echo "No .sh files found" && \
+        for script in "$DRACUT_LIVE_DIR"/*.sh; do \
+            if [ -f "$script" ]; then \
+                echo "Patching: $script" && \
+                cp "$script" "${script}.bak" && \
+                if head -1 "$script" | grep -q "^#!"; then \
+                    sed -i '1a\
+# STIG fix: Ensure /run and /run/rootfsbase exist before overlayfs mount\
 mkdir -p /run 2>/dev/null || true\
 mkdir -p /run/rootfsbase 2>/dev/null || true\
-mkdir -p /run/overlayfs 2>/dev/null || true\
-chmod 755 /run/rootfsbase 2>/dev/null || true\
-chmod 755 /run/overlayfs 2>/dev/null || true' "$script"; \
-            else \
-                sed -i '1i\
-# STIG fix: Ensure /run, /run/rootfsbase, and /run/overlayfs exist before overlayfs mount\
+chmod 755 /run/rootfsbase 2>/dev/null || true' "$script"; \
+                else \
+                    sed -i '1i\
+# STIG fix: Ensure /run and /run/rootfsbase exist before overlayfs mount\
 mkdir -p /run 2>/dev/null || true\
 mkdir -p /run/rootfsbase 2>/dev/null || true\
-mkdir -p /run/overlayfs 2>/dev/null || true\
-chmod 755 /run/rootfsbase 2>/dev/null || true\
-chmod 755 /run/overlayfs 2>/dev/null || true' "$script"; \
+chmod 755 /run/rootfsbase 2>/dev/null || true' "$script"; \
+                fi && \
+                echo "Patched: $script" && \
+                head -5 "$script" || true; \
             fi; \
-        fi; \
-    done || true
+        done; \
+    else \
+        echo "WARNING: $DRACUT_LIVE_DIR does not exist"; \
+    fi || true
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init --version "${KAIROS_VERSION}"

@@ -109,16 +109,15 @@ fi
 echo "Ensuring boot-critical directories and configurations are preserved..."
 
 # STIG remediation may remove or restrict /run directory creation
-# Ensure /run, /run/rootfsbase, and /run/overlayfs can be created during boot
-# Note: /run is tmpfs, but we need to ensure dracut-live can create these directories
+# Ensure /run and /run/rootfsbase can be created during boot
+# Note: /run is tmpfs, but we need to ensure dracut-live can create /run/rootfsbase
 # Create tmpfiles.d entry as backup (though this runs after initramfs)
 mkdir -p /usr/lib/tmpfiles.d
-cat > /usr/lib/tmpfiles.d/kairos-overlayfs.conf <<'EOF'
-# Create /run/rootfsbase and /run/overlayfs directories for overlayfs during live CD boot
+cat > /usr/lib/tmpfiles.d/kairos-rootfsbase.conf <<'EOF'
+# Create /run/rootfsbase directory for overlayfs during live CD boot
 # This is required by dracut-live module for overlayfs root filesystem
 # Note: This is a backup - the actual fix is patching dracut-live scripts
 d /run/rootfsbase 0755 root root -
-d /run/overlayfs 0755 root root -
 EOF
 
 # Ensure STIG remediation didn't break /run directory permissions
