@@ -108,12 +108,34 @@ COPY overlay/rhel9/ /
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
-# Note: We rely on the custom rootfsbase dracut module (added via dracut.conf)
-# to ensure /run/rootfsbase exists. Patching dracut-live scripts directly is risky
-# and can break dracut logic. The rootfsbase module runs early via cmdline/pre-mount hooks.
+# Ensure custom rootfsbase dracut module is present and executable before initramfs generation
+# This module must be available when kairos-init -s init generates the initramfs
+RUN if [ -d /usr/lib/dracut/modules.d/90rootfsbase ]; then \
+        chmod +x /usr/lib/dracut/modules.d/90rootfsbase/*.sh 2>/dev/null || true; \
+        echo "rootfsbase module found and made executable"; \
+        ls -la /usr/lib/dracut/modules.d/90rootfsbase/ || true; \
+    else \
+        echo "WARNING: rootfsbase module not found at /usr/lib/dracut/modules.d/90rootfsbase"; \
+    fi
+
+# Verify dracut can see the module
+RUN if command -v dracut >/dev/null 2>&1; then \
+        echo "Dracut modules available:"; \
+        dracut --list-modules 2>/dev/null | grep -E "(rootfsbase|dmsquash-live)" || echo "Modules not listed (may be normal)"; \
+    fi || true
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
+
+# Verify initramfs was generated successfully
+RUN if ls /boot/initramfs-* 1>/dev/null 2>&1 || ls /boot/initrd-* 1>/dev/null 2>&1; then \
+        echo "Initramfs generated successfully"; \
+        ls -lh /boot/initramfs-* /boot/initrd-* 2>/dev/null | head -5 || true; \
+    else \
+        echo "ERROR: No initramfs found in /boot after kairos-init -s init"; \
+        ls -la /boot/ || true; \
+        exit 1; \
+    fi
 
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all

@@ -104,9 +104,28 @@ if [ $REMEDIATION_EXIT -ne 0 ]; then
     echo "Review /tmp/stig-remediation.log for details"
 fi
 
-# Ensure critical boot directories are preserved after STIG remediation
-# STIG remediation might remove or modify directories needed for boot
-echo "Ensuring boot-critical directories and configurations are preserved..."
+# Ensure critical boot directories and binaries are preserved after STIG remediation
+# STIG remediation might remove or modify directories/binaries needed for boot
+echo "Ensuring boot-critical directories, binaries, and configurations are preserved..."
+
+# CRITICAL: Ensure emergency shell binaries exist (required for initramfs)
+# These are needed for dracut emergency mode if boot fails
+for bin in /bin/dracut-emergency /usr/bin/systemctl /bin/sh /bin/bash; do
+    if [ ! -f "$bin" ]; then
+        echo "WARNING: Critical binary missing: $bin"
+    fi
+done
+
+# Ensure /dev directory structure is preserved (STIG might restrict /dev)
+# /dev must be available in initramfs for I/O operations
+if [ -d /dev ]; then
+    # Ensure /dev/null, /dev/console, /dev/tty exist (critical for initramfs)
+    for dev in null console tty zero; do
+        if [ ! -e "/dev/$dev" ]; then
+            echo "WARNING: Critical device missing: /dev/$dev"
+        fi
+    done
+fi
 
 # STIG remediation may remove or restrict /run directory creation
 # Ensure /run and /run/rootfsbase can be created during boot
