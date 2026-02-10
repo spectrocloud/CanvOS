@@ -1,0 +1,62 @@
+ARG AURORABOOT_IMAGE
+
+FROM ${AURORABOOT_IMAGE} AS builder
+
+ARG ISO_NAME
+ARG CLUSTERCONFIG
+ARG EDGE_CUSTOM_CONFIG
+ARG FORCE_INTERACTIVE_INSTALL=false
+
+COPY overlay/files-iso/ /overlay/
+
+COPY --from=validate-user-data /validated /validated
+
+COPY --from=iso-image / /iso-source/
+
+
+RUN --mount=type=bind,target=/build-context \
+    mkdir -p /overlay/opt/spectrocloud/content && \
+    for dir in /build-context/content-*/; do \
+        [ -d "$dir" ] && cp "$dir"*.zst /overlay/opt/spectrocloud/content/ 2>/dev/null || true; \
+    done && \
+    if [ -n "$EDGE_CUSTOM_CONFIG" ] && [ -f /build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
+        cp /build-context/"$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml; \
+    fi && \
+    if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
+        for file in /overlay/opt/spectrocloud/content/*.zst; do \
+            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
+        done; \
+        rm -f /overlay/opt/spectrocloud/content/*.zst; \
+    fi && \
+    if [ -n "$CLUSTERCONFIG" ] && [ -f /build-context/"$CLUSTERCONFIG" ]; then \
+        mkdir -p /overlay/opt/spectrocloud/clusterconfig && \
+        cp /build-context/"$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz; \
+    fi
+
+# Generate grub.cfg based on FORCE_INTERACTIVE_INSTALL setting
+RUN if [ "$FORCE_INTERACTIVE_INSTALL" = "true" ]; then \
+        sed 's/{{DEFAULT_ENTRY}}/2/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
+        mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
+    else \
+        sed 's/{{DEFAULT_ENTRY}}/0/g' /overlay/boot/grub2/grub.cfg > /overlay/boot/grub2/grub.cfg.tmp && \
+        mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
+    fi
+
+RUN mkdir -p /output
+
+RUN /usr/bin/auroraboot \
+    --debug \
+    build-iso \
+    --output /output \
+    --override-name ${ISO_NAME} \
+    --overlay-iso /overlay \
+    $(if [ -f /validated/config.yaml ] && [ -s /validated/config.yaml ]; then echo "--cloud-config /validated/config.yaml"; fi) \
+    dir:/iso-source
+
+RUN mkdir -p /iso && \
+    cp /output/${ISO_NAME}.iso /iso/ && \
+    cd /iso && \
+    sha256sum "${ISO_NAME}.iso" > "${ISO_NAME}.iso.sha256"
+
+FROM scratch AS output
+COPY --from=builder /iso/ /

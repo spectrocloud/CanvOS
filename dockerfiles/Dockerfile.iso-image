@@ -1,0 +1,45 @@
+FROM base-image AS iso-image
+
+ARG IS_UKI=false
+ARG IS_CLOUD_IMAGE=false
+ARG IS_MAAS=false
+
+COPY --from=stylus-image / /
+
+RUN if [ "$IS_UKI" = "true" ]; then \
+        find /opt/spectrocloud/bin/. ! -name 'agent-provider-stylus' -type f -exec rm -f {} + && \
+        rm -f /usr/bin/luet; \
+    fi
+
+COPY overlay/files/ /
+
+RUN if [ -f /etc/logrotate.d/stylus.conf ]; then \
+        chmod 644 /etc/logrotate.d/stylus.conf; \
+    fi
+
+RUN --mount=type=bind,target=/build-context \
+    # Extract local-ui for all build types (ISO, UKI, Cloud, MAAS)
+    if [ -f /build-context/local-ui.tar ]; then \
+        mkdir -p /opt/spectrocloud && \
+        tar -xf /build-context/local-ui.tar -C /opt/spectrocloud; \
+    fi && \
+    # Cloud-specific configuration
+    if [ "$IS_CLOUD_IMAGE" = "true" ]; then \
+        cp /build-context/cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg && \
+        cp /build-context/cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml && \
+        mkdir -p /opt/spectrocloud/scripts && \
+        cp /build-context/cloudconfigs/cloud-content.sh /opt/spectrocloud/scripts/cloud-content.sh && \
+        chmod 755 /opt/spectrocloud/scripts/cloud-content.sh && \
+        cp /build-context/cloudconfigs/cloud-extend-persistent.sh /opt/spectrocloud/scripts/cloud-extend-persistent.sh && \
+        chmod 755 /opt/spectrocloud/scripts/cloud-extend-persistent.sh; \
+    fi && \
+    # MAAS-specific configuration
+    if [ "$IS_MAAS" = "true" ]; then \
+        mkdir -p /opt/spectrocloud/scripts && \
+        cp /build-context/cloudconfigs/maas-content.sh /opt/spectrocloud/scripts/maas-content.sh && \
+        chmod 755 /opt/spectrocloud/scripts/maas-content.sh; \
+    fi
+
+RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli && \
+    touch /etc/machine-id && \
+    chmod 444 /etc/machine-id

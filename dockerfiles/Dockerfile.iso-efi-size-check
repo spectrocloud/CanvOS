@@ -1,0 +1,45 @@
+ARG UBUNTU_IMAGE
+# Stage 1: Build the EFI binary
+FROM rust:1.78-bookworm AS rust-deps
+
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -qq autoconf autotools-dev libtool-bin clang cmake bsdmainutils
+
+RUN ls -lrth
+
+WORKDIR /build
+COPY efi-size-check efi-size-check
+
+WORKDIR /build/efi-size-check
+RUN cargo build --target x86_64-unknown-uefi
+
+# Stage 2: Create the ISO
+FROM ${UBUNTU_IMAGE} AS iso-builder
+
+ARG EFI_MAX_SIZE
+ARG EFI_IMG_SIZE
+
+RUN apt-get update && \
+    apt-get install -y mtools xorriso && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY --from=rust-deps /build/efi-size-check/target/x86_64-unknown-uefi/debug/efi-size-check.efi /build/efi-size-check.efi
+
+RUN mkdir -p esp && \
+    dd if=/dev/urandom of=esp/ABC bs=1M count=${EFI_MAX_SIZE} && \
+    dd if=/dev/zero of=fat.img bs=1M count=${EFI_IMG_SIZE} && \
+    mformat -i fat.img -F :: && \
+    mmd -i fat.img ::/EFI && \
+    mmd -i fat.img ::/EFI/BOOT && \
+    mcopy -i fat.img efi-size-check.efi ::/EFI/BOOT/BOOTX64.EFI && \
+    mcopy -i fat.img esp/ABC :: && \
+    mkdir -p iso && \
+    cp fat.img iso && \
+    xorriso -as mkisofs -e fat.img -no-emul-boot -o efi-size-check.iso iso
+
+# Output stage
+FROM scratch AS output
+COPY --from=iso-builder /build/efi-size-check.iso /
+

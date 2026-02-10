@@ -179,9 +179,8 @@ if [[ "$1" == "+maas-image" ]]; then
     fi
     
     # Run the original build-kairos-maas.sh script locally
-    # The script expects curtin-hooks to be in ORIG_DIR (the directory where the script is invoked from)
-    # Copy curtin-hooks to the repo root (current directory) so the script can find it
-    cp "$CURTIN_HOOKS" ./curtin-hooks
+    # Export path to curtin-hooks so the build script can find it
+    export CURTIN_HOOKS_SCRIPT="$(readlink -f "$CURTIN_HOOKS")"
     
     # Check for files to add to content partition
     # The build script looks for:
@@ -286,26 +285,12 @@ if [[ "$1" == "+maas-image" ]]; then
         exit 1
     fi
     
-    # Move the compressed composite image to build directory for consistency
+    # Move the compressed composite image and checksum to build directory
     mkdir -p build
     mv "$COMPOSITE_IMAGE" "build/$COMPOSITE_IMAGE"
+    mv "${COMPOSITE_IMAGE}.sha256" "build/${COMPOSITE_IMAGE}.sha256" 2>/dev/null || true
     
-    # Generate SHA256 checksum file for the final image
-    echo "=== Generating SHA256 checksum ==="
-    FINAL_IMAGE_PATH="build/$COMPOSITE_IMAGE"
-    sha256sum "$FINAL_IMAGE_PATH" > "${FINAL_IMAGE_PATH}.sha256"
-    echo "✅ SHA256 checksum created: ${FINAL_IMAGE_PATH}.sha256"
-    
-    # Clean up temporary curtin-hooks file from repo root
-    rm -f ./curtin-hooks
-    
-    # Show final image size and checksum
-    FINAL_SIZE=$(du -h "$FINAL_IMAGE_PATH" | cut -f1)
-    CHECKSUM=$(cat "${FINAL_IMAGE_PATH}.sha256" | cut -d' ' -f1)
-    echo "✅ MAAS composite image created and compressed successfully: $FINAL_IMAGE_PATH"
-    echo "   Final size: $FINAL_SIZE"
-    echo "   SHA256: $CHECKSUM"
-    echo "   MAAS will automatically decompress this image during upload."
+    echo "✅ MAAS image build complete: build/$COMPOSITE_IMAGE"
     exit 0
 fi
 

@@ -1,0 +1,86 @@
+ARG UBUNTU_IMAGE
+
+FROM ${UBUNTU_IMAGE}
+
+ARG INCLUDE_MS_SECUREBOOT_KEYS=false
+
+
+RUN apt-get update && apt-get install -y efitools curl tar ca-certificates && \
+    update-ca-certificates
+
+RUN curl -fsSL -o /tmp/sbctl.tar.gz https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz && \
+    tar -xzf /tmp/sbctl.tar.gz -C /tmp && \
+    mv /tmp/sbctl/sbctl /usr/bin/sbctl && \
+    chmod +x /usr/bin/sbctl && \
+    rm -rf /tmp/sbctl.tar.gz /tmp/sbctl
+
+RUN mkdir -p /exported-keys /keys /tmp/secure-boot /private-keys /public-keys
+
+COPY secure-boot/ /tmp/secure-boot
+
+# Copy keys from /tmp/secure-boot to their destinations
+# Preserve original structure in /private-keys and /public-keys for output
+RUN if [ -d "/tmp/secure-boot/private-keys" ]; then \
+        cp -r /tmp/secure-boot/private-keys/* /keys/ && \
+        cp -r /tmp/secure-boot/private-keys/* /private-keys/; \
+    fi
+
+RUN if [ -d "/tmp/secure-boot/public-keys" ]; then \
+        cp -r /tmp/secure-boot/public-keys/* /keys/ && \
+        cp -r /tmp/secure-boot/public-keys/* /public-keys/; \
+    fi
+
+RUN if [ -d "/tmp/secure-boot/exported-keys" ]; then \
+        cp -r /tmp/secure-boot/exported-keys/* /exported-keys/; \
+    fi
+
+RUN rm -rf /tmp/secure-boot
+
+WORKDIR /keys
+
+RUN sbctl import-keys \
+    --pk-key /keys/PK.key \
+    --pk-cert /keys/PK.pem \
+    --kek-key /keys/KEK.key \
+    --kek-cert /keys/KEK.pem \
+    --db-key /keys/db.key \
+    --db-cert /keys/db.pem
+
+RUN sbctl create-keys
+
+RUN if [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]; then \
+        sbctl enroll-keys --export esl --yes-this-might-brick-my-machine; \
+    else \
+        sbctl enroll-keys --export esl --yes-this-might-brick-my-machine --microsoft; \
+    fi
+
+RUN mkdir -p /output
+
+RUN cp PK.esl  /output/PK.esl  2>/dev/null || true && \
+    cp KEK.esl /output/KEK.esl 2>/dev/null || true && \
+    cp db.esl  /output/db.esl  2>/dev/null || true
+
+RUN if [ -f dbx.esl ]; then \
+        cp dbx.esl /output/dbx.esl; \
+    else \
+        touch /output/dbx.esl; \
+    fi
+
+RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl || true && \
+    [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true && \
+    [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
+
+WORKDIR /output
+
+RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  PK  PK.esl  PK.auth && \
+    sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  KEK KEK.esl KEK.auth && \
+    sign-efi-sig-list -c /keys/KEK.pem -k /keys/KEK.key db  db.esl  db.auth && \
+    sign-efi-sig-list -c /keys/KEK.pem -k /keys/KEK.key dbx dbx.esl dbx.auth
+
+RUN sig-list-to-certs 'PK.esl' 'PK' && \
+    sig-list-to-certs 'KEK.esl' 'KEK' && \
+    sig-list-to-certs 'db.esl' 'db'
+
+RUN cp PK-0.der  PK.der  2>/dev/null || true && \
+    cp KEK-0.der KEK.der 2>/dev/null || true && \
+    cp db-0.der  db.der  2>/dev/null || true

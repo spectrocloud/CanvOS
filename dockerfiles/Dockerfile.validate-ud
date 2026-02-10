@@ -1,0 +1,15 @@
+ARG CLI_IMAGE
+ARG ARCH
+FROM --platform=linux/${ARCH} ${CLI_IMAGE} AS validate-user-data
+
+RUN chmod +x /usr/local/bin/palette-edge-cli
+
+# Use bind mount to access user-data without copying entire context
+RUN --mount=type=bind,target=/build-context \
+    mkdir -p /validated && \
+    if [ -f /build-context/user-data ]; then \
+        /usr/local/bin/palette-edge-cli validate -f /build-context/user-data && \
+        cp /build-context/user-data /validated/config.yaml; \
+    else \
+        echo "user-data file does not exist (skipping validation)"; \
+    fi
