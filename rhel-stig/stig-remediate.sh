@@ -147,6 +147,55 @@ for conf_file in /etc/dracut.conf.d/*.conf; do
     fi
 done
 
+# CRITICAL: Ensure STIG remediation doesn't blacklist required filesystem modules
+# Kairos requires squashfs, overlay, and loop to boot
+# These modules MUST be available in initramfs
+echo "Ensuring required filesystem modules are not blacklisted..."
+
+# Check for and remove blacklist entries for required modules
+for mod in squashfs overlay loop; do
+    # Remove blacklist entries from all modprobe.d configs
+    for conf in /etc/modprobe.d/*.conf; do
+        if [ -f "$conf" ]; then
+            # Remove blacklist lines
+            sed -i "/^blacklist.*${mod}/d" "$conf" || true
+            # Remove install lines that disable the module
+            sed -i "/^install.*${mod}.*\/bin\/true/d" "$conf" || true
+            # Remove install lines that disable the module (alternative syntax)
+            sed -i "/^install.*${mod}.*\/bin\/false/d" "$conf" || true
+        fi
+    done
+    
+    # Ensure module is explicitly allowed (create allowlist if needed)
+    if ! grep -rq "^allow.*${mod}" /etc/modprobe.d/ 2>/dev/null; then
+        echo "allow ${mod}" >> /etc/modprobe.d/kairos-required-modules.conf || true
+    fi
+done
+
+# Ensure kernel.modules_disabled is not set to 1 (would prevent module loading)
+# STIG may require this, but it must be delayed until after rootfs mount
+if [ -f /etc/sysctl.conf ]; then
+    # Comment out if present (we'll handle this at runtime if STIG requires it)
+    sed -i 's/^kernel\.modules_disabled.*/# STIG exception: kernel.modules_disabled delayed for Kairos boot\n# &/' /etc/sysctl.conf || true
+fi
+
+# Ensure required drivers are in dracut config (backup in case STIG removed them)
+for conf_file in /etc/dracut.conf.d/*.conf; do
+    if [ -f "$conf_file" ]; then
+        # Add drivers if not present
+        if ! grep -q "add_drivers.*squashfs" "$conf_file"; then
+            echo 'add_drivers+=" squashfs overlay loop "' >> "$conf_file" || true
+        fi
+    fi
+done
+
+# Also ensure in main dracut.conf
+if [ -f /etc/dracut.conf ]; then
+    if ! grep -q "add_drivers.*squashfs" /etc/dracut.conf; then
+        echo 'add_drivers+=" squashfs overlay loop "' >> /etc/dracut.conf || true
+    fi
+fi
+
 # Clean up
 rm -f "$REMEDIATION_SCRIPT"
 
