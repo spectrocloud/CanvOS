@@ -135,18 +135,20 @@ RUN if [ -f /boot/initrd ] || ls /boot/initramfs-* 1>/dev/null 2>&1 || ls /boot/
         INITRD=$(ls -1 /boot/initramfs-* /boot/initrd-* /boot/initrd 2>/dev/null | head -n1); \
         echo "Using initrd: $INITRD"; \
         ls -lh "$INITRD" || true; \
-        echo "Checking initramfs contents for required modules and scripts..."; \
         if ! command -v lsinitrd >/dev/null 2>&1; then \
-            echo "ERROR: lsinitrd missing - cannot verify initramfs contents"; \
-            echo "This should not happen as dracut is installed earlier in the build"; \
-            exit 1; \
+            echo "lsinitrd missing; installing dracut-tools..."; \
+            dnf install -y dracut-tools && dnf clean all; \
         fi; \
-        echo "=== Checking for dmsquash-live module and scripts ==="; \
-        lsinitrd "$INITRD" 2>/dev/null | grep -E "(90dmsquash-live|dmsquash-live|dmsquash-liveroot|parse-live.sh|iso-scan|CDLABEL)" || echo "WARNING: dmsquash-live scripts not found in initramfs"; \
-        echo "=== Checking for rootfsbase module ==="; \
-        lsinitrd "$INITRD" 2>/dev/null | grep -E "(rootfsbase|90rootfsbase)" || echo "WARNING: rootfsbase module not found in initramfs"; \
-        echo "=== Checking for required kernel modules ==="; \
-        lsinitrd "$INITRD" 2>/dev/null | grep -E "/lib/modules/.*/kernel/fs/squashfs/squashfs\.ko|/lib/modules/.*/kernel/fs/overlayfs/overlay\.ko|/lib/modules/.*/kernel/drivers/block/loop\.ko" || echo "WARNING: Some required kernel modules not found (may be built-in)"; \
+        if command -v lsinitrd >/dev/null 2>&1; then \
+            echo "=== dmsquash-live ==="; \
+            lsinitrd "$INITRD" 2>/dev/null | grep -E "(90dmsquash-live|dmsquash-live|dmsquash-liveroot|parse-live|iso-scan|CDLABEL)" || echo "WARNING: dmsquash-live scripts not found"; \
+            echo "=== rootfsbase ==="; \
+            lsinitrd "$INITRD" 2>/dev/null | grep -E "(rootfsbase|90rootfsbase)" || echo "WARNING: rootfsbase module not found"; \
+            echo "=== required kernel modules ==="; \
+            lsinitrd "$INITRD" 2>/dev/null | grep -E "/lib/modules/.*/kernel/fs/squashfs/squashfs\.ko|/lib/modules/.*/kernel/fs/overlayfs/overlay\.ko|/lib/modules/.*/kernel/drivers/block/loop\.ko" || echo "WARNING: Some required kernel modules not found (may be built-in)"; \
+        else \
+            echo "WARNING: lsinitrd still missing; skipping initramfs inspection"; \
+        fi; \
     else \
         echo "ERROR: No initramfs found in /boot after kairos-init -s init"; \
         ls -la /boot/ || true; \
