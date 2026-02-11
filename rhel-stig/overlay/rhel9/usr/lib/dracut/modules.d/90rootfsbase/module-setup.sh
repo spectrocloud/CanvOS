@@ -9,18 +9,22 @@ check() {
 }
 
 depends() {
-    # Depend on systemd if available, but don't require it
-    # This ensures we run after systemd sets up /run if present
-    if dracut_module_included "systemd"; then
-        echo systemd
-    fi
+    # Don't depend on systemd - we need to run BEFORE systemd sets up /run
+    # This ensures /run and /run/systemd/journal exist before systemd-journald starts
+    # If we depend on systemd, we might run too late
     return 0
 }
 
 install() {
-    # Install the script that creates /run/rootfsbase
-    # Use pre-mount hook with priority 10 to run early, before overlayfs mounts
-    # Also install in cmdline hook as a backup (runs even earlier)
-    inst_hook cmdline 10 "$moddir/rootfsbase.sh"
-    inst_hook pre-mount 10 "$moddir/rootfsbase.sh"
+    # Install the script that creates /run/rootfsbase and /run/systemd/journal
+    # Run in multiple hooks with highest priority (1 = earliest) to ensure it happens FIRST:
+    # - initqueue: runs very early, before most services (priority 1 = earliest)
+    # - pre-trigger: runs before udev trigger (priority 1 = earliest)
+    # - cmdline: runs during cmdline parsing (priority 1 = earliest)
+    # - pre-mount: runs before rootfs mount (priority 1 = earliest)
+    # Lower priority numbers run earlier, so 1 ensures we run before other modules
+    inst_hook initqueue 1 "$moddir/rootfsbase.sh"
+    inst_hook pre-trigger 1 "$moddir/rootfsbase.sh"
+    inst_hook cmdline 1 "$moddir/rootfsbase.sh"
+    inst_hook pre-mount 1 "$moddir/rootfsbase.sh"
 }
