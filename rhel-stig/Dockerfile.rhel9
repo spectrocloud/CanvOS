@@ -132,7 +132,26 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 # Kairos may create initramfs as initramfs-*, initrd-*, or just initrd
 RUN if [ -f /boot/initrd ] || ls /boot/initramfs-* 1>/dev/null 2>&1 || ls /boot/initrd-* 1>/dev/null 2>&1; then \
         echo "Initramfs generated successfully"; \
-        ls -lh /boot/initrd /boot/initramfs-* /boot/initrd-* 2>/dev/null | head -5 || true; \
+        INITRD=$(ls -1 /boot/initramfs-* /boot/initrd-* /boot/initrd 2>/dev/null | head -n1); \
+        echo "Using initrd: $INITRD"; \
+        ls -lh "$INITRD" || true; \
+        echo "Checking initramfs contents for required modules and scripts..."; \
+        if command -v lsinitrd >/dev/null 2>&1; then \
+            echo "=== Checking for dmsquash-live module and scripts ==="; \
+            lsinitrd "$INITRD" 2>/dev/null | grep -E "(90dmsquash-live|dmsquash-live|dmsquash-liveroot|parse-live.sh|iso-scan|CDLABEL)" || echo "WARNING: dmsquash-live scripts not found in initramfs"; \
+            echo "=== Checking for rootfsbase module ==="; \
+            lsinitrd "$INITRD" 2>/dev/null | grep -E "(rootfsbase|90rootfsbase)" || echo "WARNING: rootfsbase module not found in initramfs"; \
+            echo "=== Checking for required drivers ==="; \
+            lsinitrd "$INITRD" 2>/dev/null | grep -E "(squashfs|overlay|loop)" || echo "WARNING: Some required drivers not found"; \
+        else \
+            echo "WARNING: lsinitrd not available - cannot verify initramfs contents"; \
+            echo "Installing dracut to get lsinitrd..."; \
+            dnf install -y dracut && dnf clean all || true; \
+            if command -v lsinitrd >/dev/null 2>&1; then \
+                echo "=== Checking for dmsquash-live module and scripts ==="; \
+                lsinitrd "$INITRD" 2>/dev/null | grep -E "(90dmsquash-live|dmsquash-live|dmsquash-liveroot|parse-live.sh|iso-scan|CDLABEL)" || echo "WARNING: dmsquash-live scripts not found"; \
+            fi; \
+        fi; \
     else \
         echo "ERROR: No initramfs found in /boot after kairos-init -s init"; \
         ls -la /boot/ || true; \

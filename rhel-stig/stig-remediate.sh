@@ -201,6 +201,14 @@ for conf_file in /etc/dracut.conf.d/*.conf; do
         if ! grep -q "add_drivers.*squashfs" "$conf_file"; then
             echo 'add_drivers+=" squashfs overlay loop "' >> "$conf_file" || true
         fi
+        # Ensure systemd module is included (belt-and-suspenders)
+        if ! grep -q "add_dracutmodules.*systemd" "$conf_file"; then
+            echo 'add_dracutmodules+=" systemd "' >> "$conf_file" || true
+        fi
+        # Ensure dmsquash-live module is included (CRITICAL for live squashfs mount)
+        if ! grep -q "add_dracutmodules.*dmsquash-live" "$conf_file"; then
+            echo 'add_dracutmodules+=" dmsquash-live "' >> "$conf_file" || true
+        fi
         # Ensure rootfsbase module is included
         if ! grep -q "add_dracutmodules.*rootfsbase" "$conf_file"; then
             echo 'add_dracutmodules+=" rootfsbase "' >> "$conf_file" || true
@@ -212,6 +220,12 @@ done
 if [ -f /etc/dracut.conf ]; then
     if ! grep -q "add_drivers.*squashfs" /etc/dracut.conf; then
         echo 'add_drivers+=" squashfs overlay loop "' >> /etc/dracut.conf || true
+    fi
+    if ! grep -q "add_dracutmodules.*systemd" /etc/dracut.conf; then
+        echo 'add_dracutmodules+=" systemd "' >> /etc/dracut.conf || true
+    fi
+    if ! grep -q "add_dracutmodules.*dmsquash-live" /etc/dracut.conf; then
+        echo 'add_dracutmodules+=" dmsquash-live "' >> /etc/dracut.conf || true
     fi
     if ! grep -q "add_dracutmodules.*rootfsbase" /etc/dracut.conf; then
         echo 'add_dracutmodules+=" rootfsbase "' >> /etc/dracut.conf || true
