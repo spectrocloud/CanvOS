@@ -1,35 +1,24 @@
-# Kairos init image
 FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
-
-FROM registry.access.redhat.com/ubi9-init:9.4-6 as base
+FROM registry.access.redhat.com/ubi9-init:9.4-6
 
 ARG USERNAME
 ARG PASSWORD
-
-# Generate os-release file
 ARG KAIROS_VERSION=v3.5.9
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
-# Disable EPEL openh264 repository - GPG signature file doesn't exist (404 error)
-# This repository is not needed for STIG builds
-RUN if [ -f /etc/yum.repos.d/epel-cisco-openh264.repo ]; then \
-        sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/epel-cisco-openh264.repo || true; \
-        sed -i 's/^gpgcheck=1/gpgcheck=0/' /etc/yum.repos.d/epel-cisco-openh264.repo || true; \
-    fi || true
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
 RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
-    && yum repolist \
-    && subscription-manager attach --auto \
-    && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
-    && yum repolist
+  && yum repolist \
+  && subscription-manager attach --auto \
+  && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
+  && yum repolist
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel9/ /
 
-# Copy dracut.conf early so it's available for initramfs generation
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
 COPY --from=kairos-init /kairos-init /kairos-init
@@ -37,51 +26,51 @@ RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
-    squashfs-tools \
-    dracut-live \
-    livecd-tools \
-    dracut-squash \
-    dracut-network \
-    efibootmgr \
-    dhclient \
-    audit \
-    sudo \
-    systemd \
-    systemd-networkd \
-    systemd-timesyncd \
-    systemd-resolved \
-    parted \
-    dracut \
-    e2fsprogs \
-    dosfstools \
-    coreutils-single \
-    device-mapper \
-    grub2 \
-    which \
-    nano \
-    gawk \
-    haveged \
-    polkit \
-    ncurses \
-    tar \
-    kbd \
-    lvm2 \
-    zstd \
-    openssh-server \
-    openssh-clients \
-    shim-x64 \
-    grub2-pc \
-    grub2-efi-x64 \
-    grub2-efi-x64-modules \
-    open-vm-tools \
-    iscsi-initiator-utils \
-    iptables ethtool socat iproute-tc conntrack \
-    kernel kernel-modules kernel-modules-extra \
-    rsync jq \
-    scap-security-guide \
-    openscap-scanner \
-    firewalld \
-    && dnf clean all
+  squashfs-tools \
+  dracut-live \
+  livecd-tools \
+  dracut-squash \
+  dracut-network \
+  efibootmgr \
+  dhclient \
+  audit \
+  sudo \
+  systemd \
+  systemd-networkd \
+  systemd-timesyncd \
+  systemd-resolved \
+  parted \
+  dracut \
+  e2fsprogs \
+  dosfstools \
+  coreutils-single \
+  device-mapper \
+  grub2 \
+  which \
+  nano \
+  gawk \
+  haveged \
+  polkit \
+  ncurses \
+  tar \
+  kbd \
+  lvm2 \
+  zstd \
+  openssh-server \
+  openssh-clients \
+  shim-x64 \
+  grub2-pc \
+  grub2-efi-x64 \
+  grub2-efi-x64-modules \
+  open-vm-tools \
+  iscsi-initiator-utils \
+  iptables ethtool socat iproute-tc conntrack \
+  kernel kernel-modules kernel-modules-extra \
+  rsync jq \
+  scap-security-guide \
+  openscap-scanner \
+  firewalld \
+  && dnf clean all
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
@@ -104,76 +93,29 @@ RUN systemctl enable systemd-udevd
 RUN systemctl unmask systemd-logind.service
 RUN systemctl enable systemd-logind.service
 
-COPY overlay/rhel9/ /
-
-COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
-
-# Ensure custom rootfsbase dracut module is present and executable before initramfs generation
-# This module must be available when kairos-init -s init generates the initramfs
-RUN if [ -d /usr/lib/dracut/modules.d/90rootfsbase ]; then \
-        chmod +x /usr/lib/dracut/modules.d/90rootfsbase/*.sh 2>/dev/null || true; \
-        echo "rootfsbase module found and made executable"; \
-        ls -la /usr/lib/dracut/modules.d/90rootfsbase/ || true; \
-    else \
-        echo "WARNING: rootfsbase module not found at /usr/lib/dracut/modules.d/90rootfsbase"; \
-    fi
-
-# Verify dracut can see the module
-RUN if command -v dracut >/dev/null 2>&1; then \
-        echo "Dracut modules available:"; \
-        dracut --list-modules 2>/dev/null | grep -E "(rootfsbase|dmsquash-live)" || echo "Modules not listed (may be normal)"; \
-    fi || true
-
-RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
-
-# Verify initramfs was generated successfully
-# Kairos may create initramfs as initramfs-*, initrd-*, or just initrd
-RUN if [ -f /boot/initrd ] || ls /boot/initramfs-* 1>/dev/null 2>&1 || ls /boot/initrd-* 1>/dev/null 2>&1; then \
-        echo "Initramfs generated successfully"; \
-        INITRD=$(ls -1 /boot/initramfs-* /boot/initrd-* /boot/initrd 2>/dev/null | head -n1); \
-        echo "Using initrd: $INITRD"; \
-        ls -lh "$INITRD" || true; \
-        if ! command -v lsinitrd >/dev/null 2>&1; then \
-            echo "lsinitrd missing; installing dracut-tools..."; \
-            dnf install -y dracut-tools && dnf clean all; \
-        fi; \
-        if command -v lsinitrd >/dev/null 2>&1; then \
-            echo "=== dmsquash-live ==="; \
-            lsinitrd "$INITRD" 2>/dev/null | grep -E "(90dmsquash-live|dmsquash-live|dmsquash-liveroot|parse-live|iso-scan|CDLABEL)" || echo "WARNING: dmsquash-live scripts not found"; \
-            echo "=== rootfsbase ==="; \
-            lsinitrd "$INITRD" 2>/dev/null | grep -E "(rootfsbase|90rootfsbase)" || echo "WARNING: rootfsbase module not found"; \
-            echo "=== required kernel modules ==="; \
-            lsinitrd "$INITRD" 2>/dev/null | grep -E "/lib/modules/.*/kernel/fs/squashfs/squashfs\.ko|/lib/modules/.*/kernel/fs/overlayfs/overlay\.ko|/lib/modules/.*/kernel/drivers/block/loop\.ko" || echo "WARNING: Some required kernel modules not found (may be built-in)"; \
-        else \
-            echo "WARNING: lsinitrd still missing; skipping initramfs inspection"; \
-        fi; \
-    else \
-        echo "ERROR: No initramfs found in /boot after kairos-init -s init"; \
-        ls -la /boot/ || true; \
-        exit 1; \
-    fi
 
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
-# Apply STIG remediation AFTER kairos-init
-# This ensures the base system is set up correctly before applying STIG rules
-# Note: Some remediation rules may fail (e.g., download-dependent rules) - this is expected
-COPY stig-remediate.sh /tmp/stig-remediate.sh
-RUN chmod +x /tmp/stig-remediate.sh && \
-    /tmp/stig-remediate.sh || echo "STIG remediation completed with warnings (some rules may require runtime)" && \
-    rm -f /tmp/stig-remediate.sh
-
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Disable SELinux
 RUN echo "SELINUX=disabled" > /etc/selinux/config
 
-# DO NOT delete initramfs - Kairos needs it for boot
-# The initramfs generated by kairos-init -s init contains required dracut modules
-# Removing it causes "Don't know how to handle 'root=live:CDLABEL=COS_LIVE'" errors
+RUN rm -rf /boot/initramfs-*
 
 COPY overlay/rhel9/ /
+
+# Note: Some remediation rules may fail (e.g., download-dependent rules) - this is expected
+COPY stig-remediate.sh /tmp/stig-remediate.sh
+RUN chmod +x /tmp/stig-remediate.sh && \
+    /tmp/stig-remediate.sh 2>&1 && \
+    rm -f /tmp/stig-remediate.sh
+
+RUN mkdir -p /etc/luet/repos.conf.d
+## Clear cache
+RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
+
+RUN subscription-manager unregister

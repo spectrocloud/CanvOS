@@ -86,22 +86,6 @@ RUN systemctl enable systemd-udevd
 RUN systemctl unmask systemd-logind.service
 RUN systemctl enable systemd-logind.service
 
-
-# DEBUG: Add default root user for troubleshooting userdata issues
-# This allows console/SSH access even if userdata doesn't execute
-# Password: root (change this in production!)
-RUN echo "root:root" | chpasswd && \
-    # Ensure root can login via console
-    sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config.d/*.conf 2>/dev/null || true && \
-    # Also ensure in main sshd_config if no .d files exist
-    if [ ! -f /etc/ssh/sshd_config.d/*.conf ]; then \
-        sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config 2>/dev/null || \
-        echo "PermitRootLogin yes" >> /etc/ssh/sshd_config; \
-    fi && \
-    # Ensure root account is not locked
-    passwd -u root 2>/dev/null || true && \
-    echo "DEBUG: Root user enabled with password 'root' for troubleshooting"
-
 COPY overlay/rhel9/ /
 
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
