@@ -182,6 +182,7 @@ harden_sysctl() {
 	update_config_files 'net.ipv4.tcp_syncookies' 'net.ipv4.tcp_syncookies=1' ${config_file}
 	update_config_files 'kernel.randomize_va_space' 'kernel.randomize_va_space=2' ${config_file}
 	update_config_files 'fs.suid_dumpable' 'fs.suid_dumpable=0' ${config_file}
+	update_config_files 'kernel.yama.ptrace_scope' 'kernel.yama.ptrace_scope=1' ${config_file}
 
 
 	update_config_files 'net.ipv6.conf.all.accept_redirects' 'net.ipv6.conf.all.accept_redirects=0'  ${config_file}
@@ -580,6 +581,35 @@ harden_system() {
 }
 
 ##########################################################################
+#  Disable unnecessary services
+##########################################################################
+disable_services() {
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		echo "Disabling apport crash reporting service"
+		systemctl stop apport.service 2>/dev/null || true
+		systemctl disable apport.service 2>/dev/null || true
+		systemctl mask apport.service 2>/dev/null || true
+	fi
+
+	return 0
+}
+
+##########################################################################
+#  Restrict coredumps via systemd
+##########################################################################
+harden_coredump() {
+	echo "Restricting coredumps via systemd"
+	mkdir -p /etc/systemd/coredump.conf.d
+	cat > /etc/systemd/coredump.conf.d/disable-coredump.conf << EOF
+[Coredump]
+Storage=none
+ProcessSizeMax=0
+EOF
+
+	return 0
+}
+
+##########################################################################
 #  Remove unnecessary packages
 ##########################################################################
 remove_services() {
@@ -626,18 +656,29 @@ disable_modules() {
 	if [[ -d  /etc/modprobe.d ]]; then
 	echo "Disabling unnecessary modules"
 
+	# Protocol modules
 	echo "install dccp /bin/true"   > /etc/modprobe.d/dccp.conf
-	echo "install sctp /bin/true"  >> /etc/modprobe.d/sctp.conf
-	echo "install rds /bin/true"   >> /etc/modprobe.d/rds.conf
-	echo "install tipc /bin/true"  >> /etc/modprobe.d/tipc.conf
+	echo "blacklist dccp"          >> /etc/modprobe.d/dccp.conf
+	echo "install sctp /bin/true"   > /etc/modprobe.d/sctp.conf
+	echo "blacklist sctp"          >> /etc/modprobe.d/sctp.conf
+	echo "install rds /bin/true"    > /etc/modprobe.d/rds.conf
+	echo "blacklist rds"           >> /etc/modprobe.d/rds.conf
+	echo "install tipc /bin/true"   > /etc/modprobe.d/tipc.conf
+	echo "blacklist tipc"          >> /etc/modprobe.d/tipc.conf
 
-	echo "install cramfs /bin/false"   > /etc/modprobe.d/cramfs.conf
-	echo "install freevxfs /bin/true" >> /etc/modprobe.d/freevxfs.conf
-	echo "install jffs2 /bin/true"    >> /etc/modprobe.d/jffs2.conf
-	echo "install hfs /bin/true"      >> /etc/modprobe.d/hfs.conf
-	echo "install hfsplus /bin/true"  >> /etc/modprobe.d/hfsplus.conf
+	# Filesystem modules
+	echo "install cramfs /bin/false"  > /etc/modprobe.d/cramfs.conf
+	echo "blacklist cramfs"          >> /etc/modprobe.d/cramfs.conf
+	echo "install freevxfs /bin/true" > /etc/modprobe.d/freevxfs.conf
+	echo "blacklist freevxfs"        >> /etc/modprobe.d/freevxfs.conf
+	echo "install jffs2 /bin/true"    > /etc/modprobe.d/jffs2.conf
+	echo "blacklist jffs2"           >> /etc/modprobe.d/jffs2.conf
+	echo "install hfs /bin/true"      > /etc/modprobe.d/hfs.conf
+	echo "blacklist hfs"             >> /etc/modprobe.d/hfs.conf
+	echo "install hfsplus /bin/true"  > /etc/modprobe.d/hfsplus.conf
+	echo "blacklist hfsplus"         >> /etc/modprobe.d/hfsplus.conf
 
-	# Needed for Kairos
+	# Needed for Kairos - DO NOT disable squashfs, udf, or usb-storage
 	#echo "install squashfs /bin/true"  >> /etc/modprobe.d/squashfs.conf
 	#echo "install udf /bin/true"      >> /etc/modprobe.d/udf.conf
 	#echo "install usb-storage /bin/false" >> /etc/modprobe.d/usb_storage.conf
@@ -927,8 +968,10 @@ harden_ssh
 harden_boot
 harden_password_files
 harden_system
+disable_services
 remove_services
 disable_modules
+harden_coredump
 harden_audit
 harden_banner
 harden_log
