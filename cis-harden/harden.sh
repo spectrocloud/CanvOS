@@ -105,18 +105,35 @@ get_os() {
 ##########################################################################
 upgrade_packages() {
 	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		export DEBIAN_FRONTEND=noninteractive
 		apt-get update
 		apt-get -y upgrade
 		check_error $? "Failed upgrading packages" 1
-		apt-get install -y auditd apparmor-utils libpam-pwquality
-		if  $? -ne 0 ; then
+		# CIS 1.3.1 - Install AIDE for file integrity monitoring
+		# CIS 5.5.1 - Install vlock for screen locking
+		DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor apparmor-utils libpam-pwquality aide vlock
+		if [[ $? -ne 0 ]]; then
 			echo 'deb http://archive.ubuntu.com/ubuntu focal main restricted' > /etc/apt/sources.list.d/repotmp.list
 			apt-get update
-			apt-get install -y auditd apparmor-utils libpam-pwquality
+			DEBIAN_FRONTEND=noninteractive apt-get install -y auditd apparmor apparmor-utils libpam-pwquality aide vlock
 			check_error $? "Failed installing audit packages" 1
 			rm -f /etc/apt/sources.list.d/repotmp.list
 			apt-get update
 		fi
+
+		# CIS 1.3.2 - Initialize AIDE database
+		echo "Initializing AIDE database..."
+		if [[ -x /usr/sbin/aideinit ]]; then
+			/usr/sbin/aideinit -y -f 2>/dev/null || true
+		fi
+
+		# CIS 1.7.1.2 - Enable AppArmor
+		echo "Enabling AppArmor..."
+		systemctl enable apparmor 2>/dev/null || true
+
+		# CIS 4.2.1.2 - Enable rsyslog
+		echo "Enabling rsyslog..."
+		systemctl enable rsyslog 2>/dev/null || true
 	fi
 
 	if [[ ${OS_FLAVOUR} == "centos" ]]; then
@@ -191,6 +208,14 @@ harden_sysctl() {
 	update_config_files 'net.ipv6.conf.all.accept_ra' 'net.ipv6.conf.all.accept_ra=0'  ${config_file}
 	update_config_files 'net.ipv6.conf.default.accept_ra' 'net.ipv6.conf.default.accept_ra=0' ${config_file}
 
+	# CIS Level 2 - Additional kernel hardening (Ubuntu only)
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		update_config_files 'kernel.yama.ptrace_scope' 'kernel.yama.ptrace_scope=1' ${config_file}
+		update_config_files 'kernel.dmesg_restrict' 'kernel.dmesg_restrict=1' ${config_file}
+		update_config_files 'kernel.kptr_restrict' 'kernel.kptr_restrict=2' ${config_file}
+		update_config_files 'kernel.perf_event_paranoid' 'kernel.perf_event_paranoid=3' ${config_file}
+	fi
+
 	# To restrict core dumps
 	config_file='/etc/security/limits.conf'
 	echo "" >> ${config_file}
@@ -212,7 +237,7 @@ harden_ssh() {
 	chmod og-rwx ${config_file}
 
 	echo "" >> ${config_file}
-	update_config_files 'Protocol ' 'Protocol 2' ${config_file}
+	# Note: Protocol 2 is deprecated in OpenSSH 7.4+ (SSH1 removed), skip on modern systems
 	update_config_files 'LogLevel ' 'LogLevel INFO' ${config_file}
 	update_config_files 'PermitEmptyPasswords ' 'PermitEmptyPasswords no' ${config_file}
 	update_config_files 'X11Forwarding ' 'X11Forwarding no' ${config_file}
@@ -230,6 +255,16 @@ harden_ssh() {
 	update_config_files 'Ciphers' 'Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr' ${config_file}
 	update_config_files 'MACs' 'MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256' ${config_file}
 	update_config_files 'KexAlgorithms' 'KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256' ${config_file}
+
+	# CIS Level 2 - Additional SSH hardening
+	update_config_files 'GSSAPIAuthentication' 'GSSAPIAuthentication no' ${config_file}
+	update_config_files 'UsePAM' 'UsePAM yes' ${config_file}
+	update_config_files 'AllowTcpForwarding' 'AllowTcpForwarding no' ${config_file}
+	update_config_files 'TCPKeepAlive' 'TCPKeepAlive no' ${config_file}
+	update_config_files 'AllowAgentForwarding' 'AllowAgentForwarding no' ${config_file}
+	update_config_files 'DisableForwarding' 'DisableForwarding yes' ${config_file}
+	# CIS 5.2.6 - Ensure SSH access is configured with pubkey authentication
+	update_config_files 'PubkeyAuthentication' 'PubkeyAuthentication yes' ${config_file}
 
 	#############Shell timeout policy##################
 
@@ -346,10 +381,20 @@ harden_audit() {
 		"-w /etc/apparmor/ -p wa -k MAC-policy"
 	)
 
+	# Note: /var/log/tallylog only exists on systems using pam_tally2 (Ubuntu <22.04)
+	# The rule is harmless on newer systems but won't match anything
 	local content_logineventsrules=(
 		"-w /var/log/faillog -p wa -k logins"
 		"-w /var/log/lastlog -p wa -k logins"
 		"-w /var/log/tallylog -p wa -k logins"
+	)
+
+	# CIS 4.1.3.* - Session initiation information audit rules
+	local file_path_sessionrules="/etc/audit/rules.d/50-session.rules"
+	local content_sessionrules=(
+		"-w /var/run/utmp -p wa -k session"
+		"-w /var/log/wtmp -p wa -k session"
+		"-w /var/log/btmp -p wa -k session"
 	)
 
 	local content_DACrules=(
@@ -433,6 +478,11 @@ harden_audit() {
 		echo "$line" | sudo tee -a "$file_path_DACrules" >/dev/null
 	done
 
+	# CIS 4.1.3.* - Create or append to the session rules
+	for line in "${content_sessionrules[@]}"; do
+		echo "$line" | sudo tee -a "$file_path_sessionrules" >/dev/null
+	done
+
 
 	# Verify if the files were created or appended successfully
 	if [ -f "$file_path_timechange" ] && [ -f "$file_path_identityrules" ] && [ -f "$file_path_accessrules" ] && [ -f "$file_path_deleterules" ] && [ -f "$file_path_mountrules" ] && [ -f "$file_path_scoperules" ] && [ -f "$file_path_actionsrules" ] && [ -f "$file_path_modulesrules" ] && [ -f "$file_path_immutablerules" ] && [ -f "$file_path_networkrules" ] && [ -f "$file_path_MACrules" ] && [ -f "$file_path_logineventsrules" ] && [ -f "$file_path_DACrules" ]; then
@@ -444,10 +494,35 @@ harden_audit() {
 	# Define the desired value for max_log_file
 	max_log_file_value=100
 
-	# Set the max_log_file parameter in auditd.conf
-	sed -i "s/^max_log_file = 8/max_log_file = ${max_log_file_value}/" /etc/audit/auditd.conf
+	# Configure audit log rotation in auditd.conf
+	echo "Configuring audit log rotation..."
+	
+	# Set max log file size to 100 MB
+	sed -i "s/^max_log_file = .*/max_log_file = ${max_log_file_value}/" /etc/audit/auditd.conf
+	
+	# Set max_log_file_action to ROTATE (rotate logs when max size reached)
+	sed -i "s/^max_log_file_action = .*/max_log_file_action = ROTATE/" /etc/audit/auditd.conf
+	
+	# Keep 10 rotated log files (10 x 100MB = 1GB total)
+	sed -i "s/^num_logs = .*/num_logs = 10/" /etc/audit/auditd.conf
+	
+	# Set space_left to 25% of partition (warning threshold)
+	sed -i "s/^space_left = .*/space_left = 250/" /etc/audit/auditd.conf
+	sed -i "s/^space_left_action = .*/space_left_action = SYSLOG/" /etc/audit/auditd.conf
+	
+	# Set admin_space_left to 10% (critical threshold - rotate aggressively)
+	sed -i "s/^admin_space_left = .*/admin_space_left = 100/" /etc/audit/auditd.conf
+	sed -i "s/^admin_space_left_action = .*/admin_space_left_action = ROTATE/" /etc/audit/auditd.conf
+	
+	# When disk is full, keep old logs (don't stop auditing)
+	sed -i "s/^disk_full_action = .*/disk_full_action = ROTATE/" /etc/audit/auditd.conf
+	sed -i "s/^disk_error_action = .*/disk_error_action = SYSLOG/" /etc/audit/auditd.conf
 
-	echo "The max_log_file parameter has been set to ${max_log_file_value}."
+	echo "Audit log rotation configured:"
+	echo "  - Max log file size: ${max_log_file_value} MB"
+	echo "  - Number of rotated logs: 10 (total ~1GB)"
+	echo "  - Rotation trigger: ROTATE on max size"
+	echo "  - Space warnings enabled at 250 MB and 100 MB remaining"
 
 	# Enable auditd service
 	systemctl enable auditd
@@ -516,7 +591,7 @@ harden_system() {
 
 	echo "Error out if there are users with empty password"
 	cat /etc/shadow |awk -F : '($2 == "" ){ exit 1}'
-	if $? -ne 0 ; then
+	if [[ $? -ne 0 ]]; then
 		echo "Users present with empty password. Remove the user or set password for the users"
 		exit 1
 	fi
@@ -533,7 +608,7 @@ harden_system() {
 	for each in ${cron_files}; do
 		if [[ -e ${each} ]]; then
 			stat -L -c "%a %u %g" "${each}" | grep -E ".00 0 0"
-			if $? -ne 0 ; then
+			if [[ $? -ne 0 ]]; then
 				chown root:root "${each}"
 				chmod og-rwx "${each}"
 			fi
@@ -586,15 +661,34 @@ remove_services() {
 
 	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
 		echo "Disable setrouble shoot service if enabled"
-		systemctl disable setroubleshoot
+		systemctl disable setroubleshoot 2>/dev/null || true
 
 		echo "Removing legacy networking services"
-		systemctl disable xinetd
-		apt-get remove -y openbsd-inetd rsh-client rsh-redone-client nis talk telnet ldap-utils gdm3
-		apt-get purge -y telnet vim vim-common vim-runtime vim-tiny
+		systemctl disable xinetd 2>/dev/null || true
+		apt-get remove -y openbsd-inetd rsh-client rsh-redone-client nis talk telnet ldap-utils gdm3 2>/dev/null || true
+		apt-get purge -y telnet vim vim-common vim-runtime vim-tiny 2>/dev/null || true
 
 		echo "Removing X packages"
-		apt-get remove -y xserver-xorg*
+		apt-get remove -y xserver-xorg* 2>/dev/null || true
+
+		# CIS Level 2 - Additional packages to remove
+		echo "Removing additional CIS Level 2 packages"
+		apt-get remove -y avahi-daemon cups rpcbind nfs-kernel-server vsftpd apache2 nginx samba squid snmpd 2>/dev/null || true
+
+		# CIS Level 2 - Disable additional services
+		echo "Disabling additional CIS Level 2 services"
+		systemctl disable avahi-daemon 2>/dev/null || true
+		systemctl disable cups 2>/dev/null || true
+		systemctl disable rpcbind 2>/dev/null || true
+		systemctl disable nfs-server 2>/dev/null || true
+		systemctl disable bluetooth 2>/dev/null || true
+		systemctl disable apport 2>/dev/null || true
+		systemctl disable autofs 2>/dev/null || true
+
+		# CIS 1.6.1 - Disable kdump service
+		echo "Disabling kdump service"
+		systemctl disable kdump-tools 2>/dev/null || true
+		systemctl mask kdump-tools 2>/dev/null || true
 	fi
 
 	if [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
@@ -632,15 +726,56 @@ disable_modules() {
 	echo "install tipc /bin/true"  >> /etc/modprobe.d/tipc.conf
 
 	echo "install cramfs /bin/false"   > /etc/modprobe.d/cramfs.conf
-	echo "install freevxfs /bin/true" >> /etc/modprobe.d/freevxfs.conf
-	echo "install jffs2 /bin/true"    >> /etc/modprobe.d/jffs2.conf
-	echo "install hfs /bin/true"      >> /etc/modprobe.d/hfs.conf
-	echo "install hfsplus /bin/true"  >> /etc/modprobe.d/hfsplus.conf
+	echo "install freevxfs /bin/true" > /etc/modprobe.d/freevxfs.conf
+	echo "install jffs2 /bin/true"    > /etc/modprobe.d/jffs2.conf
+	echo "install hfs /bin/true"      > /etc/modprobe.d/hfs.conf
+	echo "install hfsplus /bin/true"  > /etc/modprobe.d/hfsplus.conf
 
-	# Needed for Kairos
-	#echo "install squashfs /bin/true"  >> /etc/modprobe.d/squashfs.conf
-	#echo "install udf /bin/true"      >> /etc/modprobe.d/udf.conf
-	#echo "install usb-storage /bin/false" >> /etc/modprobe.d/usb_storage.conf
+	# CIS Level 2 - Additional filesystem modules to disable
+	echo "blacklist cramfs" >> /etc/modprobe.d/cramfs.conf
+	echo "blacklist freevxfs" >> /etc/modprobe.d/freevxfs.conf
+	echo "blacklist jffs2" >> /etc/modprobe.d/jffs2.conf
+	echo "blacklist hfs" >> /etc/modprobe.d/hfs.conf
+	echo "blacklist hfsplus" >> /etc/modprobe.d/hfsplus.conf
+
+	# Needed for Kairos - do not disable squashfs and udf
+	#echo "install squashfs /bin/true"  > /etc/modprobe.d/squashfs.conf
+	#echo "install udf /bin/true"       > /etc/modprobe.d/udf.conf
+	#echo "install usb-storage /bin/false" > /etc/modprobe.d/usb_storage.conf
+	fi
+
+	return 0
+}
+
+##########################################################################
+#  CIS Level 2 - Journald Hardening (Ubuntu only)
+##########################################################################
+harden_journald() {
+	# Only apply to Ubuntu
+	if [[ ${OS_FLAVOUR} != "ubuntu" ]]; then
+		return 0
+	fi
+
+	echo "Configuring journald for CIS Level 2 compliance"
+
+	local journald_conf="/etc/systemd/journald.conf"
+
+	if [[ -f ${journald_conf} ]]; then
+		# Ensure journald is configured to compress large log files
+		if grep -q "^Compress=" ${journald_conf}; then
+			sed -i "s/^Compress=.*/Compress=yes/" ${journald_conf}
+		else
+			echo "Compress=yes" >> ${journald_conf}
+		fi
+
+		# Ensure journald is not configured to send logs to rsyslog
+		if grep -q "^ForwardToSyslog=" ${journald_conf}; then
+			sed -i "s/^ForwardToSyslog=.*/ForwardToSyslog=no/" ${journald_conf}
+		else
+			echo "ForwardToSyslog=no" >> ${journald_conf}
+		fi
+
+		echo "Journald configuration updated for CIS Level 2 compliance"
 	fi
 
 	return 0
@@ -808,47 +943,85 @@ harden_auth() {
 		echo "File /etc/security/pwquality.conf not found."
 	fi
 
-	# Configuration lines to add to /etc/pam.d/su
-	config_lines="auth required pam_wheel.so use_uid group=admin"
+	##############Restrict su command access##################
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		# Ubuntu uses 'admin' or 'sudo' group
+		config_lines="auth required pam_wheel.so use_uid group=sudo"
+	elif [[ ${OS_FLAVOUR} == "centos" ]] || [[ ${OS_FLAVOUR} == "rhel" ]]; then
+		# RHEL/CentOS uses 'wheel' group
+		config_lines="auth required pam_wheel.so use_uid group=wheel"
+	else
+		config_lines="auth required pam_wheel.so use_uid"
+	fi
 
 	# Add configuration lines to the top of the file
-	echo -e "$config_lines\n$(cat /etc/pam.d/su)" > /etc/pam.d/su
-
-	echo "Configuration to ensure access to the su command is restricted have been made"
+	if [[ -f /etc/pam.d/su ]]; then
+		echo -e "$config_lines\n$(cat /etc/pam.d/su)" > /etc/pam.d/su
+		echo "Configuration to ensure access to the su command is restricted have been made"
+	fi
 
 	##############Password lockout policies##################
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		# Get Ubuntu version for compatibility checks
+		ubuntu_version="22"
+		if [[ -f /etc/os-release ]]; then
+			. /etc/os-release
+			ubuntu_version=$(echo "$VERSION_ID" | cut -d. -f1)
+		fi
 
-	# Backup the original file
-	cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+		# Ubuntu/Debian uses common-auth, common-account, common-password
+		# pam_faillock.so is only available in Ubuntu 22.04+
+		if [[ "$ubuntu_version" -ge 22 ]]; then
+			if [[ -f /etc/pam.d/common-auth ]]; then
+				cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+				{
+					echo "auth required                   pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600"
+					echo "auth [success=1 default=ignore] pam_unix.so nullok"
+					echo "auth [default=die]              pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600"
+					echo "auth sufficient                 pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600"
+					echo "auth requisite                  pam_deny.so"
+					echo "auth required                   pam_permit.so"
+				} >> /etc/pam.d/common-auth
+			fi
 
-	{
-		echo "auth required                   pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600"
-		echo "auth [success=1 default=ignore] pam_unix.so nullok"
-		echo "auth [default=die]              pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600"
-		echo "auth sufficient                 pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600"
-		echo "auth requisite                  pam_deny.so"
-		echo "auth required                   pam_permit.so"
-	} >> /etc/pam.d/common-auth
+			if [[ -f /etc/pam.d/common-account ]]; then
+				cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+				echo "account required                        pam_faillock.so" >> /etc/pam.d/common-account
+			fi
+			echo "Ubuntu 22.04+ PAM faillock configuration applied"
+		else
+			# Ubuntu 20.04 uses pam_tally2 instead of pam_faillock
+			echo "Ubuntu $ubuntu_version detected - using pam_tally2 for account lockout"
+			if [[ -f /etc/pam.d/common-auth ]]; then
+				cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+				# Only add if not already present
+				if ! grep -q "pam_tally2" /etc/pam.d/common-auth; then
+					sed -i '/^auth.*pam_unix.so/i auth required pam_tally2.so deny=4 onerr=fail unlock_time=600' /etc/pam.d/common-auth
+				fi
+			fi
+			if [[ -f /etc/pam.d/common-account ]]; then
+				cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+				if ! grep -q "pam_tally2" /etc/pam.d/common-account; then
+					echo "account required pam_tally2.so" >> /etc/pam.d/common-account
+				fi
+			fi
+		fi
 
-	# Backup the original file
-	cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+		##############Password reuse policy##################
+		if [[ -f /etc/pam.d/common-password ]]; then
+			cp /etc/pam.d/common-password /etc/pam.d/common-password.bak
+			{
+				echo "password requisite pam_pwquality.so retry=3"
+				echo "password [success=1 default=ignore] pam_unix.so obscure use_authtok try_first_pass remember=5"
+				echo "password requisite pam_deny.so"
+				echo "password required pam_permit.so"
+			} >> /etc/pam.d/common-password
+		fi
+		echo "Ubuntu PAM configuration updated for password lockout and reuse policies"
 
-	echo "account required                        pam_faillock.so" >> /etc/pam.d/common-account
-
-	##############Password reuse policy##################
-
-	# Backup the original file
-	cp /etc/pam.d/common-password /etc/pam.d/common-password.bak
-
-	{
-		echo "password requisite pam_pwquality.so retry=3"
-		echo "password [success=1 default=ignore] pam_unix.so obscure use_authtok try_first_pass remember=5"
-		echo "password requisite pam_deny.so"
-		echo "password required pam_permit.so"
-	} >> /etc/pam.d/common-password
+	fi
 
 	#####################Password expiry policy#################
-
 	#Define the destination file
 	config_file='/etc/login.defs'
 
@@ -861,31 +1034,50 @@ harden_auth() {
 	echo "Password expiry policy updated to PASS_MIN_DAYS 1 & PASS_MAX_DAYS 365 & PASS_WARN_AGE 7"
 
 	#####################Password encryption standards##########
-
 	config_file='/etc/login.defs'
 
-	update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
-
-	echo "Password encryption method set to yescrypt"
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		# Check Ubuntu version for encryption method support
+		ubuntu_version="22"
+		if [[ -f /etc/os-release ]]; then
+			. /etc/os-release
+			ubuntu_version=$(echo "$VERSION_ID" | cut -d. -f1)
+		fi
+		if [[ "$ubuntu_version" -ge 22 ]]; then
+			# Ubuntu 22.04+ supports yescrypt
+			update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
+			echo "Password encryption method set to yescrypt"
+		else
+			# Ubuntu 20.04 and earlier use SHA512
+			update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD SHA512' ${config_file}
+			echo "Password encryption method set to SHA512 (Ubuntu $ubuntu_version)"
+		fi
+	else
+		# Default for other OS (original behavior)
+		update_config_files 'ENCRYPT_METHOD' 'ENCRYPT_METHOD yescrypt' ${config_file}
+		echo "Password encryption method set to yescrypt"
+	fi
 
 	####################Inactive password lock################
-
 	#Define the destination file
 	config_file='/etc/default/useradd'
 
-	echo "" >> ${config_file}
-
-	update_config_files 'INACTIVE' 'INACTIVE=30' ${config_file}
-	echo "Inactive password lock policy updated to 30 days"
+	if [[ -f ${config_file} ]]; then
+		echo "" >> ${config_file}
+		update_config_files 'INACTIVE' 'INACTIVE=30' ${config_file}
+		echo "Inactive password lock policy updated to 30 days"
+	fi
 
 	#################Session expiry policy#####################
 	# Configuration lines to add to /etc/profile
 	config_lines="readonly TMOUT=900 ; export TMOUT"
 
-	# Add configuration lines to the top of the file
-	echo "$config_lines" >> /etc/profile
+	# Add configuration lines to the file
+	if [[ -f /etc/profile ]]; then
+		echo "$config_lines" >> /etc/profile
+		echo "Configuration added to /etc/profile for shell timeout policy"
+	fi
 
-	echo "Configuration added to /etc/profile for shell timeout policy"
 	return 0
 }
 
@@ -929,6 +1121,7 @@ harden_password_files
 harden_system
 remove_services
 disable_modules
+harden_journald
 harden_audit
 harden_banner
 harden_log
