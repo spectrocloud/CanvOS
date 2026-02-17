@@ -33,7 +33,7 @@ COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
 # Run Kairos install stage with FIPS
 COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"s
+RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
 # Generate machine-id and install all required packages in ONE layer
 RUN uuidgen > /etc/machine-id && dnf install -y \
