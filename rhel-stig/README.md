@@ -207,7 +207,7 @@ Ensure your Red Hat subscription credentials are correct and have access to:
 
 ### STIG Remediation Warnings
 
-Some remediation rules may show warnings during build. This is expected in container environments. Review `/tmp/stig-remediation.log` if present for details.
+Some remediation rules may show warnings during build. This is expected in container environments. Review `/var/log/stig-remediation/remediation.log` for details. All STIG remediation logs are saved to `/var/log/stig-remediation/` and will persist after installation.
 
 ### Firewall Blocking Cluster Operations
 
