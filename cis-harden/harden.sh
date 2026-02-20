@@ -272,6 +272,7 @@ harden_audit() {
 	local file_path_MACrules="/etc/audit/rules.d/50-MAC-policy.rules"
 	local file_path_logineventsrules="/etc/audit/rules.d/50-logins.rules"
 	local file_path_DACrules="/etc/audit/rules.d/50-perm_mod.rules"
+	local file_path_privcmdrules="/etc/audit/rules.d/50-priv_cmd.rules"
 
 	local content_base=(
 		"-D"
@@ -362,6 +363,14 @@ harden_audit() {
 		"-a always,exit -F arch=b32 -S setxattr -S lsetxattr -S fsetxattr -S removexattr -S lremovexattr -S fremovexattr -F auid>=1000 -F auid!=4294967295 -k perm_mod"
 	)
 
+	# Privileged commands audit rules (chacl, chcon, setfacl, usermod)
+	local content_privcmdrules=(
+		"-w /usr/bin/chacl -p x -k priv_cmd"
+		"-w /usr/bin/chcon -p x -k priv_cmd"
+		"-w /usr/bin/setfacl -p x -k priv_cmd"
+		"-w /usr/sbin/usermod -p x -k usermod"
+	)
+
 
 	# Create or append to the time change rules
 	echo "" > "$file_path_base"
@@ -434,6 +443,11 @@ harden_audit() {
 		echo "$line" | sudo tee -a "$file_path_DACrules" >/dev/null
 	done
 
+		# Create or append to the privileged commands rules
+	for line in "${content_privcmdrules[@]}"; do
+		echo "$line" | sudo tee -a "$file_path_privcmdrules" >/dev/null
+	done
+
 
 	# Verify if the files were created or appended successfully
 	if [ -f "$file_path_timechange" ] && [ -f "$file_path_identityrules" ] && [ -f "$file_path_accessrules" ] && [ -f "$file_path_deleterules" ] && [ -f "$file_path_mountrules" ] && [ -f "$file_path_scoperules" ] && [ -f "$file_path_actionsrules" ] && [ -f "$file_path_modulesrules" ] && [ -f "$file_path_immutablerules" ] && [ -f "$file_path_networkrules" ] && [ -f "$file_path_MACrules" ] && [ -f "$file_path_logineventsrules" ] && [ -f "$file_path_DACrules" ]; then
@@ -449,6 +463,13 @@ harden_audit() {
 	sed -i "s/^max_log_file = 8/max_log_file = ${max_log_file_value}/" /etc/audit/auditd.conf
 
 	echo "The max_log_file parameter has been set to ${max_log_file_value}."
+
+	# Configure auditd log rotation and space management
+	sed -i "s/^max_log_file_action.*/max_log_file_action = keep_logs/" /etc/audit/auditd.conf
+	sed -i "s/^space_left_action.*/space_left_action = email/" /etc/audit/auditd.conf
+	sed -i "s/^admin_space_left_action.*/admin_space_left_action = single/" /etc/audit/auditd.conf
+
+	echo "Auditd log rotation and space management configured."
 
 	# Enable auditd service
 	systemctl enable auditd
@@ -589,6 +610,14 @@ disable_services() {
 		systemctl stop apport.service 2>/dev/null || true
 		systemctl disable apport.service 2>/dev/null || true
 		systemctl mask apport.service 2>/dev/null || true
+
+		echo "Disabling rpcbind service"
+		systemctl stop rpcbind.service 2>/dev/null || true
+		systemctl stop rpcbind.socket 2>/dev/null || true
+		systemctl disable rpcbind.service 2>/dev/null || true
+		systemctl disable rpcbind.socket 2>/dev/null || true
+		systemctl mask rpcbind.service 2>/dev/null || true
+		systemctl mask rpcbind.socket 2>/dev/null || true
 	fi
 
 	return 0
@@ -605,6 +634,43 @@ harden_coredump() {
 Storage=none
 ProcessSizeMax=0
 EOF
+
+	return 0
+}
+
+##########################################################################
+#  Harden journald with retention limits (Ubuntu only)
+##########################################################################
+harden_journald() {
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		echo "Configuring journald with 14-day retention and storage limits"
+		mkdir -p /etc/systemd/journald.conf.d
+		cat > /etc/systemd/journald.conf.d/hardening.conf << EOF
+[Journal]
+Storage=persistent
+Compress=yes
+MaxRetentionSec=14day
+SystemMaxUse=500M
+SystemMaxFileSize=50M
+ForwardToSyslog=yes
+EOF
+	fi
+
+	return 0
+}
+
+##########################################################################
+#  Configure NTP time synchronization (Ubuntu only)
+##########################################################################
+harden_ntp() {
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		echo "Enabling time synchronization service"
+		if systemctl list-unit-files | grep -q chronyd; then
+			systemctl enable chronyd 2>/dev/null || true
+		else
+			systemctl enable systemd-timesyncd 2>/dev/null || true
+		fi
+	fi
 
 	return 0
 }
@@ -677,6 +743,10 @@ disable_modules() {
 	echo "blacklist hfs"             >> /etc/modprobe.d/hfs.conf
 	echo "install hfsplus /bin/true"  > /etc/modprobe.d/hfsplus.conf
 	echo "blacklist hfsplus"         >> /etc/modprobe.d/hfsplus.conf
+
+	# Firewire module (not needed for K8s)
+	echo "install firewire-core /bin/true" > /etc/modprobe.d/firewire.conf
+	echo "blacklist firewire-core"        >> /etc/modprobe.d/firewire.conf
 
 	# Needed for Kairos - DO NOT disable squashfs, udf, or usb-storage
 	#echo "install squashfs /bin/true"  >> /etc/modprobe.d/squashfs.conf
@@ -972,6 +1042,8 @@ disable_services
 remove_services
 disable_modules
 harden_coredump
+harden_journald
+harden_ntp
 harden_audit
 harden_banner
 harden_log
