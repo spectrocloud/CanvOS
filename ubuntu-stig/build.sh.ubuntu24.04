@@ -1,0 +1,12 @@
+#!/bin/bash
+
+BASE_IMAGE="${1:-ubuntu24.04-byoi-stig}"
+FIPS_ENABLED="${2:-false}"
+
+if [ "$FIPS_ENABLED" = "true" ]; then
+    echo "Building Ubuntu 24.04 STIG FIPS image..."
+    docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04-fips .
+else
+    echo "Building Ubuntu 24.04 STIG image..."
+    docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04 .
+fi

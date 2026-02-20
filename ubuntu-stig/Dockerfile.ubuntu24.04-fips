@@ -1,0 +1,88 @@
+FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
+FROM ubuntu:24.04
+
+ARG KAIROS_VERSION=v3.5.9
+ENV DEBIAN_FRONTEND=noninteractive
+
+COPY --from=kairos-init /kairos-init /kairos-init
+RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
+
+# Copy dracut config for FIPS (after kairos-init install)
+COPY dracut.conf.fips /etc/dracut.conf.d/kairos-fips.conf
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  squashfs-tools \
+  dracut-live \
+  efibootmgr \
+  dhcpcd5 \
+  auditd \
+  sudo \
+  systemd \
+  systemd-networkd \
+  systemd-timesyncd \
+  systemd-resolved \
+  parted \
+  dracut \
+  e2fsprogs \
+  dosfstools \
+  coreutils \
+  device-mapper \
+  grub2-common \
+  grub-pc-bin \
+  grub-efi-amd64-bin \
+  grub-efi-amd64-signed \
+  which \
+  nano \
+  gawk \
+  haveged \
+  policykit-1 \
+  ncurses-base \
+  tar \
+  kbd \
+  lvm2 \
+  zstd \
+  openssh-server \
+  openssh-client \
+  shim-signed \
+  open-vm-tools \
+  open-iscsi \
+  iptables ethtool socat iproute2 conntrack \
+  linux-image-generic linux-modules-extra-generic \
+  rsync jq \
+  scap-security-guide \
+  openscap-scanner \
+  ufw \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
+
+# Configure systemd services
+RUN systemctl enable systemd-networkd
+RUN systemctl enable systemd-resolved
+RUN systemctl enable ssh
+RUN systemctl enable systemd-udevd
+RUN systemctl enable systemd-logind.service
+
+COPY overlay/ubuntu24.04/ /
+
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+  ln -sf "${kernel#/boot/}" /boot/vmlinuz
+RUN kernel=$(ls /lib/modules | head -n1) && \
+  dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
+  ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+RUN rm -rf /boot/initramfs-*
+
+# Note: Some remediation rules may fail (e.g., download-dependent rules) - this is expected
+COPY stig-remediate.sh /tmp/stig-remediate.sh
+RUN chmod +x /tmp/stig-remediate.sh && \
+    /tmp/stig-remediate.sh 2>&1 && \
+    rm -f /tmp/stig-remediate.sh
+
+RUN mkdir -p /etc/luet/repos.conf.d
+## Clear cache
+RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K && rm -f /etc/machine-id
