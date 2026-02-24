@@ -40,28 +40,36 @@ print_debug "Starting RHEL 9 STIG remediation..."
 print_debug "Log directory: $LOG_DIR"
 
 # Find the STIG profile XCCDF file
-# Try common locations for scap-security-guide content
+# Prefer static content (pinned for reproducible releases) over system packages
 STIG_XCCDF=""
+STATIC_DIR="/tmp/stig-static"
 for path in \
+    "$STATIC_DIR/ssg-rhel9-ds.xml" \
+    "$STATIC_DIR/ssg-rhel9-ds-1.2.xml" \
     "/usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml" \
     "/usr/share/scap-security-guide/ssg-rhel9-ds.xml" \
     "/usr/share/xml/scap/ssg/content/ssg-rhel9-ds-1.2.xml"
 do
     if [ -f "$path" ]; then
         STIG_XCCDF="$path"
+        if [[ "$path" == "$STATIC_DIR"* ]]; then
+            print_debug "Using static STIG content (pinned for reproducible release)"
+        fi
         break
     fi
 done
 
 if [ -z "$STIG_XCCDF" ]; then
     print_debug "ERROR: STIG XCCDF file not found"
-    print_debug "Please ensure scap-security-guide package is installed"
+    print_debug "Please ensure scap-security-guide package is installed, or provide static content in $STATIC_DIR"
     print_debug "Searched paths:"
+    print_debug "  $STATIC_DIR/ssg-rhel9-ds.xml (static, for reproducible releases)"
     print_debug "  /usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml"
     print_debug "  /usr/share/scap-security-guide/ssg-rhel9-ds.xml"
     echo "ERROR: STIG XCCDF file not found" >&2
-    echo "Please ensure scap-security-guide package is installed" >&2
+    echo "Please ensure scap-security-guide package is installed, or provide static content in $STATIC_DIR" >&2
     echo "Searched paths:" >&2
+    echo "  $STATIC_DIR/ssg-rhel9-ds.xml (static, for reproducible releases)" >&2
     echo "  /usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml" >&2
     echo "  /usr/share/scap-security-guide/ssg-rhel9-ds.xml" >&2
     echo "Check /var/log/stig-remediation/debug.log for details" >&2
@@ -85,29 +93,35 @@ if ! command -v oscap &> /dev/null; then
     exit 1
 fi
 
-# Generate remediation script
-echo "Generating STIG remediation script..."
-print_debug "Generating STIG remediation script..."
+# Use remediation script - prefer static (pinned) over generated
 REMEDIATION_SCRIPT="/tmp/stig-fix.sh"
-
-# Generate fix script from STIG profile
+STATIC_REMEDIATION="$STATIC_DIR/stig-fix.sh"
 OSCAP_ERROR_LOG="$LOG_DIR/oscap-error.log"
-if ! oscap xccdf generate fix \
-    --profile "$STIG_PROFILE" \
-    --template urn:xccdf:fix:script:sh \
-    "$STIG_XCCDF" > "$REMEDIATION_SCRIPT" 2>"$OSCAP_ERROR_LOG"; then
-    print_debug "WARNING: Could not generate remediation script"
-    print_debug "oscap error output:"
-    cat "$OSCAP_ERROR_LOG" | while read line; do print_debug "  $line"; done || true
-    echo "WARNING: Could not generate remediation script" >&2
-    echo "Check $OSCAP_ERROR_LOG for details" >&2
-    echo "Attempting to continue with manual remediation..." >&2
-    rm -f "$REMEDIATION_SCRIPT"
-    exit 0
-fi
 
-# Make script executable
-chmod +x "$REMEDIATION_SCRIPT"
+if [ -f "$STATIC_REMEDIATION" ]; then
+    echo "Using static STIG remediation script (pinned for reproducible release)"
+    print_debug "Using static remediation script: $STATIC_REMEDIATION"
+    cp "$STATIC_REMEDIATION" "$REMEDIATION_SCRIPT"
+    chmod +x "$REMEDIATION_SCRIPT"
+else
+    echo "Generating STIG remediation script..."
+    print_debug "Generating STIG remediation script..."
+    OSCAP_ERROR_LOG="$LOG_DIR/oscap-error.log"
+    if ! oscap xccdf generate fix \
+        --profile "$STIG_PROFILE" \
+        --template urn:xccdf:fix:script:sh \
+        "$STIG_XCCDF" > "$REMEDIATION_SCRIPT" 2>"$OSCAP_ERROR_LOG"; then
+        print_debug "WARNING: Could not generate remediation script"
+        print_debug "oscap error output:"
+        cat "$OSCAP_ERROR_LOG" | while read line; do print_debug "  $line"; done || true
+        echo "WARNING: Could not generate remediation script" >&2
+        echo "Check $OSCAP_ERROR_LOG for details" >&2
+        echo "Attempting to continue with manual remediation..." >&2
+        rm -f "$REMEDIATION_SCRIPT"
+        exit 0
+    fi
+    chmod +x "$REMEDIATION_SCRIPT"
+fi
 
 # OPTION A: Use command stubbing instead of mutating the script
 # This preserves 100% syntax integrity and avoids structural breakage
@@ -412,4 +426,5 @@ print_debug "These logs will persist in /var/log/stig-remediation/ after install
 
 # Always exit successfully to not fail Docker build
 exit 0
+
 

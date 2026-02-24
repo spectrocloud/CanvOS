@@ -78,6 +78,34 @@ docker push <your-dockerhub-username>/rhel9-byoi-stig:latest
 
 **Important**: Earthly cannot use local-only Docker images. The image must be pushed to a registry that Earthly can access.
 
+## Static STIG Content (Reproducible Releases)
+
+To ensure released base images use a **verified, pinned** STIG guide and remediation (avoiding unforeseen changes that could affect Kubernetes clusters), we support static STIG content:
+
+1. **Before a release**, run the update script to download and pin STIG content:
+   ```bash
+   cd rhel-stig
+   bash scripts/update-stig-content.sh v0.1.79
+   ```
+   This downloads the ComplianceAsCode release, builds the RHEL 9 datastream, and generates the remediation script into `static/`.
+
+2. **Build with static content**: Ensure `static/` contains `ssg-rhel9-ds.xml` and `stig-fix.sh` before building. The Dockerfile copies these into the image.
+
+3. **Without static content**: The build falls back to system-installed `scap-security-guide` and generates remediation at build time. This uses whatever version is in the base image's repositories.
+
+### Using Latest STIG (for customers who want current content)
+
+To use the latest STIG guide and remediation instead of the pinned release:
+
+- Omit the static content: ensure `static/` contains only `VERSION` (or no XCCDF/stig-fix.sh)
+- The build will use system packages and generate remediation from the installed `scap-security-guide`
+- Or run `scripts/update-stig-content.sh v0.1.XX` with a newer version before building
+
+**Source**: [ComplianceAsCode/content releases](https://github.com/ComplianceAsCode/content/releases)
+
+**Update script requirements**: `cmake`, `make`, `openscap-utils`, `openscap-scanner`, `python3`, `pip`  
+RHEL/Fedora: `dnf install cmake make openscap-utils openscap-scanner python3 python3-pip`
+
 ## STIG Compliance
 
 The images apply DISA STIG security hardening using:
@@ -221,3 +249,4 @@ If cluster operations are blocked by firewall:
 - [DISA STIG for RHEL 9](https://public.cyber.mil/stigs/downloads/)
 - [OpenSCAP Documentation](https://www.open-scap.org/)
 - [scap-security-guide](https://github.com/ComplianceAsCode/content)
+

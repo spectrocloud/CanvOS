@@ -10,5 +10,5 @@ if [ "$FIPS_ENABLED" = "true" ]; then
     docker build --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" -f Dockerfile.rhel9-fips .
 else
     echo "Building RHEL 9 STIG image..."
-    docker build --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
+    docker build --no-cache --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
 fi

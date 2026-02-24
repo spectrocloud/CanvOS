@@ -96,6 +96,9 @@ RUN kernel=$(ls /lib/modules | head -n1) && \
 RUN rm -rf /boot/initramfs-*
 
 # Note: Some remediation rules may fail (e.g., download-dependent rules) - this is expected
+# Static STIG content (optional): for reproducible releases, run scripts/update-stig-content.sh
+# and ensure static/ contains ssg-rhel9-ds.xml and stig-fix.sh
+COPY static/ /tmp/stig-static/
 COPY stig-remediate.sh /tmp/stig-remediate.sh
 RUN chmod +x /tmp/stig-remediate.sh && \
     /tmp/stig-remediate.sh 2>&1 && \
@@ -106,3 +109,4 @@ RUN mkdir -p /etc/luet/repos.conf.d
 RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
 
 RUN subscription-manager unregister
+
