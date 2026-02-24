@@ -27,16 +27,38 @@ bash build.sh.ubuntu24.04 ubuntu24.04-byoi-stig false
 
 ### Building FIPS STIG Image
 
+**Ubuntu Pro Token Required**: FIPS-certified packages require an Ubuntu Pro subscription token.
+
+**Option 1: Using build script with token**
 ```bash
-bash build.sh.ubuntu24.04 [<base image name>] [true]
+bash build.sh.ubuntu24.04 [<base image name>] [true] [<ubuntu-pro-token>]
 ```
 
 Example:
 ```bash
-bash build.sh.ubuntu24.04 ubuntu24.04-byoi-stig-fips true
+bash build.sh.ubuntu24.04 ubuntu24.04-byoi-stig-fips true YOUR_UBUNTU_PRO_TOKEN
 ```
 
-**Note**: Ubuntu packages are freely available - no subscription credentials required.
+**Option 2: Using Docker secret (recommended)**
+```bash
+# Create pro-attach-config.yaml with your token
+cat > pro-attach-config.yaml <<EOF
+token: "YOUR_UBUNTU_PRO_TOKEN"
+enable_services:
+  - fips-updates
+EOF
+
+# Build with secret
+docker build --secret id=pro-attach-config,src=pro-attach-config.yaml \
+             --build-arg KAIROS_VERSION=v3.5.9 \
+             -t ubuntu24.04-byoi-stig-fips \
+             -f Dockerfile.ubuntu24.04-fips .
+```
+
+**Note**: 
+- Non-FIPS STIG images do not require Ubuntu Pro subscription
+- FIPS-certified packages require Ubuntu Pro subscription
+- Get your Ubuntu Pro token from https://ubuntu.com/pro
 
 ## Using the Base Image
 

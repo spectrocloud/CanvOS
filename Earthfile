@@ -708,8 +708,15 @@ base-image:
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
-            RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION" ; fi && \
-                if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
+            RUN apt-get update && \
+                if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null 2>&1; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION"; fi && \
+                if dpkg -l linux-image-generic > /dev/null 2>&1; then \
+                    apt-mark hold linux-image-generic linux-headers-generic linux-generic; \
+                    latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}'); \
+                    for pkg in linux-image-${latest_kernel}-generic linux-modules-${latest_kernel}-generic linux-modules-extra-${latest_kernel}-generic; do \
+                        if dpkg -l "$pkg" > /dev/null 2>&1; then apt-mark hold "$pkg"; fi; \
+                    done; \
+                fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
@@ -735,6 +742,7 @@ base-image:
                     cryptsetup-bin \ # Provides tools for setting up encrypted disks.
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
                 latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
+                apt-mark manual linux-image-${latest_kernel}-generic linux-modules-${latest_kernel}-generic linux-modules-extra-${latest_kernel}-generic 2>/dev/null || true && \
                 if [ "$FIPS_ENABLED" = "true" ]; then \
                     # When FIPS is enabled, we need to remove any non-FIPS kernel packages (e.g., 5.15 HWE) to avoid conflicts.
                     # However, some kernel packages may be held (apt-mark hold), which causes `apt-get purge` to fail with:
@@ -745,9 +753,9 @@ base-image:
                         | grep -v "$latest_kernel" | grep -v fips); do \
                         apt-mark unhold "$pkg" || true; \
                     done && \
-                    apt-get purge -y $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}" | grep -v fips); \
+                    apt-get purge -y $(dpkg -l | awk '/^.i\s+linux-(image|headers|modules)/ {print $2}' | grep -E 'linux-(image|headers|modules)-[0-9]' | grep -v "${latest_kernel}" | grep -v fips); \
                 else \
-                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -v "${latest_kernel}"); \
+                    apt-get purge -y $(dpkg -l | awk '/^ii\s+linux-(image|headers|modules)/ {print $2}' | grep -E 'linux-(image|headers|modules)-[0-9]' | grep -v "${latest_kernel}"); \
                 fi && \
                 apt-get autoremove -y && \
                 rm -rf /var/lib/apt/lists/*

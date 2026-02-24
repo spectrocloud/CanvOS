@@ -2,10 +2,23 @@
 
 BASE_IMAGE="${1:-ubuntu24.04-byoi-stig}"
 FIPS_ENABLED="${2:-false}"
+UBUNTU_PRO_TOKEN="${3:-}"
 
 if [ "$FIPS_ENABLED" = "true" ]; then
     echo "Building Ubuntu 24.04 STIG FIPS image..."
-    docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04-fips .
+    if [ -z "$UBUNTU_PRO_TOKEN" ]; then
+        echo "WARNING: No Ubuntu Pro token provided. FIPS-certified packages may not be available."
+        echo "Usage: $0 <image-name> true <ubuntu-pro-token>"
+        echo "Or use Docker secret: docker build --secret id=pro-attach-config,src=pro-attach-config.yaml ..."
+    fi
+    if [ -n "$UBUNTU_PRO_TOKEN" ]; then
+        docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" \
+                     --build-arg UBUNTU_PRO_TOKEN="$UBUNTU_PRO_TOKEN" \
+                     -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04-fips .
+    else
+        docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" \
+                     -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04-fips .
+    fi
 else
     echo "Building Ubuntu 24.04 STIG image..."
     docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04 .

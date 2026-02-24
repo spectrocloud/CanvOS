@@ -41,14 +41,32 @@ print_debug "Log directory: $LOG_DIR"
 
 # Find the STIG profile XCCDF file
 # Try common locations for scap-security-guide content
+# Ubuntu 24.04 STIG may not be available yet, so we'll try multiple versions
 STIG_XCCDF=""
+
+# Debug: List available STIG files
+print_debug "Searching for STIG XCCDF files..."
+if [ -d "/usr/share/xml/scap/ssg/content" ]; then
+    print_debug "Files in /usr/share/xml/scap/ssg/content/:"
+    ls -la /usr/share/xml/scap/ssg/content/ 2>&1 | head -20 | tee -a "$DEBUG_LOG" || true
+fi
+if [ -d "/usr/share/scap-security-guide" ]; then
+    print_debug "Files in /usr/share/scap-security-guide/:"
+    ls -la /usr/share/scap-security-guide/ 2>&1 | head -20 | tee -a "$DEBUG_LOG" || true
+fi
+
+# Try Ubuntu 24.04 first, then fall back to 22.04 if needed
 for path in \
     "/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml" \
     "/usr/share/scap-security-guide/ssg-ubuntu2404-ds.xml" \
-    "/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds-1.2.xml"
+    "/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds-1.2.xml" \
+    "/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml" \
+    "/usr/share/scap-security-guide/ssg-ubuntu2204-ds.xml" \
+    "/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds-1.2.xml"
 do
     if [ -f "$path" ]; then
         STIG_XCCDF="$path"
+        print_debug "Found STIG XCCDF file: $STIG_XCCDF"
         break
     fi
 done
@@ -59,11 +77,36 @@ if [ -z "$STIG_XCCDF" ]; then
     print_debug "Searched paths:"
     print_debug "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml"
     print_debug "  /usr/share/scap-security-guide/ssg-ubuntu2404-ds.xml"
+    print_debug "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml (fallback)"
+    print_debug "  /usr/share/scap-security-guide/ssg-ubuntu2204-ds.xml (fallback)"
+    
+    # Try to find any Ubuntu STIG files and show them
+    print_debug "Attempting to find any Ubuntu STIG files..."
+    FOUND_FILES=$(find /usr/share -name "*ubuntu*ds.xml" -type f 2>/dev/null | head -10)
+    if [ -n "$FOUND_FILES" ]; then
+        print_debug "Found Ubuntu STIG files:"
+        echo "$FOUND_FILES" | while read -r file; do
+            print_debug "  $file"
+        done
+    else
+        print_debug "No Ubuntu STIG files found in /usr/share"
+    fi
+    
+    # Also check for any SSG files
+    print_debug "Checking for any SSG content files..."
+    find /usr/share -name "*ssg*.xml" -type f 2>/dev/null | head -10 | while read -r file; do
+        print_debug "  Found: $file"
+    done || true
+    
     echo "ERROR: STIG XCCDF file not found" >&2
     echo "Please ensure scap-security-guide package is installed" >&2
     echo "Searched paths:" >&2
     echo "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml" >&2
     echo "  /usr/share/scap-security-guide/ssg-ubuntu2404-ds.xml" >&2
+    echo "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds-1.2.xml" >&2
+    echo "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml (fallback)" >&2
+    echo "  /usr/share/scap-security-guide/ssg-ubuntu2204-ds.xml (fallback)" >&2
+    echo "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds-1.2.xml (fallback)" >&2
     echo "Check /var/log/stig-remediation/debug.log for details" >&2
     exit 1
 fi

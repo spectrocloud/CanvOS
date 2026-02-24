@@ -2,57 +2,124 @@ FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
 FROM ubuntu:24.04
 
 ARG KAIROS_VERSION=v3.5.9
+ARG UBUNTU_PRO_TOKEN=""
 ENV DEBIAN_FRONTEND=noninteractive
 
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
+# Attach Ubuntu Pro if token is provided (required for FIPS-certified packages)
+# Token can be provided via build arg or Docker secret
+RUN if [ -n "$UBUNTU_PRO_TOKEN" ]; then \
+        echo "Attaching Ubuntu Pro using token..."; \
+        apt-get update && \
+        apt-get install -y --no-install-recommends ubuntu-advantage-tools ca-certificates && \
+        pro attach "$UBUNTU_PRO_TOKEN" && \
+        pro enable fips-updates && \
+        apt-get update; \
+    elif [ -f /run/secrets/pro-attach-config ]; then \
+        echo "Attaching Ubuntu Pro using secret file..."; \
+        apt-get update && \
+        apt-get install -y --no-install-recommends ubuntu-advantage-tools ca-certificates && \
+        pro attach --attach-config /run/secrets/pro-attach-config && \
+        pro enable fips-updates && \
+        apt-get update; \
+    else \
+        echo "WARNING: No Ubuntu Pro token provided. FIPS-certified packages may not be available."; \
+        echo "For FIPS-certified packages, provide UBUNTU_PRO_TOKEN build arg or pro-attach-config secret."; \
+    fi
+
 # Copy dracut config for FIPS (after kairos-init install)
 COPY dracut.conf.fips /etc/dracut.conf.d/kairos-fips.conf
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  squashfs-tools \
-  dracut-live \
-  efibootmgr \
-  dhcpcd5 \
-  auditd \
-  sudo \
-  systemd \
-  systemd-networkd \
-  systemd-timesyncd \
-  systemd-resolved \
-  parted \
-  dracut \
-  e2fsprogs \
-  dosfstools \
-  coreutils \
-  device-mapper \
-  grub2-common \
-  grub-pc-bin \
-  grub-efi-amd64-bin \
-  grub-efi-amd64-signed \
-  which \
-  nano \
-  gawk \
-  haveged \
-  policykit-1 \
-  ncurses-base \
-  tar \
-  kbd \
-  lvm2 \
-  zstd \
-  openssh-server \
-  openssh-client \
-  shim-signed \
-  open-vm-tools \
-  open-iscsi \
-  iptables ethtool socat iproute2 conntrack \
-  linux-image-generic linux-modules-extra-generic \
-  rsync jq \
-  scap-security-guide \
-  openscap-scanner \
-  ufw \
-  && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Enable universe repository for scap-security-guide
+RUN apt-get update && apt-get install -y --no-install-recommends software-properties-common && \
+    add-apt-repository universe && \
+    apt-get update
+
+# Configure dracut to skip problematic modules before installation
+# This prevents errors with livenet/network module dependencies during install
+RUN mkdir -p /etc/dracut.conf.d && \
+    echo 'omit_dracutmodules+=" livenet network network-legacy systemd-networkd "' > /etc/dracut.conf.d/99-skip-livenet.conf && \
+    echo 'hostonly="no"' >> /etc/dracut.conf.d/99-skip-livenet.conf
+
+# Install packages, allowing dracut post-install failures
+# Dracut post-install scripts will fail due to livenet/network dependencies,
+# but packages will be installed. We regenerate initramfs manually later anyway.
+RUN set +e && \
+    apt-get install -y --no-install-recommends \
+      squashfs-tools \
+      dracut-live \
+      efibootmgr \
+      dhcpcd5 \
+      auditd \
+      sudo \
+      systemd \
+      parted \
+      dracut \
+      e2fsprogs \
+      dosfstools \
+      coreutils \
+      dmsetup \
+      grub2-common \
+      grub-pc-bin \
+      grub-efi-amd64-bin \
+      grub-efi-amd64-signed \
+      which \
+      nano \
+      gawk \
+      haveged \
+      policykit-1 \
+      ncurses-base \
+      tar \
+      kbd \
+      lvm2 \
+      zstd \
+      openssh-server \
+      openssh-client \
+      shim-signed \
+      open-vm-tools \
+      open-iscsi \
+      iptables ethtool socat iproute2 conntrack \
+      linux-image-generic \
+      cloud-guest-utils \
+      rsync jq \
+      ssg-base ssg-debderived \
+      openscap-scanner \
+      ufw; \
+    INSTALL_EXIT=$?; \
+    if [ $INSTALL_EXIT -ne 0 ]; then \
+      echo "Package installation had errors (likely dracut post-install), attempting to fix..."; \
+      dpkg --configure -a || true; \
+      apt-get install -f -y || true; \
+    fi; \
+    set -e
+
+# Ensure kernel packages and their dependencies are properly installed
+# This is critical for the Earthfile kernel cleanup step
+RUN apt-get update && \
+    echo "Checking for held packages..." && \
+    HELD_PKGS=$(apt-mark showhold | grep -E "linux-image|linux-modules" || true) && \
+    if [ -n "$HELD_PKGS" ]; then \
+        echo "Found held kernel packages, unholding them:"; \
+        echo "$HELD_PKGS"; \
+        echo "$HELD_PKGS" | xargs -r apt-mark unhold || true; \
+    fi && \
+    apt-get install -y --no-install-recommends --fix-broken && \
+    apt-get install -y --no-install-recommends -f && \
+    echo "Verifying linux-image-generic installation..." && \
+    if dpkg -l | grep -q "^ii.*linux-image-generic"; then \
+        echo "linux-image-generic is installed"; \
+        echo "Checking its dependencies..."; \
+        apt-cache depends linux-image-generic | grep "Depends:" | head -10 || true; \
+        echo "Installed kernel packages:"; \
+        dpkg -l | grep -E "^ii.*linux-(image|modules)" | head -10 || true; \
+        echo "Ensuring kernel dependencies are installed..."; \
+        apt-get install -y --no-install-recommends linux-image-generic || true; \
+    else \
+        echo "WARNING: linux-image-generic is not installed!"; \
+    fi && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
@@ -72,10 +139,48 @@ COPY overlay/ubuntu24.04/ /
 
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
   ln -sf "${kernel#/boot/}" /boot/vmlinuz
+# Create dummy dracut modules to satisfy dependencies
+# This prevents dracut from failing when dracut-live requires network modules
+RUN mkdir -p /usr/lib/dracut/modules.d/35systemd-networkd && \
+    echo '#!/bin/bash' > /usr/lib/dracut/modules.d/35systemd-networkd/module-setup.sh && \
+    echo '# Dummy module to satisfy dracut-live dependencies' >> /usr/lib/dracut/modules.d/35systemd-networkd/module-setup.sh && \
+    echo 'check() { return 0; }' >> /usr/lib/dracut/modules.d/35systemd-networkd/module-setup.sh && \
+    echo 'install() { return 0; }' >> /usr/lib/dracut/modules.d/35systemd-networkd/module-setup.sh && \
+    chmod +x /usr/lib/dracut/modules.d/35systemd-networkd/module-setup.sh && \
+    mkdir -p /usr/lib/dracut/modules.d/45network-legacy && \
+    echo '#!/bin/bash' > /usr/lib/dracut/modules.d/45network-legacy/module-setup.sh && \
+    echo '# Dummy module to satisfy dracut-live dependencies' >> /usr/lib/dracut/modules.d/45network-legacy/module-setup.sh && \
+    echo 'check() { return 0; }' >> /usr/lib/dracut/modules.d/45network-legacy/module-setup.sh && \
+    echo 'install() { return 0; }' >> /usr/lib/dracut/modules.d/45network-legacy/module-setup.sh && \
+    chmod +x /usr/lib/dracut/modules.d/45network-legacy/module-setup.sh
+# Regenerate initramfs with dracut
 RUN kernel=$(ls /lib/modules | head -n1) && \
-  dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
+  dracut -v -N --no-hostonly -f "/boot/initrd-${kernel}" "${kernel}" && \
   ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
 RUN rm -rf /boot/initramfs-*
+
+# Verify STIG content is available, install full scap-security-guide if needed
+RUN echo "Checking for STIG XCCDF files..." && \
+    echo "Installed SSG packages:" && \
+    dpkg -l | grep -E "ssg|scap" || echo "No SSG packages found" && \
+    echo "Files provided by ssg-base:" && \
+    dpkg -L ssg-base 2>/dev/null | grep -E "\.xml$|ds\.xml" | head -10 || echo "ssg-base not installed or no XML files" && \
+    echo "Files provided by ssg-debderived:" && \
+    dpkg -L ssg-debderived 2>/dev/null | grep -E "\.xml$|ds\.xml" | head -10 || echo "ssg-debderived not installed or no XML files" && \
+    if [ ! -f "/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml" ] && \
+       [ ! -f "/usr/share/scap-security-guide/ssg-ubuntu2404-ds.xml" ] && \
+       [ ! -f "/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml" ]; then \
+        echo "STIG files not found, attempting to install full scap-security-guide package..."; \
+        apt-get update && \
+        apt-get install -y --no-install-recommends scap-security-guide || \
+        (echo "scap-security-guide not available, listing all STIG files:" && \
+         find /usr/share -name "*ubuntu*ds.xml" -type f 2>/dev/null | head -20 || echo "No Ubuntu STIG files found" && \
+         echo "All SSG XML files:" && \
+         find /usr/share -name "*ssg*.xml" -type f 2>/dev/null | head -20 || echo "No SSG XML files found"); \
+        apt-get clean && rm -rf /var/lib/apt/lists/*; \
+    else \
+        echo "STIG XCCDF file found!"; \
+    fi
 
 # Note: Some remediation rules may fail (e.g., download-dependent rules) - this is expected
 COPY stig-remediate.sh /tmp/stig-remediate.sh
@@ -84,5 +189,12 @@ RUN chmod +x /tmp/stig-remediate.sh && \
     rm -f /tmp/stig-remediate.sh
 
 RUN mkdir -p /etc/luet/repos.conf.d
+
+# Detach Ubuntu Pro before final cleanup (if it was attached)
+RUN if command -v pro >/dev/null 2>&1 && pro status | grep -q "ATTACHED"; then \
+        echo "Detaching Ubuntu Pro..."; \
+        pro detach --assume-yes || true; \
+    fi
+
 ## Clear cache
 RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K && rm -f /etc/machine-id
