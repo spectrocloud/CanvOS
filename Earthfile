@@ -743,6 +743,8 @@ base-image:
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
                 latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
                 apt-mark manual linux-image-${latest_kernel}-generic linux-modules-${latest_kernel}-generic linux-modules-extra-${latest_kernel}-generic 2>/dev/null || true && \
+                apt-mark unhold linux-image-generic linux-headers-generic linux-generic 2>/dev/null || true && \
+                (apt-get purge -y --allow-change-held-packages linux-image-generic linux-headers-generic linux-generic || true) && \
                 if [ "$FIPS_ENABLED" = "true" ]; then \
                     # When FIPS is enabled, we need to remove any non-FIPS kernel packages (e.g., 5.15 HWE) to avoid conflicts.
                     # However, some kernel packages may be held (apt-mark hold), which causes `apt-get purge` to fail with:
