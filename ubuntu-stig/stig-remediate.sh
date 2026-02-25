@@ -40,23 +40,14 @@ print_debug "Starting Ubuntu 24.04 STIG remediation..."
 print_debug "Log directory: $LOG_DIR"
 
 # Find the STIG profile XCCDF file
-# Try common locations for scap-security-guide content
-# Ubuntu 24.04 STIG may not be available yet, so we'll try multiple versions
+# Prefer static content (pinned for reproducible releases) over system packages
 STIG_XCCDF=""
-
-# Debug: List available STIG files
-print_debug "Searching for STIG XCCDF files..."
-if [ -d "/usr/share/xml/scap/ssg/content" ]; then
-    print_debug "Files in /usr/share/xml/scap/ssg/content/:"
-    ls -la /usr/share/xml/scap/ssg/content/ 2>&1 | head -20 | tee -a "$DEBUG_LOG" || true
-fi
-if [ -d "/usr/share/scap-security-guide" ]; then
-    print_debug "Files in /usr/share/scap-security-guide/:"
-    ls -la /usr/share/scap-security-guide/ 2>&1 | head -20 | tee -a "$DEBUG_LOG" || true
-fi
-
-# Try Ubuntu 24.04 first, then fall back to 22.04 if needed
+STATIC_DIR="/tmp/stig-static"
 for path in \
+    "$STATIC_DIR/ssg-ubuntu2404-ds.xml" \
+    "$STATIC_DIR/ssg-ubuntu2404-ds-1.2.xml" \
+    "$STATIC_DIR/ssg-ubuntu2204-ds.xml" \
+    "$STATIC_DIR/ssg-ubuntu2204-ds-1.2.xml" \
     "/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml" \
     "/usr/share/scap-security-guide/ssg-ubuntu2404-ds.xml" \
     "/usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds-1.2.xml" \
@@ -66,47 +57,19 @@ for path in \
 do
     if [ -f "$path" ]; then
         STIG_XCCDF="$path"
-        print_debug "Found STIG XCCDF file: $STIG_XCCDF"
+        if [[ "$path" == "$STATIC_DIR"* ]]; then
+            print_debug "Using static STIG content (pinned for reproducible release)"
+        fi
         break
     fi
 done
 
 if [ -z "$STIG_XCCDF" ]; then
     print_debug "ERROR: STIG XCCDF file not found"
-    print_debug "Please ensure scap-security-guide package is installed"
-    print_debug "Searched paths:"
-    print_debug "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml"
-    print_debug "  /usr/share/scap-security-guide/ssg-ubuntu2404-ds.xml"
-    print_debug "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml (fallback)"
-    print_debug "  /usr/share/scap-security-guide/ssg-ubuntu2204-ds.xml (fallback)"
-    
-    # Try to find any Ubuntu STIG files and show them
-    print_debug "Attempting to find any Ubuntu STIG files..."
-    FOUND_FILES=$(find /usr/share -name "*ubuntu*ds.xml" -type f 2>/dev/null | head -10)
-    if [ -n "$FOUND_FILES" ]; then
-        print_debug "Found Ubuntu STIG files:"
-        echo "$FOUND_FILES" | while read -r file; do
-            print_debug "  $file"
-        done
-    else
-        print_debug "No Ubuntu STIG files found in /usr/share"
-    fi
-    
-    # Also check for any SSG files
-    print_debug "Checking for any SSG content files..."
-    find /usr/share -name "*ssg*.xml" -type f 2>/dev/null | head -10 | while read -r file; do
-        print_debug "  Found: $file"
-    done || true
-    
+    print_debug "Please ensure scap-security-guide package is installed, or provide static content in $STATIC_DIR"
+    print_debug "Searched paths: $STATIC_DIR (static), /usr/share/xml/scap/ssg/content/, /usr/share/scap-security-guide/"
     echo "ERROR: STIG XCCDF file not found" >&2
-    echo "Please ensure scap-security-guide package is installed" >&2
-    echo "Searched paths:" >&2
-    echo "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml" >&2
-    echo "  /usr/share/scap-security-guide/ssg-ubuntu2404-ds.xml" >&2
-    echo "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds-1.2.xml" >&2
-    echo "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml (fallback)" >&2
-    echo "  /usr/share/scap-security-guide/ssg-ubuntu2204-ds.xml (fallback)" >&2
-    echo "  /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds-1.2.xml (fallback)" >&2
+    echo "Please ensure scap-security-guide package is installed, or provide static content in $STATIC_DIR" >&2
     echo "Check /var/log/stig-remediation/debug.log for details" >&2
     exit 1
 fi
@@ -128,29 +91,35 @@ if ! command -v oscap &> /dev/null; then
     exit 1
 fi
 
-# Generate remediation script
-echo "Generating STIG remediation script..."
-print_debug "Generating STIG remediation script..."
+# Use remediation script - prefer static (pinned) over generated
 REMEDIATION_SCRIPT="/tmp/stig-fix.sh"
-
-# Generate fix script from STIG profile
+STATIC_REMEDIATION="$STATIC_DIR/stig-fix.sh"
 OSCAP_ERROR_LOG="$LOG_DIR/oscap-error.log"
-if ! oscap xccdf generate fix \
-    --profile "$STIG_PROFILE" \
-    --template urn:xccdf:fix:script:sh \
-    "$STIG_XCCDF" > "$REMEDIATION_SCRIPT" 2>"$OSCAP_ERROR_LOG"; then
-    print_debug "WARNING: Could not generate remediation script"
-    print_debug "oscap error output:"
-    cat "$OSCAP_ERROR_LOG" | while read line; do print_debug "  $line"; done || true
-    echo "WARNING: Could not generate remediation script" >&2
-    echo "Check $OSCAP_ERROR_LOG for details" >&2
-    echo "Attempting to continue with manual remediation..." >&2
-    rm -f "$REMEDIATION_SCRIPT"
-    exit 0
-fi
 
-# Make script executable
-chmod +x "$REMEDIATION_SCRIPT"
+if [ -f "$STATIC_REMEDIATION" ]; then
+    echo "Using static STIG remediation script (pinned for reproducible release)"
+    print_debug "Using static remediation script: $STATIC_REMEDIATION"
+    cp "$STATIC_REMEDIATION" "$REMEDIATION_SCRIPT"
+    chmod +x "$REMEDIATION_SCRIPT"
+else
+    echo "Generating STIG remediation script..."
+    print_debug "Generating STIG remediation script..."
+    OSCAP_ERROR_LOG="$LOG_DIR/oscap-error.log"
+    if ! oscap xccdf generate fix \
+        --profile "$STIG_PROFILE" \
+        --template urn:xccdf:fix:script:sh \
+        "$STIG_XCCDF" > "$REMEDIATION_SCRIPT" 2>"$OSCAP_ERROR_LOG"; then
+        print_debug "WARNING: Could not generate remediation script"
+        print_debug "oscap error output:"
+        cat "$OSCAP_ERROR_LOG" | while read line; do print_debug "  $line"; done || true
+        echo "WARNING: Could not generate remediation script" >&2
+        echo "Check $OSCAP_ERROR_LOG for details" >&2
+        echo "Attempting to continue with manual remediation..." >&2
+        rm -f "$REMEDIATION_SCRIPT"
+        exit 0
+    fi
+    chmod +x "$REMEDIATION_SCRIPT"
+fi
 
 # OPTION A: Use command stubbing instead of mutating the script
 # This preserves 100% syntax integrity and avoids structural breakage

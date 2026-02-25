@@ -172,6 +172,9 @@ RUN echo "Checking for STIG XCCDF files..." && \
     fi
 
 # Note: Some remediation rules may fail (e.g., download-dependent rules) - this is expected
+# Static STIG content (optional): for reproducible releases, run scripts/update-stig-content.sh
+# and ensure static/ contains ssg-ubuntu2404-ds.xml (or 2204) and stig-fix.sh
+COPY static/ /tmp/stig-static/
 COPY stig-remediate.sh /tmp/stig-remediate.sh
 RUN chmod +x /tmp/stig-remediate.sh && \
     /tmp/stig-remediate.sh 2>&1 && \
