@@ -256,10 +256,12 @@ if [ -d /run ]; then
 fi
 
 # Ensure dmsquash-live module is not disabled (Ubuntu dracut-live pkg provides dmsquash-live, not "dracut-live")
-# Remove incorrect "dracut-live" module refs - that module name does not exist on Ubuntu
+# Fix incorrect module refs - Ubuntu package names differ from dracut module names
+# dracut-live pkg provides dmsquash-live; rootfsbase does not exist, use rootfs-block
 for f in /etc/dracut.conf /etc/dracut.conf.d/*.conf; do
     [ -f "$f" ] || continue
     sed -i 's/dracut-live/dmsquash-live/g' "$f" 2>/dev/null || true
+    sed -i 's/rootfsbase/rootfs-block/g' "$f" 2>/dev/null || true
 done
 if [ -f /etc/dracut.conf ]; then
     sed -i 's/^omit_dracutmodules.*dmsquash-live.*//g' /etc/dracut.conf || true
@@ -316,9 +318,9 @@ for conf_file in /etc/dracut.conf.d/*.conf; do
         if ! grep -q "add_dracutmodules.*dmsquash-live" "$conf_file"; then
             printf '\n%s\n' 'add_dracutmodules+=" dmsquash-live "' >> "$conf_file" || true
         fi
-        # Ensure rootfsbase module is included
-        if ! grep -q "add_dracutmodules.*rootfsbase" "$conf_file"; then
-            printf '\n%s\n' 'add_dracutmodules+=" rootfsbase "' >> "$conf_file" || true
+        # Ensure rootfs-block module is included (required by dmsquash-live)
+        if ! grep -q "add_dracutmodules.*rootfs-block" "$conf_file"; then
+            printf '\n%s\n' 'add_dracutmodules+=" rootfs-block "' >> "$conf_file" || true
         fi
     fi
 done
@@ -334,8 +336,8 @@ if [ -f /etc/dracut.conf ]; then
     if ! grep -q "add_dracutmodules.*dmsquash-live" /etc/dracut.conf; then
         printf '\n%s\n' 'add_dracutmodules+=" dmsquash-live "' >> /etc/dracut.conf || true
     fi
-    if ! grep -q "add_dracutmodules.*rootfsbase" /etc/dracut.conf; then
-        printf '\n%s\n' 'add_dracutmodules+=" rootfsbase "' >> /etc/dracut.conf || true
+    if ! grep -q "add_dracutmodules.*rootfs-block" /etc/dracut.conf; then
+        printf '\n%s\n' 'add_dracutmodules+=" rootfs-block "' >> /etc/dracut.conf || true
     fi
 fi
 
