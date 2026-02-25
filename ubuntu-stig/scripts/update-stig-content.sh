@@ -3,8 +3,8 @@
 # Run this to pin STIG guide and remediation for reproducible releases.
 # See README.md for release process and "latest STIG" options.
 #
-# Requires: cmake, make, openscap-utils, openscap-scanner, python3, pip
-#   Ubuntu: apt install cmake make libopenscap8 openscap-utils openscap-scanner python3 python3-pip
+# Requires: cmake, make, openscap-utils, openscap-scanner, python3, pip, libxml2-utils, xsltproc
+#   Ubuntu 24.04: apt install cmake make openscap-utils openscap-scanner python3 python3-pip libxml2-utils xsltproc
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

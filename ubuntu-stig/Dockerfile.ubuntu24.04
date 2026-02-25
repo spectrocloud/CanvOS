@@ -173,9 +173,11 @@ RUN echo "Checking for STIG XCCDF files..." && \
 
 # Note: Some remediation rules may fail (e.g., download-dependent rules) - this is expected
 # Static STIG content (optional): for reproducible releases, run scripts/update-stig-content.sh
-# and ensure static/ contains ssg-ubuntu2404-ds.xml (or 2204) and stig-fix.sh
+# Without static content: build uses system scap-security-guide (latest STIG for customers who want current content)
 COPY static/ /tmp/stig-static/
 COPY stig-remediate.sh /tmp/stig-remediate.sh
+# Verify correct script (Ubuntu, not RHEL) before running
+RUN grep -q "Ubuntu 24.04 STIG remediation" /tmp/stig-remediate.sh || (echo "ERROR: Wrong stig-remediate.sh (expected Ubuntu 24.04)" && exit 1)
 RUN chmod +x /tmp/stig-remediate.sh && \
     /tmp/stig-remediate.sh 2>&1 && \
     rm -f /tmp/stig-remediate.sh
