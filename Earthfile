@@ -740,7 +740,9 @@ base-image:
                     dosfstools \ # Utilities for creating and checking FAT file systems.
                     rsync \ # Used for efficient file synchronization and transfer.
                     cryptsetup-bin \ # Provides tools for setting up encrypted disks.
-                    udev && \ # Device manager for the Linux kernel, required for managing device nodes.
+                    udev \ # Device manager for the Linux kernel, required for managing device nodes.
+                    dracut \ # Required for initramfs (custom base images like ubuntu24.04-byoi-stig need this after purge).
+                    dracut-live && \ # Required for live/squashfs boot; apt autoremove may remove it otherwise.
                 latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
                 apt-mark manual linux-image-${latest_kernel}-generic linux-modules-${latest_kernel}-generic linux-modules-extra-${latest_kernel}-generic 2>/dev/null || true && \
                 apt-mark unhold linux-image-generic linux-headers-generic linux-generic 2>/dev/null || true && \

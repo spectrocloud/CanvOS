@@ -255,24 +255,21 @@ if [ -d /run ]; then
     chmod 755 /run 2>/dev/null || true
 fi
 
-# Ensure dracut-live module is not disabled
-# Check if dracut.conf exists and ensure dracut-live is included
+# Ensure dmsquash-live module is not disabled (Ubuntu dracut-live pkg provides dmsquash-live, not "dracut-live")
+# Remove incorrect "dracut-live" module refs - that module name does not exist on Ubuntu
+for f in /etc/dracut.conf /etc/dracut.conf.d/*.conf; do
+    [ -f "$f" ] || continue
+    sed -i 's/dracut-live/dmsquash-live/g' "$f" 2>/dev/null || true
+done
 if [ -f /etc/dracut.conf ]; then
-    # Ensure dracut-live is not in omit_dracutmodules
-    sed -i 's/^omit_dracutmodules.*dracut-live.*//g' /etc/dracut.conf || true
-    # Ensure dracut-live is in add_dracutmodules if not already
-    if ! grep -q "add_dracutmodules.*dracut-live" /etc/dracut.conf; then
-        printf '\n%s\n' 'add_dracutmodules+=" dracut-live "' >> /etc/dracut.conf || true
-    fi
+    sed -i 's/^omit_dracutmodules.*dmsquash-live.*//g' /etc/dracut.conf || true
 fi
 
-# Ensure dracut-live is included in all dracut.conf.d files
+# Ensure dmsquash-live is not omitted in dracut.conf.d files
 for conf_file in /etc/dracut.conf.d/*.conf; do
     if [ -f "$conf_file" ]; then
-        # Remove any lines that omit dracut-live
-        sed -i '/omit_dracutmodules.*dracut-live/d' "$conf_file" || true
-        # Note: We're patching dracut-live directly instead of using a custom module
-        # This is more reliable and doesn't require add_dracutmodules configuration
+        # Remove any lines that omit dmsquash-live
+        sed -i '/omit_dracutmodules.*dmsquash-live/d' "$conf_file" || true
     fi
 done
 
