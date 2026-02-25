@@ -49,6 +49,25 @@ update_config_files() {
 	return 0
 }
 
+##########################################################################
+#  Idempotent config update - removes old values and sets new one
+##########################################################################
+update_config_idempotent() {
+	local search_str="$1"
+	local new_value="$2"
+	local config_file="$3"
+
+	if [[ ! -f ${config_file} ]]; then
+		touch "${config_file}"
+	fi
+
+	# Remove all existing lines (commented or uncommented)
+	sed -i "/^[#[:space:]]*${search_str}/d" "${config_file}"
+
+	# Add the new value once
+	echo "${new_value}" >> "${config_file}"
+}
+
 
 ##########################################################################
 #  Determine the Operating system
@@ -105,18 +124,26 @@ get_os() {
 ##########################################################################
 upgrade_packages() {
 	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		export DEBIAN_FRONTEND=noninteractive
 		apt-get update
 		apt-get -y upgrade
 		check_error $? "Failed upgrading packages" 1
-		apt-get install -y auditd apparmor-utils libpam-pwquality
-		if  $? -ne 0 ; then
+		
+		# Install base hardening packages
+		apt-get install -y auditd apparmor apparmor-utils libpam-pwquality aide aide-common vlock
+		if [[ $? -ne 0 ]]; then
 			echo 'deb http://archive.ubuntu.com/ubuntu focal main restricted' > /etc/apt/sources.list.d/repotmp.list
 			apt-get update
-			apt-get install -y auditd apparmor-utils libpam-pwquality
+			apt-get install -y auditd apparmor apparmor-utils libpam-pwquality aide aide-common vlock
 			check_error $? "Failed installing audit packages" 1
 			rm -f /etc/apt/sources.list.d/repotmp.list
 			apt-get update
 		fi
+		
+		# Enable services
+		systemctl enable apparmor 2>/dev/null || true
+		systemctl enable rsyslog 2>/dev/null || true
+		systemctl enable auditd 2>/dev/null || true
 	fi
 
 	if [[ ${OS_FLAVOUR} == "centos" ]]; then
@@ -139,6 +166,188 @@ upgrade_packages() {
 		check_error $? "OS not supported" 1
 	fi
 
+	return 0
+}
+
+##########################################################################
+#  CIS 5.2.2, 5.2.3, 5.2.4 - Configure sudo hardening
+##########################################################################
+configure_sudo() {
+	echo "Configuring sudo hardening with idempotent sudoers.d files"
+	
+	# CIS 5.2.2 - Sudo use pty
+	echo "Defaults use_pty" > /etc/sudoers.d/10-cis-pty
+	chmod 440 /etc/sudoers.d/10-cis-pty
+	
+	# CIS 5.2.3 - Sudo log file
+	echo "Defaults logfile=/var/log/sudo.log" > /etc/sudoers.d/10-cis-logfile
+	chmod 440 /etc/sudoers.d/10-cis-logfile
+	
+	# CIS 5.2.4 - Require password for escalation
+	cat > /etc/sudoers.d/10-cis-password << 'EOF'
+Defaults !targetpw
+Defaults !rootpw
+Defaults !runaspw
+EOF
+	chmod 440 /etc/sudoers.d/10-cis-password
+	
+	echo "Sudo hardening configured successfully"
+	return 0
+}
+
+##########################################################################
+#  CIS 5.3.x - Configure PAM for Ubuntu
+##########################################################################
+configure_pam_ubuntu() {
+	if [[ ${OS_FLAVOUR} != "ubuntu" ]]; then
+		return 0
+	fi
+	
+	echo "Configuring PAM authentication policies for Ubuntu"
+	local ubuntu_version=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2 | cut -d'.' -f1)
+	
+	# CIS 5.2.7 - Restrict su command access (use correct group for Ubuntu)
+	if [[ ! -f /etc/pam.d/su.bak ]]; then
+		cp /etc/pam.d/su /etc/pam.d/su.bak 2>/dev/null || true
+	fi
+	
+	if ! grep -q "^auth.*required.*pam_wheel.so" /etc/pam.d/su 2>/dev/null; then
+		sed -i '1i auth required pam_wheel.so use_uid group=sudo' /etc/pam.d/su
+		echo "Su command access restricted to sudo group"
+	fi
+	
+	# CIS 5.3.3.1.x - Password lockout policies
+	if [[ "$ubuntu_version" -ge 22 ]]; then
+		# Ubuntu 22.04+ uses pam_faillock
+		if ! grep -q "pam_faillock.so" /etc/pam.d/common-auth 2>/dev/null; then
+			[[ ! -f /etc/pam.d/common-auth.bak ]] && cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+			cat > /etc/pam.d/common-auth << 'EOF'
+auth required pam_faillock.so preauth audit silent deny=4 fail_interval=900 unlock_time=600
+auth [success=1 default=ignore] pam_unix.so nullok
+auth [default=die] pam_faillock.so authfail audit deny=4 fail_interval=900 unlock_time=600
+auth sufficient pam_faillock.so authsucc audit deny=4 fail_interval=900 unlock_time=600
+auth requisite pam_deny.so
+auth required pam_permit.so
+EOF
+			echo "PAM faillock configured for Ubuntu $ubuntu_version"
+		fi
+		
+		if ! grep -q "pam_faillock.so" /etc/pam.d/common-account 2>/dev/null; then
+			[[ ! -f /etc/pam.d/common-account.bak ]] && cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+			echo "account required pam_faillock.so" >> /etc/pam.d/common-account
+		fi
+	else
+		# Ubuntu 20.04 uses pam_tally2
+		if ! grep -q "pam_tally2" /etc/pam.d/common-auth 2>/dev/null; then
+			[[ ! -f /etc/pam.d/common-auth.bak ]] && cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak
+			sed -i '/^auth.*pam_unix.so/i auth required pam_tally2.so deny=4 onerr=fail unlock_time=600' /etc/pam.d/common-auth
+			echo "PAM tally2 configured for Ubuntu $ubuntu_version"
+		fi
+		
+		if ! grep -q "pam_tally2" /etc/pam.d/common-account 2>/dev/null; then
+			[[ ! -f /etc/pam.d/common-account.bak ]] && cp /etc/pam.d/common-account /etc/pam.d/common-account.bak
+			echo "account required pam_tally2.so" >> /etc/pam.d/common-account
+		fi
+	fi
+	
+	# CIS 5.3.3.3.x - Password history with pam_pwhistory
+	if ! grep -q "pam_pwhistory.so" /etc/pam.d/common-password 2>/dev/null; then
+		[[ ! -f /etc/pam.d/common-password.bak ]] && cp /etc/pam.d/common-password /etc/pam.d/common-password.bak
+		cat > /etc/pam.d/common-password << 'EOF'
+password requisite pam_pwquality.so retry=3
+password requisite pam_pwhistory.so remember=5 use_authtok enforce_for_root
+password [success=1 default=ignore] pam_unix.so obscure use_authtok try_first_pass sha512
+password requisite pam_deny.so
+password required pam_permit.so
+EOF
+		echo "PAM password history configured with pam_pwhistory"
+	fi
+	
+	return 0
+}
+
+##########################################################################
+#  CIS 6.3.1, 6.3.2 - Configure AIDE
+##########################################################################
+configure_aide_ubuntu() {
+	if [[ ${OS_FLAVOUR} != "ubuntu" ]]; then
+		return 0
+	fi
+	
+	echo "Configuring AIDE file integrity monitoring"
+	
+	# Initialize AIDE database if it doesn't exist
+	if [[ ! -f /var/lib/aide/aide.db ]] && [[ ! -f /var/lib/aide/aide.db.gz ]]; then
+		echo "Initializing AIDE database (this may take several minutes)..."
+		aideinit 2>/dev/null || /usr/sbin/aideinit 2>/dev/null || true
+		
+		# Move new database to expected location
+		if [[ -f /var/lib/aide/aide.db.new ]]; then
+			mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+			echo "AIDE database initialized successfully"
+		elif [[ -f /var/lib/aide/aide.db.new.gz ]]; then
+			mv /var/lib/aide/aide.db.new.gz /var/lib/aide/aide.db.gz
+			echo "AIDE database initialized successfully"
+		else
+			echo "Warning: AIDE database initialization may have failed"
+		fi
+	fi
+	
+	# CIS 6.3.2 - Create daily AIDE check cron job
+	if [[ ! -f /etc/cron.daily/aide-check ]]; then
+		cat > /etc/cron.daily/aide-check << 'EOF'
+#!/bin/bash
+/usr/bin/aide --check 2>&1 | logger -t aide-check
+EOF
+		chmod 755 /etc/cron.daily/aide-check
+		echo "AIDE daily check cron job created"
+	fi
+	
+	# CIS 6.3.3 - Cryptographic protection for audit tools
+	if [[ ! -f /etc/aide/aide.conf.d/99_aide_cryptography ]]; then
+		mkdir -p /etc/aide/aide.conf.d
+		cat > /etc/aide/aide.conf.d/99_aide_cryptography << 'EOF'
+/sbin/auditctl p+i+n+u+g+s+b+acl+xattrs+sha512
+/sbin/auditd p+i+n+u+g+s+b+acl+xattrs+sha512
+/sbin/ausearch p+i+n+u+g+s+b+acl+xattrs+sha512
+/sbin/aureport p+i+n+u+g+s+b+acl+xattrs+sha512
+/sbin/autrace p+i+n+u+g+s+b+acl+xattrs+sha512
+/sbin/augenrules p+i+n+u+g+s+b+acl+xattrs+sha512
+EOF
+		echo "AIDE audit tools protection configured"
+	fi
+	
+	return 0
+}
+
+##########################################################################
+#  CIS 5.4.3.3 - Configure default umask
+##########################################################################
+configure_umask() {
+	echo "Configuring default umask to 027"
+	local umask_line="umask 027"
+	
+	# Configure /etc/profile
+	if [[ -f /etc/profile ]]; then
+		if ! grep -q "^umask 027" /etc/profile; then
+			sed -i '/^umask/d' /etc/profile
+			echo "$umask_line" >> /etc/profile
+		fi
+	fi
+	
+	# Configure /etc/bash.bashrc
+	if [[ -f /etc/bash.bashrc ]]; then
+		if ! grep -q "^umask 027" /etc/bash.bashrc; then
+			sed -i '/^umask/d' /etc/bash.bashrc
+			echo "$umask_line" >> /etc/bash.bashrc
+		fi
+	fi
+	
+	# Configure /etc/profile.d/umask.sh
+	echo "$umask_line" > /etc/profile.d/umask.sh
+	chmod 644 /etc/profile.d/umask.sh
+	
+	echo "Default umask configured"
 	return 0
 }
 
@@ -645,15 +854,17 @@ harden_journald() {
 	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
 		echo "Configuring journald with 14-day retention and storage limits"
 		mkdir -p /etc/systemd/journald.conf.d
-		cat > /etc/systemd/journald.conf.d/hardening.conf << EOF
+		# CIS 6.1.1.1.4 - ForwardToSyslog should be disabled (no)
+		cat > /etc/systemd/journald.conf.d/99-cis.conf << 'EOF'
 [Journal]
 Storage=persistent
 Compress=yes
+ForwardToSyslog=no
 MaxRetentionSec=14day
 SystemMaxUse=500M
 SystemMaxFileSize=50M
-ForwardToSyslog=yes
 EOF
+		chmod 644 /etc/systemd/journald.conf.d/99-cis.conf
 	fi
 
 	return 0
@@ -762,37 +973,22 @@ disable_modules() {
 ##########################################################################
 
 harden_banner() {
-
-	local file_path_locallogin="/etc/issue"
-	local file_path_remotelogin="/etc/issue.net"
-
-	local content_locallogin=(
-    "Authorized uses only. All activity may be monitored and reported."
-	)
-
-	local content_remotelogin=(
-    "Authorized uses only. All activity may be monitored and reported."
-	)
-	# Create or append to the local login banner
-	for line in "${content_locallogin[@]}"; do
-		echo "$line" | sudo tee -a "$file_path_locallogin" >/dev/null
-	done
-
-	# Create or append to the remote login banner
-	for line in "${content_remotelogin[@]}"; do
-		echo "$line" | sudo tee -a "$file_path_remotelogin" >/dev/null
-	done
-
-	# Verify if the files were created or appended successfully
-	if [ -f "$file_path_locallogin" ] && [ -f "$file_path_remotelogin" ]; then
-		echo "Files $file_path_locallogin', '$file_path_remotelogin' created/appended successfully."
-	else
-		echo "Failed to create/append to files '$file_path_locallogin' and or '$file_path_remotelogin'."
-	fi
-
+	echo "Configuring login banners (CIS 1.6.2, 1.6.3)"
+	
+	# CIS 1.6.2 - /etc/issue (use overwrite for idempotency)
+	echo "Authorized uses only. All activity may be monitored and reported." > /etc/issue
+	chmod 644 /etc/issue
+	chown root:root /etc/issue
+	
+	# CIS 1.6.3 - /etc/issue.net (use overwrite for idempotency)
+	echo "Authorized uses only. All activity may be monitored and reported." > /etc/issue.net
+	chmod 644 /etc/issue.net
+	chown root:root /etc/issue.net
+	
 	# Delete motd file
-	if [[ -f /etc/motd ]]; then rm /etc/motd; fi
-
+	[[ -f /etc/motd ]] && rm -f /etc/motd
+	
+	echo "Login banners configured successfully"
 	return 0
 }
 
@@ -1033,6 +1229,10 @@ cp /etc/os-release /etc/os-release.bak
 OS_FLAVOUR="linux"
 get_os
 upgrade_packages
+configure_sudo
+configure_umask
+configure_pam_ubuntu
+configure_aide_ubuntu
 harden_sysctl
 harden_ssh
 harden_boot
@@ -1052,4 +1252,5 @@ cleanup_cache
 
 mv /etc/os-release.bak /etc/os-release
 
+echo "CIS hardening completed successfully"
 exit 0
