@@ -49,6 +49,25 @@ update_config_files() {
 	return 0
 }
 
+##########################################################################
+#  Idempotent config update - removes old values and sets new one
+##########################################################################
+update_config_idempotent() {
+	local search_str="$1"
+	local new_value="$2"
+	local config_file="$3"
+
+	if [[ ! -f ${config_file} ]]; then
+		touch "${config_file}"
+	fi
+
+	# Remove all existing lines (commented or uncommented)
+	sed -i "/^[#[:space:]]*${search_str}/d" "${config_file}"
+
+	# Add the new value once
+	echo "${new_value}" >> "${config_file}"
+}
+
 
 ##########################################################################
 #  Determine the Operating system
@@ -782,6 +801,127 @@ harden_journald() {
 }
 
 ##########################################################################
+#  CIS 5.2.2, 5.2.3, 5.2.4 - Configure sudo hardening
+##########################################################################
+configure_sudo() {
+	echo "Configuring sudo hardening with idempotent sudoers.d files"
+
+	# CIS 5.2.2 - Sudo use pty
+	echo "Defaults use_pty" > /etc/sudoers.d/10-cis-pty
+	chmod 440 /etc/sudoers.d/10-cis-pty
+
+	# CIS 5.2.3 - Sudo log file
+	echo "Defaults logfile=/var/log/sudo.log" > /etc/sudoers.d/10-cis-logfile
+	chmod 440 /etc/sudoers.d/10-cis-logfile
+
+	# CIS 5.2.4 - Require password for escalation
+	cat > /etc/sudoers.d/10-cis-password << 'EOF'
+Defaults !targetpw
+Defaults !rootpw
+Defaults !runaspw
+EOF
+	chmod 440 /etc/sudoers.d/10-cis-password
+
+	echo "Sudo hardening configured successfully"
+	return 0
+}
+
+##########################################################################
+#  CIS 5.4.3.3 - Configure default umask
+##########################################################################
+configure_umask() {
+	echo "Configuring default umask to 027"
+	local umask_line="umask 027"
+
+	# Configure /etc/profile
+	if [[ -f /etc/profile ]]; then
+		if ! grep -q "^umask 027" /etc/profile; then
+			sed -i '/^umask/d' /etc/profile
+			echo "$umask_line" >> /etc/profile
+		fi
+	fi
+
+	# Configure /etc/bash.bashrc
+	if [[ -f /etc/bash.bashrc ]]; then
+		if ! grep -q "^umask 027" /etc/bash.bashrc; then
+			sed -i '/^umask/d' /etc/bash.bashrc
+			echo "$umask_line" >> /etc/bash.bashrc
+		fi
+	fi
+
+	# Configure /etc/profile.d/umask.sh
+	echo "$umask_line" > /etc/profile.d/umask.sh
+	chmod 644 /etc/profile.d/umask.sh
+
+	echo "Default umask configured"
+	return 0
+}
+
+##########################################################################
+#  Disable unnecessary services (Ubuntu only)
+##########################################################################
+disable_services() {
+	if [[ ${OS_FLAVOUR} == "ubuntu" ]]; then
+		echo "Masking apport crash reporting service"
+		systemctl stop apport.service 2>/dev/null || true
+		systemctl disable apport.service 2>/dev/null || true
+		systemctl mask apport.service 2>/dev/null || true
+
+		echo "Masking rpcbind service"
+		systemctl stop rpcbind.service 2>/dev/null || true
+		systemctl stop rpcbind.socket 2>/dev/null || true
+		systemctl disable rpcbind.service 2>/dev/null || true
+		systemctl disable rpcbind.socket 2>/dev/null || true
+		systemctl mask rpcbind.service 2>/dev/null || true
+		systemctl mask rpcbind.socket 2>/dev/null || true
+	fi
+
+	return 0
+}
+
+##########################################################################
+#  Restrict coredumps via systemd
+##########################################################################
+harden_coredump() {
+	echo "Restricting coredumps via systemd"
+	mkdir -p /etc/systemd/coredump.conf.d
+	cat > /etc/systemd/coredump.conf.d/disable-coredump.conf << EOF
+[Coredump]
+Storage=none
+ProcessSizeMax=0
+EOF
+
+	return 0
+}
+
+##########################################################################
+#  Configure NTP time synchronization (Ubuntu only)
+##########################################################################
+harden_ntp() {
+	if [[ ${OS_FLAVOUR} != "ubuntu" ]]; then
+		return 0
+	fi
+
+	echo "Configuring NTP time synchronization"
+
+	# Ensure systemd-timesyncd is enabled
+	systemctl enable systemd-timesyncd 2>/dev/null || true
+
+	# Configure timesyncd if config dir exists
+	if [[ -d /etc/systemd/timesyncd.conf.d ]] || mkdir -p /etc/systemd/timesyncd.conf.d; then
+		cat > /etc/systemd/timesyncd.conf.d/99-cis.conf << 'EOF'
+[Time]
+NTP=time.nist.gov
+FallbackNTP=pool.ntp.org
+EOF
+		chmod 644 /etc/systemd/timesyncd.conf.d/99-cis.conf
+		echo "NTP configuration updated"
+	fi
+
+	return 0
+}
+
+##########################################################################
 #  Login Banner
 ##########################################################################
 
@@ -1114,14 +1254,19 @@ cp /etc/os-release /etc/os-release.bak
 OS_FLAVOUR="linux"
 get_os
 upgrade_packages
+configure_sudo
+configure_umask
 harden_sysctl
 harden_ssh
 harden_boot
 harden_password_files
 harden_system
+disable_services
 remove_services
 disable_modules
+harden_coredump
 harden_journald
+harden_ntp
 harden_audit
 harden_banner
 harden_log
@@ -1130,4 +1275,5 @@ cleanup_cache
 
 mv /etc/os-release.bak /etc/os-release
 
+echo "CIS hardening completed successfully"
 exit 0
