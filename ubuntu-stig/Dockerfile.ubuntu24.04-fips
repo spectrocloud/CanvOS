@@ -139,6 +139,10 @@ RUN systemctl disable dhcpcd 2>/dev/null || true
 
 COPY overlay/ubuntu24.04/ /
 
+# OpenSCAP workaround: create dummy rpmrc so CPE/platform detection doesn't error on Ubuntu
+# (OpenSCAP expects RPM files; Debian/Ubuntu has none - causes "Unknown IO error" in scans)
+RUN mkdir -p /usr/lib/rpm && echo '# Dummy for OpenSCAP CPE on Debian/Ubuntu' > /usr/lib/rpm/rpmrc
+
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
   ln -sf "${kernel#/boot/}" /boot/vmlinuz
 # Create dummy dracut modules to satisfy dependencies
