@@ -51,6 +51,23 @@ To build an image with the **latest** STIG guide and remediation instead of the 
 
 2. **Option B – Pin a newer version**: Run `scripts/update-stig-content.sh v0.1.XX` with a newer ComplianceAsCode release before building.
 
+### Checking the Latest STIG Version
+
+To find the latest ComplianceAsCode release version before running the update script:
+
+```bash
+# Via GitHub API (requires jq)
+curl -s https://api.github.com/repos/ComplianceAsCode/content/releases/latest | jq -r .tag_name
+
+# Via git (no API)
+git ls-remote --tags https://github.com/ComplianceAsCode/content.git | tail -1 | sed 's|.*refs/tags/||'
+```
+
+Then run the update script with that version:
+```bash
+./scripts/update-stig-content.sh v0.1.XX
+```
+
 **Source**: [ComplianceAsCode/content releases](https://github.com/ComplianceAsCode/content/releases)
 
 ## Build Requirements
@@ -58,8 +75,6 @@ To build an image with the **latest** STIG guide and remediation instead of the 
 The update script (`scripts/update-stig-content.sh`) requires build dependencies:
 
 - **Ubuntu 24.04**: `apt install cmake make openscap-utils openscap-scanner python3 python3-pip libxml2-utils xsltproc`
-
-Check latest STIG version: `curl -s https://api.github.com/repos/ComplianceAsCode/content/releases/latest | jq -r '.tag_name'`
 
 ## Running OpenSCAP Scans (Post-Install)
 
