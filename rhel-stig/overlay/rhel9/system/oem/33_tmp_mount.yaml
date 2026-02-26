@@ -1,0 +1,10 @@
+name: " tmp layout setup"
+stages:
+  initramfs.after:
+    - name: mount tmp
+      commands:
+      - systemctl enable tmp.mount
+  fs.before:
+    - name: start tmp
+      commands:
+      - systemctl start tmp.mount
