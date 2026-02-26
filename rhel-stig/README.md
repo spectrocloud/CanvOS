@@ -101,6 +101,23 @@ To use the latest STIG guide and remediation instead of the pinned release:
 - The build will use system packages and generate remediation from the installed `scap-security-guide`
 - Or run `scripts/update-stig-content.sh v0.1.XX` with a newer version before building
 
+### Checking the Latest STIG Version
+
+To find the latest ComplianceAsCode release version before running the update script:
+
+```bash
+# Via GitHub API (requires jq)
+curl -s https://api.github.com/repos/ComplianceAsCode/content/releases/latest | jq -r .tag_name
+
+# Via git (no API)
+git ls-remote --tags https://github.com/ComplianceAsCode/content.git | tail -1 | sed 's|.*refs/tags/||'
+```
+
+Then run the update script with that version:
+```bash
+./scripts/update-stig-content.sh v0.1.XX
+```
+
 **Source**: [ComplianceAsCode/content releases](https://github.com/ComplianceAsCode/content/releases)
 
 **Update script requirements**: `cmake`, `make`, `openscap-utils`, `openscap-scanner`, `python3`, `pip`  
