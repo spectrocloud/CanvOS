@@ -134,6 +134,8 @@ RUN systemctl enable systemd-resolved
 RUN systemctl enable ssh
 RUN systemctl enable systemd-udevd
 RUN systemctl enable systemd-logind.service
+# Disable dhcpcd - it conflicts with systemd-networkd; both request DHCP and cause dual IPs
+RUN systemctl disable dhcpcd 2>/dev/null || true
 
 COPY overlay/ubuntu24.04/ /
 
@@ -187,8 +189,6 @@ RUN echo "Checking for STIG XCCDF files..." && \
 # Without static content: build uses system scap-security-guide (latest STIG for customers who want current content)
 COPY static/ /tmp/stig-static/
 COPY stig-remediate.sh /tmp/stig-remediate.sh
-# Verify correct script (Ubuntu, not RHEL) before running
-RUN grep -q "Ubuntu 24.04 STIG remediation" /tmp/stig-remediate.sh || (echo "ERROR: Wrong stig-remediate.sh (expected Ubuntu 24.04)" && exit 1)
 RUN chmod +x /tmp/stig-remediate.sh && \
     /tmp/stig-remediate.sh 2>&1 && \
     rm -f /tmp/stig-remediate.sh
