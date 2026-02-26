@@ -83,6 +83,11 @@ echo "Using STIG profile: $STIG_PROFILE"
 print_debug "Using STIG XCCDF file: $STIG_XCCDF"
 print_debug "Using STIG profile: $STIG_PROFILE"
 
+# Copy ds xml to log dir so compliance checks can run post-boot without copying
+STIG_DS_COPY="$LOG_DIR/$(basename "$STIG_XCCDF")"
+cp "$STIG_XCCDF" "$STIG_DS_COPY"
+print_debug "Copied STIG datastream to $STIG_DS_COPY for post-boot compliance scans"
+
 # Verify oscap is available
 if ! command -v oscap &> /dev/null; then
     print_debug "ERROR: oscap command not found"
