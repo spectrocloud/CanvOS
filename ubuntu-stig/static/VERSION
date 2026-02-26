@@ -1,4 +1,3 @@
 # STIG content version - pin for reproducible releases
-# Update via: bash scripts/update-stig-content.sh
 # Source: https://github.com/ComplianceAsCode/content/releases
 STIG_CONTENT_VERSION=v0.1.79
