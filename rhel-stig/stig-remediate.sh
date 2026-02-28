@@ -323,7 +323,7 @@ fi
 # STIG sets net.ipv4.ip_forward=0 for general servers; Kubernetes requires ip_forward=1 for CNI pod networking
 # Override STIG: remove ip_forward=0 and add ip_forward=1 (load order: use 99-zzz-* so it applies last)
 echo "Applying Kubernetes exception: net.ipv4.ip_forward=1 (required for pod networking)..."
-for f in /etc/sysctl.conf /etc/sysctl.d/*.conf /run/sysctl.d/*.conf /usr/local/lib/sysctl.d/*.conf 2>/dev/null; do
+for f in /etc/sysctl.conf /etc/sysctl.d/*.conf /run/sysctl.d/*.conf /usr/local/lib/sysctl.d/*.conf; do
     [ -f "$f" ] || continue
     [ "$(readlink -f "$f" 2>/dev/null)" = "/etc/sysctl.conf" ] && continue
     sed -i 's/^[[:space:]]*net\.ipv4\.ip_forward[[:space:]]*=[[:space:]]*0/# STIG exception: Kubernetes requires ip_forward for pod networking - &/' "$f" 2>/dev/null || true
