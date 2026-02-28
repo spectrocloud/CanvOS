@@ -139,6 +139,10 @@ The build process automatically applies STIG remediation rules including:
 - Firewall rules (with Palette-compatible exceptions)
 - System hardening settings
 
+### Kubernetes Exceptions (STIG Overrides)
+
+STIG disables `net.ipv4.ip_forward` for general servers. Kubernetes nodes require `ip_forward=1` for CNI pod networking (Calico, Flannel, etc.). The build overrides this STIG rule and sets `net.ipv4.ip_forward=1` via `/etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf`.
+
 ### Firewall Configuration
 
 STIG requires strict firewall rules, but Palette cluster operations require specific ports to be open. The build process creates a custom firewall zone template (`/etc/firewalld/zones/k8s.xml`) that includes:

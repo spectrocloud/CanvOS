@@ -320,6 +320,21 @@ if [ -f /etc/sysctl.conf ]; then
     sed -i 's/^kernel\.modules_disabled.*/# STIG exception: kernel.modules_disabled delayed for Kairos boot\n# &/' /etc/sysctl.conf || true
 fi
 
+# STIG sets net.ipv4.ip_forward=0 for general servers; Kubernetes requires ip_forward=1 for CNI pod networking
+# Override STIG: remove ip_forward=0 and add ip_forward=1 (load order: use 99-zzz-* so it applies last)
+echo "Applying Kubernetes exception: net.ipv4.ip_forward=1 (required for pod networking)..."
+for f in /etc/sysctl.conf /etc/sysctl.d/*.conf /run/sysctl.d/*.conf /usr/local/lib/sysctl.d/*.conf 2>/dev/null; do
+    [ -f "$f" ] || continue
+    [ "$(readlink -f "$f" 2>/dev/null)" = "/etc/sysctl.conf" ] && continue
+    sed -i 's/^[[:space:]]*net\.ipv4\.ip_forward[[:space:]]*=[[:space:]]*0/# STIG exception: Kubernetes requires ip_forward for pod networking - &/' "$f" 2>/dev/null || true
+done
+mkdir -p /etc/sysctl.d
+cat > /etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf <<'EOF'
+# Kubernetes exception: STIG disables ip_forward; Kubernetes/CNI requires it for pod networking
+net.ipv4.ip_forward = 1
+EOF
+print_debug "Created /etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf (net.ipv4.ip_forward=1)"
+
 # Ensure required drivers and modules are in dracut config (backup in case STIG removed them)
 for conf_file in /etc/dracut.conf.d/*.conf; do
     if [ -f "$conf_file" ]; then
