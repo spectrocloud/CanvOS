@@ -895,33 +895,6 @@ EOF
 }
 
 ##########################################################################
-#  Configure NTP time synchronization (Ubuntu only)
-##########################################################################
-harden_ntp() {
-	if [[ ${OS_FLAVOUR} != "ubuntu" ]]; then
-		return 0
-	fi
-
-	echo "Configuring NTP time synchronization"
-
-	# Ensure systemd-timesyncd is enabled
-	systemctl enable systemd-timesyncd 2>/dev/null || true
-
-	# Configure timesyncd if config dir exists
-	if [[ -d /etc/systemd/timesyncd.conf.d ]] || mkdir -p /etc/systemd/timesyncd.conf.d; then
-		cat > /etc/systemd/timesyncd.conf.d/99-cis.conf << 'EOF'
-[Time]
-NTP=time.nist.gov
-FallbackNTP=pool.ntp.org
-EOF
-		chmod 644 /etc/systemd/timesyncd.conf.d/99-cis.conf
-		echo "NTP configuration updated"
-	fi
-
-	return 0
-}
-
-##########################################################################
 #  Login Banner
 ##########################################################################
 
@@ -1266,7 +1239,6 @@ remove_services
 disable_modules
 harden_coredump
 harden_journald
-harden_ntp
 harden_audit
 harden_banner
 harden_log
