@@ -31,8 +31,6 @@ ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.7.1
 ARG KUBEADM_PROVIDER_VERSION=v4.7.3
-# Custom provider image override (set to override default provider-kubeadm image)
-ARG CUSTOM_KUBEADM_PROVIDER_IMAGE=
 ARG RKE2_PROVIDER_VERSION=v4.8.1
 ARG NODEADM_PROVIDER_VERSION=v4.6.0
 ARG CANONICAL_PROVIDER_VERSION=v1.3.0
@@ -660,17 +658,9 @@ stylus-package-image:
 
 kairos-provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-        IF [ -n "$CUSTOM_KUBEADM_PROVIDER_IMAGE" ]
-            ARG PROVIDER_BASE=$CUSTOM_KUBEADM_PROVIDER_IMAGE
-        ELSE
-            ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
-        END
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ]
-        IF [ -n "$CUSTOM_KUBEADM_PROVIDER_IMAGE" ]
-            ARG PROVIDER_BASE=$CUSTOM_KUBEADM_PROVIDER_IMAGE
-        ELSE
-            ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
-        END
+        ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-kubeadm:$KUBEADM_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-k3s:$K3S_PROVIDER_VERSION
     ELSE IF [ "$K8S_DISTRIBUTION" = "rke2" ] && $FIPS_ENABLED
