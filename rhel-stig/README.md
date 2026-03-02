@@ -101,6 +101,23 @@ To use the latest STIG guide and remediation instead of the pinned release:
 - The build will use system packages and generate remediation from the installed `scap-security-guide`
 - Or run `scripts/update-stig-content.sh v0.1.XX` with a newer version before building
 
+### Checking the Latest STIG Version
+
+To find the latest ComplianceAsCode release version before running the update script:
+
+```bash
+# Via GitHub API (requires jq)
+curl -s https://api.github.com/repos/ComplianceAsCode/content/releases/latest | jq -r .tag_name
+
+# Via git (no API)
+git ls-remote --tags https://github.com/ComplianceAsCode/content.git | tail -1 | sed 's|.*refs/tags/||'
+```
+
+Then run the update script with that version:
+```bash
+./scripts/update-stig-content.sh v0.1.XX
+```
+
 **Source**: [ComplianceAsCode/content releases](https://github.com/ComplianceAsCode/content/releases)
 
 **Update script requirements**: `cmake`, `make`, `openscap-utils`, `openscap-scanner`, `python3`, `pip`  
@@ -121,6 +138,10 @@ The build process automatically applies STIG remediation rules including:
 - Audit configuration
 - Firewall rules (with Palette-compatible exceptions)
 - System hardening settings
+
+### Kubernetes Exceptions (STIG Overrides)
+
+STIG disables `net.ipv4.ip_forward` for general servers. Kubernetes nodes require `ip_forward=1` for CNI pod networking (Calico, Flannel, etc.). The build overrides this STIG rule and sets `net.ipv4.ip_forward=1` via `/etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf`.
 
 ### Firewall Configuration
 
@@ -191,19 +212,41 @@ install:
 - You must add `selinux=0`. SELinux is not supported yet and must be explicitly disabled
 - Red Hat subscription is required for access to FIPS-compliant packages
 
-## Verify STIG Compliance
+## Running OpenSCAP Scans (Post-Install)
 
-After installation, you can verify STIG compliance by running:
+To run a scan on a deployed node:
 
 ```bash
-# Check STIG profile compliance
-oscap xccdf eval --profile xccdf_org.ssgproject.content_profile_stig \
-  --results stig-results.xml \
-  /usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml
+# The ds xml is copied to the stig-remediation log dir during build (e.g. ssg-rhel9-ds.xml)
+XCCDF="/var/log/stig-remediation/ssg-rhel9-ds.xml"
 
-# Generate HTML report
-oscap xccdf generate report stig-results.xml > stig-report.html
+oscap xccdf eval --profile xccdf_org.ssgproject.content_profile_stig \
+  --report report.html "$XCCDF"
 ```
+
+### Known OpenSCAP Errors
+
+You may see these non-fatal errors; the scan still completes and produces results:
+
+- **"Unknown IO error" / "cpelang_priv.c"** – OpenSCAP's CPE (Common Platform Enumeration) code path can emit these errors during platform detection. This occurs on both RHEL and Ubuntu. The scan completes and produces valid results.
+
+### Expected Scan Results for Minimal Edge Images
+
+For a minimal Kairos/edge image, many STIG rules will **fail** or be **notapplicable** by design:
+
+| Category | Reason |
+|----------|--------|
+| **AIDE** | File integrity monitoring not typically used on edge nodes |
+| **FIPS** | Only for FIPS-enabled build; non-FIPS image will fail FIPS checks |
+| **Mount options** | `/tmp`, `/var/log`, `/dev/shm`, etc. – Kairos layout differs from traditional partitioning |
+| **GRUB** | `init_on_free`, PTI, vsyscall, password – require kernel/GRUB changes |
+| **Packages** | chrony, cron, fapolicyd, postfix, s-nail, nfs-utils, usbguard, libreswan |
+| **Partitions** | `/var/log/audit`, `/var/tmp` – edge layout may not match STIG expectations |
+| **User namespaces** | `sysctl_user_max_user_namespaces` – may conflict with containers |
+| **SELinux** | Policy configuration (e.g. `selinux_context_elevation_for_sudo`) |
+| **Firewall** | SSH firewalld exception – environment-specific |
+
+The remediation script applies rules that are safe for Kubernetes edge nodes. Rules that fail on scan often require environment-specific configuration or packages not suitable for minimal edge.
 
 ## Verify FIPS is Enabled (FIPS variant only)
 

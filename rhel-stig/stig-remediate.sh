@@ -83,6 +83,11 @@ echo "Using STIG profile: $STIG_PROFILE"
 print_debug "Using STIG XCCDF file: $STIG_XCCDF"
 print_debug "Using STIG profile: $STIG_PROFILE"
 
+# Copy ds xml to log dir so compliance checks can run post-boot without copying
+STIG_DS_COPY="$LOG_DIR/$(basename "$STIG_XCCDF")"
+cp "$STIG_XCCDF" "$STIG_DS_COPY"
+print_debug "Copied STIG datastream to $STIG_DS_COPY for post-boot compliance scans"
+
 # Verify oscap is available
 if ! command -v oscap &> /dev/null; then
     print_debug "ERROR: oscap command not found"
@@ -315,6 +320,44 @@ if [ -f /etc/sysctl.conf ]; then
     sed -i 's/^kernel\.modules_disabled.*/# STIG exception: kernel.modules_disabled delayed for Kairos boot\n# &/' /etc/sysctl.conf || true
 fi
 
+# STIG sets net.ipv4.ip_forward=0 and net.ipv4.conf.all.forwarding=0; Kubernetes requires both=1
+echo "Applying Kubernetes exception: net.ipv4.ip_forward=1 and net.ipv4.conf.all.forwarding=1 (required for pod networking)..."
+
+shopt -s nullglob
+for f in /etc/sysctl.conf /etc/sysctl.d/*.conf /run/sysctl.d/*.conf /usr/local/lib/sysctl.d/*.conf /usr/lib/sysctl.d/*.conf; do
+    [ -f "$f" ] || continue
+    # Comment out existing settings (preserve original line)
+    sed -i \
+        -e 's/^[[:space:]]*net\.ipv4\.ip_forward[[:space:]]*=.*$/# STIG exception (Kubernetes requires ip_forward=1): &/' \
+        -e 's/^[[:space:]]*net\.ipv4\.conf\.all\.forwarding[[:space:]]*=.*$/# STIG exception (Kubernetes requires forwarding=1): &/' \
+        "$f" 2>/dev/null || true
+done
+shopt -u nullglob 2>/dev/null || true
+
+mkdir -p /etc/sysctl.d
+cat > /etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf <<'EOF'
+# Kubernetes exception: STIG disables ip_forward; Kubernetes/CNI requires it for pod networking
+net.ipv4.ip_forward = 1
+net.ipv4.conf.all.forwarding = 1
+EOF
+
+# Set safe ownership/mode
+chown root:root /etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf
+chmod 0644 /etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf
+
+# Apply now and re-check (retry a few times in short loop to beat races)
+for i in 1 2 3; do
+    /sbin/sysctl -w net.ipv4.ip_forward=1 2>/dev/null || true
+    /sbin/sysctl -w net.ipv4.conf.all.forwarding=1 2>/dev/null || true
+    /sbin/sysctl --system 2>/dev/null || true
+    sleep 0.5
+done
+
+# verify
+current=$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo "MISSING")
+current_all=$(cat /proc/sys/net/ipv4/conf/all/forwarding 2>/dev/null || echo "MISSING")
+print_debug "Runtime after apply: net.ipv4.ip_forward=$current net.ipv4.conf.all.forwarding=$current_all"
+
 # Ensure required drivers and modules are in dracut config (backup in case STIG removed them)
 for conf_file in /etc/dracut.conf.d/*.conf; do
     if [ -f "$conf_file" ]; then
@@ -426,5 +469,4 @@ print_debug "These logs will persist in /var/log/stig-remediation/ after install
 
 # Always exit successfully to not fail Docker build
 exit 0
-
 
