@@ -12,7 +12,7 @@ on:
         description: "Kairos Init Image"
         required: false
         type: string
-        default: "quay.io/kairos/kairos-init:v0.5.28"
+        default: "quay.io/kairos/kairos-init:v0.7.1"
       arch:
         description: "Architecture"
         required: false
@@ -30,7 +30,7 @@ on:
         description: "Kairos Version"
         required: false
         type: string
-        default: "v3.5.9"
+        default: "v4.0.1"
       trusted_boot:
         description: "Trusted Boot"
         required: false
@@ -40,7 +40,7 @@ on:
         description: "Registry prefix for output images"
         required: false
         type: string
-        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-6616/edge"
+        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8215/edge"
 
 jobs:
   generate-matrix:
