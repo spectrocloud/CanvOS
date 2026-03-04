@@ -21,11 +21,11 @@ ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.8.10
-ARG KAIROS_VERSION=v4.0.1
+ARG KAIROS_VERSION=v3.5.9
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.402.0
+ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
@@ -872,7 +872,7 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
-
+    
 
     IF [ "$IS_UKI" = "false" ]
         COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
@@ -909,7 +909,7 @@ iso-image:
         RUN mkdir -p /opt/spectrocloud/scripts
         COPY cloudconfigs/maas-content.sh /opt/spectrocloud/scripts/maas-content.sh
         RUN chmod 755 /opt/spectrocloud/scripts/maas-content.sh
-
+        
         # Add local-ui if provided (extract it directly to the image)
         COPY --if-exists local-ui.tar /opt/spectrocloud/
         RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
@@ -1018,7 +1018,7 @@ aws-cloud-image:
 
     RUN apt-get update && apt-get install -y unzip ca-certificates curl
     RUN curl --fail -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-        unzip -q awscliv2.zip -d aws_install_temp && \
+        unzip -q awscliv2.zip -d aws_install_temp && \  
         ./aws_install_temp/aws/install && \
         rm -rf awscliv2.zip aws_install_temp
 
@@ -1057,7 +1057,7 @@ iso-disk-image:
 # This target converts the installer image to a raw disk image using auroraboot
 kairos-raw-image:
     FROM --platform=linux/amd64 --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
-
+    
     # Copy user-data if it exists (for embedded userdata in MAAS builds)
     COPY --if-exists +validate-user-data/user-data /workdir/user-data
 
@@ -1140,7 +1140,7 @@ kairos-raw-image:
             cp "$RAW_IMG" /kairos.raw && \
             echo "✅ Kairos raw image created: /kairos.raw"
     END
-
+    
     SAVE ARTIFACT /kairos.raw AS LOCAL ./build/
 
 go-deps:
