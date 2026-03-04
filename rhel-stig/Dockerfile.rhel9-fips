@@ -1,9 +1,9 @@
-FROM quay.io/kairos/kairos-init:v0.7.1 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
 FROM registry.access.redhat.com/ubi9-init:9.4-6
 
 ARG USERNAME
 ARG PASSWORD
-ARG KAIROS_VERSION=v4.0.1
+ARG KAIROS_VERSION=v3.5.9
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
