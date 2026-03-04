@@ -1,0 +1,22 @@
+ARG ALPINE_BASE_IMAGE
+
+FROM ${ALPINE_BASE_IMAGE} AS alpine-base
+
+RUN apk add --no-cache bash curl jq ca-certificates upx
+
+
+FROM alpine-base AS alpine
+
+# In FIPS mode, this may fail due to OpenSSL FIPS constraints.
+RUN update-ca-certificates || true
+
+
+FROM alpine-base AS alpine-certs
+
+# Use bind mount to conditionally copy certs without adding to image layers
+# Note: update-ca-certificates may fail in FIPS mode due to OpenSSL constraints
+RUN --mount=type=bind,target=/build-context \
+    if [ -d "/build-context/certs" ]; then \
+        cp -r /build-context/certs/. /etc/ssl/certs/; \
+    fi && \
+    update-ca-certificates || true

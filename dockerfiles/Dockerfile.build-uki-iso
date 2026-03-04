@@ -1,0 +1,90 @@
+ARG AURORABOOT_IMAGE
+FROM ${AURORABOOT_IMAGE} AS builder
+
+ARG ARCH
+ARG ISO_NAME
+ARG CLUSTERCONFIG
+ARG EDGE_CUSTOM_CONFIG
+ARG AUTO_ENROLL_SECUREBOOT_KEYS
+ARG DEBUG=false
+ARG CMDLINE
+ARG BRANDING="Palette eXtended Kubernetes Edge"
+
+ENV ISO_NAME=${ISO_NAME}
+
+COPY overlay/files-iso/ /overlay/
+
+COPY --from=validate-user-data /validated /overlay/
+
+COPY --from=stylus-image-pack /stylus-image.tar /overlay/stylus-image.tar
+
+COPY --from=third-party-luet /WORKDIR/luet /overlay/luet
+
+COPY --from=iso-image / /iso-source/
+
+RUN --mount=type=bind,target=/build-context \
+    mkdir -p /overlay/opt/spectrocloud/content && \
+    for dir in /build-context/content-*/; do \
+        [ -d "$dir" ] && cp "$dir"*.zst /overlay/opt/spectrocloud/content/ 2>/dev/null || true; \
+    done && \
+    if [ -n "$EDGE_CUSTOM_CONFIG" ] && [ -f /build-context/"$EDGE_CUSTOM_CONFIG" ]; then \
+        cp /build-context/"$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml; \
+    fi && \
+    if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
+        for file in /overlay/opt/spectrocloud/content/*.zst; do \
+            split --bytes=3GB --numeric-suffixes "$file" /overlay/opt/spectrocloud/content/$(basename "$file")_part; \
+        done; \
+        rm -f /overlay/opt/spectrocloud/content/*.zst; \
+    fi && \
+    if [ -n "$CLUSTERCONFIG" ] && [ -f /build-context/"$CLUSTERCONFIG" ]; then \
+        mkdir -p /overlay/opt/spectrocloud/clusterconfig && \
+        cp /build-context/"$CLUSTERCONFIG" /overlay/opt/spectrocloud/clusterconfig/spc.tgz; \
+    fi
+
+# For UKI: move local-ui from squashfs to overlay to reduce EFI size
+RUN if [ -d /iso-source/opt/spectrocloud/local-ui ]; then \
+        mkdir -p /overlay/opt/spectrocloud && \
+        mv /iso-source/opt/spectrocloud/local-ui /overlay/opt/spectrocloud/ ; \
+    fi
+
+COPY secure-boot/enrollment/ /keys/
+
+RUN --mount=type=secret,id=db_key,target=/keys/db.key \
+    --mount=type=secret,id=db_pem,target=/keys/db.pem \
+    --mount=type=secret,id=kek_key,target=/keys/KEK.key \
+    --mount=type=secret,id=kek_pem,target=/keys/KEK.pem \
+    --mount=type=secret,id=pk_key,target=/keys/PK.key \
+    --mount=type=secret,id=pk_pem,target=/keys/PK.pem \
+    --mount=type=secret,id=tpm2_pcr_private,target=/keys/tpm2-pcr-private.pem \
+    mkdir -p /iso && \
+    if [ "$ARCH" = "arm64" ]; then \
+        /usr/bin/auroraboot \
+            $([ "$DEBUG" = "true" ] && echo "--debug") \
+            build-iso \
+            --output /iso \
+            --override-name "${ISO_NAME}" \
+            --overlay-iso /overlay \
+            dir:/iso-source; \
+    elif [ "$ARCH" = "amd64" ]; then \
+        /usr/bin/auroraboot \
+            $([ "$DEBUG" = "true" ] && echo "--debug") \
+            build-uki \
+            --output-type iso \
+            --name "${ISO_NAME}" \
+            --output-dir /iso \
+            --overlay-iso /overlay \
+            --public-keys /keys \
+            --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+            --sb-key /keys/db.key \
+            --sb-cert /keys/db.pem \
+            --boot-branding "${BRANDING}" \
+            $([ -n "$CMDLINE" ] && echo "--extend-cmdline $CMDLINE") \
+            $([ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ] && echo "--secure-boot-enroll force") \
+            dir:/iso-source; \
+    fi
+
+RUN cd /iso && \
+    sha256sum "${ISO_NAME}.iso" > "${ISO_NAME}.iso.sha256"
+
+FROM scratch AS output
+COPY --from=builder /iso/ /

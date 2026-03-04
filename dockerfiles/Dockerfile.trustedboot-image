@@ -1,0 +1,34 @@
+ARG AURORABOOT_IMAGE
+ARG DEBUG=false
+
+FROM provider-image AS provider-image-rootfs
+
+FROM ${AURORABOOT_IMAGE} AS builder
+
+COPY --from=provider-image-rootfs / /build/image/
+
+COPY secure-boot/enrollment/ /keys/
+
+RUN mkdir -p /output
+
+RUN --mount=type=secret,id=db_key,target=/keys/db.key \
+    --mount=type=secret,id=db_pem,target=/keys/db.pem \
+    --mount=type=secret,id=kek_key,target=/keys/KEK.key \
+    --mount=type=secret,id=kek_pem,target=/keys/KEK.pem \
+    --mount=type=secret,id=pk_key,target=/keys/PK.key \
+    --mount=type=secret,id=pk_pem,target=/keys/PK.pem \
+    --mount=type=secret,id=tpm2_pcr_private,target=/keys/tpm2-pcr-private.pem \
+    /usr/bin/auroraboot \
+        $([ "$DEBUG" = "true" ] && echo "--debug") \
+        build-uki \
+        --output-dir /output \
+        --public-keys /keys \
+        --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+        --sb-key /keys/db.key \
+        --sb-cert /keys/db.pem \
+        --output-type container \
+        --boot-branding "Palette eXtended Kubernetes Edge" \
+        dir:/build/image
+
+FROM scratch AS output
+COPY --from=builder /output/ /
