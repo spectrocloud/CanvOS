@@ -41,6 +41,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   systemd-resolved \
   parted \
   gdisk \
+  cloud-utils-growpart \
   dracut \
   e2fsprogs \
   dosfstools \
