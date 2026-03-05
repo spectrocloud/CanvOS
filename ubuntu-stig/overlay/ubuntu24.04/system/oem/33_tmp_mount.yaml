@@ -1,0 +1,8 @@
+name: "Tmp mount"
+stages:
+  boot:
+    - name: "Mount tmp"
+      if: "[ ! -d /tmp ]"
+      commands:
+        - mkdir -p /tmp
+        - mount -t tmpfs tmpfs /tmp -o nodev,nosuid,noexec,size=1G
