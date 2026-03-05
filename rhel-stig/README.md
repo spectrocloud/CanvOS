@@ -145,25 +145,9 @@ STIG disables `net.ipv4.ip_forward` and `net.ipv4.conf.all.forwarding` for gener
 
 ### Firewall Configuration
 
-STIG requires strict firewall rules, but Palette cluster operations require specific ports to be open. The build process creates a custom firewall zone (`/etc/firewalld/zones/k8s.xml`) and sets it as the **default zone** so the primary interface is assigned to it automatically (avoids the public zone blocking k8s ports).
+No firewall ports or zones are opened by default. Configure firewall rules via **user-data** or **cluster profile** as needed for your environment.
 
-**Required Ports for Kubernetes:**
-- **6443/tcp**: Kubernetes API server
-- **2379-2380/tcp**: etcd server client API
-- **10250/tcp**: Kubelet API
-- **10259/tcp**: kube-scheduler
-- **10257/tcp**: kube-controller-manager
-- **30000-32767/tcp,udp**: NodePort Services
-- **8472/udp**: Flannel VXLAN
-- **4789/udp**, **12345/udp**: VXLAN overlay (required for registration mode)
-- **179/tcp**: Calico BGP
-- **6783-6784/tcp,udp**: Weave Net
-
-**Note**: Firewall rules must be configured at runtime via cloud-init/user-data. The base image includes the zone template and sets k8s as default zone.
-
-### Runtime Firewall Configuration
-
-To configure firewall at runtime, add the following to your `user-data`:
+**Example – Kubernetes ports via user-data:**
 
 ```yaml
 #cloud-config
@@ -192,29 +176,7 @@ stages:
         - firewall-cmd --reload
 ```
 
-### Adding Custom Ports (Apps, CSI, etc.)
-
-The base image already has the k8s zone with Kubernetes ports. To add ports for your applications or storage (Longhorn, Rook-Ceph, etc.), use `firewall-cmd --permanent --zone=k8s --add-port` in your cloud-init. The `--add-port` adds to the zone; it does not replace existing rules.
-
-```yaml
-#cloud-config
-stages:
-  boot.after:
-    - name: Add custom firewall ports for CSI and apps
-      commands:
-        # Longhorn
-        - firewall-cmd --permanent --zone=k8s --add-port=9500-9504/tcp
-        # Rook-Ceph
-        - firewall-cmd --permanent --zone=k8s --add-port=6789/tcp
-        - firewall-cmd --permanent --zone=k8s --add-port=6800-7300/tcp
-        # Your app
-        - firewall-cmd --permanent --zone=k8s --add-port=8080/tcp
-        - firewall-cmd --reload
-```
-
-You can add this as a separate stage or merge it into the base firewall configuration stage above.
-
-**Common CSI / storage ports:**
+**Adding ports for CSI (Longhorn, Rook-Ceph, etc.):**
 
 | Component   | Ports                    |
 |------------|---------------------------|
@@ -223,7 +185,7 @@ You can add this as a separate stage or merge it into the base firewall configur
 | OpenEBS    | 3260/tcp (iSCSI), 9001/tcp |
 | NFS client | 2049/tcp, 111/tcp, 20048/tcp |
 
-**Alternative:** Create a custom firewalld service (e.g. `/etc/firewalld/services/longhorn.xml`) and add it with `--add-service=longhorn`, or use a separate boot stage that runs after the base firewall setup.
+Use `firewall-cmd --permanent --zone=k8s --add-port=<port>/<protocol>` for additional ports.
 
 ## FIPS Mode
 

@@ -95,8 +95,8 @@ RUN systemctl enable systemd-udevd
 RUN systemctl unmask systemd-logind.service
 RUN systemctl enable systemd-logind.service
 
-# Run init stage (initrd, services, workarounds, cleanup) - install stage already ran with packages skipped
-RUN /kairos-init -l debug -s init --fips --version "${KAIROS_VERSION}"
+# Run init stage; skip cleanup (removes dracut/squashfs needed for boot)
+RUN /kairos-init -l debug -s init --fips --version "${KAIROS_VERSION}" --skip-step cleanup
 
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all

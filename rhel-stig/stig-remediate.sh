@@ -409,66 +409,9 @@ else
     print_debug "WARNING: Remediation script not found for saving (may have been deleted earlier)"
 fi
 
-# Apply firewall rules that are compatible with Palette cluster operations
-# STIG requires strict firewall, but we need to allow Kubernetes networking
-echo "Configuring firewall rules for Palette compatibility..."
-
-mkdir -p /etc/firewalld/services
-mkdir -p /etc/firewalld/zones
-
-# Create k8s zone with required ports; set as default so primary interface is assigned automatically
-cat > /etc/firewalld/zones/k8s.xml <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<zone>
-  <short>Kubernetes</short>
-  <description>Zone for Kubernetes cluster networking</description>
-  <service name="ssh"/>
-  <service name="dhcpv6-client"/>
-  <!-- Kubernetes API server -->
-  <port protocol="tcp" port="6443"/>
-  <!-- etcd server client API -->
-  <port protocol="tcp" port="2379-2380"/>
-  <!-- Kubelet API -->
-  <port protocol="tcp" port="10250"/>
-  <!-- kube-scheduler -->
-  <port protocol="tcp" port="10259"/>
-  <!-- kube-controller-manager -->
-  <port protocol="tcp" port="10257"/>
-  <!-- NodePort Services -->
-  <port protocol="tcp" port="30000-32767"/>
-  <port protocol="udp" port="30000-32767"/>
-  <!-- Flannel VXLAN -->
-  <port protocol="udp" port="8472"/>
-  <!-- VXLAN overlay (required for registration mode) -->
-  <port protocol="udp" port="4789"/>
-  <port protocol="udp" port="12345"/>
-  <!-- Calico BGP -->
-  <port protocol="tcp" port="179"/>
-  <!-- Calico IP-in-IP -->
-  <protocol value="ipip"/>
-  <!-- Weave Net -->
-  <port protocol="tcp" port="6783"/>
-  <port protocol="udp" port="6783-6784"/>
-</zone>
-EOF
-
-# Set k8s as default zone so primary interface is assigned to it (avoids public zone blocking k8s ports)
-mkdir -p /etc/firewalld
-if [ -f /etc/firewalld/firewalld.conf ]; then
-    if grep -q '^DefaultZone=' /etc/firewalld/firewalld.conf 2>/dev/null; then
-        sed -i 's/^DefaultZone=.*/DefaultZone=k8s/' /etc/firewalld/firewalld.conf
-    else
-        echo 'DefaultZone=k8s' >> /etc/firewalld/firewalld.conf
-    fi
-else
-    echo 'DefaultZone=k8s' > /etc/firewalld/firewalld.conf
-fi
-print_debug "Set firewalld DefaultZone=k8s (primary interface will use k8s zone)"
-
+# Firewall: no default ports/zones - customers configure via user-data or cluster profile
 echo "STIG remediation completed"
 echo "NOTE: Some rules requiring downloads or network access were skipped (expected in container builds)"
-echo "NOTE: Firewall rules will need to be configured at runtime for Palette cluster operations"
-echo "See README.md for required firewall exceptions"
 print_debug "STIG remediation completed successfully"
 print_debug "STIG remediation logs saved to: $LOG_DIR"
 print_debug "Available log files:"
