@@ -141,11 +141,11 @@ The build process automatically applies STIG remediation rules including:
 
 ### Kubernetes Exceptions (STIG Overrides)
 
-STIG disables `net.ipv4.ip_forward` for general servers. Kubernetes nodes require `ip_forward=1` for CNI pod networking (Calico, Flannel, etc.). The build overrides this STIG rule and sets `net.ipv4.ip_forward=1` via `/etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf`.
+STIG disables `net.ipv4.ip_forward` and `net.ipv4.conf.all.forwarding` for general servers. Kubernetes nodes require both `=1` for CNI pod networking (Calico, Flannel, etc.). The build overrides STIG via `/etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf` and applies it during build.
 
 ### Firewall Configuration
 
-STIG requires strict firewall rules, but Palette cluster operations require specific ports to be open. The build process creates a custom firewall zone template (`/etc/firewalld/zones/k8s.xml`) that includes:
+STIG requires strict firewall rules, but Palette cluster operations require specific ports to be open. The build process creates a custom firewall zone (`/etc/firewalld/zones/k8s.xml`) and sets it as the **default zone** so the primary interface is assigned to it automatically (avoids the public zone blocking k8s ports).
 
 **Required Ports for Kubernetes:**
 - **6443/tcp**: Kubernetes API server
@@ -155,10 +155,11 @@ STIG requires strict firewall rules, but Palette cluster operations require spec
 - **10257/tcp**: kube-controller-manager
 - **30000-32767/tcp,udp**: NodePort Services
 - **8472/udp**: Flannel VXLAN
+- **4789/udp**, **12345/udp**: VXLAN overlay (required for registration mode)
 - **179/tcp**: Calico BGP
 - **6783-6784/tcp,udp**: Weave Net
 
-**Note**: Firewall rules must be configured at runtime via cloud-init/user-data. The base image includes a template but does not activate firewall rules during build to avoid breaking the build process.
+**Note**: Firewall rules must be configured at runtime via cloud-init/user-data. The base image includes the zone template and sets k8s as default zone.
 
 ### Runtime Firewall Configuration
 
@@ -181,6 +182,8 @@ stages:
         - firewall-cmd --permanent --zone=k8s --add-port=30000-32767/tcp
         - firewall-cmd --permanent --zone=k8s --add-port=30000-32767/udp
         - firewall-cmd --permanent --zone=k8s --add-port=8472/udp
+        - firewall-cmd --permanent --zone=k8s --add-port=4789/udp
+        - firewall-cmd --permanent --zone=k8s --add-port=12345/udp
         - firewall-cmd --permanent --zone=k8s --add-port=179/tcp
         - firewall-cmd --permanent --zone=k8s --add-port=6783-6784/tcp
         - firewall-cmd --permanent --zone=k8s --add-port=6783-6784/udp
@@ -188,6 +191,39 @@ stages:
         - firewall-cmd --set-default-zone=k8s
         - firewall-cmd --reload
 ```
+
+### Adding Custom Ports (Apps, CSI, etc.)
+
+The base image already has the k8s zone with Kubernetes ports. To add ports for your applications or storage (Longhorn, Rook-Ceph, etc.), use `firewall-cmd --permanent --zone=k8s --add-port` in your cloud-init. The `--add-port` adds to the zone; it does not replace existing rules.
+
+```yaml
+#cloud-config
+stages:
+  boot.after:
+    - name: Add custom firewall ports for CSI and apps
+      commands:
+        # Longhorn
+        - firewall-cmd --permanent --zone=k8s --add-port=9500-9504/tcp
+        # Rook-Ceph
+        - firewall-cmd --permanent --zone=k8s --add-port=6789/tcp
+        - firewall-cmd --permanent --zone=k8s --add-port=6800-7300/tcp
+        # Your app
+        - firewall-cmd --permanent --zone=k8s --add-port=8080/tcp
+        - firewall-cmd --reload
+```
+
+You can add this as a separate stage or merge it into the base firewall configuration stage above.
+
+**Common CSI / storage ports:**
+
+| Component   | Ports                    |
+|------------|---------------------------|
+| Longhorn   | 9500-9504/tcp             |
+| Rook-Ceph  | 6789/tcp, 6800-7300/tcp   |
+| OpenEBS    | 3260/tcp (iSCSI), 9001/tcp |
+| NFS client | 2049/tcp, 111/tcp, 20048/tcp |
+
+**Alternative:** Create a custom firewalld service (e.g. `/etc/firewalld/services/longhorn.xml`) and add it with `--add-service=longhorn`, or use a separate boot stage that runs after the base firewall setup.
 
 ## FIPS Mode
 

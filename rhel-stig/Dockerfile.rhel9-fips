@@ -21,10 +21,12 @@ COPY overlay/rhel9/ /
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
+# Run install stage with installPackages skipped; we install all packages in one dnf run below
 COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
+RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}" --skip-step installPackages
 
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+# Single dnf install: base + STIG packages (avoids duplicate install with kairos-init)
 RUN uuidgen > /etc/machine-id && dnf install -y \
   squashfs-tools \
   dracut-live \
@@ -93,6 +95,8 @@ RUN systemctl enable systemd-udevd
 RUN systemctl unmask systemd-logind.service
 RUN systemctl enable systemd-logind.service
 
+# Run init stage (initrd, services, workarounds, cleanup) - install stage already ran with packages skipped
+RUN /kairos-init -l debug -s init --fips --version "${KAIROS_VERSION}"
 
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all

@@ -13,11 +13,14 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
   && yum repolist
 
-RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug --version "${KAIROS_VERSION}" -m "generic" -t "false"
+# Run install stage with installPackages skipped; we install all packages in one dnf run below
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s install --version "${KAIROS_VERSION}" -m "generic" -t "false" --skip-step installPackages
 
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+# Single dnf install: base + STIG packages (avoids duplicate install with kairos-init)
 RUN uuidgen > /etc/machine-id && dnf install -y \
   squashfs-tools \
   dracut-live \
@@ -64,6 +67,10 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   openscap-scanner \
   firewalld \
   && dnf clean all
+
+# Run init stage (initrd, services, workarounds, cleanup) - install stage already ran with packages skipped
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --version "${KAIROS_VERSION}" -m "generic" -t "false"
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
