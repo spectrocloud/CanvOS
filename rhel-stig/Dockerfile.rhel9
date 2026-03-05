@@ -36,6 +36,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   systemd-timesyncd \
   systemd-resolved \
   parted \
+  gptfdisk \
   dracut \
   e2fsprogs \
   dosfstools \
