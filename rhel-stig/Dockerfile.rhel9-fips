@@ -21,12 +21,10 @@ COPY overlay/rhel9/ /
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
-# Run install stage with installPackages skipped; we install all packages in one dnf run below
 COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}" --skip-step installPackages
 
+# Install all packages first (single dnf run); then kairos-init skips installPackages - avoids "already installed" warnings
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
-# Single dnf install: base + STIG packages (avoids duplicate install with kairos-init)
 RUN uuidgen > /etc/machine-id && dnf install -y \
   squashfs-tools \
   dracut-live \
@@ -42,7 +40,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   systemd-timesyncd \
   systemd-resolved \
   parted \
-  gptfdisk \
+  gdisk \
   dracut \
   e2fsprogs \
   dosfstools \
@@ -74,6 +72,9 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   openscap-scanner \
   firewalld \
   && dnf clean all
+
+# Run install stage with installPackages skipped (packages already installed above)
+RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}" --skip-step installPackages
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml

@@ -13,14 +13,10 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
   && yum repolist
 
-# Run install stage with installPackages skipped; we install all packages in one dnf run below
-RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s install --version "${KAIROS_VERSION}" -m "generic" -t "false" --skip-step installPackages
-
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
+# Install all packages first (single dnf run); then kairos-init skips installPackages - avoids "already installed" warnings
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
-# Single dnf install: base + STIG packages (avoids duplicate install with kairos-init)
 RUN uuidgen > /etc/machine-id && dnf install -y \
   squashfs-tools \
   dracut-live \
@@ -36,7 +32,7 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   systemd-timesyncd \
   systemd-resolved \
   parted \
-  gptfdisk \
+  gdisk \
   dracut \
   e2fsprogs \
   dosfstools \
@@ -68,6 +64,10 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   openscap-scanner \
   firewalld \
   && dnf clean all
+
+# Run install stage with installPackages skipped (packages already installed above)
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s install --version "${KAIROS_VERSION}" -m "generic" -t "false" --skip-step installPackages
 
 # Run init stage; skip cleanup (removes dracut/squashfs) and initrd (we run dracut ourselves below)
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
