@@ -13,62 +13,21 @@ RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --
   && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
   && yum repolist
 
+# Let Kairos install packages first (provides network config, luet packages, etc.)
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s install --version "${KAIROS_VERSION}" -m "generic" -t "false"
+
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
-# Install all packages first (single dnf run); then kairos-init skips installPackages - avoids "already installed" warnings
+# Add only STIG extras (Kairos provides base packages; gdisk/cloud-utils-growpart needed for dracut)
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
-  squashfs-tools \
-  dracut-live \
-  livecd-tools \
-  dracut-squash \
-  dracut-network \
-  efibootmgr \
-  dhclient \
-  audit \
-  sudo \
-  systemd \
-  systemd-networkd \
-  systemd-timesyncd \
-  systemd-resolved \
-  parted \
-  gdisk \
-  cloud-utils-growpart \
-  dracut \
-  e2fsprogs \
-  dosfstools \
-  coreutils-single \
-  device-mapper \
-  grub2 \
-  which \
-  nano \
-  gawk \
-  haveged \
-  polkit \
-  ncurses \
-  tar \
-  kbd \
-  lvm2 \
-  zstd \
-  openssh-server \
-  openssh-clients \
-  shim-x64 \
-  grub2-pc \
-  grub2-efi-x64 \
-  grub2-efi-x64-modules \
-  open-vm-tools \
-  iscsi-initiator-utils \
-  iptables ethtool socat iproute-tc conntrack \
-  kernel kernel-modules kernel-modules-extra \
-  rsync jq \
   scap-security-guide \
   openscap-scanner \
   firewalld \
+  gdisk \
+  cloud-utils-growpart \
   && dnf clean all
-
-# Run install stage with installPackages skipped (packages already installed above)
-RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s install --version "${KAIROS_VERSION}" -m "generic" -t "false" --skip-step installPackages
 
 # Run init stage; skip cleanup (removes dracut/squashfs) and initrd (we run dracut ourselves below)
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
