@@ -26,7 +26,8 @@ COPY --from=kairos-init /kairos-init /kairos-init
 # Let Kairos install packages first (provides network config, luet packages, etc.)
 RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
-# Add only STIG extras (gdisk/cloud-utils-growpart needed for dracut)
+# Add STIG extras + network stack + storage (Kairos may not install these on RHEL base)
+# gdisk/cloud-utils-growpart needed for dracut; iscsi-initiator-utils for Longhorn
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
   scap-security-guide \
@@ -34,6 +35,11 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   firewalld \
   gdisk \
   cloud-utils-growpart \
+  systemd-networkd \
+  systemd-resolved \
+  iscsi-initiator-utils \
+  ethtool \
+  tcpdump \
   && dnf clean all
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml

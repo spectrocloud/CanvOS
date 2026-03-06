@@ -19,7 +19,8 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
-# Add only STIG extras (Kairos provides base packages; gdisk/cloud-utils-growpart needed for dracut)
+# Add STIG extras + network stack + storage (Kairos may not install these on RHEL base)
+# gdisk/cloud-utils-growpart needed for dracut; iscsi-initiator-utils for Longhorn
 # Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
 RUN uuidgen > /etc/machine-id && dnf install -y \
   scap-security-guide \
@@ -27,6 +28,11 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   firewalld \
   gdisk \
   cloud-utils-growpart \
+  systemd-networkd \
+  systemd-resolved \
+  iscsi-initiator-utils \
+  ethtool \
+  tcpdump \
   && dnf clean all
 
 # Run init stage; skip cleanup (removes dracut/squashfs) and initrd (we run dracut ourselves below)
