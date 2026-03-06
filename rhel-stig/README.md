@@ -141,28 +141,13 @@ The build process automatically applies STIG remediation rules including:
 
 ### Kubernetes Exceptions (STIG Overrides)
 
-STIG disables `net.ipv4.ip_forward` for general servers. Kubernetes nodes require `ip_forward=1` for CNI pod networking (Calico, Flannel, etc.). The build overrides this STIG rule and sets `net.ipv4.ip_forward=1` via `/etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf`.
+STIG disables `net.ipv4.ip_forward` and `net.ipv4.conf.all.forwarding` for general servers. Kubernetes nodes require both `=1` for CNI pod networking (Calico, Flannel, etc.). The build overrides STIG via `/etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf` and applies it during build.
 
 ### Firewall Configuration
 
-STIG requires strict firewall rules, but Palette cluster operations require specific ports to be open. The build process creates a custom firewall zone template (`/etc/firewalld/zones/k8s.xml`) that includes:
+No firewall ports or zones are opened by default. Configure firewall rules via **user-data** or **cluster profile** as needed for your environment.
 
-**Required Ports for Kubernetes:**
-- **6443/tcp**: Kubernetes API server
-- **2379-2380/tcp**: etcd server client API
-- **10250/tcp**: Kubelet API
-- **10259/tcp**: kube-scheduler
-- **10257/tcp**: kube-controller-manager
-- **30000-32767/tcp,udp**: NodePort Services
-- **8472/udp**: Flannel VXLAN
-- **179/tcp**: Calico BGP
-- **6783-6784/tcp,udp**: Weave Net
-
-**Note**: Firewall rules must be configured at runtime via cloud-init/user-data. The base image includes a template but does not activate firewall rules during build to avoid breaking the build process.
-
-### Runtime Firewall Configuration
-
-To configure firewall at runtime, add the following to your `user-data`:
+**Example – Kubernetes ports via user-data:**
 
 ```yaml
 #cloud-config
@@ -181,6 +166,8 @@ stages:
         - firewall-cmd --permanent --zone=k8s --add-port=30000-32767/tcp
         - firewall-cmd --permanent --zone=k8s --add-port=30000-32767/udp
         - firewall-cmd --permanent --zone=k8s --add-port=8472/udp
+        - firewall-cmd --permanent --zone=k8s --add-port=4789/udp
+        - firewall-cmd --permanent --zone=k8s --add-port=12345/udp
         - firewall-cmd --permanent --zone=k8s --add-port=179/tcp
         - firewall-cmd --permanent --zone=k8s --add-port=6783-6784/tcp
         - firewall-cmd --permanent --zone=k8s --add-port=6783-6784/udp
@@ -188,6 +175,17 @@ stages:
         - firewall-cmd --set-default-zone=k8s
         - firewall-cmd --reload
 ```
+
+**Adding ports for CSI (Longhorn, Rook-Ceph, etc.):**
+
+| Component   | Ports                    |
+|------------|---------------------------|
+| Longhorn   | 9500-9504/tcp             |
+| Rook-Ceph  | 6789/tcp, 6800-7300/tcp   |
+| OpenEBS    | 3260/tcp (iSCSI), 9001/tcp |
+| NFS client | 2049/tcp, 111/tcp, 20048/tcp |
+
+Use `firewall-cmd --permanent --zone=k8s --add-port=<port>/<protocol>` for additional ports.
 
 ## FIPS Mode
 
