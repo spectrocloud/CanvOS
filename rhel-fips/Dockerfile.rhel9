@@ -98,7 +98,7 @@ COPY overlay/rhel9/ /
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
+    /kairos-init -l debug -s init --fips --version "${KAIROS_VERSION}"
 
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all
