@@ -34,9 +34,19 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   openscap-scanner \
   firewalld \
   gdisk \
+  efibootmgr \
+  conntrack \
+  ncurses \
+  socat \
+  kbd \
+  grub2 \
+  audit \
+  haveged \
+  open-vm-tools \
   cloud-utils-growpart \
   systemd-networkd \
   systemd-resolved \
+  systemd-timesyncd \
   iscsi-initiator-utils \
   ethtool \
   tcpdump \
