@@ -714,8 +714,11 @@ base-image:
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
             # Remove incompatible dracut configs (e.g. 99-immucore.conf) that reference modules (livenet, immucore)
             # not available in standard Ubuntu dracut - they cause dracut post-install to fail
+            # Omit iscsi/iscsiroot - initrd is built for local disk boot, not iSCSI root
             # Install cloud-guest-utils first - dracut requires growpart for initramfs generation
-            RUN [ -f /etc/dracut.conf.d/99-immucore.conf ] && mv /etc/dracut.conf.d/99-immucore.conf /etc/dracut.conf.d/99-immucore.conf.bak || true; \
+            RUN mkdir -p /etc/dracut.conf.d && \
+                echo 'omit_dracutmodules+=" iscsi iscsiroot "' > /etc/dracut.conf.d/99-no-iscsi-canvos.conf && \
+                [ -f /etc/dracut.conf.d/99-immucore.conf ] && mv /etc/dracut.conf.d/99-immucore.conf /etc/dracut.conf.d/99-immucore.conf.bak || true; \
                 UBUNTU_VER=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2) && \
                 DEBIAN_FRONTEND=noninteractive apt-get update && \
                 apt-get install -y cloud-guest-utils dracut dracut-network && \
@@ -770,6 +773,14 @@ base-image:
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
+            fi
+
+            # Remove iSCSI-related kernel params from grub - initrd is built without iscsi support.
+            # "iscsiroot requested but initrd does not support iscsi" occurs when cmdline has rd.iscsi/netroot=iscsi
+            RUN if [ -f /etc/default/grub ]; then \
+                sed -i -E 's/(rd\.iscsi[^ "]*|root=iscsi:[^ "]*|netroot=iscsi[^ "]*) ?//g' /etc/default/grub && \
+                sed -i -E 's/  +/ /g' /etc/default/grub && \
+                (command -v update-grub >/dev/null 2>&1 && update-grub 2>/dev/null) || true; \
             fi
         END
 
