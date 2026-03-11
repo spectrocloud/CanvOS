@@ -845,6 +845,12 @@ base-image:
             if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
     END
 
+    # Remove iSCSI params from all boot config sources - initrd is built without iscsi support.
+    # "iscsiroot requested but initrd does not support iscsi" occurs when kernel cmdline has rd.iscsi/netroot=iscsi
+    RUN for f in /etc/cos/bootargs.cfg /etc/kernel/cmdline; do \
+        [ -f "$f" ] && sed -i -E 's/(rd\.iscsi[^ "]*|root=iscsi:[^ "]*|netroot=iscsi[^ "]*) ?//g' "$f" && sed -i -E 's/  +/ /g' "$f" || true; \
+    done
+
 KAIROS_RELEASE:
     COMMAND
     ARG OS_VERSION
