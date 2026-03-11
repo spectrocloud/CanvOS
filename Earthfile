@@ -712,8 +712,14 @@ base-image:
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-                apt-get install -y linux-image-generic-hwe-$OS_VERSION
+            # Remove incompatible dracut configs (e.g. 99-immucore.conf) that reference modules (livenet, immucore)
+            # not available in standard Ubuntu dracut - they cause dracut post-install to fail
+            # Install cloud-guest-utils first - dracut requires growpart for initramfs generation
+            RUN [ -f /etc/dracut.conf.d/99-immucore.conf ] && mv /etc/dracut.conf.d/99-immucore.conf /etc/dracut.conf.d/99-immucore.conf.bak || true; \
+                UBUNTU_VER=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2) && \
+                DEBIAN_FRONTEND=noninteractive apt-get update && \
+                apt-get install -y cloud-guest-utils dracut dracut-network && \
+                apt-get install -y linux-image-generic-hwe-$UBUNTU_VER
         END
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
