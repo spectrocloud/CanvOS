@@ -765,10 +765,13 @@ base-image:
             END
             # Ensure linux-modules is installed - provides modules.order, modules.builtin required by depmod.
             # Needed because purge/autoremove can remove it, or FIPS base may have incomplete module tree.
+            # FIPS kernels use -fips suffix; HWE uses -generic. Try both.
             RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
                 DEBIAN_FRONTEND=noninteractive apt-get update && \
-                apt-get install -y --no-install-recommends "linux-modules-${kernel}" && \
-                apt-get install -y "linux-modules-extra-${kernel}" 2>/dev/null || true && \
+                (apt-get install -y --no-install-recommends "linux-modules-${kernel}" || \
+                 apt-get install -y --no-install-recommends "linux-modules-${kernel}-fips" || true) && \
+                (apt-get install -y "linux-modules-extra-${kernel}" || \
+                 apt-get install -y "linux-modules-extra-${kernel}-fips" || true) 2>/dev/null && \
                 depmod -a "${kernel}"
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
