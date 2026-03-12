@@ -507,7 +507,13 @@ provider-image:
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && ( [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] )
-            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            # When FIPS: select FIPS kernel (e.g. 5.15.0-161-fips) and install linux-headers-*-fips.
+            RUN kernel=$([ "$FIPS_ENABLED" = "true" ] && printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | grep fips | tail -1 || printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                if ! ls /usr/src 2>/dev/null | grep -q "linux-headers-$kernel"; then \
+                    apt-get update && \
+                    (apt-get install -y "linux-headers-${kernel}-fips" 2>/dev/null || apt-get install -y "linux-headers-${kernel}") && \
+                    depmod -a "${kernel}"; \
+                fi
         END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -762,12 +768,22 @@ base-image:
             # Ensure linux-modules is installed - provides modules.order, modules.builtin required by depmod.
             # Needed because purge/autoremove can remove it, or FIPS base may have incomplete module tree.
             # FIPS kernels use -fips suffix; HWE uses -generic. Try both.
-            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+            # Install kernel headers for out-of-tree module builds (e.g. DRBD) - provides /lib/modules/$kernel/build.
+            # When FIPS: select FIPS kernel (5.15.0-161-fips) so we install linux-headers-5.15.0-161-fips.
+            # FIPS headers are from Ubuntu Pro (esm.ubuntu.com/fips-updates).
+            RUN kernel=$([ "$FIPS_ENABLED" = "true" ] && printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | grep fips | tail -1 || printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
                 DEBIAN_FRONTEND=noninteractive apt-get update && \
                 (apt-get install -y --no-install-recommends "linux-modules-${kernel}" || \
                  apt-get install -y --no-install-recommends "linux-modules-${kernel}-fips" || true) && \
                 (apt-get install -y "linux-modules-extra-${kernel}" || \
                  apt-get install -y "linux-modules-extra-${kernel}-fips" || true) 2>/dev/null && \
+                (if [ "$FIPS_ENABLED" = "true" ]; then \
+                    apt-get install -y --no-install-recommends "linux-headers-${kernel}-fips" || \
+                    apt-get install -y --no-install-recommends "linux-headers-${kernel}" || true; \
+                else \
+                    apt-get install -y --no-install-recommends "linux-headers-${kernel}" || \
+                    apt-get install -y --no-install-recommends "linux-headers-${kernel}-fips" || true; \
+                fi) && \
                 depmod -a "${kernel}"
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
