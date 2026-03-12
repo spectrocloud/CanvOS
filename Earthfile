@@ -763,8 +763,13 @@ base-image:
                    dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
                    ln -sf "initrd-${kernel}" /boot/initrd
             END
+            # Ensure linux-modules is installed - provides modules.order, modules.builtin required by depmod.
+            # Needed because purge/autoremove can remove it, or FIPS base may have incomplete module tree.
             RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-           	depmod -a "${kernel}"
+                DEBIAN_FRONTEND=noninteractive apt-get update && \
+                apt-get install -y --no-install-recommends "linux-modules-${kernel}" && \
+                apt-get install -y "linux-modules-extra-${kernel}" 2>/dev/null || true && \
+                depmod -a "${kernel}"
 
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
