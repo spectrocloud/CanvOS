@@ -512,7 +512,6 @@ provider-image:
             ls -la /usr/src/ && \
             apt-get update && apt-get install -y "linux-headers-${kernel}" && \
             depmod -a
-        fi
         END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
