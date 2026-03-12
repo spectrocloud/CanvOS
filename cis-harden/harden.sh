@@ -247,7 +247,7 @@ harden_ssh() {
 	update_config_files 'ClientAliveInterval' 'ClientAliveInterval 300' ${config_file}
 	update_config_files 'ClientAliveCountMax' 'ClientAliveCountMax 3' ${config_file}
 	update_config_files 'LoginGraceTime' 'LoginGraceTime 60' ${config_file}
-	update_config_files 'Banner' 'Banner /etc/issue.net' ${config_file}
+	# Banner not set - login banner removed
 	update_config_files 'MaxStartups' 'MaxStartups 10:30:60' ${config_file}
 	update_config_files 'MaxSessions' 'MaxSessions 10' ${config_file}
 	update_config_files 'PermitUserEnvironment' 'PermitUserEnvironment no' ${config_file}
@@ -786,7 +786,7 @@ harden_journald() {
 ##########################################################################
 
 harden_banner() {
-
+	# Login banner removed - ensure files exist but are empty
 	local file_path_locallogin="/etc/issue"
 	local file_path_remotelogin="/etc/issue.net"
 
@@ -813,10 +813,8 @@ harden_banner() {
 	else
 		echo "Failed to create/append to files '$file_path_locallogin' and or '$file_path_remotelogin'."
 	fi
-
-	# Delete motd file
+	# Remove motd so no login banner is shown
 	if [[ -f /etc/motd ]]; then rm /etc/motd; fi
-
 	return 0
 }
 

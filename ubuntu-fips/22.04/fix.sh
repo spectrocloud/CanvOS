@@ -722,6 +722,9 @@ formatted=$(echo "$login_banner_text" | fold -sw 80)
 cat <<EOF >/etc/issue.net
 $formatted
 EOF
+cat <<EOF >/etc/issue
+$formatted
+EOF
 
 else
     >&2 echo 'Remediation is not applicable, nothing was done'
@@ -4021,12 +4024,10 @@ cp "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf" "/etc/ssh/sshd_co
 # Insert before the line matching the regex '^Match'.
 line_number="$(LC_ALL=C grep -n "^Match" "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf.bak" | LC_ALL=C sed 's/:.*//g')"
 if [ -z "$line_number" ]; then
-    # There was no match of '^Match', insert at
-    # the end of the file.
-    printf '%s\n' "Banner /etc/issue.net" >> "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
+    # There was no match of '^Match', do not add Banner (login banner removed)
+    :
 else
     head -n "$(( line_number - 1 ))" "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf.bak" > "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
-    printf '%s\n' "Banner /etc/issue.net" >> "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
     tail -n "+$(( line_number ))" "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf.bak" >> "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
 fi
 # Clean up after ourselves.
