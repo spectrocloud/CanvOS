@@ -17,6 +17,7 @@ hack/*.img
 test/.env
 two-node-create.json
 two-node-update.json
+.netrc
 
 build/
 /local/

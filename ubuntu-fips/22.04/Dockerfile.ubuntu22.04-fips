@@ -6,8 +6,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s install --version "${VERSION}"
-# Remove default kernel that Kairos-init installs
-RUN apt-get remove -y linux-base linux-image-generic-hwe-22.04 && apt-get autoremove -y
+# Remove default kernel that Kairos-init installs and purge leftover configs
+RUN apt-get remove -y linux-base linux-image-generic-hwe-22.04 && apt-get autoremove -y \
+    && dpkg -l 'linux-*' | awk '/^(ii|rc)/ && $2 !~ /fips/ {print $2}' | xargs -r apt-get purge -y
 ## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
 ## I've just added "linux-image-fips" in the package list
 ## If you want to use secureboot with fips, you need to install the shim-signed package
@@ -17,10 +18,11 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips shim-signed
+    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed \
     ## && pro enable usg \
     ## && apt install -y usg \
-    ## && usg fix disa_stig 
+    ## && usg fix disa_stig \
+    && pro detach --assume-yes
 
 # Copy the custom dracut modules.fips that includes 2 missing modules
 COPY modules.fips /tmp/modules.fips
@@ -37,6 +39,6 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Clear cache
-RUN pro detach --assume-yes && rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
