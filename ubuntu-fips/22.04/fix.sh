@@ -28427,4 +28427,5 @@ echo "-w /var/spool/cron/ -p wa -k cronjobs" >> "$audit_rule_file_cronjob"
 chmod 640 "$audit_rule_file_cronjob"
 chmod 740 /bin/journalctl
 
+cat /etc/issue > /etc/issue.net
 # END of Misc fixes for STIG Compliance
