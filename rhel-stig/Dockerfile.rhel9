@@ -43,6 +43,10 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   iscsi-initiator-utils \
   ethtool \
   tcpdump \
+  gnutls-utils \
+  nss-tools \
+  rng-tools \
+  rsyslog-gnutls \
   && dnf clean all
 
 # Run init stage; skip cleanup (removes dracut/squashfs) and initrd (we run dracut ourselves below)

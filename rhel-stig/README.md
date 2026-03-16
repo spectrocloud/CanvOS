@@ -237,7 +237,7 @@ For a minimal Kairos/edge image, many STIG rules will **fail** or be **notapplic
 | **AIDE** | File integrity monitoring not typically used on edge nodes |
 | **FIPS** | Only for FIPS-enabled build; non-FIPS image will fail FIPS checks |
 | **Mount options** | `/tmp`, `/var/log`, `/dev/shm`, etc. – Kairos layout differs from traditional partitioning |
-| **GRUB** | `init_on_free`, PTI, vsyscall, password – require kernel/GRUB changes |
+| **GRUB** | `init_on_free`, PTI, vsyscall in base image (`/etc/kernel/cmdline`); GRUB password – environment-specific |
 | **Packages** | chrony, cron, fapolicyd, postfix, s-nail, nfs-utils, usbguard, libreswan |
 | **Partitions** | `/var/log/audit`, `/var/tmp` – edge layout may not match STIG expectations |
 | **User namespaces** | `sysctl_user_max_user_namespaces` – may conflict with containers |
