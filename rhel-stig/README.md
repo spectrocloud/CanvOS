@@ -143,6 +143,8 @@ The build process automatically applies STIG remediation rules including:
 
 STIG disables `net.ipv4.ip_forward` and `net.ipv4.conf.all.forwarding` for general servers. Kubernetes nodes require both `=1` for CNI pod networking (Calico, Flannel, etc.). The build overrides STIG via `/etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf` and applies it during build.
 
+STIG sets `rp_filter=1` (strict); overlay clusters (Calico, etc.) require `rp_filter=0`. The build overrides via `/etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf`.
+
 ### Firewall Configuration
 
 No firewall ports or zones are opened by default. Configure firewall rules via **user-data** or **cluster profile** as needed for your environment.
