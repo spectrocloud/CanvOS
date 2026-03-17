@@ -372,7 +372,9 @@ done
 shopt -u nullglob 2>/dev/null || true
 
 cat > /etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf <<'EOF'
-# Kubernetes exception: STIG sets rp_filter=1; overlay clusters (Calico, etc.) require rp_filter=0
+# Kubernetes exception: STIG/Red Hat set rp_filter=1; overlay clusters (Calico, etc.) require rp_filter=0
+# 50-redhat.conf uses net.ipv4.conf.*.rp_filter=1 per-interface; override with same wildcard (loads later)
+net.ipv4.conf.*.rp_filter = 0
 net.ipv4.conf.all.rp_filter = 0
 net.ipv4.conf.default.rp_filter = 0
 EOF
