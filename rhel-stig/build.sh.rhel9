@@ -24,5 +24,5 @@ if [ "$FIPS_ENABLED" = "true" ]; then
     docker build --secret id=rhsm_username,src="$tmpdir/rhsm_username" --secret id=rhsm_password,src="$tmpdir/rhsm_password" -t "$BASE_IMAGE" -f Dockerfile.rhel9-fips .
 else
     echo "Building RHEL 9 STIG image..."
-    docker build --no-cache --secret id=rhsm_username,src="$tmpdir/rhsm_username" --secret id=rhsm_password,src="$tmpdir/rhsm_password" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
+    docker build --secret id=rhsm_username,src="$tmpdir/rhsm_username" --secret id=rhsm_password,src="$tmpdir/rhsm_password" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
 fi
