@@ -11,8 +11,10 @@ RHEL 9 STIG (Security Technical Implementation Guide) compliance is required for
 ### Prerequisites
 
 - Red Hat subscription credentials (username and password)
-- Docker installed and running
+- Docker installed and running (BuildKit enabled; the build script sets `DOCKER_BUILDKIT=1`)
 - Access to Red Hat repositories (RHEL 9 packages required)
+
+**Building on non-RHEL hosts (Ubuntu, etc.):** subscription-manager runs inside the UBI container, so the host OS does not need to be RHEL. The build works on any Docker host.
 
 ### Building Non-FIPS STIG Image
 
@@ -36,7 +38,7 @@ Example:
 bash build.sh.rhel9 myuser@example.com mypassword rhel9-byoi-stig-fips true
 ```
 
-**Note**: Red Hat subscription credentials are required to build these images as RHEL 9 STIG packages are only available through Red Hat repositories.
+**Note**: Red Hat subscription credentials are required to build these images as RHEL 9 STIG packages are only available through Red Hat repositories. Credentials are passed via Docker BuildKit secrets (not build args) and are never stored in image layers. Requires Docker BuildKit (default in Docker 23+; set `DOCKER_BUILDKIT=1` for older versions).
 
 ## Using the Base Image
 
