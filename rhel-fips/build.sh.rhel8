@@ -1,9 +1,22 @@
 #!/bin/bash
 
+# Run from rhel-fips/ so overlay/ and Dockerfile are in build context
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 USERNAME=$1
 PASSWORD=$2
 BASE_IMAGE="${3:-rhel-byoi-fips}"
 
+# BuildKit required for --secret (credentials never stored in image layers)
+export DOCKER_BUILDKIT=1
+
+# Use BuildKit secrets - credentials passed via temp files, never in image layers or build args
+tmpdir=$(mktemp -d)
+trap "rm -rf $tmpdir" EXIT
+echo -n "$USERNAME" > "$tmpdir/rhsm_username"
+echo -n "$PASSWORD" > "$tmpdir/rhsm_password"
+chmod 600 "$tmpdir"/*
+
 # Build the container image
-docker build --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" -f Dockerfile.rhel8 .
+docker build --secret id=rhsm_username,src="$tmpdir/rhsm_username" --secret id=rhsm_password,src="$tmpdir/rhsm_password" -t "$BASE_IMAGE" -f Dockerfile.rhel8 .

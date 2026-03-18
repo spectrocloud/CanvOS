@@ -8,7 +8,7 @@
 - run `bash build.sh.rhel9 <username> <password> [<base image>]`
 - use the generated base image as input in installer generation with `earthly +iso`
 
-**Note**: Red Hat subscription credentials are required to build these images as RHEL8/RHEL9 FIPS packages are only available through Red Hat repositories.
+**Note**: Red Hat subscription credentials are required to build these images as RHEL8/RHEL9 FIPS packages are only available through Red Hat repositories. Credentials are passed via Docker BuildKit secrets (not build args) and are never stored in image layers.
 
 The system is not enabling FIPS by default in kernel space. 
 
