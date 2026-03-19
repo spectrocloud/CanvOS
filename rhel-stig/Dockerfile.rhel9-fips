@@ -50,6 +50,10 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   iscsi-initiator-utils \
   ethtool \
   tcpdump \
+  gnutls-utils \
+  nss-tools \
+  rng-tools \
+  rsyslog-gnutls \
   && dnf clean all
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
