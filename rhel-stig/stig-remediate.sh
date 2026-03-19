@@ -358,6 +358,33 @@ current=$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo "MISSING")
 current_all=$(cat /proc/sys/net/ipv4/conf/all/forwarding 2>/dev/null || echo "MISSING")
 print_debug "Runtime after apply: net.ipv4.ip_forward=$current net.ipv4.conf.all.forwarding=$current_all"
 
+# STIG sets rp_filter=1 (strict); overlay clusters/CNI require rp_filter=0 for pod networking
+echo "Applying Kubernetes exception: net.ipv4.conf.all.rp_filter=0 and net.ipv4.conf.default.rp_filter=0 (required for overlay clusters)..."
+
+shopt -s nullglob
+for f in /etc/sysctl.conf /etc/sysctl.d/*.conf /run/sysctl.d/*.conf /usr/local/lib/sysctl.d/*.conf /usr/lib/sysctl.d/*.conf; do
+    [ -f "$f" ] || continue
+    sed -i \
+        -e 's/^[[:space:]]*net\.ipv4\.conf\.all\.rp_filter[[:space:]]*=.*$/# STIG exception (Kubernetes overlay clusters require rp_filter=0): &/' \
+        -e 's/^[[:space:]]*net\.ipv4\.conf\.default\.rp_filter[[:space:]]*=.*$/# STIG exception (Kubernetes overlay clusters require rp_filter=0): &/' \
+        "$f" 2>/dev/null || true
+done
+shopt -u nullglob 2>/dev/null || true
+
+cat > /etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf <<'EOF'
+# Kubernetes exception: STIG/Red Hat set rp_filter=1; overlay clusters (Calico, etc.) require rp_filter=0
+# 50-redhat.conf uses net.ipv4.conf.*.rp_filter=1 per-interface; override with same wildcard (loads later)
+net.ipv4.conf.*.rp_filter = 0
+net.ipv4.conf.all.rp_filter = 0
+net.ipv4.conf.default.rp_filter = 0
+EOF
+chown root:root /etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf
+chmod 0644 /etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf
+
+/sbin/sysctl -w net.ipv4.conf.all.rp_filter=0 2>/dev/null || true
+/sbin/sysctl -w net.ipv4.conf.default.rp_filter=0 2>/dev/null || true
+/sbin/sysctl --system 2>/dev/null || true
+
 # Ensure required drivers and modules are in dracut config (backup in case STIG removed them)
 for conf_file in /etc/dracut.conf.d/*.conf; do
     if [ -f "$conf_file" ]; then
