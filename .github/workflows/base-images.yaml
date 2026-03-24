@@ -73,7 +73,8 @@ jobs:
 
               matrix.append({
                   "base_os": base_os_image,
-                  "tag": tag
+                  "tag": tag,
+                  "build_type": "kairosify"
               })
 
           elif trusted_boot:
@@ -81,23 +82,26 @@ jobs:
               tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
               matrix.append({
                   "base_os": "ubuntu:24.04",
-                  "tag": tag
+                  "tag": tag,
+                  "build_type": "kairosify"
               })
 
           else:
               # Standard builds - all combinations
               combinations = [
-                  ("ubuntu:20.04", "kairos-ubuntu:20.04-core"),
-                  ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
-                  ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
-                  ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core")
+                  ("ubuntu:20.04", "kairos-ubuntu:20.04-core", "kairosify"),
+                  ("ubuntu:22.04", "kairos-ubuntu:22.04-core", "kairosify"),
+                  ("ubuntu:24.04", "kairos-ubuntu:24.04-core", "kairosify"),
+                  ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core", "kairosify"),
+                  ("registry.suse.com/suse/sle-micro-rancher/5.4:latest", "kairos-slem:5.4-core", "slem")
               ]
 
-              for base_os, tag_prefix in combinations:
+              for base_os, tag_prefix, build_type in combinations:
                   tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
                   matrix.append({
                       "base_os": base_os,
-                      "tag": tag
+                      "tag": tag,
+                      "build_type": build_type
                   })
 
           matrix_json = json.dumps(matrix)
@@ -125,6 +129,7 @@ jobs:
         run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
 
       - name: Build and push kairosify image
+        if: matrix.build_type == 'kairosify'
         uses: docker/bake-action@v6
         with:
           files: docker-bake-kairosify.hcl
@@ -140,6 +145,18 @@ jobs:
             kairosify.tags=${{ matrix.tag }}
         env:
           DOCKER_BUILD_SUMMARY: false
+
+      - name: Build and push SLEM image
+        if: matrix.build_type == 'slem'
+        run: |
+          docker build \
+            --platform linux/${{ github.event.inputs.arch }} \
+            --build-arg KAIROS_INIT_IMAGE=${{ github.event.inputs.kairos_init_image }} \
+            --build-arg KAIROS_VERSION=${{ github.event.inputs.kairos_version }} \
+            -t ${{ matrix.tag }} \
+            -f slem/Dockerfile \
+            slem/
+          docker push ${{ matrix.tag }}
 
       - name: Save build result
         run: |
