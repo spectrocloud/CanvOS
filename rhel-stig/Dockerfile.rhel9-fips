@@ -85,6 +85,7 @@ RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
     && dnf clean all
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+COPY dracut-40-fips-stig.conf /etc/dracut.conf.d/40-fips.conf
 
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 

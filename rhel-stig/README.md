@@ -232,6 +232,19 @@ You may see these non-fatal errors; the scan still completes and produces result
 
 - **"Unknown IO error" / "cpelang_priv.c"** – OpenSCAP's CPE (Common Platform Enumeration) code path can emit these errors during platform detection. This occurs on both RHEL and Ubuntu. The scan completes and produces valid results.
 
+### FIPS builds: runtime vs OpenSCAP
+
+You can have `cat /proc/sys/crypto/fips_enabled` return **1** (FIPS active) while some **FIPS-related rules still fail**:
+
+| Rule (examples) | Why it can fail on Kairos |
+|-----------------|----------------------------|
+| **Enable FIPS Mode** | OVAL requires **`fips=1` in** `/boot/loader/entries/*.conf` (BLS snippets) **or** bootc kargs TOML—not only `/proc/cmdline`. UKI/embedded-cmdline systems often have **no** `loader/entries` files, so the check fails even when the kernel booted with `fips=1`. |
+| **Enable Dracut FIPS Module** | Fixed in FIPS image build: OpenSCAP looks for **`/etc/dracut.conf.d/40-fips.conf`** specifically; `kairos-fips.conf` alone was not enough. |
+| **SSH MACs (crypto policy)** | Checks **`/etc/crypto-policies/back-ends/openssh{,server}.config`** for an **exact** MAC list matching the profile export order—not `sshd_config.d` overrides. Align with `FIPS:STIG` (`update-crypto-policies --set FIPS:STIG`) or match the `stig_rhel9` MAC string from the datastream. |
+| **AIDE** | Scanner expects AIDE installed, DB built, and FIPS hash options—typically **not** included on minimal edge images. |
+
+Use reports as **documentation of gaps vs a traditional RHEL install**, not as proof that FIPS is off when `fips_enabled` is 1. Tailor the benchmark or add BLS metadata only if your compliance program requires the file-based checks.
+
 ### Expected Scan Results for Minimal Edge Images
 
 For a minimal Kairos/edge image, many STIG rules will **fail** or be **notapplicable** by design:
@@ -239,7 +252,7 @@ For a minimal Kairos/edge image, many STIG rules will **fail** or be **notapplic
 | Category | Reason |
 |----------|--------|
 | **AIDE** | File integrity monitoring not typically used on edge nodes |
-| **FIPS** | Only for FIPS-enabled build; non-FIPS image will fail FIPS checks |
+| **FIPS** | Only for FIPS-enabled build; non-FIPS image will fail FIPS checks; file-based FIPS rules may still fail on UKI—see above |
 | **Mount options** | `/tmp`, `/var/log`, `/dev/shm`, etc. – Kairos layout differs from traditional partitioning |
 | **GRUB** | `init_on_free`, PTI, vsyscall in base image (`/etc/kernel/cmdline`); GRUB password – environment-specific |
 | **Packages** | chrony, cron, fapolicyd, postfix, s-nail, nfs-utils, usbguard, libreswan |
