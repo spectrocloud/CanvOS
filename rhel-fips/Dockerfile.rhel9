@@ -1,7 +1,8 @@
+# syntax=docker/dockerfile:1
 # Kairos init image
-FROM quay.io/kairos/kairos-init:0.8.4 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.8.5 AS kairos-init
 
-FROM registry.access.redhat.com/ubi9-init:9.4-6 as base
+FROM registry.access.redhat.com/ubi9-init:9.4-6 AS base
 
 ARG USERNAME
 ARG PASSWORD
@@ -12,13 +13,17 @@ ARG KAIROS_VERSION=v4.0.3
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
+# EPEL: prefer mirror redirector; dl.fedoraproject.org often returns 503 under load.
+RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm' || \
+    dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm'
+
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
 RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
     && yum repolist \
     && subscription-manager attach --auto \
     && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
-    && yum repolist
+    && yum repolist \
+    && dnf clean all
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel9/ /
@@ -72,6 +77,9 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
     kernel kernel-modules kernel-modules-extra \
     rsync jq && dnf clean all
 
+# Avoid clashes with systemd-networkd (Kairos/RHEL guidance).
+RUN rpm -q NetworkManager >/dev/null 2>&1 && dnf remove -y NetworkManager || true
+
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
@@ -113,3 +121,5 @@ RUN echo "SELINUX=disabled" > /etc/selinux/config
 RUN rm -rf /boot/initramfs-*
 
 COPY overlay/rhel9/ /
+
+RUN if [ ! -f /boot/efi/EFI/redhat/shim.efi ]; then cp /boot/efi/EFI/redhat/shimx64.efi /boot/efi/EFI/redhat/shim.efi; fi

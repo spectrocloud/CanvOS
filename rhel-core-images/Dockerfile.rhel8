@@ -1,17 +1,22 @@
-FROM quay.io/kairos/kairos-init:0.8.4 AS kairos-init
+# syntax=docker/dockerfile:1
+FROM quay.io/kairos/kairos-init:v0.8.5 AS kairos-init
 FROM registry.access.redhat.com/ubi8/ubi-init:8.7-10
 
 ARG USERNAME
 ARG PASSWORD
 ARG KAIROS_VERSION=v4.0.3
 
-RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm -y
+# EPEL: prefer mirror redirector; dl.fedoraproject.org often returns 503 under load.
+RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm' || \
+    dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm'
+
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
 RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
   && yum repolist \
   && subscription-manager attach --auto \
   && subscription-manager repos --enable rhel-8-for-x86_64-appstream-rpms \
-  && yum repolist
+  && yum repolist \
+  && dnf clean all
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug -m "generic" -t "false" --version "${KAIROS_VERSION}"
 
@@ -60,6 +65,9 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   iptables ethtool socat iproute-tc conntrack \
   kernel kernel-modules kernel-modules-extra \
   rsync jq && dnf clean all
+
+# Avoid clashes with systemd-networkd (Kairos/RHEL guidance).
+RUN rpm -q NetworkManager >/dev/null 2>&1 && dnf remove -y NetworkManager || true
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
 RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
