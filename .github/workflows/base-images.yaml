@@ -125,7 +125,7 @@ jobs:
       - name: Login to registry
         run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
 
-      - name: Build and push image
+      - name: Build and push kairosify image
         uses: docker/bake-action@v6
         with:
           files: docker-bake-kairosify.hcl
