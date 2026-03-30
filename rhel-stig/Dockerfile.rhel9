@@ -1,7 +1,9 @@
-FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
+FROM quay.io/kairos/kairos-init:0.8.5 AS kairos-init
 FROM registry.access.redhat.com/ubi9-init:9.4-6
 
-ARG KAIROS_VERSION=v3.5.9
+ARG USERNAME
+ARG PASSWORD
+ARG KAIROS_VERSION=v4.0.3
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
 # subscription-manager runs inside the UBI container (host OS does not need to be RHEL). Remove rhsm-host so it does not try to use host entitlements.
@@ -90,8 +92,8 @@ RUN rm -rf /boot/initramfs-*
 COPY static/ /tmp/stig-static/
 COPY stig-remediate.sh /tmp/stig-remediate.sh
 RUN chmod +x /tmp/stig-remediate.sh && \
-    /tmp/stig-remediate.sh 2>&1 && \
-    rm -f /tmp/stig-remediate.sh
+  /tmp/stig-remediate.sh 2>&1 && \
+  rm -f /tmp/stig-remediate.sh
 
 RUN mkdir -p /etc/luet/repos.conf.d
 ## Clear cache
