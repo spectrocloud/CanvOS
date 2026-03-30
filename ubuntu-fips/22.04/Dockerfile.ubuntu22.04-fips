@@ -18,10 +18,10 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips shim-signed
-## && pro enable usg \
-## && apt install -y usg \
-## && usg fix disa_stig 
+    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed
+    ## && pro enable usg \
+    ## && apt install -y usg \
+    ## && usg fix disa_stig 
 
 # Copy the custom dracut modules.fips that includes 2 missing modules
 COPY modules.fips /tmp/modules.fips
