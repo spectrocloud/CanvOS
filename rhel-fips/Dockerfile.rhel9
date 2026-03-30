@@ -1,7 +1,7 @@
 # Kairos init image
 FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
 
-FROM registry.access.redhat.com/ubi9-init:9.4-6 as base
+FROM registry.access.redhat.com/ubi9-init:9.4-6 AS base
 
 ARG USERNAME
 ARG PASSWORD

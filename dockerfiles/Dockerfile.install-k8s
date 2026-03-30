@@ -1,0 +1,44 @@
+ARG ARCH
+
+FROM --platform=linux/${ARCH} alpine-certs AS install-k8s
+
+ARG K8S_DISTRIBUTION
+ARG K8S_VERSION
+ARG K3S_FLAVOR_TAG
+ARG RKE2_FLAVOR_TAG
+ARG SPECTRO_LUET_REPO
+ARG ARCH
+ARG LUET_REPO
+
+COPY --from=third-party-luet /WORKDIR/luet /usr/bin/luet
+
+WORKDIR /output
+
+RUN mkdir -p /etc/luet/repos.conf.d && \
+    luet repo add spectro --type docker --url $SPECTRO_LUET_REPO/$LUET_REPO --priority 1 -y
+
+# Use bind mount for optional luet auth config
+RUN --mount=type=bind,target=/build-context \
+    if [ -f /build-context/spectro-luet-auth.yaml ]; then \
+        cat /build-context/spectro-luet-auth.yaml >> /etc/luet/repos.conf.d/spectro.yaml; \
+    fi
+
+RUN luet repo update
+
+# Calculate BASE_K8S_VERSION based on K8S_DISTRIBUTION
+RUN if [ "$K8S_DISTRIBUTION" = "kubeadm" ] || \
+    [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || \
+    [ "$K8S_DISTRIBUTION" = "nodeadm" ] || \
+    [ "$K8S_DISTRIBUTION" = "canonical" ]; then \
+    BASE_K8S_VERSION="$K8S_VERSION"; \
+    elif [ "$K8S_DISTRIBUTION" = "k3s" ]; then \
+    K8S_DISTRIBUTION_TAG="$K3S_FLAVOR_TAG"; \
+    BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
+    elif [ "$K8S_DISTRIBUTION" = "rke2" ]; then \
+    K8S_DISTRIBUTION_TAG="$RKE2_FLAVOR_TAG"; \
+    BASE_K8S_VERSION="$K8S_VERSION-$K8S_DISTRIBUTION_TAG"; \
+    fi && \
+    echo "Installing k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION for K8S_VERSION=$K8S_VERSION" && \
+    luet install -y k8s/$K8S_DISTRIBUTION@$BASE_K8S_VERSION --system-target /output && luet cleanup
+
+RUN rm -rf /output/var/cache/*

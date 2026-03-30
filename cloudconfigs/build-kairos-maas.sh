@@ -46,12 +46,14 @@ UBUNTU_ROOT_SIZE="3G"
 # The size of the content partition (for Stylus content files)
 # Default to 2G, but will be calculated based on actual content size if content files exist
 CONTENT_SIZE="2G"
-# Path to the curtin hooks script (relative to the original directory)
-CURTIN_HOOKS_SCRIPT="$ORIG_DIR/curtin-hooks"
+
+CURTIN_HOOKS_SCRIPT="${CURTIN_HOOKS_SCRIPT:-$ORIG_DIR/curtin-hooks}"
+
+CONTENT_BASE_DIR="${CONTENT_BASE_DIR:-$ORIG_DIR}"
 # Path to content directory (if content files are provided)
 # Look for content-* directories (e.g., content-3a456a58)
 CONTENT_DIR=""
-for dir in "$ORIG_DIR"/content-*; do
+for dir in "$CONTENT_BASE_DIR"/content-*; do
     if [ -d "$dir" ]; then
         CONTENT_DIR="$dir"
         echo "Found content directory: $CONTENT_DIR"
@@ -59,8 +61,8 @@ for dir in "$ORIG_DIR"/content-*; do
     fi
 done
 # Fallback to plain content directory if no content-* found
-if [ -z "$CONTENT_DIR" ] && [ -d "$ORIG_DIR/content" ]; then
-    CONTENT_DIR="$ORIG_DIR/content"
+if [ -z "$CONTENT_DIR" ] && [ -d "$CONTENT_BASE_DIR/content" ]; then
+    CONTENT_DIR="$CONTENT_BASE_DIR/content"
     echo "Found content directory: $CONTENT_DIR"
 fi
 
@@ -579,8 +581,16 @@ if [ -f "$INPUT_IMG" ]; then
     rm -f "$INPUT_IMG"
 fi
 
+# Generate SHA256 checksum
+echo "Generating SHA256 checksum..."
+sha256sum "$COMPRESSED_IMG" > "${COMPRESSED_IMG}.sha256"
+CHECKSUM=$(cat "${COMPRESSED_IMG}.sha256" | cut -d' ' -f1)
+echo "SHA256: $CHECKSUM"
+
 echo ""
 echo "✅ Composite image created and compressed successfully: $COMPRESSED_IMG"
+echo "   Size: $COMP_SIZE"
+echo "   Checksum: ${COMPRESSED_IMG}.sha256"
 echo "You can now upload this compressed raw image to MAAS (MAAS will automatically decompress it)."
 
 # Exit with success code
