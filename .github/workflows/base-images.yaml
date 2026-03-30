@@ -73,7 +73,7 @@ jobs:
 
               matrix.append({
                   "base_os": base_os_image,
-                  "tag": tag
+                  "tag": tag,
               })
 
           elif trusted_boot:
@@ -81,7 +81,7 @@ jobs:
               tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
               matrix.append({
                   "base_os": "ubuntu:24.04",
-                  "tag": tag
+                  "tag": tag,
               })
 
           else:
@@ -90,14 +90,15 @@ jobs:
                   ("ubuntu:20.04", "kairos-ubuntu:20.04-core"),
                   ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
                   ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
-                  ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core")
+                  ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core"),
+                  ("registry.suse.com/suse/sle-micro-rancher/5.4:latest", "kairos-slem:5.4-core"),
               ]
 
               for base_os, tag_prefix in combinations:
                   tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
                   matrix.append({
                       "base_os": base_os,
-                      "tag": tag
+                      "tag": tag,
                   })
 
           matrix_json = json.dumps(matrix)
