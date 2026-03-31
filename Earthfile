@@ -3,7 +3,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 # Default image repositories used in the builds.
-ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
+ARG SPECTRO_PUB_REPO=us-east1-docker.pkg.dev/spectro-images/dev/rutu
 ARG BUILDER_3RDPARTY_VERSION=4.8
 ARG SPECTRO_THIRD_PARTY_IMAGE=us-docker.pkg.dev/palette-images/third-party/spectro-third-party:$BUILDER_3RDPARTY_VERSION
 ARG ALPINE_TAG=3.20
@@ -42,7 +42,7 @@ ARG K8S_VERSION
 ARG IMAGE_REGISTRY
 ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG ISO_NAME=installer
-ARG K8S_DISTRIBUTION
+ARG K8S_DISTRIBUTION=k3s
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
@@ -89,10 +89,6 @@ ARG EFI_IMG_SIZE=2200
 # internal variables
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
-
-ARG STYLUS_BASE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-amd64:v0.0.0-53a27cd7"
-ARG STYLUS_PACKAGE_BASE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-linux-amd64:v0.0.0-53a27cd7"
-ARG CLI_IMAGE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-amd64:v0.0.0-53a27cd7"
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
