@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v0.0.0-53a27cd7
+ARG PE_VERSION=v4.8.10
 ARG KAIROS_VERSION=v4.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -42,7 +42,7 @@ ARG K8S_VERSION
 ARG IMAGE_REGISTRY
 ARG IMAGE_REPO=$OS_DISTRIBUTION
 ARG ISO_NAME=installer
-ARG K8S_DISTRIBUTION=k3s
+ARG K8S_DISTRIBUTION
 ARG CUSTOM_TAG
 ARG CLUSTERCONFIG
 ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
@@ -65,7 +65,7 @@ ARG UPDATE_KERNEL=false
 ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
-ARG TWO_NODE=true
+ARG TWO_NODE=false
 ARG KINE_VERSION=0.11.4
 
 # MAAS Variables
@@ -90,7 +90,6 @@ ARG EFI_IMG_SIZE=2200
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
 
-
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
         ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
@@ -114,15 +113,15 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
-ARG STYLUS_BASE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-$ARCH:$PE_VERSION
-ARG STYLUS_PACKAGE_BASE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-linux-$ARCH:$PE_VERSION
+ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
+ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
-    ARG CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
+    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
