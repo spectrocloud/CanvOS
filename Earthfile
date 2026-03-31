@@ -3,7 +3,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 # Default image repositories used in the builds.
-ARG SPECTRO_PUB_REPO=us-east1-docker.pkg.dev/spectro-images/dev/rutu
+ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 ARG BUILDER_3RDPARTY_VERSION=4.8
 ARG SPECTRO_THIRD_PARTY_IMAGE=us-docker.pkg.dev/palette-images/third-party/spectro-third-party:$BUILDER_3RDPARTY_VERSION
 ARG ALPINE_TAG=3.20
@@ -114,15 +114,15 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
-ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
-ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
+ARG STYLUS_BASE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-$ARCH:$PE_VERSION
+ARG STYLUS_PACKAGE_BASE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-linux-$ARCH:$PE_VERSION
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
+    ARG CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
+    ARG CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
