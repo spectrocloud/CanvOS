@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.8.10
+ARG PE_VERSION=v0.0.0-53a27cd7
 ARG KAIROS_VERSION=v4.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -65,7 +65,7 @@ ARG UPDATE_KERNEL=false
 ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
-ARG TWO_NODE=false
+ARG TWO_NODE=true
 ARG KINE_VERSION=0.11.4
 
 # MAAS Variables
@@ -222,11 +222,13 @@ trust-boot-unpack:
         luet util unpack $FILE /trusted-boot
     SAVE ARTIFACT /trusted-boot/*
 
+
+
 stylus-image-pack:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY --keep-ts --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
-    RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
+    RUN luet util pack us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-amd64:${PE_VERSION} stylus.tar stylus-image.tar
     SAVE ARTIFACT --keep-ts stylus-image.tar AS LOCAL ./build/
 
 kairos-agent:
@@ -327,7 +329,7 @@ iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 validate-user-data:
-    FROM --platform=linux/${TARGETARCH} $CLI_IMAGE
+    FROM --platform=linux/${TARGETARCH} us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-amd64:${PE_VERSION}
     COPY --if-exists user-data /user-data
 
     RUN chmod +x /usr/local/bin/palette-edge-cli;
@@ -646,14 +648,14 @@ build-provider-trustedboot-image:
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
-    FROM --platform=linux/${ARCH} $STYLUS_BASE
+    FROM --platform=linux/${ARCH} us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-amd64:${PE_VERSION}
     SAVE ARTIFACT --keep-ts --keep-own  ./*
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
 
 stylus-package-image:
-    FROM --platform=linux/${ARCH} $STYLUS_PACKAGE_BASE
+    FROM --platform=linux/${ARCH} us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-linux-amd64:${PE_VERSION}
     SAVE ARTIFACT --keep-ts --keep-own  ./*
 
 kairos-provider-image:
