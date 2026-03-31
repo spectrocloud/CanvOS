@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.8.10
+ARG PE_VERSION=v0.0.0-53a27cd7
 ARG KAIROS_VERSION=v4.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -65,7 +65,7 @@ ARG UPDATE_KERNEL=false
 ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
-ARG TWO_NODE=false
+ARG TWO_NODE=true
 ARG KINE_VERSION=0.11.4
 
 # MAAS Variables
@@ -89,6 +89,11 @@ ARG EFI_IMG_SIZE=2200
 # internal variables
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
+
+ARG STYLUS_BASE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-amd64:v0.0.0-53a27cd7"
+ARG STYLUS_PACKAGE_BASE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-linux-amd64:v0.0.0-53a27cd7"
+ARG CLI_IMAGE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-amd64:v0.0.0-53a27cd7"
+
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
