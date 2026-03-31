@@ -1,6 +1,6 @@
 FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ARG VERSION=v3.5.9
 ARG ENABLE_STIG=1
 ARG SKIP_STIG_BANNER=0
@@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s install --version "${VERSION}"
 # Remove default kernel that Kairos-init installs and purge leftover configs
-RUN apt-get remove -y linux-base linux-image-generic-hwe-22.04 && apt-get autoremove -y \
+RUN apt-get remove -y linux-base linux-image-generic-hwe-24.04 && apt-get autoremove -y \
     && dpkg -l 'linux-*' | awk '/^(ii|rc)/ && $2 !~ /fips/ {print $2}' | xargs -r apt-get purge -y
 ## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
 ## I've just added "linux-image-fips" in the package list
@@ -21,16 +21,13 @@ RUN --mount=type=secret,id=pro-attach-config \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
     && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed \
-    ## && pro enable usg \
-    ## && apt install -y usg \
-    ## && usg fix disa_stig \
     && pro detach --assume-yes
 
 # Copy the custom dracut modules.fips that includes 2 missing modules
-COPY 22.04/modules.fips /tmp/modules.fips
+COPY 24.04/modules.fips /tmp/modules.fips
 RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
 
-COPY 22.04/fix.sh /tmp/fix.sh
+COPY 24.04/fix.sh /tmp/fix.sh
 COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
 RUN chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banners.sh \
     && if [ "$ENABLE_STIG" = "1" ]; then bash /tmp/fix.sh; fi \
