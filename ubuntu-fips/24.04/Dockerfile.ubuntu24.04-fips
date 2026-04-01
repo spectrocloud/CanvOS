@@ -15,12 +15,13 @@ RUN apt-get remove -y linux-base linux-image-generic-hwe-24.04 && apt-get autore
 ## I've just added "linux-image-fips" in the package list
 ## If you want to use secureboot with fips, you need to install the shim-signed package
 ## from the Ubuntu PRO repos as its signed with adifferent key
+## Noble: no strongswan-hmac package in archive (jammy had it); install strongswan only.
 RUN --mount=type=secret,id=pro-attach-config \
     apt-get update \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed \
+    && apt-get install -y strongswan openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed \
     && pro detach --assume-yes
 
 # Copy the custom dracut modules.fips that includes 2 missing modules

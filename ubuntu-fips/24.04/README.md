@@ -23,6 +23,8 @@ ENABLE_STIG=0 bash build.sh my-fips-base
 SKIP_STIG_BANNER=1 bash build.sh my-fips-stig-nobanner
 ```
 
+The bundled `fix.sh` **comments out** the STIG rules that install **chrony**, remove **systemd-timesyncd**, and harden **chrony.conf**—same idea as the jammy `fix.sh`—so **Kairos** can keep using **systemd-timesyncd** (`kairos-init` enables that service during init). Regenerating `fix.sh` from OpenSCAP will drop these edits; re-apply or maintain a patch.
+
 Use the generated base image as input in installer generation with `earthly +iso`.
 
 The system does not enable FIPS by default in kernel space.
