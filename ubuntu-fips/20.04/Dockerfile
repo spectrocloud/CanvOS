@@ -10,10 +10,15 @@ ARG KAIROS_VERSION=v4.0.3
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
 
+# NOTE: --fips is NOT passed here. Unlike RHEL (where subscription-manager enables FIPS repos
+# before this step), Ubuntu FIPS packages require Ubuntu PRO, which is only attached in the
+# apt-get install block below. kairos-init would fail with "FIPS is not supported on Ubuntu
+# without a PRO account and extra packages" if --fips were used at this stage.
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s install --version "${KAIROS_VERSION}"
 
-RUN apt-get remove -y linux-base linux-image-generic-hwe-20.04 && apt-get autoremove -y
+RUN apt-get remove -y linux-base linux-image-generic-hwe-20.04 && apt-get autoremove -y \
+    && dpkg -l 'linux-*' | awk '/^(ii|rc)/ && $2 !~ /fips/ {print $2}' | xargs -r apt-get purge -y
 
 ## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
 ## I've just added "linux-image-fips" in the package list
@@ -43,8 +48,6 @@ RUN --mount=type=secret,id=pro-attach-config \
     debianutils \
     dmsetup \
     dosfstools \
-    dracut \
-    dracut-network \
     e2fsprogs \
     efibootmgr \
     file \
@@ -108,8 +111,16 @@ RUN cd /usr/lib/dracut/modules.d/95iscsi && patch < /dracut-broken-iscsi-ubuntu-
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
+# Copy the custom dracut modules.fips that includes 2 missing modules
+COPY modules.fips /tmp/modules.fips
+RUN kernel=$(ls /lib/modules | grep fips | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
+
+# --fips is passed here (not at install stage) because Ubuntu PRO has been attached and all
+# FIPS packages (linux-image-fips, openssl, libssl1.1-hmac, etc.) are already installed above.
+# This sets KAIROS_FIPS="true" in /etc/kairos-release so the image is correctly identified
+# as a FIPS build. fips=1 on the kernel cmdline must still be set via cloud-config extra_cmdline.
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s init --version "${KAIROS_VERSION}"
+    /kairos-init -l debug -s init --fips --version "${KAIROS_VERSION}"
 
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
