@@ -102,6 +102,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     zfsutils-linux \
     zstd \
     cloud-guest-utils \
+    cracklib-runtime \
     && apt-get remove -y unattended-upgrades && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && pro detach --assume-yes

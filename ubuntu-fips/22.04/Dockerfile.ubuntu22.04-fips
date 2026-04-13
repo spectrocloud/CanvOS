@@ -22,7 +22,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed
+    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed cracklib-runtime
     ## && pro enable usg \
     ## && apt install -y usg \
     ## && usg fix disa_stig 
@@ -46,6 +46,7 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Clear cache
-RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} + && \
+    rm -rf /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true

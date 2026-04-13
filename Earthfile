@@ -704,7 +704,7 @@ base-image:
         END
 
         RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate cracklib-runtime -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -796,19 +796,18 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
-        RUN zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate cracklib cracklib-dict-small
+        RUN zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate
         RUN zypper cc && \
             zypper clean
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
-        RUN yum install -y openssl rsyslog logrotate cracklib cracklib-dicts
+        RUN yum install -y openssl rsyslog logrotate
     END
 
     IF [ "$OS_DISTRIBUTION" = "sles" ]
         RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
-        RUN zypper install -y cracklib cracklib-dict-small && zypper cc && zypper clean
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
