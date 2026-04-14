@@ -814,7 +814,7 @@ base-image:
 
     DO +KAIROS_RELEASE --OS_VERSION=$OS_VERSION --OS_DISTRIBUTION=$OS_DISTRIBUTION --ARCH=$ARCH --IS_MAAS=$IS_MAAS
 
-    RUN rm -rf /var/cache/* && \
+    RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} + && \
         journalctl --vacuum-size=1K && \
         rm -rf /etc/machine-id && \
         rm -rf /var/lib/dbus/machine-id
