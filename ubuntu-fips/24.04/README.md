@@ -23,7 +23,13 @@ ENABLE_STIG=0 bash build.sh my-fips-base
 SKIP_STIG_BANNER=1 bash build.sh my-fips-stig-nobanner
 ```
 
-The bundled `fix.sh` **comments out** the STIG rules that install **chrony**, remove **systemd-timesyncd**, and harden **chrony.conf**—same idea as the jammy `fix.sh`—so **Kairos** can keep using **systemd-timesyncd** (`kairos-init` enables that service during init). Regenerating `fix.sh` from OpenSCAP will drop these edits; re-apply or maintain a patch.
+The bundled `fix.sh` carries two kinds of **jammy-aligned** changes:
+
+1. **Explicit comments (Kairos / time sync)** — Rules that install **chrony**, remove **systemd-timesyncd**, or edit **chrony.conf** are commented out with `EXCEPTION (CanvOS/Kairos)` notes, matching the intent of `ubuntu-fips/22.04/fix.sh`, so **kairos-init** can keep enabling **systemd-timesyncd**.
+
+2. **Docker build applicability** — Noble’s OpenSCAP script uses `dpkg-query … linux-base`, so remediations run during `docker build`. Jammy’s script used `/.dockerenv` / `/.containerenv` for most rules, so they **did not** run in-container. After regenerating `fix.sh`, run `python3 24.04/align-fix-sh-dockerenv.py` from the repo (or `python3 align-fix-sh-dockerenv.py` inside `ubuntu-fips/24.04`) to remap each rule to the same guard style as 22.04. Rules that had **no** `if` in jammy (e.g. some audit `chown`/`chmod` snippets) still run during the image build, as before.
+
+Regenerating `fix.sh` from **oscap** drops both the comments and the dockerenv alignment — re-apply them or keep a patch.
 
 Use the generated base image as input in installer generation with `earthly +iso`.
 
@@ -61,3 +67,5 @@ oscap xccdf generate fix \
   --output fix.sh \
   /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml
 ```
+
+Then re-apply **CanvOS** edits: comment the Kairos/chrony/timesyncd blocks (see current `fix.sh`), and run **`align-fix-sh-dockerenv.py`** so image-build behavior matches **22.04**.

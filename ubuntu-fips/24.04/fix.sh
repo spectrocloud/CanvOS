@@ -28,7 +28,7 @@
 ###############################################################################
 (>&2 echo "Remediating rule 1/230: 'xccdf_org.ssgproject.content_rule_package_aide_installed'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "aide"
 
@@ -43,7 +43,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 2/230: 'xccdf_org.ssgproject.content_rule_aide_build_database'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "aide"
 
@@ -75,7 +75,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 3/230: 'xccdf_org.ssgproject.content_rule_aide_check_audit_tools'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "aide"
 
@@ -133,7 +133,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 4/230: 'xccdf_org.ssgproject.content_rule_aide_disable_silentreports'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 if [ -e "/etc/default/aide" ] ; then
     
@@ -161,7 +161,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 5/230: 'xccdf_org.ssgproject.content_rule_aide_periodic_checking_systemd_timer'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ( dpkg-query --show --showformat='${db:Status-Status}' 'aide' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'systemd' 2>/dev/null | grep -q '^installed$' ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && { ( dpkg-query --show --showformat='${db:Status-Status}' 'aide' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'systemd' 2>/dev/null | grep -q '^installed$' ); }; then
 
 #!/bin/bash
 
@@ -182,7 +182,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 6/230: 'xccdf_org.ssgproject.content_rule_aide_periodic_cron_checking'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "aide"
 
@@ -714,7 +714,7 @@ echo "Unattended-Upgrade::Remove-Unused-Kernel-Packages \"true\";" >> /etc/apt/a
 ###############################################################################
 (>&2 echo "Remediating rule 16/230: 'xccdf_org.ssgproject.content_rule_banner_etc_issue_net'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 remote_login_banner_text='^(You[\s\n]+are[\s\n]+accessing[\s\n]+a[\s\n]+U\.S\.[\s\n]+Government[\s\n]+\(USG\)[\s\n]+Information[\s\n]+System[\s\n]+\(IS\)[\s\n]+that[\s\n]+is[\s\n]+provided[\s\n]+for[\s\n]+USG\-authorized[\s\n]+use[\s\n]+only\.[\s\n]+By[\s\n]+using[\s\n]+this[\s\n]+IS[\s\n]+\(which[\s\n]+includes[\s\n]+any[\s\n]+device[\s\n]+attached[\s\n]+to[\s\n]+this[\s\n]+IS\),[\s\n]+you[\s\n]+consent[\s\n]+to[\s\n]+the[\s\n]+following[\s\n]+conditions\:(?:[\n]+|(?:\\n)+)\-The[\s\n]+USG[\s\n]+routinely[\s\n]+intercepts[\s\n]+and[\s\n]+monitors[\s\n]+communications[\s\n]+on[\s\n]+this[\s\n]+IS[\s\n]+for[\s\n]+purposes[\s\n]+including,[\s\n]+but[\s\n]+not[\s\n]+limited[\s\n]+to,[\s\n]+penetration[\s\n]+testing,[\s\n]+COMSEC[\s\n]+monitoring,[\s\n]+network[\s\n]+operations[\s\n]+and[\s\n]+defense,[\s\n]+personnel[\s\n]+misconduct[\s\n]+\(PM\),[\s\n]+law[\s\n]+enforcement[\s\n]+\(LE\),[\s\n]+and[\s\n]+counterintelligence[\s\n]+\(CI\)[\s\n]+investigations\.(?:[\n]+|(?:\\n)+)\-At[\s\n]+any[\s\n]+time,[\s\n]+the[\s\n]+USG[\s\n]+may[\s\n]+inspect[\s\n]+and[\s\n]+seize[\s\n]+data[\s\n]+stored[\s\n]+on[\s\n]+this[\s\n]+IS\.(?:[\n]+|(?:\\n)+)\-Communications[\s\n]+using,[\s\n]+or[\s\n]+data[\s\n]+stored[\s\n]+on,[\s\n]+this[\s\n]+IS[\s\n]+are[\s\n]+not[\s\n]+private,[\s\n]+are[\s\n]+subject[\s\n]+to[\s\n]+routine[\s\n]+monitoring,[\s\n]+interception,[\s\n]+and[\s\n]+search,[\s\n]+and[\s\n]+may[\s\n]+be[\s\n]+disclosed[\s\n]+or[\s\n]+used[\s\n]+for[\s\n]+any[\s\n]+USG\-authorized[\s\n]+purpose\.(?:[\n]+|(?:\\n)+)\-This[\s\n]+IS[\s\n]+includes[\s\n]+security[\s\n]+measures[\s\n]+\(e\.g\.,[\s\n]+authentication[\s\n]+and[\s\n]+access[\s\n]+controls\)[\s\n]+to[\s\n]+protect[\s\n]+USG[\s\n]+interests\-\-not[\s\n]+for[\s\n]+your[\s\n]+personal[\s\n]+benefit[\s\n]+or[\s\n]+privacy\.(?:[\n]+|(?:\\n)+)\-Notwithstanding[\s\n]+the[\s\n]+above,[\s\n]+using[\s\n]+this[\s\n]+IS[\s\n]+does[\s\n]+not[\s\n]+constitute[\s\n]+consent[\s\n]+to[\s\n]+PM,[\s\n]+LE[\s\n]+or[\s\n]+CI[\s\n]+investigative[\s\n]+searching[\s\n]+or[\s\n]+monitoring[\s\n]+of[\s\n]+the[\s\n]+content[\s\n]+of[\s\n]+privileged[\s\n]+communications,[\s\n]+or[\s\n]+work[\s\n]+product,[\s\n]+related[\s\n]+to[\s\n]+personal[\s\n]+representation[\s\n]+or[\s\n]+services[\s\n]+by[\s\n]+attorneys,[\s\n]+psychotherapists,[\s\n]+or[\s\n]+clergy,[\s\n]+and[\s\n]+their[\s\n]+assistants\.[\s\n]+Such[\s\n]+communications[\s\n]+and[\s\n]+work[\s\n]+product[\s\n]+are[\s\n]+private[\s\n]+and[\s\n]+confidential\.[\s\n]+See[\s\n]+User[\s\n]+Agreement[\s\n]+for[\s\n]+details\.|I've[\s\n]+read[\s\n]+\&[\s\n]+consent[\s\n]+to[\s\n]+terms[\s\n]+in[\s\n]+IS[\s\n]+user[\s\n]+agreem't\.)$'
 
@@ -2420,7 +2420,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 41/230: 'xccdf_org.ssgproject.content_rule_disable_ctrlaltdel_reboot'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( [ -f /.dockerenv ] || [ -f /run/.containerenv ] ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 if /bin/false ; then
     systemctl disable ctrl-alt-del.target
@@ -2441,7 +2441,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 42/230: 'xccdf_org.ssgproject.content_rule_vlock_installed'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "vlock"
 
@@ -2456,7 +2456,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 43/230: 'xccdf_org.ssgproject.content_rule_package_opensc_installed'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "opensc"
 
@@ -2471,7 +2471,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 44/230: 'xccdf_org.ssgproject.content_rule_install_smartcard_packages'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( grep -sqE "^.*\.s390x$" /proc/sys/kernel/osrelease || grep -sqE "^s390x$" /proc/sys/kernel/arch; ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && { ! ( grep -sqE "^.*\.s390x$" /proc/sys/kernel/osrelease || grep -sqE "^s390x$" /proc/sys/kernel/arch; ); }; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--path-include=/usr/share/doc/libpam-pkcs11/*" "libpam-pkcs11"
 
@@ -2493,7 +2493,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 45/230: 'xccdf_org.ssgproject.content_rule_smartcard_configure_ca'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 if [ ! -f /etc/pam_pkcs11/pam_pkcs11.conf ]; then
     cp /usr/share/doc/libpam-pkcs11/examples/pam_pkcs11.conf.example /etc/pam_pkcs11/pam_pkcs11.conf
@@ -2514,7 +2514,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 46/230: 'xccdf_org.ssgproject.content_rule_smartcard_configure_cert_checking'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( grep -sqE "^.*\.s390x$" /proc/sys/kernel/osrelease || grep -sqE "^s390x$" /proc/sys/kernel/arch; ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && { ! ( grep -sqE "^.*\.s390x$" /proc/sys/kernel/osrelease || grep -sqE "^s390x$" /proc/sys/kernel/arch; ); }; then
 
 if [ ! -f /etc/pam_pkcs11/pam_pkcs11.conf ]; then
     cp /usr/share/doc/libpam-pkcs11/examples/pam_pkcs11.conf.example /etc/pam_pkcs11/pam_pkcs11.conf
@@ -2535,7 +2535,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 47/230: 'xccdf_org.ssgproject.content_rule_smartcard_configure_crl'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 if [ ! -f /etc/pam_pkcs11/pam_pkcs11.conf ]; then
     cp /usr/share/doc/libpam-pkcs11/examples/pam_pkcs11.conf.example /etc/pam_pkcs11/pam_pkcs11.conf
@@ -2807,7 +2807,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 57/230: 'xccdf_org.ssgproject.content_rule_no_empty_passwords_etc_shadow'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 readarray -t users_with_empty_pass < <(sudo awk -F: '!$2 {print $1}' /etc/shadow)
 
@@ -2859,7 +2859,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 60/230: 'xccdf_org.ssgproject.content_rule_accounts_tmout'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 var_accounts_tmout='600'
 
@@ -2993,7 +2993,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 66/230: 'xccdf_org.ssgproject.content_rule_service_rsyslog_enabled'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { dpkg-query --show --showformat='${db:Status-Status}' 'rsyslog' 2>/dev/null | grep -q '^installed$'; }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && { dpkg-query --show --showformat='${db:Status-Status}' 'rsyslog' 2>/dev/null | grep -q '^installed$'; }; then
 
 SYSTEMCTL_EXEC='/usr/bin/systemctl'
 "$SYSTEMCTL_EXEC" unmask 'rsyslog.service'
@@ -3013,7 +3013,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 67/230: 'xccdf_org.ssgproject.content_rule_ensure_rtc_utc_configuration'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 if timedatectl status | grep -i "time zone" | grep -iv 'UTC\|GMT'; then
     timedatectl set-timezone UTC
@@ -3030,7 +3030,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 68/230: 'xccdf_org.ssgproject.content_rule_rsyslog_remote_access_monitoring'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'rsyslog' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'rsyslog' 2>/dev/null | grep -q '^installed$'; then
 
 if [ ! -f /etc/rsyslog.d/50-default.conf ]; then
     mkdir -p /etc/rsyslog.d/
@@ -3059,7 +3059,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 69/230: 'xccdf_org.ssgproject.content_rule_dir_groupowner_system_journal'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 TMPFILES_CONF="/usr/lib/tmpfiles.d/systemd.conf"
 
@@ -3090,7 +3090,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 70/230: 'xccdf_org.ssgproject.content_rule_dir_owner_system_journal'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 TMPFILES_CONF="/usr/lib/tmpfiles.d/systemd.conf"
 
@@ -3121,7 +3121,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 71/230: 'xccdf_org.ssgproject.content_rule_dir_permissions_system_journal'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 TMPFILES_CONF="/usr/lib/tmpfiles.d/systemd.conf"
 
@@ -3152,7 +3152,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 72/230: 'xccdf_org.ssgproject.content_rule_file_groupowner_journalctl'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 newgroup=""
 if getent group "0" >/dev/null 2>&1; then
@@ -3179,7 +3179,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 73/230: 'xccdf_org.ssgproject.content_rule_file_groupowner_system_journal'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 TMPFILES_CONF="/usr/lib/tmpfiles.d/systemd.conf"
 
@@ -3210,7 +3210,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 74/230: 'xccdf_org.ssgproject.content_rule_file_owner_journalctl'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 newown=""
 if id "0" >/dev/null 2>&1; then
@@ -3237,7 +3237,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 75/230: 'xccdf_org.ssgproject.content_rule_file_owner_system_journal'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 TMPFILES_CONF="/usr/lib/tmpfiles.d/systemd.conf"
 
@@ -3268,7 +3268,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 76/230: 'xccdf_org.ssgproject.content_rule_file_permissions_journalctl'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 chmod u-s,g-xws,o-xwrt /usr/bin/journalctl
 
@@ -3283,7 +3283,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 77/230: 'xccdf_org.ssgproject.content_rule_file_permissions_system_journal'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 TMPFILES_CONF="/usr/lib/tmpfiles.d/systemd.conf"
 
@@ -3314,7 +3314,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 78/230: 'xccdf_org.ssgproject.content_rule_sysctl_net_ipv4_tcp_syncookies'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 # Comment out any occurrences of net.ipv4.tcp_syncookies from /etc/sysctl.d/*.conf files
 
@@ -3386,7 +3386,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 79/230: 'xccdf_org.ssgproject.content_rule_package_ufw_installed'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 var_network_filtering_service='ufw'
 
@@ -3797,7 +3797,7 @@ find /lib/ /lib64/ /usr/lib/ /usr/lib64/ \! -gid -1000 -type f -exec chgrp --no-
 ###############################################################################
 (>&2 echo "Remediating rule 104/230: 'xccdf_org.ssgproject.content_rule_kernel_module_usb-storage_disabled'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 if LC_ALL=C grep -q -m 1 "^install usb-storage" /etc/modprobe.d/usb-storage.conf ; then
 	
@@ -3822,7 +3822,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 105/230: 'xccdf_org.ssgproject.content_rule_sysctl_kernel_dmesg_restrict'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 # Comment out any occurrences of kernel.dmesg_restrict from /etc/sysctl.d/*.conf files
 
@@ -3892,7 +3892,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 106/230: 'xccdf_org.ssgproject.content_rule_sysctl_kernel_randomize_va_space'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 # Comment out any occurrences of kernel.randomize_va_space from /etc/sysctl.d/*.conf files
 
@@ -3978,7 +3978,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 109/230: 'xccdf_org.ssgproject.content_rule_service_kdump_disabled'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 SYSTEMCTL_EXEC='/usr/bin/systemctl'
 if [[ $("$SYSTEMCTL_EXEC" is-system-running) != "offline" ]]; then
@@ -4047,7 +4047,7 @@ DEBIAN_FRONTEND=noninteractive apt-get remove -y "telnetd"
 ###############################################################################
 (>&2 echo "Remediating rule 112/230: 'xccdf_org.ssgproject.content_rule_package_ntp_removed'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 # CAUTION: This remediation script will remove ntp
 # from the system, and may remove any packages
@@ -4227,7 +4227,7 @@ DEBIAN_FRONTEND=noninteractive apt-get remove -y "rsh-server"
 ###############################################################################
 (>&2 echo "Remediating rule 119/230: 'xccdf_org.ssgproject.content_rule_package_openssh-server_installed'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "openssh-server"
 
@@ -4242,7 +4242,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 120/230: 'xccdf_org.ssgproject.content_rule_service_sshd_enabled'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 SYSTEMCTL_EXEC='/usr/bin/systemctl'
 "$SYSTEMCTL_EXEC" unmask 'ssh.service'
@@ -4262,7 +4262,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 121/230: 'xccdf_org.ssgproject.content_rule_ssh_client_use_approved_ciphers_ordered_stig'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 ssh_approved_ciphers="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes128-ctr"
 
@@ -4310,7 +4310,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 122/230: 'xccdf_org.ssgproject.content_rule_ssh_use_approved_macs_ordered_stig'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 ssh_approved_macs='hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256'
 
@@ -4359,7 +4359,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 123/230: 'xccdf_org.ssgproject.content_rule_sshd_set_keepalive'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 var_sshd_set_keepalive='1'
 
@@ -4397,7 +4397,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 124/230: 'xccdf_org.ssgproject.content_rule_sshd_set_idle_timeout'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 sshd_idle_timeout_value='600'
 
@@ -4435,7 +4435,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 125/230: 'xccdf_org.ssgproject.content_rule_sshd_disable_empty_passwords'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf
@@ -4470,7 +4470,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 126/230: 'xccdf_org.ssgproject.content_rule_sshd_disable_x11_forwarding'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf
@@ -4505,7 +4505,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 127/230: 'xccdf_org.ssgproject.content_rule_sshd_do_not_permit_user_env'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf
@@ -4540,7 +4540,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 128/230: 'xccdf_org.ssgproject.content_rule_sshd_enable_pam'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf
@@ -4575,7 +4575,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 129/230: 'xccdf_org.ssgproject.content_rule_sshd_enable_pubkey_auth'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf
@@ -4610,7 +4610,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 130/230: 'xccdf_org.ssgproject.content_rule_sshd_enable_warning_banner_net'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf
@@ -4645,7 +4645,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 131/230: 'xccdf_org.ssgproject.content_rule_sshd_use_approved_ciphers_ordered_stig'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 sshd_approved_ciphers="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes128-ctr"
 
@@ -4683,7 +4683,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 132/230: 'xccdf_org.ssgproject.content_rule_sshd_use_approved_kex_ordered_stig'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 KEX_ALGOS="ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256"
 
@@ -4720,7 +4720,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 133/230: 'xccdf_org.ssgproject.content_rule_sshd_use_approved_macs_ordered_stig'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 sshd_approved_macs="hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256"
 
@@ -4758,7 +4758,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 134/230: 'xccdf_org.ssgproject.content_rule_sshd_x11_use_localhost'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf
@@ -4808,7 +4808,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 136/230: 'xccdf_org.ssgproject.content_rule_service_sssd_enabled'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'sssd-common' 2>/dev/null | grep -q '^installed$' && { ( dpkg-query --show --showformat='${db:Status-Status}' 'sssd-common' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'sssd-common' 2>/dev/null | grep -q '^installed$'; then
 
 SYSTEMCTL_EXEC='/usr/bin/systemctl'
 "$SYSTEMCTL_EXEC" unmask 'sssd.service'
@@ -5049,7 +5049,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 142/230: 'xccdf_org.ssgproject.content_rule_package_audit-audispd-plugins_installed'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "audispd-plugins"
 
@@ -5064,7 +5064,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 143/230: 'xccdf_org.ssgproject.content_rule_package_audit_installed'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y "auditd"
 
@@ -5079,7 +5079,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 144/230: 'xccdf_org.ssgproject.content_rule_service_auditd_enabled'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && { dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; }; then
 
 SYSTEMCTL_EXEC='/usr/bin/systemctl'
 "$SYSTEMCTL_EXEC" unmask 'auditd.service'
@@ -5099,7 +5099,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 145/230: 'xccdf_org.ssgproject.content_rule_grub2_audit_argument'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { dpkg-query --show --showformat='${db:Status-Status}' 'grub2-common' 2>/dev/null | grep -q '^installed$'; }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && { dpkg-query --show --showformat='${db:Status-Status}' 'grub2-common' 2>/dev/null | grep -q '^installed$'; }; then
 
 if /bin/false ; then
     KARGS_DIR="/usr/lib/bootc/kargs.d/"
@@ -5138,7 +5138,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 146/230: 'xccdf_org.ssgproject.content_rule_audit_rules_immutable'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Traverse all of:
 #
@@ -5175,7 +5175,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 147/230: 'xccdf_org.ssgproject.content_rule_audit_rules_session_events_btmp'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -5346,7 +5346,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 148/230: 'xccdf_org.ssgproject.content_rule_audit_rules_session_events_utmp'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -5517,7 +5517,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 149/230: 'xccdf_org.ssgproject.content_rule_audit_rules_session_events_wtmp'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -5688,7 +5688,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 150/230: 'xccdf_org.ssgproject.content_rule_audit_rules_sudoers'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -5859,7 +5859,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 151/230: 'xccdf_org.ssgproject.content_rule_audit_rules_sudoers_d'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -6030,7 +6030,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 152/230: 'xccdf_org.ssgproject.content_rule_audit_rules_suid_privilege_function'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -6687,7 +6687,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 153/230: 'xccdf_org.ssgproject.content_rule_audit_rules_usergroup_modification_group'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -6858,7 +6858,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 154/230: 'xccdf_org.ssgproject.content_rule_audit_rules_usergroup_modification_gshadow'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -7029,7 +7029,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 155/230: 'xccdf_org.ssgproject.content_rule_audit_rules_usergroup_modification_opasswd'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -7200,7 +7200,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 156/230: 'xccdf_org.ssgproject.content_rule_audit_rules_usergroup_modification_passwd'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -7371,7 +7371,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 157/230: 'xccdf_org.ssgproject.content_rule_audit_rules_usergroup_modification_shadow'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -7542,7 +7542,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 158/230: 'xccdf_org.ssgproject.content_rule_audit_rules_var_log_journal'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -7713,7 +7713,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 159/230: 'xccdf_org.ssgproject.content_rule_audit_sudo_log_events'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -7884,7 +7884,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 160/230: 'xccdf_org.ssgproject.content_rule_directory_permissions_var_log_audit'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 if LC_ALL=C grep -iw ^log_file /etc/audit/auditd.conf; then
   DIR=$(awk -F "=" '/^log_file/ {print $2}' /etc/audit/auditd.conf | tr -d ' ' | rev | cut -d"/" -f2- | rev)
@@ -7915,7 +7915,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 161/230: 'xccdf_org.ssgproject.content_rule_file_group_ownership_var_log_audit_stig'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 if LC_ALL=C grep -iw log_file /etc/audit/auditd.conf; then
   FILE=$(awk -F "=" '/^log_file/ {print $2}' /etc/audit/auditd.conf | tr -d ' ')
@@ -7951,7 +7951,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 162/230: 'xccdf_org.ssgproject.content_rule_file_groupownership_audit_configuration'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 newgroup=""
 if getent group "0" >/dev/null 2>&1; then
@@ -7977,7 +7977,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 163/230: 'xccdf_org.ssgproject.content_rule_file_ownership_audit_configuration'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 newown=""
 if id "0" >/dev/null 2>&1; then
@@ -8005,7 +8005,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 164/230: 'xccdf_org.ssgproject.content_rule_file_ownership_var_log_audit_stig'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 if LC_ALL=C grep -iw log_file /etc/audit/auditd.conf; then
     FILE=$(awk -F "=" '/^log_file/ {print $2}' /etc/audit/auditd.conf | tr -d ' ')
@@ -8025,7 +8025,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 165/230: 'xccdf_org.ssgproject.content_rule_file_permissions_var_log_audit_stig'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 if LC_ALL=C grep -iqw ^log_file /etc/audit/auditd.conf; then
     FILE=$(awk -F "=" '/^log_file/ {print $2}' /etc/audit/auditd.conf | tr -d ' ')
@@ -8046,7 +8046,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 166/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_chmod'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -8380,7 +8380,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 167/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_chown'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -8714,7 +8714,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 168/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fchmod'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -9048,7 +9048,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 169/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fchmodat'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -9382,7 +9382,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 170/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fchown'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -9716,7 +9716,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 171/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fchownat'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -10050,7 +10050,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 172/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fremovexattr'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -10703,7 +10703,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 173/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_fsetxattr'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -11356,7 +11356,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 174/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_lchown'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -11690,7 +11690,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 175/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_lremovexattr'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -12343,7 +12343,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 176/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_lsetxattr'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -12996,7 +12996,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 177/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_removexattr'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -13649,7 +13649,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 178/230: 'xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_setxattr'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -14302,7 +14302,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 179/230: 'xccdf_org.ssgproject.content_rule_audit_rules_execution_chacl'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/chacl -F perm=x"
@@ -14631,7 +14631,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 180/230: 'xccdf_org.ssgproject.content_rule_audit_rules_execution_setfacl'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/setfacl -F perm=x"
@@ -14960,7 +14960,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 181/230: 'xccdf_org.ssgproject.content_rule_audit_rules_execution_chcon'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/chcon -F perm=x"
@@ -15289,7 +15289,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 182/230: 'xccdf_org.ssgproject.content_rule_audit_rules_file_deletion_events_rename'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -15622,7 +15622,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 183/230: 'xccdf_org.ssgproject.content_rule_audit_rules_file_deletion_events_renameat'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -15955,7 +15955,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 184/230: 'xccdf_org.ssgproject.content_rule_audit_rules_file_deletion_events_rmdir'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -16288,7 +16288,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 185/230: 'xccdf_org.ssgproject.content_rule_audit_rules_file_deletion_events_unlink'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -16621,7 +16621,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 186/230: 'xccdf_org.ssgproject.content_rule_audit_rules_file_deletion_events_unlinkat'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -16954,7 +16954,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 187/230: 'xccdf_org.ssgproject.content_rule_audit_rules_unsuccessful_file_modification_creat'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -17600,7 +17600,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 188/230: 'xccdf_org.ssgproject.content_rule_audit_rules_unsuccessful_file_modification_ftruncate'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -18246,7 +18246,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 189/230: 'xccdf_org.ssgproject.content_rule_audit_rules_unsuccessful_file_modification_open'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && { ! ( ( grep -sqE "^.*\.aarch64$" /proc/sys/kernel/osrelease || grep -sqE "^aarch64$" /proc/sys/kernel/arch; ) ); }; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -18892,7 +18892,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 190/230: 'xccdf_org.ssgproject.content_rule_audit_rules_unsuccessful_file_modification_open_by_handle_at'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -19538,7 +19538,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 191/230: 'xccdf_org.ssgproject.content_rule_audit_rules_unsuccessful_file_modification_openat'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -20184,7 +20184,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 192/230: 'xccdf_org.ssgproject.content_rule_audit_rules_unsuccessful_file_modification_truncate'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -20830,7 +20830,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 193/230: 'xccdf_org.ssgproject.content_rule_audit_rules_kernel_module_loading_delete'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -21169,7 +21169,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 194/230: 'xccdf_org.ssgproject.content_rule_audit_rules_kernel_module_loading_finit'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -21508,7 +21508,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 195/230: 'xccdf_org.ssgproject.content_rule_audit_rules_kernel_module_loading_init'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # First perform the remediation of the syscall rule
 # Retrieve hardware architecture of the underlying system
@@ -21847,7 +21847,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 196/230: 'xccdf_org.ssgproject.content_rule_audit_rules_login_events_faillog'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -22018,7 +22018,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 197/230: 'xccdf_org.ssgproject.content_rule_audit_rules_login_events_lastlog'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 
@@ -22189,7 +22189,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 198/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_apparmor_parser'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/sbin/apparmor_parser -F perm=x"
@@ -22518,7 +22518,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 199/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_chage'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/chage -F perm=x"
@@ -22847,7 +22847,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 200/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_chfn'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/chfn -F perm=x"
@@ -23176,7 +23176,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 201/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_chsh'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/chsh -F perm=x"
@@ -23505,7 +23505,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 202/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_crontab'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/crontab -F perm=x"
@@ -23834,7 +23834,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 203/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_fdisk'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 # Create a list of audit *.rules files that should be inspected for presence and correctness
@@ -23999,7 +23999,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 204/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_gpasswd'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/gpasswd -F perm=x"
@@ -24328,7 +24328,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 205/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_kmod'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/kmod -F perm=x"
@@ -24657,7 +24657,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 206/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_modprobe'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Perform the remediation for both possible tools: 'auditctl' and 'augenrules'
 # Create a list of audit *.rules files that should be inspected for presence and correctness
@@ -24822,7 +24822,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 207/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_mount'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/mount -F perm=x"
@@ -25151,7 +25151,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 208/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_newgrp'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/newgrp -F perm=x"
@@ -25480,7 +25480,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 209/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_pam_timestamp_check'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/sbin/pam_timestamp_check -F perm=x"
@@ -25809,7 +25809,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 210/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_passwd'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/passwd -F perm=x"
@@ -26138,7 +26138,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 211/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_ssh_agent'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/ssh-agent -F perm=x"
@@ -26467,7 +26467,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 212/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_ssh_keysign'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/lib/openssh/ssh-keysign -F perm=x"
@@ -26796,7 +26796,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 213/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_su'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/su -F perm=x"
@@ -27125,7 +27125,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 214/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_sudo'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/sudo -F perm=x"
@@ -27454,7 +27454,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 215/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_sudoedit'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/sudoedit -F perm=x"
@@ -27783,7 +27783,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 216/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_umount'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/bin/umount -F perm=x"
@@ -28112,7 +28112,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 217/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_unix_update'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/sbin/unix_update -F perm=x"
@@ -28441,7 +28441,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 218/230: 'xccdf_org.ssgproject.content_rule_audit_rules_privileged_commands_usermod'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 # Retrieve hardware architecture of the underlying system
 OTHER_FILTERS="-F path=/usr/sbin/usermod -F perm=x"
@@ -28770,7 +28770,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 219/230: 'xccdf_org.ssgproject.content_rule_auditd_audispd_configure_remote_server'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 var_audispd_remote_server='logcollector'
 
@@ -28832,7 +28832,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 221/230: 'xccdf_org.ssgproject.content_rule_auditd_data_retention_action_mail_acct'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 var_auditd_action_mail_acct='root'
 
@@ -28870,7 +28870,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 222/230: 'xccdf_org.ssgproject.content_rule_auditd_data_retention_space_left_action'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 var_auditd_space_left_action='email'
 
@@ -28915,7 +28915,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 223/230: 'xccdf_org.ssgproject.content_rule_auditd_data_retention_space_left_percentage'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$' && dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ] && dpkg-query --show --showformat='${db:Status-Status}' 'auditd' 2>/dev/null | grep -q '^installed$'; then
 
 var_auditd_space_left_percentage='25'
 
@@ -28943,7 +28943,7 @@ fi
 ###############################################################################
 (>&2 echo "Remediating rule 225/230: 'xccdf_org.ssgproject.content_rule_file_groupownership_audit_binaries'"); (
 # Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 newgroup=""
 if getent group "0" >/dev/null 2>&1; then
