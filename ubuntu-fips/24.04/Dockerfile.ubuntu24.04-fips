@@ -26,7 +26,8 @@ RUN --mount=type=secret,id=pro-attach-config \
 
 # Copy the custom dracut modules.fips that includes 2 missing modules
 COPY 24.04/modules.fips /tmp/modules.fips
-RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
+# Use highest-version kernel dir (head -n1 is not ordered; avoids wrong modules.fips target).
+RUN kernel=$(ls -1 /lib/modules | sort -V | tail -1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
 
 COPY 24.04/fix.sh /tmp/fix.sh
 COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
