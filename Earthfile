@@ -720,21 +720,28 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
+            # Omit nvdimm dracut module to prevent libnvdimm errors during apt trigger-based initrd regeneration
+            RUN mkdir -p /etc/dracut.conf.d && \
+                echo 'omit_dracutmodules+=" nvdimm "' > /etc/dracut.conf.d/99-omit-nvdimm.conf
+
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-                apt-get upgrade $APT_UPGRADE_FLAGS && \
+                apt-get upgrade $APT_UPGRADE_FLAGS
+
+            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
                 apt-get install --no-install-recommends -y \
-                    util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
-                    parted \ # Used for creating and managing disk partitions.
-                    cloud-guest-utils \ # Includes utilities for cloud environments, such as resizing root partitions.
-                    gawk \ # Required for text processing and scripting in build scripts.
-                    fdisk \ # A partitioning tool for managing disk partitions.
-                    gdisk \ # GPT partitioning tool, complementing fdisk for modern systems.
-                    e2fsprogs \ # Provides tools for managing ext2/ext3/ext4 file systems.
-                    dosfstools \ # Utilities for creating and checking FAT file systems.
-                    rsync \ # Used for efficient file synchronization and transfer.
-                    cryptsetup-bin \ # Provides tools for setting up encrypted disks.
-                    udev && \ # Device manager for the Linux kernel, required for managing device nodes.
-                latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
+                    util-linux \
+                    parted \
+                    cloud-guest-utils \
+                    gawk \
+                    fdisk \
+                    gdisk \
+                    e2fsprogs \
+                    dosfstools \
+                    rsync \
+                    cryptsetup-bin \
+                    udev
+
+            RUN latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
                 if [ "$FIPS_ENABLED" = "true" ]; then \
                     # When FIPS is enabled, we need to remove any non-FIPS kernel packages (e.g., 5.15 HWE) to avoid conflicts.
                     # However, some kernel packages may be held (apt-mark hold), which causes `apt-get purge` to fail with:
