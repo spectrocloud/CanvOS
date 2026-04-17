@@ -697,6 +697,19 @@ base-image:
 
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+        # Try multiple mirrors to handle archive.ubuntu.com outages
+        RUN cp /etc/apt/sources.list /etc/apt/sources.list.bak && \
+            apt_update_ok=false && \
+            for mirror in archive.ubuntu.com mirror.kakao.com in.archive.ubuntu.com; do \
+                sed -i "s|[a-z.]*archive\.ubuntu\.com|$mirror|g" /etc/apt/sources.list && \
+                if apt-get update; then \
+                    apt_update_ok=true && break; \
+                fi && \
+                echo "Mirror $mirror failed, trying next..." && \
+                cp /etc/apt/sources.list.bak /etc/apt/sources.list; \
+            done && \
+            if [ "$apt_update_ok" = "false" ]; then echo "All mirrors failed" && exit 1; fi
+
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
             RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
             apt update && apt-get install -y snapd && \
