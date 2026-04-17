@@ -95,7 +95,7 @@ ARG DEBUG=false
 # assessment fallback on newer builds (refs: kairos-io/kairos#3831,
 # kairos-io/kairos#4046). v3.5.9 ships systemd 256.x where it still works.
 IF [ "$IS_UKI" = "true" ]
-    ARG KAIROS_VERSION=v3.5.9
+    LET KAIROS_VERSION=v3.5.9
 END
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
