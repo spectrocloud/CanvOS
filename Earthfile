@@ -700,7 +700,7 @@ base-image:
         # Try multiple mirrors to handle archive.ubuntu.com / security.ubuntu.com outages
         RUN cp /etc/apt/sources.list /etc/apt/sources.list.bak && \
             apt_update_ok=false && \
-            for mirror in archive.ubuntu.com mirror.kakao.com in.archive.ubuntu.com; do \
+            for mirror in mirror.kakao.com in.archive.ubuntu.com archive.ubuntu.com; do \
                 sed -i "s|[a-z.]*archive\.ubuntu\.com|$mirror|g" /etc/apt/sources.list && \
                 sed -i "s|security\.ubuntu\.com|$mirror|g" /etc/apt/sources.list && \
                 if apt-get update; then \
