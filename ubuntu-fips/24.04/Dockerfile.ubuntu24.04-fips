@@ -127,7 +127,7 @@ RUN systemctl enable systemd-logind.service
 # Disable dhcpcd - it conflicts with systemd-networkd; both request DHCP and cause dual IPs
 RUN systemctl disable dhcpcd 2>/dev/null || true
 
-COPY overlay/ubuntu24.04/ /
+COPY overlay/ /
 
 # OpenSCAP workaround: create dummy rpmrc so CPE/platform detection doesn't error on Ubuntu
 # (OpenSCAP expects RPM files; Debian/Ubuntu has none - causes "Unknown IO error" in scans)
