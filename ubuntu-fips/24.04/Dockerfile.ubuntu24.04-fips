@@ -8,9 +8,8 @@ ARG SKIP_STIG_BANNER=0
 ENV DEBIAN_FRONTEND=noninteractive
 
 COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -s install --fips --version "${VERSION}"
 
-# Ubuntu Pro: same pattern as 22.04 — BuildKit secret (see pro-attach-config.yaml; build.sh passes --secret id=pro-attach-config)
+# Pro + FIPS repos first — kairos-init only accepts --fips on Ubuntu once Pro is attached (and FIPS updates enabled).
 RUN --mount=type=secret,id=pro-attach-config \
     apt-get update \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
@@ -18,6 +17,8 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get upgrade -y \
     && pro enable fips-updates \
     && apt-get update
+
+RUN /kairos-init -l debug -s install --fips --version "${VERSION}"
 
 # Copy dracut config for FIPS (after kairos-init install)
 COPY 24.04/dracut.conf /etc/dracut.conf.d/kairos-fips.conf
@@ -127,7 +128,7 @@ RUN systemctl enable systemd-logind.service
 # Disable dhcpcd - it conflicts with systemd-networkd; both request DHCP and cause dual IPs
 RUN systemctl disable dhcpcd 2>/dev/null || true
 
-COPY overlay/ /
+COPY 24.04/overlay/ /
 
 # OpenSCAP workaround: create dummy rpmrc so CPE/platform detection doesn't error on Ubuntu
 # (OpenSCAP expects RPM files; Debian/Ubuntu has none - causes "Unknown IO error" in scans)
