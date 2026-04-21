@@ -165,7 +165,8 @@ RUN pro detach --assume-yes || true
 # DISA STIG remediation via generated fix.sh; optional stock Ubuntu banners (ENABLE_STIG / SKIP_STIG_BANNER)
 COPY 24.04/fix.sh /tmp/fix.sh
 COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
-RUN chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banners.sh \
+# touch /.dockerenv: some OCI builders omit it; fix.sh uses it to skip rules like 104 (usb-storage) like docker build does.
+RUN touch /.dockerenv && chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banners.sh \
     && if [ "$ENABLE_STIG" = "1" ]; then bash /tmp/fix.sh; fi \
     && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
 

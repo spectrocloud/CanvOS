@@ -4024,30 +4024,24 @@ DEBIAN_FRONTEND=noninteractive apt-get remove -y "telnetd"
 ###############################################################################
 # BEGIN fix (111 / 230) for 'xccdf_org.ssgproject.content_rule_package_chrony_installed'
 ###############################################################################
-(>&2 echo "Remediating rule 111/230: 'xccdf_org.ssgproject.content_rule_package_chrony_installed'")
-# Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
-
-var_timesync_service='chronyd'
-
-
-
-  if [ $var_timesync_service == chronyd ]; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "chrony"
-  fi
-
-else
-    >&2 echo 'Remediation is not applicable, nothing was done'
-fi
-
+# EXCEPTION (CanvOS/Kairos): commented to match 22.04/fix.sh — avoid chrony vs systemd-timesyncd at boot.
+# (>&2 echo "Remediating rule 111/230: 'xccdf_org.ssgproject.content_rule_package_chrony_installed'")
+# if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+# var_timesync_service='chronyd'
+#   if [ $var_timesync_service == chronyd ]; then
+#     DEBIAN_FRONTEND=noninteractive apt-get install -y "chrony"
+#   fi
+# else
+#     >&2 echo 'Remediation is not applicable, nothing was done'
+# fi
 # END fix for 'xccdf_org.ssgproject.content_rule_package_chrony_installed'
 
 ###############################################################################
 # BEGIN fix (112 / 230) for 'xccdf_org.ssgproject.content_rule_package_ntp_removed'
 ###############################################################################
 (>&2 echo "Remediating rule 112/230: 'xccdf_org.ssgproject.content_rule_package_ntp_removed'")
-# Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+# Remediation is applicable only in certain platforms — same guard as 22.04/fix.sh
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 # CAUTION: This remediation script will remove ntp
 # from the system, and may remove any packages
@@ -4094,76 +4088,19 @@ fi
 ###############################################################################
 # BEGIN fix (114 / 230) for 'xccdf_org.ssgproject.content_rule_chronyd_specify_remote_server'
 ###############################################################################
-(>&2 echo "Remediating rule 114/230: 'xccdf_org.ssgproject.content_rule_chronyd_specify_remote_server'")
-# Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { dpkg-query --show --showformat='${db:Status-Status}' 'chrony' 2>/dev/null | grep -q '^installed$'; }; then
-
-var_multiple_time_servers='0.us.pool.ntp.mil'
-
-
-config_file="/etc/chrony/chrony.conf"
-
-if ! grep -q '^[[:space:]]*\(server\|pool\)[[:space:]]\+[[:graph:]]\+' "$config_file" ; then
-  if ! grep -q '#[[:space:]]*server' "$config_file" ; then
-    for server in $(echo "$var_multiple_time_servers" | tr ',' '\n') ; do
-      printf '\nserver %s' "$server" >> "$config_file"
-    done
-  else
-    sed -i 's/#[ \t]*server/server/g' "$config_file"
-  fi
-  if [[ -s "$config_file" ]] && [[ -n "$(tail -c 1 -- "$config_file" || true)" ]]; then
-      LC_ALL=C sed -i --follow-symlinks '$a'\\ "$config_file"
-  fi
-fi
-
-else
-    >&2 echo 'Remediation is not applicable, nothing was done'
-fi
-
+# EXCEPTION (CanvOS/Kairos): commented to match 22.04 time-sync exceptions — no chrony.conf edits during image build.
+# (>&2 echo "Remediating rule 114/230: 'xccdf_org.ssgproject.content_rule_chronyd_specify_remote_server'")
+# if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { dpkg-query --show --showformat='${db:Status-Status}' 'chrony' 2>/dev/null | grep -q '^installed$'; }; then
+# ... (see upstream OpenSCAP remediation)
+# fi
 # END fix for 'xccdf_org.ssgproject.content_rule_chronyd_specify_remote_server'
 
 ###############################################################################
 # BEGIN fix (115 / 230) for 'xccdf_org.ssgproject.content_rule_chronyd_or_ntpd_set_maxpoll'
 ###############################################################################
-(>&2 echo "Remediating rule 115/230: 'xccdf_org.ssgproject.content_rule_chronyd_or_ntpd_set_maxpoll'")
-# Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { ( dpkg-query --show --showformat='${db:Status-Status}' 'chrony' 2>/dev/null | grep -q '^installed$' || dpkg-query --show --showformat='${db:Status-Status}' 'ntp' 2>/dev/null | grep -q '^installed$' ); }; then
-
-var_time_service_set_maxpoll='16'
-
-
-
-
-pof="/bin/pidof"
-
-
-CONFIG_FILES="/etc/ntp.conf"
-$pof ntpd || {
-    CHRONY_D_PATH=/etc/chrony/conf.d/
-    
-    mapfile -t CONFIG_FILES < <(find ${CHRONY_D_PATH}.* -type f -name '*.conf')
-    
-    CONFIG_FILES+=(/etc/chrony/chrony.conf)
-}
-
-# get list of ntp files
-
-for config_file in "${CONFIG_FILES[@]}" ; do
-    # Set maxpoll values to var_time_service_set_maxpoll
-    sed -i "s/^\(\(server\|pool\|peer\).*maxpoll\) [0-9,-][0-9]*\(.*\)$/\1 $var_time_service_set_maxpoll \3/" "$config_file"
-done
-
-for config_file in "${CONFIG_FILES[@]}" ; do
-    # Add maxpoll to server, pool or peer entries without maxpoll
-    grep "^\(server\|pool\|peer\)" "$config_file" | grep -v maxpoll | while read -r line ; do
-        sed -i "s/$line/& maxpoll $var_time_service_set_maxpoll/" "$config_file"
-    done
-done
-
-else
-    >&2 echo 'Remediation is not applicable, nothing was done'
-fi
-
+# EXCEPTION (CanvOS/Kairos): commented to match 22.04/fix.sh rule 114 — chrony/ntp maxpoll STIG not applied at image build.
+# (>&2 echo "Remediating rule 115/230: 'xccdf_org.ssgproject.content_rule_chronyd_or_ntpd_set_maxpoll'")
+# ... (see upstream OpenSCAP remediation)
 # END fix for 'xccdf_org.ssgproject.content_rule_chronyd_or_ntpd_set_maxpoll'
 
 ###############################################################################
@@ -4177,29 +4114,9 @@ fi
 ###############################################################################
 # BEGIN fix (117 / 230) for 'xccdf_org.ssgproject.content_rule_chronyd_sync_clock'
 ###############################################################################
-(>&2 echo "Remediating rule 117/230: 'xccdf_org.ssgproject.content_rule_chronyd_sync_clock'")
-# Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$' && { dpkg-query --show --showformat='${db:Status-Status}' 'chrony' 2>/dev/null | grep -q '^installed$'; }; then
-
-if [ -e "/etc/chrony/chrony.conf" ] ; then
-    
-    LC_ALL=C sed -i "/^\s*makestep /Id" "/etc/chrony/chrony.conf"
-else
-    touch "/etc/chrony/chrony.conf"
-fi
-# make sure file has newline at the end
-sed -i -e '$a\' "/etc/chrony/chrony.conf"
-
-cp "/etc/chrony/chrony.conf" "/etc/chrony/chrony.conf.bak"
-# Insert at the end of the file
-printf '%s\n' "makestep 1 -1" >> "/etc/chrony/chrony.conf"
-# Clean up after ourselves.
-rm "/etc/chrony/chrony.conf.bak"
-
-else
-    >&2 echo 'Remediation is not applicable, nothing was done'
-fi
-
+# EXCEPTION (CanvOS/Kairos): commented to match 22.04/fix.sh rule 115 — no chrony makestep during image build.
+# (>&2 echo "Remediating rule 117/230: 'xccdf_org.ssgproject.content_rule_chronyd_sync_clock'")
+# ... (see upstream OpenSCAP remediation)
 # END fix for 'xccdf_org.ssgproject.content_rule_chronyd_sync_clock'
 
 ###############################################################################
