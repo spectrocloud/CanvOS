@@ -90,6 +90,14 @@ ARG EFI_IMG_SIZE=2200
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
 
+# Pin UKI to Kairos v3.5.9: systemd 257.x dropped the boot-assessment
+# suffix from sd-boot entry IDs, breaking `bootentry` selection and
+# assessment fallback on newer builds (refs: kairos-io/kairos#3831,
+# kairos-io/kairos#4046). v3.5.9 ships systemd 256.x where it still works.
+IF [ "$IS_UKI" = "true" ]
+    LET KAIROS_VERSION=v3.5.9
+END
+
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
         ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
