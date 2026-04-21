@@ -3796,12 +3796,13 @@ find /lib/ /lib64/ /usr/lib/ /usr/lib64/ \! -gid -1000 -type f -exec chgrp --no-
 # BEGIN fix (104 / 230) for 'xccdf_org.ssgproject.content_rule_kernel_module_usb-storage_disabled'
 ###############################################################################
 (>&2 echo "Remediating rule 104/230: 'xccdf_org.ssgproject.content_rule_kernel_module_usb-storage_disabled'")
-# Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+# Remediation is applicable only in certain platforms — same guard as 22.04/fix.sh: do not blacklist usb-storage
+# during docker image build; that modprobe.d is baked into initramfs and breaks live ISO/USB boot (dracut live image).
+if [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
 
 if LC_ALL=C grep -q -m 1 "^install usb-storage" /etc/modprobe.d/usb-storage.conf ; then
 	
-	sed -i 's#^install usb-storage.*#install usb-storage /bin/false#g' /etc/modprobe.d/usb-storage.conf
+	sed -i 's#^install usb-storage.*#install usb-storage /bin/true#g' /etc/modprobe.d/usb-storage.conf
 else
 	echo -e "\n# Disable per security requirements" >> /etc/modprobe.d/usb-storage.conf
 	echo "install usb-storage /bin/false" >> /etc/modprobe.d/usb-storage.conf
