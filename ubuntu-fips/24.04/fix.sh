@@ -4066,29 +4066,29 @@ fi
 ###############################################################################
 # BEGIN fix (113 / 230) for 'xccdf_org.ssgproject.content_rule_package_timesyncd_removed'
 ###############################################################################
-(>&2 echo "Remediating rule 113/230: 'xccdf_org.ssgproject.content_rule_package_timesyncd_removed'")
-# Remediation is applicable only in certain platforms
-if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
-
-# CAUTION: This remediation script will remove systemd-timesyncd
-#	   from the system, and may remove any packages
-#	   that depend on systemd-timesyncd. Execute this
-#	   remediation AFTER testing on a non-production
-#	   system!
-
-var_timesync_service='chronyd'
-
-
-
-  if [ $var_timesync_service != systemd-timesyncd ]; then
-    DEBIAN_FRONTEND=noninteractive apt-get remove -y "systemd-timesyncd"
-  fi
-
-else
-    >&2 echo 'Remediation is not applicable, nothing was done'
-fi
-
-# END fix for 'xccdf_org.ssgproject.content_rule_package_timesyncd_removed'
+# EXCEPTION (CanvOS/Kairos): keep systemd-timesyncd installed — `kairos-init -s init` enables
+# systemd-timesyncd.service; STIG removal breaks the image build. Matches commented rule 113 in 22.04/fix.sh.
+# (>&2 echo "Remediating rule 113/230: 'xccdf_org.ssgproject.content_rule_package_timesyncd_removed'")
+# # Remediation is applicable only in certain platforms
+# if dpkg-query --show --showformat='${db:Status-Status}' 'linux-base' 2>/dev/null | grep -q '^installed$'; then
+#
+# # CAUTION: This remediation script will remove systemd-timesyncd
+# #	   from the system, and may remove any packages
+# #	   that depend on systemd-timesyncd. Execute this
+# #	   remediation AFTER testing on a non-production
+# #	   system!
+#
+# var_timesync_service='chronyd'
+#
+#   if [ $var_timesync_service != systemd-timesyncd ]; then
+#     DEBIAN_FRONTEND=noninteractive apt-get remove -y "systemd-timesyncd"
+#   fi
+#
+# else
+#     >&2 echo 'Remediation is not applicable, nothing was done'
+# fi
+#
+# # END fix for 'xccdf_org.ssgproject.content_rule_package_timesyncd_removed'
 
 ###############################################################################
 # BEGIN fix (114 / 230) for 'xccdf_org.ssgproject.content_rule_chronyd_specify_remote_server'

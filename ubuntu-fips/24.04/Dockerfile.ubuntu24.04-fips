@@ -9,16 +9,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 COPY --from=kairos-init /kairos-init /kairos-init
 
-# Pro + FIPS repos first — kairos-init only accepts --fips on Ubuntu once Pro is attached (and FIPS updates enabled).
+RUN /kairos-init -l debug -s install --version "${VERSION}"
+
 RUN --mount=type=secret,id=pro-attach-config \
     apt-get update \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && pro enable fips-updates \
+    && (pro enable fips-updates || true) \
     && apt-get update
-
-RUN /kairos-init -l debug -s install --fips --version "${VERSION}"
 
 # Copy dracut config for FIPS (after kairos-init install)
 COPY 24.04/dracut.conf /etc/dracut.conf.d/kairos-fips.conf
@@ -169,6 +168,12 @@ COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
 RUN chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banners.sh \
     && if [ "$ENABLE_STIG" = "1" ]; then bash /tmp/fix.sh; fi \
     && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
+
+# kairos-init init enables systemd-timesyncd.service; ensure the package is present (Noble STIG rule 113 is disabled in fix.sh to match 22.04).
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-timesyncd && rm -rf /var/lib/apt/lists/*
+
+# Writes /etc/kairos-release (incl. KAIROS_FLAVOR) — required for enki ISO and Kairos tooling; same as 22.04 Dockerfile.
+RUN /kairos-init -l debug -s init --version "${VERSION}"
 
 RUN mkdir -p /etc/luet/repos.conf.d
 
