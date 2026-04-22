@@ -62,75 +62,76 @@ RUN touch /.dockerenv && chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banner
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-timesyncd && rm -rf /var/lib/apt/lists/*
 
-# Init may merge OEM/framework content over /etc; any fix to profile.d or netplan must run AFTER this step.
-RUN /kairos-init -l debug -s init --version "${VERSION}"
+# Init may merge OEM/framework content over /etc; any fix to profile.d must run AFTER this step.
+# --fips sets KAIROS_FIPS=true in /etc/kairos-release, matching 22.04 behaviour.
+RUN /kairos-init -l debug -s init --fips --version “${VERSION}”
 
-# - Rule 17 STIG: invalid ssh_confirm.sh must stay gone (default) or be replaced with a known-good script (USG_SSH_CONSENT_SCRIPT=1 + ENABLE_STIG, not skipping banners).
-# - Use ssh.service only: enabling ssh.socket and ssh.service together makes ssh.service fail at boot (port/socket conflict) while the socket looks “OK”.
-# - netplan + systemd-networkd for DHCP; debug logins: EMBED_DEBUG_ROOT
+# Post-init hardening (runs AFTER kairos-init so any OEM merges are already applied):
+#
+# 1. ssh_confirm.sh: STIG rule 17 writes a broken profile.d script that blocks non-SSH logins.
+#    Remove it; USG_SSH_CONSENT_SCRIPT=1 re-adds a known-good SSH-only version.
+#
+# 2. SSH service vs socket: Ubuntu 24.04 ships ssh.socket (socket-activated sshd) and
+#    ssh.service. Enabling both causes ssh.service to fail binding port 22 at boot.
+#    Nullify the sshd generator (handles both the jammy name sshd-socket-generator and
+#    the noble name sshd-generator), disable+mask ssh.socket, enable ssh.service only.
+#
+# 3. Networking: kairos-init installs and configures NetworkManager for DHCP — the same
+#    mechanism that works on 22.04. DO NOT mask NetworkManager; the earlier netplan/networkd
+#    approach wrote to /run/systemd/network/ which is wiped by the runtime tmpfs mount,
+#    leaving no DHCP config after boot.
+#
+# 4. SSSD: STIG rules 22/135/136 install sssd (via libpam-sss dependency) and enable
+#    sssd.service, but create no sssd.conf. On boot sssd fails, causing PAM delays and
+#    potentially blocking console auth. Disable and mask it here; re-enable if an actual
+#    SSSD/LDAP backend is configured at deployment time via cloud-config.
+#
+# 5. EMBED_DEBUG_ROOT: unlock root + set password “root”; set kairos password “kairos”.
+#    Also allow SSH PasswordAuthentication + PermitRootLogin for lab/debug access.
 RUN rm -f /etc/profile.d/ssh_confirm.sh; \
-  if [ "$USG_SSH_CONSENT_SCRIPT" = "1" ] && [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" != "1" ]; then \
+  if [ “$USG_SSH_CONSENT_SCRIPT” = “1” ] && [ “$ENABLE_STIG” = “1” ] && [ “$SKIP_STIG_BANNER” != “1” ]; then \
     printf '%s\n' \
       '# USG consent for SSH only (POSIX).' \
-      'if [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_TTY:-}" ]; then' \
+      'if [ -n “${SSH_CLIENT:-}” ] || [ -n “${SSH_TTY:-}” ]; then' \
       '  while true; do' \
-      '    printf "Do you agree? [y/N] "' \
+      '    printf “Do you agree? [y/N] “' \
       '    read -r yn || exit 1' \
-      '    case "$yn" in' \
+      '    case “$yn” in' \
       '      [Yy]*) break ;;' \
-      '      [Nn]*|"")' \
-      '        echo "Access denied."; exit 1 ;;' \
+      '      [Nn]*|””)' \
+      '        echo “Access denied.”; exit 1 ;;' \
       '      *) ;;' \
       '    esac' \
       '  done' \
       'fi' \
       > /etc/profile.d/ssh_confirm.sh && chmod 644 /etc/profile.d/ssh_confirm.sh; \
   fi; \
-  apt-get update; \
-  apt-get install -y --no-install-recommends netplan.io; \
-  mkdir -p /etc/netplan; \
-  printf '%s\n' \
-    'network:' \
-    '  version: 2' \
-    '  renderer: networkd' \
-    '  ethernets:' \
-    '    nic-dhcp:' \
-    '      match:' \
-    '        name: "e*"' \
-    '      dhcp4: true' \
-    '      optional: true' \
-    > /etc/netplan/99-canvos-dhcp.yaml; \
-  netplan generate 2>/dev/null || true; \
-  systemctl unmask systemd-networkd.service 2>/dev/null || true; \
-  systemctl unmask systemd-resolved.service 2>/dev/null || true; \
-  if [ -e /lib/systemd/system/NetworkManager.service ]; then systemctl mask NetworkManager.service 2>/dev/null || true; systemctl mask NetworkManager-wait-online.service 2>/dev/null || true; fi; \
   systemctl unmask ssh.service 2>/dev/null || true; \
-  systemctl unmask ssh.socket 2>/dev/null || true; \
-  systemctl enable systemd-networkd.service; \
-  systemctl enable systemd-networkd-wait-online.service; \
-  systemctl enable systemd-resolved.service; \
-  if [ -f /lib/systemd/system/ssh.socket ]; then \
+  for _gen in \
+      /lib/systemd/system-generators/sshd-socket-generator \
+      /usr/lib/systemd/system-generators/sshd-socket-generator \
+      /lib/systemd/system-generators/sshd-generator \
+      /usr/lib/systemd/system-generators/sshd-generator; do \
+    [ -e “$_gen” ] || continue; \
+    mkdir -p /etc/systemd/system-generators; \
+    ln -sf /dev/null “/etc/systemd/system-generators/$(basename “$_gen”)”; \
+  done; \
+  if [ -f /lib/systemd/system/ssh.socket ] || [ -f /usr/lib/systemd/system/ssh.socket ]; then \
     systemctl disable ssh.socket 2>/dev/null || true; \
     systemctl mask ssh.socket 2>/dev/null || true; \
   fi; \
-  if [ -e /lib/systemd/system-generators/sshd-socket-generator ]; then \
-    mkdir -p /etc/systemd/system-generators; \
-    ln -sf /dev/null /etc/systemd/system-generators/sshd-socket-generator; \
-  fi; \
   systemctl enable ssh.service; \
-  rm -rf /var/lib/apt/lists/*; \
-  if [ "$EMBED_DEBUG_ROOT" = "1" ]; then \
+  systemctl disable sssd.service 2>/dev/null || true; \
+  systemctl mask sssd.service 2>/dev/null || true; \
+  if [ “$EMBED_DEBUG_ROOT” = “1” ]; then \
     usermod -U root 2>/dev/null || true; \
     ROOT_HASH=$(openssl passwd -6 root); \
-    usermod -p "$ROOT_HASH" root; \
+    usermod -p “$ROOT_HASH” root; \
     if id -u kairos >/dev/null 2>&1; then \
       usermod -U kairos 2>/dev/null || true; \
       K_HASH=$(openssl passwd -6 kairos); \
-      usermod -p "$K_HASH" kairos; \
+      usermod -p “$K_HASH” kairos; \
     fi; \
-    for t in console tty1 tty2 tty3 ttyS0 ttyAMA0 hvc0; do \
-      grep -qxF "$t" /etc/securetty 2>/dev/null || echo "$t" >> /etc/securetty; \
-    done; \
     mkdir -p /etc/ssh/sshd_config.d; \
     printf '%s\n' 'PermitRootLogin yes' 'PasswordAuthentication yes' > /etc/ssh/sshd_config.d/99-debug-login.conf; \
     chmod 644 /etc/ssh/sshd_config.d/99-debug-login.conf; \
