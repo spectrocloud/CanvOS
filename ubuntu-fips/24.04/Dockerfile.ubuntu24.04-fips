@@ -1,10 +1,13 @@
-FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
-FROM ubuntu:24.04
+FROM quay.io/kairos/kairos-init:v0.8.5 AS kairos-init
 
-# Match ubuntu 22.04 Dockerfile: Kairos version, STIG, optional stock banners after STIG
-ARG VERSION=v3.5.9
+FROM ubuntu:24.04
+ARG VERSION=v4.0.3
 ARG ENABLE_STIG=1
 ARG SKIP_STIG_BANNER=0
+# Debug login: root/root, kairos/kairos if user exists after init; securetty + sshd allow password root. Build with --build-arg EMBED_DEBUG_ROOT=0 to skip.
+ARG EMBED_DEBUG_ROOT=1
+# STIG rule 17 writes a broken /etc/profile.d/ssh_confirm.sh. Set 1 to re-add a minimal USG script (SSH only); default 0 = leave file removed for reliable console login.
+ARG USG_SSH_CONSENT_SCRIPT=0
 ENV DEBIAN_FRONTEND=noninteractive
 
 COPY --from=kairos-init /kairos-init /kairos-init
@@ -24,7 +27,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     && (pro enable fips-updates || true) \
     && apt-get update \
     && apt-get install -y \
-    strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed \
+    strongswan openssh-client openssh-server openssl linux-image-fips linux-headers-fips shim-signed \
     && pro detach --assume-yes
 
 # Extra packages for STIG/OpenSCAP + edge — kairos-init already installs most base OS bits; keep this layer small for build time
@@ -59,12 +62,84 @@ RUN touch /.dockerenv && chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banner
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-timesyncd && rm -rf /var/lib/apt/lists/*
 
+# Init may merge OEM/framework content over /etc; any fix to profile.d or netplan must run AFTER this step.
 RUN /kairos-init -l debug -s init --version "${VERSION}"
+
+# - Rule 17 STIG: invalid ssh_confirm.sh must stay gone (default) or be replaced with a known-good script (USG_SSH_CONSENT_SCRIPT=1 + ENABLE_STIG, not skipping banners).
+# - Use ssh.service only: enabling ssh.socket and ssh.service together makes ssh.service fail at boot (port/socket conflict) while the socket looks “OK”.
+# - netplan + systemd-networkd for DHCP; debug logins: EMBED_DEBUG_ROOT
+RUN rm -f /etc/profile.d/ssh_confirm.sh; \
+  if [ "$USG_SSH_CONSENT_SCRIPT" = "1" ] && [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" != "1" ]; then \
+    printf '%s\n' \
+      '# USG consent for SSH only (POSIX).' \
+      'if [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_TTY:-}" ]; then' \
+      '  while true; do' \
+      '    printf "Do you agree? [y/N] "' \
+      '    read -r yn || exit 1' \
+      '    case "$yn" in' \
+      '      [Yy]*) break ;;' \
+      '      [Nn]*|"")' \
+      '        echo "Access denied."; exit 1 ;;' \
+      '      *) ;;' \
+      '    esac' \
+      '  done' \
+      'fi' \
+      > /etc/profile.d/ssh_confirm.sh && chmod 644 /etc/profile.d/ssh_confirm.sh; \
+  fi; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends netplan.io; \
+  mkdir -p /etc/netplan; \
+  printf '%s\n' \
+    'network:' \
+    '  version: 2' \
+    '  renderer: networkd' \
+    '  ethernets:' \
+    '    nic-dhcp:' \
+    '      match:' \
+    '        name: "e*"' \
+    '      dhcp4: true' \
+    '      optional: true' \
+    > /etc/netplan/99-canvos-dhcp.yaml; \
+  netplan generate 2>/dev/null || true; \
+  systemctl unmask systemd-networkd.service 2>/dev/null || true; \
+  systemctl unmask systemd-resolved.service 2>/dev/null || true; \
+  if [ -e /lib/systemd/system/NetworkManager.service ]; then systemctl mask NetworkManager.service 2>/dev/null || true; systemctl mask NetworkManager-wait-online.service 2>/dev/null || true; fi; \
+  systemctl unmask ssh.service 2>/dev/null || true; \
+  systemctl unmask ssh.socket 2>/dev/null || true; \
+  systemctl enable systemd-networkd.service; \
+  systemctl enable systemd-networkd-wait-online.service; \
+  systemctl enable systemd-resolved.service; \
+  if [ -f /lib/systemd/system/ssh.socket ]; then \
+    systemctl disable ssh.socket 2>/dev/null || true; \
+    systemctl mask ssh.socket 2>/dev/null || true; \
+  fi; \
+  if [ -e /lib/systemd/system-generators/sshd-socket-generator ]; then \
+    mkdir -p /etc/systemd/system-generators; \
+    ln -sf /dev/null /etc/systemd/system-generators/sshd-socket-generator; \
+  fi; \
+  systemctl enable ssh.service; \
+  rm -rf /var/lib/apt/lists/*; \
+  if [ "$EMBED_DEBUG_ROOT" = "1" ]; then \
+    usermod -U root 2>/dev/null || true; \
+    ROOT_HASH=$(openssl passwd -6 root); \
+    usermod -p "$ROOT_HASH" root; \
+    if id -u kairos >/dev/null 2>&1; then \
+      usermod -U kairos 2>/dev/null || true; \
+      K_HASH=$(openssl passwd -6 kairos); \
+      usermod -p "$K_HASH" kairos; \
+    fi; \
+    for t in console tty1 tty2 tty3 ttyS0 ttyAMA0 hvc0; do \
+      grep -qxF "$t" /etc/securetty 2>/dev/null || echo "$t" >> /etc/securetty; \
+    done; \
+    mkdir -p /etc/ssh/sshd_config.d; \
+    printf '%s\n' 'PermitRootLogin yes' 'PasswordAuthentication yes' > /etc/ssh/sshd_config.d/99-debug-login.conf; \
+    chmod 644 /etc/ssh/sshd_config.d/99-debug-login.conf; \
+  fi
 
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
-RUN mkdir -p /etc/luet/repos.conf.d
-
-RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+# Clear cache
+RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} + && \
+    rm -rf /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
