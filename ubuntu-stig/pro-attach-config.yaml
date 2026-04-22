@@ -1,0 +1,6 @@
+# Ubuntu Pro attach config for FIPS STIG builds (same pattern as ubuntu-fips/).
+# Replace the token with your Ubuntu Pro credentials before building.
+# See: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
+token: "REPLACE_WITH_TOKEN"
+enable_services:
+  - fips-updates

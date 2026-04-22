@@ -2,32 +2,21 @@ FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
 FROM ubuntu:24.04
 
 ARG KAIROS_VERSION=v3.5.9
-ARG UBUNTU_PRO_TOKEN=""
 ENV DEBIAN_FRONTEND=noninteractive
 
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
 
-# Attach Ubuntu Pro if token is provided (required for FIPS-certified packages)
-# Token can be provided via build arg or Docker secret
-RUN if [ -n "$UBUNTU_PRO_TOKEN" ]; then \
-        echo "Attaching Ubuntu Pro using token..."; \
-        apt-get update && \
-        apt-get install -y --no-install-recommends ubuntu-advantage-tools ca-certificates && \
-        pro attach "$UBUNTU_PRO_TOKEN" && \
-        pro enable fips-updates && \
-        apt-get update; \
-    elif [ -f /run/secrets/pro-attach-config ]; then \
-        echo "Attaching Ubuntu Pro using secret file..."; \
-        apt-get update && \
-        apt-get install -y --no-install-recommends ubuntu-advantage-tools ca-certificates && \
-        pro attach --attach-config /run/secrets/pro-attach-config && \
-        pro enable fips-updates && \
-        apt-get update; \
-    else \
-        echo "WARNING: No Ubuntu Pro token provided. FIPS-certified packages may not be available."; \
-        echo "For FIPS-certified packages, provide UBUNTU_PRO_TOKEN build arg or pro-attach-config secret."; \
-    fi
+# Ubuntu Pro + FIPS (same pattern as ubuntu-fips/): credentials never stored in image layers.
+# Build: docker build --secret id=pro-attach-config,src=pro-attach-config.yaml ...
+# https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
+# enable_services in pro-attach-config.yaml (e.g. fips-updates) is applied at attach time.
+# Do not run "pro enable fips-updates" here: it exits non-zero when already enabled (common after attach YAML).
+RUN --mount=type=secret,id=pro-attach-config \
+    apt-get update && \
+    apt-get install -y --no-install-recommends ubuntu-advantage-tools ca-certificates && \
+    pro attach --attach-config /run/secrets/pro-attach-config && \
+    apt-get update
 
 # Copy dracut config for FIPS (after kairos-init install)
 COPY dracut.conf.fips /etc/dracut.conf.d/kairos-fips.conf

@@ -19,14 +19,21 @@ Example: `bash build.sh.ubuntu24.04 ubuntu24.04-byoi-stig false`
 
 ### FIPS STIG Image
 
+FIPS-certified packages require **Ubuntu Pro**. Use the same **`pro-attach-config.yaml`** pattern as [`ubuntu-fips/`](../ubuntu-fips/README.md) (not build args—avoids leaking the token in image history).
+
+1. Edit `ubuntu-stig/pro-attach-config.yaml`: set `token:` to your Ubuntu Pro token and keep `enable_services: [fips-updates]`.
+2. Build:
+
 ```bash
 cd ubuntu-stig
-bash build.sh.ubuntu24.04 [<image-name>] true [<ubuntu-pro-token>]
+bash build.sh.ubuntu24.04 [<image-name>] true
 ```
 
-Example: `bash build.sh.ubuntu24.04 ubuntu24.04-byoi-stig-fips true $UBUNTU_PRO_TOKEN`
+Example: `bash build.sh.ubuntu24.04 ubuntu24.04-byoi-stig-fips true`
 
-Or use Docker secret: `docker build --secret id=pro-attach-config,src=pro-attach-config.yaml ...`
+Optional: `UBUNTU_PRO_CONFIG=/path/to/pro-attach-config.yaml` to use a config outside the repo.
+
+The build script passes `--secret id=pro-attach-config,src=...` (requires Docker BuildKit, enabled automatically).
 
 ## Static STIG Content (Reproducible Releases)
 

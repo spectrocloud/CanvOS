@@ -6,7 +6,10 @@ cd "$SCRIPT_DIR"
 
 BASE_IMAGE="${1:-ubuntu24.04-byoi-stig}"
 FIPS_ENABLED="${2:-false}"
-UBUNTU_PRO_TOKEN="${3:-}"
+# FIPS: path to Ubuntu Pro attach config (override with UBUNTU_PRO_CONFIG)
+PRO_ATTACH_CONFIG="${UBUNTU_PRO_CONFIG:-pro-attach-config.yaml}"
+
+export DOCKER_BUILDKIT=1
 
 # Verify we have the correct stig-remediate.sh (Ubuntu, not RHEL)
 if ! grep -q "Ubuntu 24.04 STIG remediation" stig-remediate.sh 2>/dev/null; then
@@ -17,19 +20,22 @@ fi
 
 if [ "$FIPS_ENABLED" = "true" ]; then
     echo "Building Ubuntu 24.04 STIG FIPS image..."
-    if [ -z "$UBUNTU_PRO_TOKEN" ]; then
-        echo "WARNING: No Ubuntu Pro token provided. FIPS-certified packages may not be available."
-        echo "Usage: $0 <image-name> true <ubuntu-pro-token>"
-        echo "Or use Docker secret: docker build --secret id=pro-attach-config,src=pro-attach-config.yaml ..."
+    if [ ! -f "$PRO_ATTACH_CONFIG" ]; then
+        echo "ERROR: FIPS build requires Ubuntu Pro attach config: $PRO_ATTACH_CONFIG"
+        echo "Copy from ubuntu-fips reference or create it with your token:"
+        echo "  token: \"<your-ubuntu-pro-token>\""
+        echo "  enable_services:"
+        echo "    - fips-updates"
+        echo "Or set UBUNTU_PRO_CONFIG=/path/to/pro-attach-config.yaml"
+        exit 1
     fi
-    if [ -n "$UBUNTU_PRO_TOKEN" ]; then
-        docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" \
-                     --build-arg UBUNTU_PRO_TOKEN="$UBUNTU_PRO_TOKEN" \
-                     -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04-fips .
-    else
-        docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" \
-                     -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04-fips .
+    if grep -q 'REPLACE_WITH_TOKEN' "$PRO_ATTACH_CONFIG" 2>/dev/null; then
+        echo "ERROR: Edit $PRO_ATTACH_CONFIG and replace REPLACE_WITH_TOKEN with your Ubuntu Pro token."
+        exit 1
     fi
+    docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" \
+                 --secret id=pro-attach-config,src="$PRO_ATTACH_CONFIG" \
+                 -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04-fips .
 else
     echo "Building Ubuntu 24.04 STIG image..."
     docker build --build-arg KAIROS_VERSION="${KAIROS_VERSION:-v3.5.9}" -t "$BASE_IMAGE" -f Dockerfile.ubuntu24.04 .
