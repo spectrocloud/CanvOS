@@ -4,143 +4,121 @@ FROM ubuntu:24.04
 ARG VERSION=v4.0.3
 ARG ENABLE_STIG=1
 ARG SKIP_STIG_BANNER=0
-# Debug login: root/root, kairos/kairos if user exists after init; securetty + sshd allow password root. Build with --build-arg EMBED_DEBUG_ROOT=0 to skip.
-ARG EMBED_DEBUG_ROOT=1
-# STIG rule 17 writes a broken /etc/profile.d/ssh_confirm.sh. Set 1 to re-add a minimal USG script (SSH only); default 0 = leave file removed for reliable console login.
-ARG USG_SSH_CONSENT_SCRIPT=0
 ENV DEBIAN_FRONTEND=noninteractive
 
-COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -s install --version "${VERSION}"
-
-# Remove non-FIPS kernels (same pattern as 22.04 — kairos installs generic; Pro layer provides FIPS kernel + initramfs via packages)
-RUN apt-get update && apt-get remove -y linux-base linux-image-generic linux-image-generic-hwe-24.04 2>/dev/null || true \
-    && apt-get autoremove -y \
-    && dpkg -l 'linux-*' 2>/dev/null | awk '/^(ii|rc)/ && $2 !~ /fips/ {print $2}' | xargs -r apt-get purge -y || true
-
-## Ubuntu Pro + FIPS kernel — same package set idea as 22.04 (no custom dracut.conf / manual dracut; initramfs from linux-image-fips postinst)
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s install --version "${VERSION}"
+# Remove default kernel that Kairos-init installs and purge leftover configs
+RUN apt-get remove -y linux-base linux-image-generic-hwe-24.04 && apt-get autoremove -y \
+    && dpkg -l 'linux-*' | awk '/^(ii|rc)/ && $2 !~ /fips/ {print $2}' | xargs -r apt-get purge -y
+## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
+## I've just added "linux-image-fips" in the package list
+## If you want to use secureboot with fips, you need to install the shim-signed package
+## from the Ubuntu PRO repos as its signed with adifferent key
+## Noble: no strongswan-hmac package in archive (jammy had it); install strongswan only.
 RUN --mount=type=secret,id=pro-attach-config \
     apt-get update \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && (pro enable fips-updates || true) \
-    && apt-get update \
-    && apt-get install -y \
-    strongswan openssh-client openssh-server openssl linux-image-fips linux-headers-fips shim-signed \
+    && apt-get install -y strongswan openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed \
     && pro detach --assume-yes
 
-# Extra packages for STIG/OpenSCAP + edge — kairos-init already installs most base OS bits; keep this layer small for build time
-RUN apt-get update && apt-get install -y --no-install-recommends software-properties-common \
-    && add-apt-repository universe -y && apt-get update \
-    && apt-get install -y --no-install-recommends \
-    auditd squashfs-tools efibootmgr parted e2fsprogs dosfstools \
-    grub2-common grub-pc-bin grub-efi-amd64-bin grub-efi-amd64-signed zstd \
-    open-vm-tools open-iscsi iptables iproute2 conntrack ethtool socat lvm2 cloud-guest-utils \
-    rsync jq ssg-base ssg-debderived openscap-scanner ufw \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Custom crypto module list for the running kernel (same as 22.04 modules.fips)
+# Copy the custom dracut modules.fips that includes 2 missing modules
 COPY 24.04/modules.fips /tmp/modules.fips
-RUN kernel=$(ls -1 /lib/modules | sort -V | tail -1) && mv /tmp/modules.fips "/lib/modules/${kernel}/modules.fips"
-
-RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml 2>/dev/null || true
-RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml 2>/dev/null || true
-RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml 2>/dev/null || true
-
-RUN mkdir -p /run/lock && touch /usr/libexec/.keep
-
-COPY 24.04/overlay/ /
-
-RUN mkdir -p /usr/lib/rpm && echo '# Dummy for OpenSCAP CPE on Debian/Ubuntu' > /usr/lib/rpm/rpmrc
+RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
 
 COPY 24.04/fix.sh /tmp/fix.sh
 COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
-RUN touch /.dockerenv && chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banners.sh \
+RUN chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banners.sh \
     && if [ "$ENABLE_STIG" = "1" ]; then bash /tmp/fix.sh; fi \
     && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-timesyncd && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --fips --version "${VERSION}"
 
-# Init may merge OEM/framework content over /etc; any fix to profile.d must run AFTER this step.
-# --fips sets KAIROS_FIPS=true in /etc/kairos-release, matching 22.04 behaviour.
-RUN /kairos-init -l debug -s init --fips --version “${VERSION}”
-
-# Post-init hardening (runs AFTER kairos-init so any OEM merges are already applied):
+# Post-init hardening — runs AFTER kairos-init so any OEM merges are already applied.
 #
-# 1. ssh_confirm.sh: STIG rule 17 writes a broken profile.d script that blocks non-SSH logins.
-#    Remove it; USG_SSH_CONSENT_SCRIPT=1 re-adds a known-good SSH-only version.
+# 1. Remove broken STIG rule-17 ssh_confirm.sh: it uses non-POSIX read/printf which
+#    causes bash to exit on console logins (non-SSH sessions).
 #
-# 2. SSH service vs socket: Ubuntu 24.04 ships ssh.socket (socket-activated sshd) and
-#    ssh.service. Enabling both causes ssh.service to fail binding port 22 at boot.
-#    Nullify the sshd generator (handles both the jammy name sshd-socket-generator and
-#    the noble name sshd-generator), disable+mask ssh.socket, enable ssh.service only.
+# 2. Nullify the sshd generator via empty files. Ubuntu 24.04 ships both ssh.socket
+#    and ssh.service. The sshd-generator also creates a socket unit at boot. With the
+#    generator active, both ssh.socket and ssh.service try to bind port 22 → bind
+#    conflict → sshd fails. systemd(1) documents empty executable files in
+#    /etc/systemd/system-generators/ (same name as the library generator) as the
+#    supported way to suppress them; symlinks-to-/dev/null behavior is inconsistent
+#    across systemd versions.
 #
-# 3. Networking: kairos-init installs and configures NetworkManager for DHCP — the same
-#    mechanism that works on 22.04. DO NOT mask NetworkManager; the earlier netplan/networkd
-#    approach wrote to /run/systemd/network/ which is wiped by the runtime tmpfs mount,
-#    leaving no DHCP config after boot.
+# 3. Mask ssh.socket and enable ssh.service directly (non-socket-activated mode).
+#    This avoids the socket/service dual-bind conflict.
 #
-# 4. SSSD: STIG rules 22/135/136 install sssd (via libpam-sss dependency) and enable
-#    sssd.service, but create no sssd.conf. On boot sssd fails, causing PAM delays and
-#    potentially blocking console auth. Disable and mask it here; re-enable if an actual
-#    SSSD/LDAP backend is configured at deployment time via cloud-config.
+# 4. SSSD + PAM cleanup: STIG rule 22 (in fix.sh) installs libpam-sss, which causes
+#    pam-auth-update to add pam_sss.so to /etc/pam.d/common-auth/session/account/
+#    password. At boot, agetty loads PAM → pam_sss is called → sssd is not running
+#    (masked here) → auth stack stalls → no login prompt renders on the console.
+#    We now guard the install in fix.sh (see rule 22 edit), but also:
+#      a) purge libpam-sss/sssd packages as a belt-and-braces
+#      b) run pam-auth-update --package so any lingering pam_sss entries are removed
+#      c) mask sssd.service AND every sssd-*.socket so the socket units don't
+#         re-pull sssd.service via socket activation (this was causing the 7
+#         DEPEND cascades visible in the boot log)
 #
-# 5. EMBED_DEBUG_ROOT: unlock root + set password “root”; set kairos password “kairos”.
-#    Also allow SSH PasswordAuthentication + PermitRootLogin for lab/debug access.
-RUN rm -f /etc/profile.d/ssh_confirm.sh; \
-  if [ “$USG_SSH_CONSENT_SCRIPT” = “1” ] && [ “$ENABLE_STIG” = “1” ] && [ “$SKIP_STIG_BANNER” != “1” ]; then \
-    printf '%s\n' \
-      '# USG consent for SSH only (POSIX).' \
-      'if [ -n “${SSH_CLIENT:-}” ] || [ -n “${SSH_TTY:-}” ]; then' \
-      '  while true; do' \
-      '    printf “Do you agree? [y/N] “' \
-      '    read -r yn || exit 1' \
-      '    case “$yn” in' \
-      '      [Yy]*) break ;;' \
-      '      [Nn]*|””)' \
-      '        echo “Access denied.”; exit 1 ;;' \
-      '      *) ;;' \
-      '    esac' \
-      '  done' \
-      'fi' \
-      > /etc/profile.d/ssh_confirm.sh && chmod 644 /etc/profile.d/ssh_confirm.sh; \
-  fi; \
-  systemctl unmask ssh.service 2>/dev/null || true; \
-  for _gen in \
-      /lib/systemd/system-generators/sshd-socket-generator \
-      /usr/lib/systemd/system-generators/sshd-socket-generator \
-      /lib/systemd/system-generators/sshd-generator \
-      /usr/lib/systemd/system-generators/sshd-generator; do \
-    [ -e “$_gen” ] || continue; \
+# 5. Mask postfix: we don't ship a mail transport in a FIPS base image; postfix's
+#    failed-start was noise in the boot log and slows boot.
+#
+# 6. Set debug credentials (root/kairos) and allow SSH password + root login for lab access.
+ARG EMBED_DEBUG_ROOT=1
+RUN set -e; \
+    rm -f /etc/profile.d/ssh_confirm.sh; \
     mkdir -p /etc/systemd/system-generators; \
-    ln -sf /dev/null “/etc/systemd/system-generators/$(basename “$_gen”)”; \
-  done; \
-  if [ -f /lib/systemd/system/ssh.socket ] || [ -f /usr/lib/systemd/system/ssh.socket ]; then \
-    systemctl disable ssh.socket 2>/dev/null || true; \
-    systemctl mask ssh.socket 2>/dev/null || true; \
-  fi; \
-  systemctl enable ssh.service; \
-  systemctl disable sssd.service 2>/dev/null || true; \
-  systemctl mask sssd.service 2>/dev/null || true; \
-  if [ “$EMBED_DEBUG_ROOT” = “1” ]; then \
-    usermod -U root 2>/dev/null || true; \
-    ROOT_HASH=$(openssl passwd -6 root); \
-    usermod -p “$ROOT_HASH” root; \
-    if id -u kairos >/dev/null 2>&1; then \
-      usermod -U kairos 2>/dev/null || true; \
-      K_HASH=$(openssl passwd -6 kairos); \
-      usermod -p “$K_HASH” kairos; \
+    for _gen in sshd-socket-generator sshd-generator; do \
+      for _dir in /lib/systemd/system-generators /usr/lib/systemd/system-generators; do \
+        if [ -f "$_dir/$_gen" ]; then \
+          : > "/etc/systemd/system-generators/$_gen"; \
+          chmod 0755 "/etc/systemd/system-generators/$_gen"; \
+        fi; \
+      done; \
+    done; \
+    ln -sf /dev/null /etc/systemd/system/ssh.socket; \
+    mkdir -p /etc/systemd/system/multi-user.target.wants; \
+    _svc=$(ls /lib/systemd/system/ssh.service /usr/lib/systemd/system/ssh.service 2>/dev/null | head -1); \
+    [ -n "$_svc" ] && ln -sf "$_svc" /etc/systemd/system/multi-user.target.wants/ssh.service || true; \
+    apt-get purge -y libpam-sss sssd sssd-common sssd-ad sssd-ipa sssd-krb5 sssd-ldap sssd-proxy 2>/dev/null || true; \
+    apt-get autoremove -y 2>/dev/null || true; \
+    if command -v pam-auth-update >/dev/null 2>&1; then \
+      DEBIAN_FRONTEND=noninteractive pam-auth-update --package 2>/dev/null || true; \
     fi; \
-    mkdir -p /etc/ssh/sshd_config.d; \
-    printf '%s\n' 'PermitRootLogin yes' 'PasswordAuthentication yes' > /etc/ssh/sshd_config.d/99-debug-login.conf; \
-    chmod 644 /etc/ssh/sshd_config.d/99-debug-login.conf; \
-  fi
+    for _pam in /etc/pam.d/common-auth /etc/pam.d/common-session /etc/pam.d/common-session-noninteractive /etc/pam.d/common-account /etc/pam.d/common-password; do \
+      [ -f "$_pam" ] && sed -i '/pam_sss\.so/d' "$_pam" || true; \
+    done; \
+    for _u in sssd.service sssd-sudo.socket sssd-pac.socket sssd-autofs.socket sssd-ssh.socket sssd-nss.socket sssd-pam.socket sssd-pam-priv.socket sssd-kcm.socket sssd-kcm.service; do \
+      ln -sf /dev/null "/etc/systemd/system/$_u"; \
+    done; \
+    for _u in postfix.service "postfix@.service"; do \
+      ln -sf /dev/null "/etc/systemd/system/$_u"; \
+    done; \
+    if [ "${EMBED_DEBUG_ROOT:-1}" = "1" ]; then \
+      usermod -U root 2>/dev/null || true; \
+      echo "root:root" | chpasswd; \
+      if id kairos >/dev/null 2>&1; then \
+        usermod -U kairos 2>/dev/null || true; \
+        echo "kairos:kairos" | chpasswd; \
+      fi; \
+      mkdir -p /etc/ssh/sshd_config.d; \
+      printf '%s\n' 'PermitRootLogin yes' 'PasswordAuthentication yes' \
+        > /etc/ssh/sshd_config.d/99-debug-login.conf; \
+      chmod 644 /etc/ssh/sshd_config.d/99-debug-login.conf; \
+    fi
 
+# OEM resilience: re-enable and reload sshd at each boot's network stage in case
+# a kairos OEM phase or upgrade resets the unit state.
+COPY 24.04/overlay/system/oem/35_enable_sshd_dockerskip.yaml /system/oem/35_enable_sshd_dockerskip.yaml
+
+# Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Clear cache
-RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} + && \
-    rm -rf /tmp/* /var/tmp/* && \
+RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
