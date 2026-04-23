@@ -86,8 +86,35 @@ RUN set -e; \
     [ -n "$_svc" ] && ln -sf "$_svc" /etc/systemd/system/multi-user.target.wants/ssh.service || true; \
     apt-get purge -y libpam-sss sssd sssd-common sssd-ad sssd-ipa sssd-krb5 sssd-ldap sssd-proxy 2>/dev/null || true; \
     apt-get autoremove -y 2>/dev/null || true; \
+    # --- PAM stack reset (login fix) ---
+    # 24.04's fix.sh installs many `cac_*` custom pam-configs (cac_faildelay,
+    # cac_faillock, cac_faillock_notify, cac_pwquality, cac_pkcs11, ...) and
+    # calls `pam-auth-update --enable <name>` ~20 times. Each config declares
+    # `Auth-Type: Primary` with its own priority; the resulting generated
+    # /etc/pam.d/common-auth has multiple Primary auth sections that can
+    # produce a stack `login` refuses to load — causing `login` to exit
+    # immediately on invocation, which looks to the user like "the login
+    # prompt disappears the instant I start typing a username" (getty
+    # respawns the prompt faster than login can run).
+    #
+    # Ubuntu 22.04's fix.sh edits /etc/pam.d/common-auth directly with sed
+    # and does NOT use pam-auth-update for these rules, which is why 22.04
+    # boots into a working login.
+    #
+    # We rebuild /etc/pam.d/common-auth to a known-good state by:
+    #   a) removing every cac_* pam-config fix.sh created
+    #   b) running pam-auth-update --force --package to regenerate the
+    #      common-* files from only the stock pam-configs (unix, systemd,
+    #      etc.), which matches the 22.04 effective outcome
+    #   c) stripping any lingering pam_sss.so line as a belt-and-braces
+    #
+    # Compliance trade-off: this removes the STIG pam_faillock/pam_faildelay
+    # hardening from the PAM stack. pam_faillock policies persist in
+    # /etc/security/faillock.conf and /etc/security/pwquality.conf so they
+    # can be re-added via a separate, correctly-ordered pam-config post-deploy.
+    rm -f /usr/share/pam-configs/cac_* 2>/dev/null || true; \
     if command -v pam-auth-update >/dev/null 2>&1; then \
-      DEBIAN_FRONTEND=noninteractive pam-auth-update --package 2>/dev/null || true; \
+      DEBIAN_FRONTEND=noninteractive pam-auth-update --force --package 2>/dev/null || true; \
     fi; \
     for _pam in /etc/pam.d/common-auth /etc/pam.d/common-session /etc/pam.d/common-session-noninteractive /etc/pam.d/common-account /etc/pam.d/common-password; do \
       [ -f "$_pam" ] && sed -i '/pam_sss\.so/d' "$_pam" || true; \
