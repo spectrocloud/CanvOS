@@ -803,7 +803,7 @@ base-image:
             zypper clean
     END
 
-    IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ]
+    IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
         RUN zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate
         RUN zypper cc && \
             zypper clean
@@ -812,10 +812,6 @@ base-image:
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl rsyslog logrotate
-    END
-
-    IF [ "$OS_DISTRIBUTION" = "sles" ]
-        RUN if [ ! -e /usr/bin/apparmor_parser ]; then cp /sbin/apparmor_parser /usr/bin/apparmor_parser; fi
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
