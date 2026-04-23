@@ -21,7 +21,20 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y strongswan openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed \
+    && apt-get install -y strongswan openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools \
+    # --- OpenSSL 3.x FIPS provider module ---
+    # On 24.04 Noble, /etc/ssl/openssl.cnf is flipped to load the FIPS provider
+    # from /usr/lib/x86_64-linux-gnu/ossl-modules/fips.so, but that file ships
+    # in a SEPARATE package (`openssl-fips-module-3`) that is NOT auto-pulled
+    # by `pro attach` → `apt-get upgrade -y` inside containers. Canonical bug:
+    #   https://github.com/canonical/ubuntu-pro-client/issues/3487
+    #
+    # Without it every libcrypto call aborts with the misleading
+    # "PRNG is not seeded" (real cause: fips.so dlopen-fails because the file
+    # doesn't exist). On 22.04 Jammy this was rolled into the FIPS-replaced
+    # libssl3, which is why that image has no such problem.
+    && apt-get install -y openssl-fips-module-3 \
+    && test -f /usr/lib/x86_64-linux-gnu/ossl-modules/fips.so \
     && pro detach --assume-yes
 
 # Copy the custom dracut modules.fips that includes 2 missing modules
@@ -50,8 +63,10 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 #    supported way to suppress them; symlinks-to-/dev/null behavior is inconsistent
 #    across systemd versions.
 #
-# 3. Mask ssh.socket and enable ssh.service directly (non-socket-activated mode).
-#    This avoids the socket/service dual-bind conflict.
+# 3. Remove any local ssh.socket mask. Ubuntu 24.04's ssh.service declares
+#    Requires=ssh.socket, so masking ssh.socket holds ssh.service in
+#    "inactive (dead)". With the sshd generator nullified above, only the
+#    static ssh.socket binds :22, so the earlier dual-bind concern is moot.
 #
 # 4. SSSD + PAM cleanup: STIG rule 22 (in fix.sh) installs libpam-sss, which causes
 #    pam-auth-update to add pam_sss.so to /etc/pam.d/common-auth/session/account/
@@ -66,9 +81,6 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 #
 # 5. Mask postfix: we don't ship a mail transport in a FIPS base image; postfix's
 #    failed-start was noise in the boot log and slows boot.
-#
-# 6. Set debug credentials (root/kairos) and allow SSH password + root login for lab access.
-ARG EMBED_DEBUG_ROOT=1
 RUN set -e; \
     rm -f /etc/profile.d/ssh_confirm.sh; \
     mkdir -p /etc/systemd/system-generators; \
@@ -80,10 +92,14 @@ RUN set -e; \
         fi; \
       done; \
     done; \
-    ln -sf /dev/null /etc/systemd/system/ssh.socket; \
-    mkdir -p /etc/systemd/system/multi-user.target.wants; \
-    _svc=$(ls /lib/systemd/system/ssh.service /usr/lib/systemd/system/ssh.service 2>/dev/null | head -1); \
-    [ -n "$_svc" ] && ln -sf "$_svc" /etc/systemd/system/multi-user.target.wants/ssh.service || true; \
+    # Do NOT mask ssh.socket on 24.04. Ubuntu 24.04's ssh.service declares
+    # Requires=ssh.socket (via ssh.socket's [Install] RequiredBy=ssh.service).
+    # Masking the socket caused ssh.service to stay "inactive (dead)" because
+    # systemd refuses to start a unit whose required dep is masked. The earlier
+    # dual-bind concern is handled by the sshd-generator nullification above —
+    # with the generator suppressed, only the static ssh.socket binds :22.
+    # We rely on the socket's stock WantedBy=sockets.target for auto-start.
+    rm -f /etc/systemd/system/ssh.socket; \
     apt-get purge -y libpam-sss sssd sssd-common sssd-ad sssd-ipa sssd-krb5 sssd-ldap sssd-proxy 2>/dev/null || true; \
     apt-get autoremove -y 2>/dev/null || true; \
     # --- PAM stack reset (login fix) ---
@@ -124,19 +140,7 @@ RUN set -e; \
     done; \
     for _u in postfix.service "postfix@.service"; do \
       ln -sf /dev/null "/etc/systemd/system/$_u"; \
-    done; \
-    if [ "${EMBED_DEBUG_ROOT:-1}" = "1" ]; then \
-      usermod -U root 2>/dev/null || true; \
-      echo "root:root" | chpasswd; \
-      if id kairos >/dev/null 2>&1; then \
-        usermod -U kairos 2>/dev/null || true; \
-        echo "kairos:kairos" | chpasswd; \
-      fi; \
-      mkdir -p /etc/ssh/sshd_config.d; \
-      printf '%s\n' 'PermitRootLogin yes' 'PasswordAuthentication yes' \
-        > /etc/ssh/sshd_config.d/99-debug-login.conf; \
-      chmod 644 /etc/ssh/sshd_config.d/99-debug-login.conf; \
-    fi
+    done
 
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
