@@ -599,8 +599,8 @@ provider-image:
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         RUN apt-get update -y && apt-get install -y gnupg && \
-            /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION --skip validate && \
-            /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION --skip validate && \
+            /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION && \
+            /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION && \
             # ssm-setup-cli fails to install amazon-ssm-agent via snap after downloading the package
             # due to PID 1 not being systemd, so we do it manually
             find /opt/ssm -type f -name "amazon-ssm-agent.deb" -exec sudo dpkg -i {} \; && \
