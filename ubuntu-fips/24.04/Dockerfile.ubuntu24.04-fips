@@ -111,10 +111,6 @@ RUN set -e; \
       chmod 644 /etc/ssh/sshd_config.d/99-debug-login.conf; \
     fi
 
-# OEM resilience: re-enable and reload sshd at each boot's network stage in case
-# a kairos OEM phase or upgrade resets the unit state.
-COPY 24.04/overlay/system/oem/35_enable_sshd_dockerskip.yaml /system/oem/35_enable_sshd_dockerskip.yaml
-
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
