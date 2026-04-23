@@ -363,6 +363,11 @@ build-iso:
         mv /overlay/boot/grub2/grub.cfg.tmp /overlay/boot/grub2/grub.cfg; \
     fi
 
+    # Append Kairos debug flags to installer kernel cmdline when DEBUG is enabled
+    RUN if [ "$DEBUG" = "true" ]; then \
+        sed -i '/rd.immucore.sysrootwait/s/$/ rd.immucore.debug console=tty0 rd.debug/' /overlay/boot/grub2/grub.cfg; \
+    fi
+
     # Add content files (split if > 3GB)
     COPY --if-exists content-*/*.zst /overlay/opt/spectrocloud/content/
     RUN if [ -n "$(ls /overlay/opt/spectrocloud/content/*.zst 2>/dev/null)" ]; then \
