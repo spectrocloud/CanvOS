@@ -32,7 +32,7 @@ ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.7.1
 ARG KUBEADM_PROVIDER_VERSION=v4.7.3
 ARG RKE2_PROVIDER_VERSION=v4.8.1
-ARG NODEADM_PROVIDER_VERSION=v4.6.0
+ARG NODEADM_PROVIDER_VERSION=v4.9.0-rc.1
 ARG CANONICAL_PROVIDER_VERSION=v1.3.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
@@ -599,8 +599,8 @@ provider-image:
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         RUN apt-get update -y && apt-get install -y gnupg && \
-            /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION --skip validate && \
-            /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION --skip validate && \
+            /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION && \
+            /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION && \
             # ssm-setup-cli fails to install amazon-ssm-agent via snap after downloading the package
             # due to PID 1 not being systemd, so we do it manually
             find /opt/ssm -type f -name "amazon-ssm-agent.deb" -exec sudo dpkg -i {} \; && \
