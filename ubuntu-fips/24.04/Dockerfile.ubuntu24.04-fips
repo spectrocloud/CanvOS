@@ -1,0 +1,151 @@
+FROM quay.io/kairos/kairos-init:v0.8.5 AS kairos-init
+
+FROM ubuntu:24.04
+ARG VERSION=v4.0.3
+ARG ENABLE_STIG=1
+ARG SKIP_STIG_BANNER=0
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s install --version "${VERSION}"
+# Remove default kernel that Kairos-init installs and purge leftover configs
+RUN apt-get remove -y linux-base linux-image-generic-hwe-24.04 && apt-get autoremove -y \
+    && dpkg -l 'linux-*' | awk '/^(ii|rc)/ && $2 !~ /fips/ {print $2}' | xargs -r apt-get purge -y
+## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
+## I've just added "linux-image-fips" in the package list
+## If you want to use secureboot with fips, you need to install the shim-signed package
+## from the Ubuntu PRO repos as its signed with adifferent key
+## Noble: no strongswan-hmac package in archive (jammy had it); install strongswan only.
+RUN --mount=type=secret,id=pro-attach-config \
+    apt-get update \
+    && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
+    && pro attach --attach-config /run/secrets/pro-attach-config \
+    && apt-get upgrade -y \
+    && apt-get install -y strongswan openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools \
+    # --- OpenSSL 3.x FIPS provider module ---
+    # On 24.04 Noble, /etc/ssl/openssl.cnf is flipped to load the FIPS provider
+    # from /usr/lib/x86_64-linux-gnu/ossl-modules/fips.so, but that file ships
+    # in a SEPARATE package (`openssl-fips-module-3`) that is NOT auto-pulled
+    # by `pro attach` → `apt-get upgrade -y` inside containers. Canonical bug:
+    #   https://github.com/canonical/ubuntu-pro-client/issues/3487
+    #
+    # Without it every libcrypto call aborts with the misleading
+    # "PRNG is not seeded" (real cause: fips.so dlopen-fails because the file
+    # doesn't exist). On 22.04 Jammy this was rolled into the FIPS-replaced
+    # libssl3, which is why that image has no such problem.
+    && apt-get install -y openssl-fips-module-3 \
+    && test -f /usr/lib/x86_64-linux-gnu/ossl-modules/fips.so \
+    && pro detach --assume-yes
+
+# Copy the custom dracut modules.fips that includes 2 missing modules
+COPY 24.04/modules.fips /tmp/modules.fips
+RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
+
+COPY 24.04/fix.sh /tmp/fix.sh
+COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
+RUN chmod +x /tmp/fix.sh /tmp/restore-ubuntu-default-banners.sh \
+    && if [ "$ENABLE_STIG" = "1" ]; then bash /tmp/fix.sh; fi \
+    && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --fips --version "${VERSION}"
+
+# Post-init hardening — runs AFTER kairos-init so any OEM merges are already applied.
+#
+# 1. Remove broken STIG rule-17 ssh_confirm.sh: it uses non-POSIX read/printf which
+#    causes bash to exit on console logins (non-SSH sessions).
+#
+# 2. Nullify the sshd generator via empty files. Ubuntu 24.04 ships both ssh.socket
+#    and ssh.service. The sshd-generator also creates a socket unit at boot. With the
+#    generator active, both ssh.socket and ssh.service try to bind port 22 → bind
+#    conflict → sshd fails. systemd(1) documents empty executable files in
+#    /etc/systemd/system-generators/ (same name as the library generator) as the
+#    supported way to suppress them; symlinks-to-/dev/null behavior is inconsistent
+#    across systemd versions.
+#
+# 3. Remove any local ssh.socket mask. Ubuntu 24.04's ssh.service declares
+#    Requires=ssh.socket, so masking ssh.socket holds ssh.service in
+#    "inactive (dead)". With the sshd generator nullified above, only the
+#    static ssh.socket binds :22, so the earlier dual-bind concern is moot.
+#
+# 4. SSSD + PAM cleanup: STIG rule 22 (in fix.sh) installs libpam-sss, which causes
+#    pam-auth-update to add pam_sss.so to /etc/pam.d/common-auth/session/account/
+#    password. At boot, agetty loads PAM → pam_sss is called → sssd is not running
+#    (masked here) → auth stack stalls → no login prompt renders on the console.
+#    We now guard the install in fix.sh (see rule 22 edit), but also:
+#      a) purge libpam-sss/sssd packages as a belt-and-braces
+#      b) run pam-auth-update --package so any lingering pam_sss entries are removed
+#      c) mask sssd.service AND every sssd-*.socket so the socket units don't
+#         re-pull sssd.service via socket activation (this was causing the 7
+#         DEPEND cascades visible in the boot log)
+#
+# 5. Mask postfix: we don't ship a mail transport in a FIPS base image; postfix's
+#    failed-start was noise in the boot log and slows boot.
+RUN set -e; \
+    rm -f /etc/profile.d/ssh_confirm.sh; \
+    mkdir -p /etc/systemd/system-generators; \
+    for _gen in sshd-socket-generator sshd-generator; do \
+      for _dir in /lib/systemd/system-generators /usr/lib/systemd/system-generators; do \
+        if [ -f "$_dir/$_gen" ]; then \
+          : > "/etc/systemd/system-generators/$_gen"; \
+          chmod 0755 "/etc/systemd/system-generators/$_gen"; \
+        fi; \
+      done; \
+    done; \
+    # Do NOT mask ssh.socket on 24.04. Ubuntu 24.04's ssh.service declares
+    # Requires=ssh.socket (via ssh.socket's [Install] RequiredBy=ssh.service).
+    # Masking the socket caused ssh.service to stay "inactive (dead)" because
+    # systemd refuses to start a unit whose required dep is masked. The earlier
+    # dual-bind concern is handled by the sshd-generator nullification above —
+    # with the generator suppressed, only the static ssh.socket binds :22.
+    # We rely on the socket's stock WantedBy=sockets.target for auto-start.
+    rm -f /etc/systemd/system/ssh.socket; \
+    apt-get purge -y libpam-sss sssd sssd-common sssd-ad sssd-ipa sssd-krb5 sssd-ldap sssd-proxy 2>/dev/null || true; \
+    apt-get autoremove -y 2>/dev/null || true; \
+    # --- PAM stack reset (login fix) ---
+    # 24.04's fix.sh installs many `cac_*` custom pam-configs (cac_faildelay,
+    # cac_faillock, cac_faillock_notify, cac_pwquality, cac_pkcs11, ...) and
+    # calls `pam-auth-update --enable <name>` ~20 times. Each config declares
+    # `Auth-Type: Primary` with its own priority; the resulting generated
+    # /etc/pam.d/common-auth has multiple Primary auth sections that can
+    # produce a stack `login` refuses to load — causing `login` to exit
+    # immediately on invocation, which looks to the user like "the login
+    # prompt disappears the instant I start typing a username" (getty
+    # respawns the prompt faster than login can run).
+    #
+    # Ubuntu 22.04's fix.sh edits /etc/pam.d/common-auth directly with sed
+    # and does NOT use pam-auth-update for these rules, which is why 22.04
+    # boots into a working login.
+    #
+    # We rebuild /etc/pam.d/common-auth to a known-good state by:
+    #   a) removing every cac_* pam-config fix.sh created
+    #   b) running pam-auth-update --force --package to regenerate the
+    #      common-* files from only the stock pam-configs (unix, systemd,
+    #      etc.), which matches the 22.04 effective outcome
+    #   c) stripping any lingering pam_sss.so line as a belt-and-braces
+    #
+    # Compliance trade-off: this removes the STIG pam_faillock/pam_faildelay
+    # hardening from the PAM stack. pam_faillock policies persist in
+    # /etc/security/faillock.conf and /etc/security/pwquality.conf so they
+    # can be re-added via a separate, correctly-ordered pam-config post-deploy.
+    rm -f /usr/share/pam-configs/cac_* 2>/dev/null || true; \
+    if command -v pam-auth-update >/dev/null 2>&1; then \
+      DEBIAN_FRONTEND=noninteractive pam-auth-update --force --package 2>/dev/null || true; \
+    fi; \
+    for _pam in /etc/pam.d/common-auth /etc/pam.d/common-session /etc/pam.d/common-session-noninteractive /etc/pam.d/common-account /etc/pam.d/common-password; do \
+      [ -f "$_pam" ] && sed -i '/pam_sss\.so/d' "$_pam" || true; \
+    done; \
+    for _u in sssd.service sssd-sudo.socket sssd-pac.socket sssd-autofs.socket sssd-ssh.socket sssd-nss.socket sssd-pam.socket sssd-pam-priv.socket sssd-kcm.socket sssd-kcm.service; do \
+      ln -sf /dev/null "/etc/systemd/system/$_u"; \
+    done; \
+    for _u in postfix.service "postfix@.service"; do \
+      ln -sf /dev/null "/etc/systemd/system/$_u"; \
+    done
+
+# Symlink kernel HMAC
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+# Clear cache
+RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+    journalctl --vacuum-size=1K || true && \
+    rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true

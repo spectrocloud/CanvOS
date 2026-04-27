@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UBUNTU_FIPS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-BASE_IMAGE="${1:-ubuntu-jammy-fips}"
-VERSION=22.04
+BASE_IMAGE="${1:-ubuntu-noble-fips}"
+VERSION=24.04
 ENABLE_STIG="${ENABLE_STIG:-1}"
 SKIP_STIG_BANNER="${SKIP_STIG_BANNER:-0}"
 

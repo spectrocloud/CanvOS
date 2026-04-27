@@ -1,8 +1,19 @@
 # Kairos Ubuntu jammy fips
 
 - Edit `pro-attach-config.yaml` with your token
-- run `bash build.sh [<base image>]`
-- use the generated base image as input in installer generation with `earthly +iso`
+- Run `bash build.sh [<base image>]`
+- Use the generated base image as input in installer generation with `earthly +iso`
+
+### Build options (environment variables)
+
+| Variable | Default | Meaning |
+| -------- | ------- | ------- |
+| `ENABLE_STIG` | `1` | When `1`, run DISA STIG remediation (`fix.sh`). Set to `0` for FIPS-only builds without STIG. |
+| `SKIP_STIG_BANNER` | `0` | When `1` (with STIG enabled), restore stock Ubuntu login banners instead of the USG DoD banner (`/etc/issue`, SSH `Banner`, GDM, `/etc/profile.d/ssh_confirm.sh`). |
+
+Examples: `ENABLE_STIG=0 bash build.sh`, `SKIP_STIG_BANNER=1 bash build.sh my-tag`.
+
+**Note:** `build.sh` uses the `ubuntu-fips` directory as the Docker build context so shared files (e.g. `restore-ubuntu-default-banners.sh`) resolve correctly.
 
 The system is not enabling FIPS by default in kernel space. 
 
