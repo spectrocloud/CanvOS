@@ -21,7 +21,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y strongswan openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools \
+    && apt-get install -y strongswan openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools cracklib-runtime \
     # --- OpenSSL 3.x FIPS provider module ---
     # On 24.04 Noble, /etc/ssl/openssl.cnf is flipped to load the FIPS provider
     # from /usr/lib/x86_64-linux-gnu/ossl-modules/fips.so, but that file ships
@@ -146,6 +146,7 @@ RUN set -e; \
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Clear cache
-RUN rm -rf /var/cache/* /tmp/* /var/tmp/* && \
+RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} + && \
+    rm -rf /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
