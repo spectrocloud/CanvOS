@@ -726,23 +726,19 @@ base-image:
             # The token is mounted via Earthly's secret store as an env var
             # that lives only for the duration of this RUN. It is materialized
             # into an attach-config file using the shell builtin `printf`, so
-            # the value never appears in any process argv (/proc/<pid>/cmdline),
-            # docker build history, or shell history. The env var is unset and
-            # the temp file shredded before the RUN exits, so nothing about the
-            # token survives in the resulting layer.
+            # the value never appears in any process argv (/proc/<pid>/cmdline)
+            # or in docker build history. The env var is unset and the temp
+            # file removed before the RUN exits, so nothing about the token
+            # survives in the resulting layer. If `--secret UBUNTU_PRO_KEY`
+            # is not supplied, Earthly aborts before this RUN is invoked.
             RUN --secret UBUNTU_PRO_KEY \
-                set +o history 2>/dev/null || true; \
-                if [ -z "${UBUNTU_PRO_KEY:-}" ]; then \
-                    echo "UBUNTU_PRO_ATTACH=true but secret UBUNTU_PRO_KEY is not set." >&2; \
-                    echo "Provide it via 'earthly secrets set UBUNTU_PRO_KEY' or '--secret UBUNTU_PRO_KEY=...'." >&2; \
-                    exit 1; \
-                fi && \
                 sed -i '/^[[:space:]]*$/d' /etc/os-release && \
-                apt update && apt-get install -y snapd && \
-                ( umask 077 && printf 'token: %s\n' "$UBUNTU_PRO_KEY" > /tmp/.pro-attach.yaml ) && \
+                apt-get update && apt-get install -y snapd && \
+                umask 077 && \
+                printf 'token: %s\n' "$UBUNTU_PRO_KEY" > /tmp/.pro-attach.yaml && \
                 unset UBUNTU_PRO_KEY && \
                 pro attach --attach-config /tmp/.pro-attach.yaml && \
-                { command -v shred >/dev/null 2>&1 && shred -uz /tmp/.pro-attach.yaml; } || rm -f /tmp/.pro-attach.yaml
+                rm -f /tmp/.pro-attach.yaml
         END
 
         RUN apt-get update && \
