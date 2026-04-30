@@ -50,9 +50,15 @@ ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
 # Ubuntu Pro toggle. The token itself is NEVER passed as a build arg.
-# Set UBUNTU_PRO_ATTACH=true and provide the token via an Earthly secret, e.g.:
-#   earthly secrets set UBUNTU_PRO_KEY        # paste token interactively
-#   earthly --secret UBUNTU_PRO_KEY=... +base-image --UBUNTU_PRO_ATTACH=true
+# Set UBUNTU_PRO_ATTACH=true and supply the token via an Earthly secret. The
+# recommended local flow (no Earthly Cloud needed):
+#   read -rs UBUNTU_PRO_KEY    # paste token, press Enter; no echo
+#   export UBUNTU_PRO_KEY
+#   earthly --secret UBUNTU_PRO_KEY +base-image --UBUNTU_PRO_ATTACH=true
+#   unset UBUNTU_PRO_KEY
+# Or load from a file: earthly --secret-file UBUNTU_PRO_KEY=/path/to/token ...
+# If you use Earthly Cloud, `earthly account login` then
+# `earthly secret set /user/UBUNTU_PRO_KEY` works too.
 # This keeps the token out of `docker history`, build-arg metadata, and the
 # build cache.
 ARG UBUNTU_PRO_ATTACH=false
