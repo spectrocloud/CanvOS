@@ -50,17 +50,18 @@ ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
 # Ubuntu Pro toggle. The token itself is NEVER passed as a build arg.
-# Set UBUNTU_PRO_ATTACH=true and supply the token via an Earthly secret. The
-# recommended local flow (no Earthly Cloud needed):
-#   read -rs UBUNTU_PRO_KEY    # paste token, press Enter; no echo
-#   export UBUNTU_PRO_KEY
-#   earthly --secret UBUNTU_PRO_KEY +base-image --UBUNTU_PRO_ATTACH=true
-#   unset UBUNTU_PRO_KEY
-# Or load from a file: earthly --secret-file UBUNTU_PRO_KEY=/path/to/token ...
-# If you use Earthly Cloud, `earthly account login` then
-# `earthly secret set /user/UBUNTU_PRO_KEY` works too.
-# This keeps the token out of `docker history`, build-arg metadata, and the
-# build cache.
+# Recommended flow: use the earthly.sh wrapper. Set UBUNTU_PRO_ATTACH=true in
+# .arg (or pass --UBUNTU_PRO_ATTACH=true on the CLI), then run e.g.
+#   ./earthly.sh +iso
+# The wrapper prompts for the token without echoing it and forwards it as an
+# Earthly --secret, so the value never lands in .arg, in `docker history`,
+# in build-arg metadata, in the build cache, or in shell history.
+# For non-interactive (CI) runs, export UBUNTU_PRO_KEY before invoking the
+# script and the prompt is skipped:
+#   read -rs UBUNTU_PRO_KEY && export UBUNTU_PRO_KEY
+#   ./earthly.sh +iso
+# Note: `earthly secret set ...` requires Earthly Cloud (earthly account login)
+# and is not available on a stock CLI install - use the earthly.sh flow above.
 ARG UBUNTU_PRO_ATTACH=false
 
 # DRBD version for Piraeus pack

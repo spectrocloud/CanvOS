@@ -23,16 +23,26 @@ FORCE_INTERACTIVE_INSTALL=false
 # Ubuntu Pro (optional)
 # Do NOT put your Pro token in this file or in any build arg - it would end up
 # in `docker history`, the Earthly build cache, and shell history.
-# Recommended flow (local, no Earthly Cloud needed):
-#   read -rs UBUNTU_PRO_KEY    # paste token, press Enter; nothing echoes
-#   export UBUNTU_PRO_KEY
-#   earthly --secret UBUNTU_PRO_KEY +base-image --UBUNTU_PRO_ATTACH=true
-#   unset UBUNTU_PRO_KEY
-# Or load from a file: earthly --secret-file UBUNTU_PRO_KEY=/path/to/token ...
-# (avoid --secret UBUNTU_PRO_KEY=<token> directly - that lands in shell history)
-# If you use Earthly Cloud: `earthly account login`, then
-# `earthly secret set /user/UBUNTU_PRO_KEY`.
-# Then uncomment the toggle below (or pass --UBUNTU_PRO_ATTACH=true on the CLI):
+#
+# Recommended flow (use the earthly.sh wrapper):
+#   1. Uncomment the toggle below:
+#        UBUNTU_PRO_ATTACH=true
+#   2. Run the build as usual:
+#        ./earthly.sh +iso              # or +base-image, +build-all-images, etc.
+#      The script will prompt for the token (input hidden, no echo) and forward
+#      it to Earthly as a secret. The token never lands in `.arg`, on the
+#      earthly command line, in `docker history`, or in shell history.
+#   3. For non-interactive runs (CI), export UBUNTU_PRO_KEY before invoking the
+#      script and the prompt is skipped:
+#        read -rs UBUNTU_PRO_KEY && export UBUNTU_PRO_KEY
+#        ./earthly.sh +iso
+#        unset UBUNTU_PRO_KEY
+#
+# Note: `earthly secret set ...` requires Earthly Cloud (`earthly account login`)
+# and is NOT available on a stock CLI install - use the earthly.sh flow above.
+# Avoid `earthly --secret UBUNTU_PRO_KEY=<token>` on the command line: the token
+# lands in your shell history and /proc/<pid>/cmdline.
+#
 # UBUNTU_PRO_ATTACH=true
 
 # For enabling Secure Boot with Full Disk Encryption
