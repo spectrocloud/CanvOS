@@ -95,3 +95,6 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 
 # ENV LB_HOW compile
 # ENTRYPOINT /entry.sh
+
+# to set cgroupv2 as default
+#RUN sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg
