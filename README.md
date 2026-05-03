@@ -733,9 +733,7 @@ Entries without these keys in the MSG part of RFC 5424 will still be logged to t
 # cgroup v2
 
 cgroup v2 is the next version of the Linux cgroup API. cgroup v2 provides a unified control system with enhanced resource management capabilities.
-Kubernetes has deprecated cgroup v1. Removal will follow Kubernetes deprecation policy.
-
-Kubelet will no longer start on a cgroup v1 node by default. To disable this setting a cluster admin should set failCgroupV1 to false in the [kubelet configuration](https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/) file or while building the installer/provider images set cgroup v2 as default.
+Kubernetes has deprecated cgroup v1.  Kubelet will no longer start on a cgroup v1 node by default from k8s v1.35.x. To disable this setting a cluster admin should set failCgroupV1 to false in the [kubelet configuration](https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/) file or while building the installer/provider images set cgroup v2 as default.
 
 In the userdata file, while building the installer add systemd.unified_cgroup_hierarchy=1
 
