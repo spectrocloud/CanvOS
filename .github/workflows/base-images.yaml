@@ -138,28 +138,12 @@ jobs:
       - name: Login to registry
         run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
 
-      - name: Create Ubuntu Pro attach config
-        run: |
-          if [ "${{ github.event.inputs.fips }}" = "true" ]; then
-            if echo "${{ matrix.base_os }}" | grep -qE "20\.04|focal"; then
-              FIPS_SERVICE="fips"
-            else
-              FIPS_SERVICE="fips-updates"
-            fi
-            printf 'token: "%s"\nenable_services:\n  - %s\n' \
-              "${{ secrets.UBUNTU_PRO_TOKEN }}" "${FIPS_SERVICE}" > /tmp/pro-attach-config.yaml
-          else
-            touch /tmp/pro-attach-config.yaml
-          fi
-
       - name: Build and push kairosify image
         uses: docker/bake-action@v6
         with:
           files: docker-bake-kairosify.hcl
           targets: kairosify
           push: true
-          secrets: |
-            id=pro-attach-config,src=/tmp/pro-attach-config.yaml
           set: |
             kairosify.platform=linux/${{ github.event.inputs.arch }}
             kairosify.args.BASE_OS_IMAGE=${{ matrix.base_os }}
@@ -167,6 +151,7 @@ jobs:
             kairosify.args.KAIROS_VERSION=${{ github.event.inputs.kairos_version }}
             kairosify.args.TRUSTED_BOOT=${{ github.event.inputs.trusted_boot }}
             kairosify.args.FIPS=${{ github.event.inputs.fips }}
+            kairosify.args.UBUNTU_PRO_KEY=${{ secrets.UBUNTU_PRO_KEY }}
             kairosify.args.MODEL=${{ github.event.inputs.model }}
             kairosify.tags=${{ matrix.tag }}
         env:

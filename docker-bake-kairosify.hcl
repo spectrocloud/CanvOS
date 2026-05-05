@@ -28,6 +28,10 @@ variable "FIPS" {
     default = false
 }
 
+variable "UBUNTU_PRO_KEY" {
+    default = ""
+}
+
 variable "TAG" {
     default = "kairosify:latest"
 }
@@ -41,6 +45,7 @@ target "kairosify" {
     KAIROS_VERSION = KAIROS_VERSION
     TRUSTED_BOOT = TRUSTED_BOOT
     FIPS = FIPS
+    UBUNTU_PRO_KEY = UBUNTU_PRO_KEY
     MODEL = MODEL
   }
   tags = [TAG]
