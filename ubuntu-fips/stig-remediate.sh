@@ -43,65 +43,199 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-ensure_oscap_and_content() {
-    if command -v oscap >/dev/null 2>&1; then
-        for p in \
-            /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml \
-            /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds-1.2.xml \
-            /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml \
-            /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds-1.2.xml \
-            /usr/share/xml/scap/ssg/content/ssg-ubuntu2004-ds.xml \
-            /usr/share/xml/scap/ssg/content/ssg-ubuntu2004-ds-1.2.xml
-        do
-            [ -f "$p" ] && return 0
+# OpenSCAP scanner: package "openscap-scanner". SCAP Security Guide *datastreams* on
+# Ubuntu are in "ssg-debderived" (not a binary package named scap-security-guide; that
+# name is the source package only).
+apt_sources_have_universe() {
+    shopt -s nullglob
+    local f
+    for f in /etc/apt/sources.list.d/*.sources; do
+        if grep -qE '^Components:.*[[:space:]]universe([[:space:]]|$)' "$f" 2>/dev/null; then
+            shopt -u nullglob
+            return 0
+        fi
+    done
+    local scan_files=(/etc/apt/sources.list)
+    for f in /etc/apt/sources.list.d/*.list; do
+        scan_files+=("$f")
+    done
+    for f in "${scan_files[@]}"; do
+        [ -f "$f" ] || continue
+        if grep -vE '^[[:space:]]*#' "$f" | grep -qE '^deb[[:space:]].*[[:space:]]universe([[:space:]]|$)'; then
+            shopt -u nullglob
+            return 0
+        fi
+    done
+    shopt -u nullglob
+    return 1
+}
+
+prepare_apt_universe_for_openscap() {
+    [ -f /etc/os-release ] && . /etc/os-release
+    local c="${VERSION_CODENAME:-}"
+    [ -n "$c" ] || return 0
+
+    if apt_sources_have_universe; then
+        print_debug "APT sources already reference universe; skipping extra repo lines"
+        return 0
+    fi
+
+    print_debug "Enabling Ubuntu universe repository (required for openscap-scanner / ssg-debderived)..."
+
+    local f
+    for f in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu-ports.sources; do
+        if [ -f "$f" ] && grep -q '^Components:' "$f" && ! grep -qE '^Components:.*[[:space:]]universe([[:space:]]|$)' "$f"; then
+            sed -i '/^Components:/ {/universe/! s/$/ universe/}' "$f"
+            return 0
+        fi
+    done
+
+    local mirror
+    shopt -s nullglob
+    local deb_lines
+    deb_lines=$(grep -hE '^deb[[:space:]]+' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null | head -1 || true)
+    shopt -u nullglob
+    mirror=$(echo "$deb_lines" | awk '{print $2}')
+    [ -n "$mirror" ] || mirror="http://archive.ubuntu.com/ubuntu"
+    local drop=/etc/apt/sources.list.d/canvos-stig-universe.list
+    {
+        printf 'deb %s %s universe\n' "$mirror" "$c"
+        printf 'deb %s %s-updates universe\n' "$mirror" "$c"
+    } >"$drop"
+}
+
+# Pick Ubuntu SSG datastream: build-time static (optional), release-matched path, else newest ssg-ubuntu*-ds.xml.
+pick_ssg_ds_path() {
+    local static dir base f
+    static=/tmp/stig-static
+    dir=/usr/share/xml/scap/ssg/content
+
+    shopt -s nullglob
+    for f in "$static"/ssg-ubuntu*-ds.xml "$static"/ssg-ubuntu*-ds-1.2.xml; do
+        if [ -f "$f" ]; then
+            printf '%s' "$f"
+            shopt -u nullglob
+            return 0
+        fi
+    done
+
+    base=""
+    if [ -f /etc/os-release ]; then
+        # shellcheck source=/dev/null
+        . /etc/os-release
+        case "${VERSION_ID:-}" in
+            24.04) base=ssg-ubuntu2404 ;;
+            22.04) base=ssg-ubuntu2204 ;;
+            20.04) base=ssg-ubuntu2004 ;;
+        esac
+    fi
+    if [ -n "$base" ]; then
+        for f in "$dir/${base}-ds.xml" "$dir/${base}-ds-1.2.xml"; do
+            if [ -f "$f" ]; then
+                printf '%s' "$f"
+                shopt -u nullglob
+                return 0
+            fi
         done
     fi
-    print_debug "Installing openscap-scanner and scap-security-guide for datastream and oscap..."
+
+    local candidates=("$dir"/ssg-ubuntu*-ds.xml)
+    if [ "${#candidates[@]}" -gt 0 ]; then
+        printf '%s\n' "${candidates[@]}" | sort -V | tail -1
+        shopt -u nullglob
+        return 0
+    fi
+    shopt -u nullglob
+    return 1
+}
+
+build_openscap_pkg_list() {
+    local pkgs=()
+    if apt-cache show ssg-debderived >/dev/null 2>&1; then
+        pkgs+=(ssg-debderived)
+    elif apt-cache show scap-security-guide >/dev/null 2>&1; then
+        pkgs+=(scap-security-guide)
+    fi
+    if apt-cache show openscap-scanner >/dev/null 2>&1; then
+        pkgs+=(openscap-scanner)
+    fi
+    printf '%s\n' "${pkgs[@]}"
+}
+
+install_openscap_from_cache_or_empty() {
+    local _stig_pkgs
+    mapfile -t _stig_pkgs < <(build_openscap_pkg_list)
+    if [ "${#_stig_pkgs[@]}" -eq 0 ]; then
+        return 1
+    fi
+    apt-get install -y --no-install-recommends "${_stig_pkgs[@]}" \
+        || { print_debug "ERROR: apt-get install failed for: ${_stig_pkgs[*]}"; exit 1; }
+    return 0
+}
+
+ensure_oscap_and_content() {
+    if command -v oscap >/dev/null 2>&1 && pick_ssg_ds_path >/dev/null; then
+        print_debug "oscap and SSG datastream already on image ($(pick_ssg_ds_path))"
+        return 0
+    fi
+
+    print_debug "Installing OpenSCAP / SSG content if published for this release (ssg-debderived, openscap-scanner)..."
+    rm -f /etc/apt/sources.list.d/canvos-stig-universe.list
+
     apt-get update || { print_debug "ERROR: apt-get update failed"; exit 1; }
-    apt-get install -y --no-install-recommends openscap-scanner scap-security-guide \
-        || { print_debug "ERROR: apt-get install (openscap / scap-security-guide) failed"; exit 1; }
+
+    if install_openscap_from_cache_or_empty; then
+        return 0
+    fi
+
+    print_debug "Packages not in apt index after first update; enabling universe (if needed) and refreshing..."
+    prepare_apt_universe_for_openscap
+    apt-get update || { print_debug "ERROR: apt-get update failed"; exit 1; }
+
+    if install_openscap_from_cache_or_empty; then
+        return 0
+    fi
+
+    print_debug "Forcing full apt lists refresh (clear /var/lib/apt/lists)..."
+    rm -rf /var/lib/apt/lists/*
+    apt-get update || { print_debug "ERROR: apt-get update failed after lists purge"; exit 1; }
+
+    if install_openscap_from_cache_or_empty; then
+        return 0
+    fi
+
+    print_debug "apt-cache policy ssg-debderived openscap-scanner:"
+    apt-cache policy ssg-debderived openscap-scanner 2>&1 | while read -r line; do print_debug "  $line"; done || true
+    print_debug "No ssg-debderived/openscap-scanner in apt for this release (e.g. 22.04). Remediation still runs; add /tmp/stig-static/*.xml in the image build or scan from a host with SSG content."
 }
 
 ensure_oscap_and_content
 
+STIG_PROFILE="xccdf_org.ssgproject.content_profile_stig"
+STIG_DS_COPY=""
 STIG_XCCDF=""
-for path in \
-    /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds.xml \
-    /usr/share/xml/scap/ssg/content/ssg-ubuntu2404-ds-1.2.xml \
-    /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml \
-    /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds-1.2.xml \
-    /usr/share/xml/scap/ssg/content/ssg-ubuntu2004-ds.xml \
-    /usr/share/xml/scap/ssg/content/ssg-ubuntu2004-ds-1.2.xml
-do
-    if [ -f "$path" ]; then
-        STIG_XCCDF="$path"
-        break
+if ds_src=$(pick_ssg_ds_path); then
+    STIG_XCCDF="$ds_src"
+    echo "Using STIG datastream: $STIG_XCCDF"
+    echo "Using STIG profile: $STIG_PROFILE"
+    print_debug "Using STIG datastream: $STIG_XCCDF"
+    print_debug "Using STIG profile: $STIG_PROFILE"
+    STIG_DS_COPY="$LOG_DIR/$(basename "$STIG_XCCDF")"
+    cp "$STIG_XCCDF" "$STIG_DS_COPY"
+    print_debug "Copied STIG datastream to $STIG_DS_COPY for post-boot compliance scans"
+    if [ -f /etc/os-release ]; then
+        # shellcheck source=/dev/null
+        . /etc/os-release
+        if [ "${VERSION_ID:-}" = "24.04" ] && [[ "$(basename "$STIG_XCCDF")" == *"2204"* ]]; then
+            print_debug "NOTE: Image has 24.04 but ssg-debderived only provided Ubuntu 22.04 datastream; pin ssg-ubuntu2404-ds.xml under /tmp/stig-static if you must match fix.sh exactly."
+        fi
     fi
-done
-
-if [ -z "$STIG_XCCDF" ]; then
-    print_debug "ERROR: STIG datastream (ssg-ubuntu*-ds.xml) not found after package install"
-    echo "ERROR: STIG datastream not found under /usr/share/xml/scap/ssg/content/" >&2
-    echo "Check $DEBUG_LOG for details" >&2
-    exit 1
+else
+    print_debug "No ssg-ubuntu*-ds.xml found under /usr/share/xml/scap/ssg/content/ or /tmp/stig-static/ after installs."
 fi
 
-STIG_PROFILE="xccdf_org.ssgproject.content_profile_stig"
-
-echo "Using STIG datastream: $STIG_XCCDF"
-echo "Using STIG profile: $STIG_PROFILE"
-print_debug "Using STIG datastream: $STIG_XCCDF"
-print_debug "Using STIG profile: $STIG_PROFILE"
-
-STIG_DS_COPY="$LOG_DIR/$(basename "$STIG_XCCDF")"
-cp "$STIG_XCCDF" "$STIG_DS_COPY"
-print_debug "Copied STIG datastream to $STIG_DS_COPY for post-boot compliance scans"
-
 if ! command -v oscap >/dev/null 2>&1; then
-    print_debug "ERROR: oscap not found"
-    echo "ERROR: oscap not found" >&2
-    echo "Check $DEBUG_LOG for details" >&2
-    exit 1
+    print_debug "NOTE: oscap not on PATH (optional on releases without openscap-scanner); install openscap-scanner where available to eval the datastream on-node."
 fi
 
 REMEDIATION_LOG="$LOG_DIR/remediation.log"
@@ -127,6 +261,8 @@ chmod +r "$REMEDIATION_SCRIPT_SAVED" 2>/dev/null || true
 print_debug "STIG remediation logs: $LOG_DIR"
 print_debug "  $DEBUG_LOG (debug)"
 print_debug "  $REMEDIATION_LOG (remediation stdout/stderr, bash -x)"
-print_debug "  $STIG_DS_COPY (datastream for oscap xccdf eval on the host)"
+if [ -n "$STIG_DS_COPY" ]; then
+    print_debug "  $STIG_DS_COPY (datastream for oscap xccdf eval on the host)"
+fi
 
 exit 0

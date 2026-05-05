@@ -58,17 +58,19 @@ Linux localhost 6.8.x-x-fips ...
 
 ## Running OpenSCAP scans (post-install)
 
-Remediation output is logged under `/var/log/stig-remediation/` (for example `debug.log`, `summary.log`, and `remediation.log`). During the image build, the STIG datastream from `scap-security-guide` is copied into that directory so you can re-evaluate on a deployed node without hunting for content paths:
+Remediation output is logged under `/var/log/stig-remediation/` (for example `debug.log`, `summary.log`, and `remediation.log`). During the image build, `stig-remediate.sh` installs **`openscap-scanner`** and **`ssg-debderived`** (Ubuntu ships SSG datastreams in that package, not under the binary name `scap-security-guide`) when available, then copies the best-matching **`ssg-ubuntu*-ds.xml`** to that directory.
 
 ```bash
-# Filename matches the installed guide (Noble: ssg-ubuntu2404-ds.xml)
+# Typical name on 24.04 when 2404 content is present (may be 2204 if only that ship set is in your ssg-debderived)
 XCCDF="/var/log/stig-remediation/ssg-ubuntu2404-ds.xml"
 
 oscap xccdf eval --profile xccdf_org.ssgproject.content_profile_stig \
   --report report.html "$XCCDF"
 ```
 
-OpenSCAP scanner and SCAP Security Guide packages are installed when `ENABLE_STIG=1` so `oscap` is available on the image.
+Use `ls /var/log/stig-remediation/ssg-ubuntu*-ds.xml` on the node to use the exact file that was copied.
+
+To **pin** a specific datastream in the image (e.g. match `fix.sh` exactly), place it at **`/tmp/stig-static/ssg-ubuntu2404-ds.xml`** in the Docker build (same idea as `rhel-stig/static/`).
 
 ## Regenerating `fix.sh`
 
