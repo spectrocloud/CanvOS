@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v0.0.0-add8c7cf
+ARG PE_VERSION=v0.0.0-d920a23c
 ARG KAIROS_VERSION=v4.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -65,7 +65,7 @@ ARG UPDATE_KERNEL=false
 ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
-ARG TWO_NODE=true
+
 ARG KINE_VERSION=0.11.4
 
 # MAAS Variables
