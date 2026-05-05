@@ -28,6 +28,10 @@ variable "FIPS" {
     default = false
 }
 
+variable "UBUNTU_PRO_KEY" {
+    default = ""
+}
+
 variable "TAG" {
     default = "kairosify:latest"
 }
@@ -43,6 +47,6 @@ target "kairosify" {
     FIPS = FIPS
     MODEL = MODEL
   }
-  secret = ["id=ubuntu_pro_key,src=ubuntu-pro-key"]
+  secret = [UBUNTU_PRO_KEY != "" ? "id=ubuntu_pro_key,env=UBUNTU_PRO_KEY" : "id=ubuntu_pro_key,src=ubuntu-pro-key"]
   tags = [TAG]
 }
