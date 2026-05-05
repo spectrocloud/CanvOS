@@ -10,6 +10,7 @@ content-*/*
 *.arg.*
 .idea
 .secret
+ubuntu-pro-key
 .DS_Store
 */user-data.yaml
 upload.sh

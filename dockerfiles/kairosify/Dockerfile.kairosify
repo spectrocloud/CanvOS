@@ -25,11 +25,17 @@ RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then 
         /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" ${FIPS_FLAG}; \
     fi
 
-# Ubuntu FIPS: attach Ubuntu Pro via secret (same pattern as Dockerfile.base-image / docker-bake.hcl),
-# enable the correct FIPS service, and install the FIPS kernel + crypto packages.
+# Ubuntu FIPS: attach Ubuntu Pro via secret mounted from the 'ubuntu-pro-key' file.
+# The file is never stored in image layers or command history.
+# Customers: copy ubuntu-pro-key.example to ubuntu-pro-key and fill in their token.
+# CI: the workflow writes secrets.UBUNTU_PRO_KEY into the ubuntu-pro-key file.
 # 20.04 uses the 'fips' service; 22.04+ uses 'fips-updates'.
 RUN --mount=type=secret,id=ubuntu_pro_key,target=/run/secrets/ubuntu_pro_key \
     if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
+        if [ ! -s /run/secrets/ubuntu_pro_key ]; then \
+            echo "ERROR: FIPS build requires an Ubuntu Pro key." \
+                 "Copy ubuntu-pro-key.example to ubuntu-pro-key and add your token." && exit 1; \
+        fi && \
         apt-get update && \
         apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates && \
         pro attach "$(cat /run/secrets/ubuntu_pro_key)" && \

@@ -138,6 +138,9 @@ jobs:
       - name: Login to registry
         run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
 
+      - name: Write Ubuntu Pro key file
+        run: printf '%s' "${{ secrets.UBUNTU_PRO_KEY }}" > ubuntu-pro-key
+
       - name: Build and push kairosify image
         uses: docker/bake-action@v6
         with:
@@ -155,7 +158,10 @@ jobs:
             kairosify.tags=${{ matrix.tag }}
         env:
           DOCKER_BUILD_SUMMARY: false
-          UBUNTU_PRO_KEY: ${{ secrets.UBUNTU_PRO_KEY }}
+
+      - name: Remove Ubuntu Pro key file
+        if: always()
+        run: rm -f ubuntu-pro-key
 
       - name: Save build result
         run: |

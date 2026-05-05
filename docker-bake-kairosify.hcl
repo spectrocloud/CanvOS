@@ -43,6 +43,6 @@ target "kairosify" {
     FIPS = FIPS
     MODEL = MODEL
   }
-  secret = ["id=ubuntu_pro_key,env=UBUNTU_PRO_KEY"]
+  secret = ["id=ubuntu_pro_key,src=ubuntu-pro-key"]
   tags = [TAG]
 }
