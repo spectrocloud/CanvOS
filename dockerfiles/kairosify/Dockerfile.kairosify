@@ -48,7 +48,6 @@ RUN --mount=type=secret,id=ubuntu_pro_key,target=/run/secrets/ubuntu_pro_key \
         else \
             pro enable fips-updates --assume-yes && \
             apt-get install -y --no-install-recommends \
-                strongswan strongswan-hmac openssh-client openssh-server \
                 linux-image-fips shim-signed; \
         fi; \
     fi
