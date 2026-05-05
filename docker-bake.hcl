@@ -284,7 +284,7 @@ function "normalized_os_version" {
 function "get_base_image" {
   params = [base_image, os_distribution, os_version, is_uki]
   result = base_image != "" ? base_image : (
-    os_distribution == "ubuntu" ? "${KAIROS_BASE_IMAGE_URL}/kairos-${os_distribution}:${os_version}-core-${ARCH}-generic-${KAIROS_VERSION}${is_uki ? "-uki" : ""}" :
+    os_distribution == "ubuntu" ? "${KAIROS_BASE_IMAGE_URL}/kairos-${os_distribution}:${os_version}-core-${ARCH}-generic-${KAIROS_VERSION}${is_uki ? "-uki" : ""}${FIPS_ENABLED ? "-fips" : ""}" :
 
     os_distribution == "opensuse-leap" && os_version == "15.6" ? 
       "${KAIROS_BASE_IMAGE_URL}/kairos-opensuse:leap-${os_version}-core-${ARCH}-generic-${KAIROS_VERSION}" :
