@@ -23,6 +23,11 @@ variable "TRUSTED_BOOT" {
     default = false
 }
 
+variable "FIPS" {
+    type = bool
+    default = false
+}
+
 variable "TAG" {
     default = "kairosify:latest"
 }
@@ -35,6 +40,7 @@ target "kairosify" {
     KAIROS_INIT_IMAGE = KAIROS_INIT_IMAGE
     KAIROS_VERSION = KAIROS_VERSION
     TRUSTED_BOOT = TRUSTED_BOOT
+    FIPS = FIPS
     MODEL = MODEL
   }
   tags = [TAG]

@@ -36,6 +36,11 @@ on:
         required: false
         type: boolean
         default: false
+      fips:
+        description: "FIPS 140-2 Compliance"
+        required: false
+        type: boolean
+        default: false
       registry_prefix:
         description: "Registry prefix for output images"
         required: false
@@ -61,15 +66,22 @@ jobs:
           model = "${{ github.event.inputs.model }}"
           kairos_version = "${{ github.event.inputs.kairos_version }}"
           trusted_boot = "${{ github.event.inputs.trusted_boot }}" == "true"
+          fips = "${{ github.event.inputs.fips }}" == "true"
 
           matrix = []
+
+          def apply_suffixes(tag, trusted_boot, fips):
+              if trusted_boot:
+                  tag += "-uki"
+              if fips:
+                  tag += "-fips"
+              return tag
 
           if base_os_image:
               # Custom base OS image
               simple_name = base_os_image.split('/')[-1].replace(':', '-')
               tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{kairos_version}"
-              if trusted_boot:
-                  tag += "-uki"
+              tag = apply_suffixes(tag, trusted_boot, fips)
 
               matrix.append({
                   "base_os": base_os_image,
@@ -78,7 +90,8 @@ jobs:
 
           elif trusted_boot:
               # UKI builds - only Ubuntu 24.04
-              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
+              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}"
+              tag = apply_suffixes(tag, trusted_boot, fips)
               matrix.append({
                   "base_os": "ubuntu:24.04",
                   "tag": tag
@@ -95,6 +108,7 @@ jobs:
 
               for base_os, tag_prefix in combinations:
                   tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
+                  tag = apply_suffixes(tag, trusted_boot, fips)
                   matrix.append({
                       "base_os": base_os,
                       "tag": tag
@@ -136,6 +150,7 @@ jobs:
             kairosify.args.KAIROS_INIT_IMAGE=${{ github.event.inputs.kairos_init_image }}
             kairosify.args.KAIROS_VERSION=${{ github.event.inputs.kairos_version }}
             kairosify.args.TRUSTED_BOOT=${{ github.event.inputs.trusted_boot }}
+            kairosify.args.FIPS=${{ github.event.inputs.fips }}
             kairosify.args.MODEL=${{ github.event.inputs.model }}
             kairosify.tags=${{ matrix.tag }}
         env:
@@ -182,6 +197,7 @@ jobs:
           echo "- Model: ${{ github.event.inputs.model }}" >> $GITHUB_STEP_SUMMARY
           echo "- Kairos Version: ${{ github.event.inputs.kairos_version }}" >> $GITHUB_STEP_SUMMARY
           echo "- Trusted Boot: ${{ github.event.inputs.trusted_boot }}" >> $GITHUB_STEP_SUMMARY
+          echo "- FIPS: ${{ github.event.inputs.fips }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Built Images:**" >> $GITHUB_STEP_SUMMARY
           echo '${{ steps.combine-tags.outputs.tags }}' | jq -r '.[] | "- " + .' >> $GITHUB_STEP_SUMMARY
