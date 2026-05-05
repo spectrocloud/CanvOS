@@ -13,19 +13,16 @@ ARG BASE_OS_IMAGE
 COPY --from=kairos-init /kairos-init /kairos-init
 
 # Run kairos-init install stage.
-# Ubuntu FIPS requires Pro + manual kernel swap before init, so we only run install here.
-# All other cases (non-Ubuntu or FIPS=false) run both stages with optional --fips flag.
+# Ubuntu FIPS: skip default kernel installation (--skip-step installKernel) so we can
+# install the FIPS kernel via Ubuntu Pro instead — avoids a remove/reinstall cycle.
+# Non-Ubuntu FIPS uses kairos-init --fips directly (OpenSUSE etc. support it natively).
+# All other cases run both stages together.
 RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
-        /kairos-init -l debug -s install -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}"; \
+        /kairos-init -l debug -s install -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" --skip-step installKernel; \
     else \
         FIPS_FLAG=""; \
         [ "${FIPS}" = "true" ] && FIPS_FLAG="--fips"; \
         /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" ${FIPS_FLAG}; \
-    fi
-
-# Ubuntu FIPS: remove the default kernel that kairos-init installed before swapping to the FIPS kernel
-RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
-        apt-get remove -y linux-base linux-image-generic* && apt-get autoremove -y || true; \
     fi
 
 # Ubuntu FIPS: attach Ubuntu Pro via secret (same pattern as Dockerfile.base-image / docker-bake.hcl),
