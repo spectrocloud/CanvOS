@@ -151,11 +151,11 @@ jobs:
             kairosify.args.KAIROS_VERSION=${{ github.event.inputs.kairos_version }}
             kairosify.args.TRUSTED_BOOT=${{ github.event.inputs.trusted_boot }}
             kairosify.args.FIPS=${{ github.event.inputs.fips }}
-            kairosify.args.UBUNTU_PRO_KEY=${{ secrets.UBUNTU_PRO_KEY }}
             kairosify.args.MODEL=${{ github.event.inputs.model }}
             kairosify.tags=${{ matrix.tag }}
         env:
           DOCKER_BUILD_SUMMARY: false
+          UBUNTU_PRO_KEY: ${{ secrets.UBUNTU_PRO_KEY }}
 
       - name: Save build result
         run: |

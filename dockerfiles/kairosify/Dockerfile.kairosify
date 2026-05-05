@@ -8,7 +8,6 @@ ARG MODEL
 ARG KAIROS_VERSION
 ARG TRUSTED_BOOT
 ARG FIPS=false
-ARG UBUNTU_PRO_KEY
 ARG BASE_OS_IMAGE
 
 COPY --from=kairos-init /kairos-init /kairos-init
@@ -29,14 +28,15 @@ RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then 
         apt-get remove -y linux-base linux-image-generic* && apt-get autoremove -y || true; \
     fi
 
-# Ubuntu FIPS: attach Ubuntu Pro (same UBUNTU_PRO_KEY used by earthly builds), enable FIPS
-# service, and install FIPS kernel + crypto packages.
-# 20.04 uses the 'fips' service and needs extra crypto libs; 22.04+ uses 'fips-updates'.
-RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
+# Ubuntu FIPS: attach Ubuntu Pro via secret (same pattern as Dockerfile.base-image / docker-bake.hcl),
+# enable the correct FIPS service, and install the FIPS kernel + crypto packages.
+# 20.04 uses the 'fips' service; 22.04+ uses 'fips-updates'.
+RUN --mount=type=secret,id=ubuntu_pro_key,target=/run/secrets/ubuntu_pro_key \
+    if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
         apt-get update && \
         apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates && \
-        pro attach "${UBUNTU_PRO_KEY}" && \
-        if echo "${BASE_OS_IMAGE}" | grep -qE "ubuntu:20.04|ubuntu:focal"; then \
+        pro attach "$(cat /run/secrets/ubuntu_pro_key)" && \
+        if echo "${BASE_OS_IMAGE}" | grep -qE "ubuntu:20\.04|ubuntu:focal"; then \
             pro enable fips --assume-yes && \
             apt-get install -y --no-install-recommends \
                 openssl libssl1.1 libssl1.1-hmac libgcrypt20 libgcrypt20-hmac \
@@ -58,10 +58,13 @@ RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then 
 RUN rm -f /kairos-init
 
 # Ubuntu FIPS: symlink kernel HMAC file and detach Ubuntu Pro
-RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
+RUN --mount=type=secret,id=ubuntu_pro_key,target=/run/secrets/ubuntu_pro_key \
+    if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
         kernel=$(ls /boot/vmlinuz-* | head -n1) && \
         ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac && \
-        pro detach --assume-yes; \
+        if [ -f /run/secrets/ubuntu_pro_key ] && [ -s /run/secrets/ubuntu_pro_key ]; then \
+            pro detach --assume-yes; \
+        fi; \
     fi
 
 RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu; then \
