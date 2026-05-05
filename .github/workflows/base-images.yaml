@@ -139,7 +139,17 @@ jobs:
         run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
 
       - name: Write Ubuntu Pro key file
-        run: printf '%s' "${{ secrets.UBUNTU_PRO_KEY }}" > ubuntu-pro-key
+        run: |
+          # Luet-BigRunner (self-hosted): key stored on the runner at /etc/ubuntu-pro-key
+          # Fallback: UBUNTU_PRO_KEY GitHub secret (if configured)
+          # Non-FIPS builds: file is left empty; Dockerfile skips Pro attachment
+          if [ -f "/etc/ubuntu-pro-key" ]; then
+            cp /etc/ubuntu-pro-key ubuntu-pro-key
+          elif [ -n "${{ secrets.UBUNTU_PRO_KEY }}" ]; then
+            printf '%s' "${{ secrets.UBUNTU_PRO_KEY }}" > ubuntu-pro-key
+          else
+            touch ubuntu-pro-key
+          fi
 
       - name: Build and push kairosify image
         uses: docker/bake-action@v6
