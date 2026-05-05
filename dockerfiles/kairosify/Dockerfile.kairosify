@@ -11,9 +11,56 @@ ARG FIPS=false
 ARG BASE_OS_IMAGE
 
 COPY --from=kairos-init /kairos-init /kairos-init
-RUN FIPS_FLAG=""; \
-    if [ "${FIPS}" = "true" ]; then FIPS_FLAG="--fips"; fi; \
-    /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" ${FIPS_FLAG} && rm /kairos-init
+
+# Run kairos-init install stage.
+# Ubuntu FIPS requires Pro + manual kernel swap before init, so we only run install here.
+# All other cases (non-Ubuntu or FIPS=false) run both stages with optional --fips flag.
+RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
+        /kairos-init -l debug -s install -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}"; \
+    else \
+        FIPS_FLAG=""; \
+        [ "${FIPS}" = "true" ] && FIPS_FLAG="--fips"; \
+        /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" ${FIPS_FLAG}; \
+    fi
+
+# Ubuntu FIPS: remove the default kernel that kairos-init installed before swapping to the FIPS kernel
+RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
+        apt-get remove -y linux-base linux-image-generic* && apt-get autoremove -y || true; \
+    fi
+
+# Ubuntu FIPS: attach Ubuntu Pro and install FIPS kernel + crypto packages.
+# 20.04 uses the 'fips' service and needs extra crypto libs; 22.04+ uses 'fips-updates'.
+RUN --mount=type=secret,id=pro-attach-config \
+    if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
+        apt-get update && \
+        apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates && \
+        pro attach --attach-config /run/secrets/pro-attach-config && \
+        apt-get upgrade -y && \
+        if echo "${BASE_OS_IMAGE}" | grep -qE "ubuntu:20.04|ubuntu:focal"; then \
+            apt-get install -y --no-install-recommends \
+                openssl libssl1.1 libssl1.1-hmac libgcrypt20 libgcrypt20-hmac \
+                strongswan strongswan-hmac openssh-client openssh-server \
+                linux-image-fips linux-headers-fips shim-signed; \
+        else \
+            apt-get install -y --no-install-recommends \
+                strongswan strongswan-hmac openssh-client openssh-server \
+                linux-image-fips shim-signed; \
+        fi; \
+    fi
+
+# Ubuntu FIPS: run kairos-init init stage after FIPS kernel is in place
+RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
+        /kairos-init -l debug -s init -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}"; \
+    fi
+
+RUN rm -f /kairos-init
+
+# Ubuntu FIPS: symlink kernel HMAC file and detach Ubuntu Pro
+RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu && [ "${FIPS}" = "true" ]; then \
+        kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+        ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac && \
+        pro detach --assume-yes; \
+    fi
 
 RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu; then \
         apt-get update && apt-get install -y --no-install-recommends \
