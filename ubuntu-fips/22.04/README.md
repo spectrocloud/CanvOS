@@ -45,3 +45,17 @@ kairos@localhost:~$ cat /proc/sys/crypto/fips_enabled
 kairos@localhost:~$ uname -a
 Linux localhost 5.15.0-153-fips 
 ```
+
+## Running OpenSCAP scans (post-install)
+
+Remediation output is logged under `/var/log/stig-remediation/` (for example `debug.log`, `summary.log`, and `remediation.log`). During the image build, the STIG datastream from `scap-security-guide` is copied into that directory so you can re-evaluate on a deployed node without hunting for content paths:
+
+```bash
+# Filename matches the installed guide (Jammy: ssg-ubuntu2204-ds.xml)
+XCCDF="/var/log/stig-remediation/ssg-ubuntu2204-ds.xml"
+
+oscap xccdf eval --profile xccdf_org.ssgproject.content_profile_stig \
+  --report report.html "$XCCDF"
+```
+
+OpenSCAP scanner and SCAP Security Guide packages are installed when `ENABLE_STIG=1` so `oscap` is available on the image.
