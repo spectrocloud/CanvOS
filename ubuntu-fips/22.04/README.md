@@ -45,3 +45,9 @@ kairos@localhost:~$ cat /proc/sys/crypto/fips_enabled
 kairos@localhost:~$ uname -a
 Linux localhost 5.15.0-153-fips 
 ```
+
+## Running OpenSCAP scans (post-install)
+
+Remediation output is logged under `/var/log/stig-remediation/` (for example `debug.log`, `summary.log`, and `remediation.log`).
+
+**Ubuntu 22.04 (Jammy) and OpenSCAP:** The official Jammy archive does **not** ship `openscap-scanner`, `scap-security-guide`, or `/usr/bin/oscap` (no matching `Package:` lines in `dists/jammy/universe/.../Packages*`). The STIG build therefore **does not** install OpenSCAP or copy a datastream onto the image. Remediation still runs the bundled `fix.sh` with the same logging layout as other releases. To ship a datastream **in the image** on Jammy, add **`/tmp/stig-static/ssg-ubuntu2204-ds.xml`** (or `*-ds-1.2.xml`) during the Docker build; `stig-remediate.sh` copies it to `/var/log/stig-remediation/` like RHEL’s static STIG layout.

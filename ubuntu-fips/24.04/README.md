@@ -56,6 +56,35 @@ kairos@localhost:~$ uname -a
 Linux localhost 6.8.x-x-fips ...
 ```
 
+## Running OpenSCAP scans (post-install)
+
+Remediation output is logged under `/var/log/stig-remediation/`. **`stig-remediate.sh`** installs **`openscap-scanner`** and **`ssg-debderived`** when available. On **24.04**, Ubuntu’s `ssg-debderived` often only ships **22.04** datastreams; the script then downloads **[ComplianceAsCode/content](https://github.com/ComplianceAsCode/content) `scap-security-guide-0.1.78`** (same benchmark as `fix.sh`) and places **`ssg-ubuntu2404-ds.xml`** under **`/tmp/stig-static`**, which is copied to `/var/log/stig-remediation/` (air‑gap: set **`STIG_FETCH_UPSTREAM_SSG=0`** and provide **`/tmp/stig-static/ssg-ubuntu2404-ds.xml`** in the image instead).
+
+| Variable | Default | Meaning |
+| -------- | ------- | ------- |
+| `STIG_FETCH_UPSTREAM_SSG` | `1` | When `1` on 24.04, fetch upstream 2404 DS if apt has no 2404 file. |
+| `STIG_SSG_VENDOR_VERSION` | `0.1.78` | ComplianceAsCode release tag (without `v`) for the tarball. |
+
+Use **`ssg-ubuntu2404-ds.xml`** for DISA STIG evaluation on a 24.04 node — it is the stream **`fix.sh`** was generated from.
+
+```bash
+XCCDF="/var/log/stig-remediation/ssg-ubuntu2404-ds.xml"
+oscap xccdf eval --profile xccdf_org.ssgproject.content_profile_stig \
+  --report report.html "$XCCDF"
+```
+
+If only **`ssg-ubuntu2204-ds.xml`** is present, **`--profile xccdf_org.ssgproject.content_profile_stig` usually fails**: Ubuntu’s 22.04 datastream from `ssg-debderived` is built from content sets that typically expose **CIS / standard** profiles, **not** the DISA STIG profile. List what is actually in a file with:
+
+```bash
+oscap info --profiles /var/log/stig-remediation/ssg-ubuntu2204-ds.xml
+```
+
+Use a profile from that list (for example a `cis_level1_*` id) if you must scan against the 22.04 datastream, or **rebuild the image** so **`ssg-ubuntu2404-ds.xml`** is copied (networked build with `STIG_FETCH_UPSTREAM_SSG=1`, or vendor the file under `/tmp/stig-static`).
+
+The **`error : Unknown IO error`** line is a known harmless OpenSCAP message on Ubuntu in some code paths; the important line is **“No profile matching …”**.
+
+To **pin** a specific datastream in the image (e.g. match `fix.sh` exactly), place it at **`/tmp/stig-static/ssg-ubuntu2404-ds.xml`** in the Docker build (same idea as `rhel-stig/static/`).
+
 ## Regenerating `fix.sh`
 
 `fix.sh` is generated from SCAP Security Guide (STIG profile) for Ubuntu 24.04, for example:
