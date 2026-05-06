@@ -104,22 +104,14 @@ prepare_apt_universe_for_openscap() {
     } >"$drop"
 }
 
-# Pick Ubuntu SSG datastream: build-time static (optional), release-matched path, else newest ssg-ubuntu*-ds.xml.
+# Pick Ubuntu SSG datastream: release-specific paths first (so Noble does not pick 22.04 from
+# ssg-debderived when /tmp/stig-static holds an upstream 24.04 DS), then generic static, then apt.
 pick_ssg_ds_path() {
     local static dir base f
     static=/tmp/stig-static
     dir=/usr/share/xml/scap/ssg/content
-
-    shopt -s nullglob
-    for f in "$static"/ssg-ubuntu*-ds.xml "$static"/ssg-ubuntu*-ds-1.2.xml; do
-        if [ -f "$f" ]; then
-            printf '%s' "$f"
-            shopt -u nullglob
-            return 0
-        fi
-    done
-
     base=""
+
     if [ -f /etc/os-release ]; then
         # shellcheck source=/dev/null
         . /etc/os-release
@@ -129,8 +121,11 @@ pick_ssg_ds_path() {
             20.04) base=ssg-ubuntu2004 ;;
         esac
     fi
+
+    shopt -s nullglob
     if [ -n "$base" ]; then
-        for f in "$dir/${base}-ds.xml" "$dir/${base}-ds-1.2.xml"; do
+        for f in "$static/${base}-ds.xml" "$static/${base}-ds-1.2.xml" \
+                 "$dir/${base}-ds.xml" "$dir/${base}-ds-1.2.xml"; do
             if [ -f "$f" ]; then
                 printf '%s' "$f"
                 shopt -u nullglob
@@ -138,6 +133,14 @@ pick_ssg_ds_path() {
             fi
         done
     fi
+
+    for f in "$static"/ssg-ubuntu*-ds.xml "$static"/ssg-ubuntu*-ds-1.2.xml; do
+        if [ -f "$f" ]; then
+            printf '%s' "$f"
+            shopt -u nullglob
+            return 0
+        fi
+    done
 
     local candidates=("$dir"/ssg-ubuntu*-ds.xml)
     if [ "${#candidates[@]}" -gt 0 ]; then
@@ -147,6 +150,61 @@ pick_ssg_ds_path() {
     fi
     shopt -u nullglob
     return 1
+}
+
+# Noble's ssg-debderived often lags fix.sh; bundle 24.04 STIG at benchmark 0.1.78 (see 24.04/fix.sh).
+fetch_ssg_ubuntu2404_ds_upstream() {
+    local dest_dir="/tmp/stig-static"
+    local dest="$dest_dir/ssg-ubuntu2404-ds.xml"
+    local ver="${STIG_SSG_VENDOR_VERSION:-0.1.78}"
+    local url="https://github.com/ComplianceAsCode/content/releases/download/v${ver}/scap-security-guide-${ver}.tar.gz"
+    local work found
+
+    command -v curl >/dev/null 2>&1 || {
+        print_debug "curl not available; cannot fetch upstream scap-security-guide ${ver}"
+        return 1
+    }
+
+    mkdir -p "$dest_dir"
+    work=$(mktemp -d)
+    print_debug "Fetching ComplianceAsCode scap-security-guide ${ver} (${url}) for ssg-ubuntu2404-ds.xml..."
+    if ! curl -fsSL "$url" | tar -xz -C "$work" 2>/dev/null; then
+        print_debug "Failed to download or extract upstream tarball (offline or URL change?)"
+        rm -rf "$work"
+        return 1
+    fi
+    found=$(find "$work" -type f -name 'ssg-ubuntu2404-ds.xml' 2>/dev/null | head -1)
+    if [ -z "$found" ] || [ ! -f "$found" ]; then
+        print_debug "ssg-ubuntu2404-ds.xml not present in extracted ${ver} tarball"
+        rm -rf "$work"
+        return 1
+    fi
+    cp "$found" "$dest"
+    rm -rf "$work"
+    print_debug "Wrote upstream datastream to $dest (matches fix.sh benchmark ${ver})"
+    return 0
+}
+
+ensure_ubuntu2404_ds_when_apt_lags() {
+    [ -f /etc/os-release ] || return 0
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    [ "${VERSION_ID:-}" = "24.04" ] || return 0
+
+    local d=/usr/share/xml/scap/ssg/content
+    local s=/tmp/stig-static
+    if [ -f "$d/ssg-ubuntu2404-ds.xml" ] || [ -f "$d/ssg-ubuntu2404-ds-1.2.xml" ] \
+        || [ -f "$s/ssg-ubuntu2404-ds.xml" ] || [ -f "$s/ssg-ubuntu2404-ds-1.2.xml" ]; then
+        return 0
+    fi
+
+    if [ "${STIG_FETCH_UPSTREAM_SSG:-1}" != "1" ]; then
+        print_debug "STIG_FETCH_UPSTREAM_SSG is not 1; skipping upstream fetch for 24.04 DS (use /tmp/stig-static or allow 22.04 fallback)."
+        return 0
+    fi
+
+    fetch_ssg_ubuntu2404_ds_upstream \
+        || print_debug "Upstream fetch failed; pick_ssg_ds_path may fall back to ssg-ubuntu2204-ds.xml from ssg-debderived."
 }
 
 build_openscap_pkg_list() {
@@ -211,6 +269,8 @@ ensure_oscap_and_content() {
 
 ensure_oscap_and_content
 
+ensure_ubuntu2404_ds_when_apt_lags
+
 STIG_PROFILE="xccdf_org.ssgproject.content_profile_stig"
 STIG_DS_COPY=""
 STIG_XCCDF=""
@@ -227,7 +287,7 @@ if ds_src=$(pick_ssg_ds_path); then
         # shellcheck source=/dev/null
         . /etc/os-release
         if [ "${VERSION_ID:-}" = "24.04" ] && [[ "$(basename "$STIG_XCCDF")" == *"2204"* ]]; then
-            print_debug "NOTE: Image has 24.04 but ssg-debderived only provided Ubuntu 22.04 datastream; pin ssg-ubuntu2404-ds.xml under /tmp/stig-static if you must match fix.sh exactly."
+            print_debug "NOTE: Using ssg-ubuntu2204 datastream on 24.04. Ubuntu-packaged 22.04 datastreams usually do NOT include the DISA STIG XCCDF profile (only CIS/standard-style profiles), so 'oscap xccdf eval --profile ...stig' will fail. Rebuild with upstream fetch (default STIG_FETCH_UPSTREAM_SSG=1) or place ssg-ubuntu2404-ds.xml in /tmp/stig-static. Check profiles: oscap info --profiles <ds.xml>"
         fi
     fi
 else
