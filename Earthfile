@@ -62,6 +62,12 @@ ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 
 ARG UPDATE_KERNEL=false
+
+IF [ "$FIPS_ENABLED" = "true" ] && [ "$UPDATE_KERNEL" = "true" ]
+    RUN echo "ERROR: UPDATE_KERNEL and FIPS_ENABLED are mutually exclusive. Cannot set both to true." >&2 && \
+        exit 1
+END
+
 ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
