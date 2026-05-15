@@ -726,7 +726,7 @@ base-image:
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-                apt-get install -y linux-image-generic-hwe-$OS_VERSION
+                apt-get install -y linux-image-generic-hwe-$OS_VERSION linux-modules-extra-hwe-$OS_VERSION
         END
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
@@ -766,6 +766,13 @@ base-image:
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
+            # Ensure iscsi_tcp and related modules are included in the initrd when UPDATE_KERNEL is used.
+            # iscsi_tcp lives in linux-modules-extra (not linux-image) and is not auto-included by
+            # mkinitramfs, which is the fallback when dracut fails. Without this, Longhorn and other
+            # iSCSI-backed storage CSI drivers fail to attach volumes on the HWE kernel.
+            RUN for mod in iscsi_tcp libiscsi libiscsi_tcp scsi_transport_iscsi; do \
+                    grep -qxF "$mod" /etc/initramfs-tools/modules 2>/dev/null || echo "$mod" >> /etc/initramfs-tools/modules; \
+                done
             # Skip dracut when FIPS is enabled - the Dockerfile will include custom dracut modules.fips
             IF [ "$FIPS_ENABLED" = "false" ]
                 RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
