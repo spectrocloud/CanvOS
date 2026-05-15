@@ -726,7 +726,9 @@ base-image:
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-                apt-get install -y linux-image-generic-hwe-$OS_VERSION linux-modules-extra-hwe-$OS_VERSION
+                apt-get install -y linux-image-generic-hwe-$OS_VERSION && \
+                kernel=$(ls /lib/modules | sort -V | tail -1) && \
+                apt-get install -y linux-modules-extra-${kernel}
         END
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
