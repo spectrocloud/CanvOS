@@ -30,6 +30,8 @@ RUN --mount=type=secret,id=pro-attach-config \
     ## && usg fix disa_stig \
     && pro detach --assume-yes
 
+COPY 22.04/dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
 # Copy the custom dracut modules.fips that includes 2 missing modules
 COPY 22.04/modules.fips /tmp/modules.fips
 RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
