@@ -7,13 +7,11 @@ ARG SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 ARG BUILDER_3RDPARTY_VERSION=4.8
 ARG SPECTRO_THIRD_PARTY_IMAGE=us-docker.pkg.dev/palette-images/third-party/spectro-third-party:$BUILDER_3RDPARTY_VERSION
 ARG ALPINE_TAG=3.20
-ARG ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
-FROM $ALPINE_IMG
+FROM +ubuntu
 
 ARG FIPS_ENABLED=false
 IF [ "$FIPS_ENABLED" = "true" ] && [ "$SPECTRO_PUB_REPO" = "us-docker.pkg.dev/palette-images" ]
     LET SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images-fips
-    LET ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:$ALPINE_TAG
 END
 
 ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
@@ -171,7 +169,8 @@ build-all-images:
     END
 
 build-provider-images:
-    FROM $ALPINE_IMG
+    FROM +ubuntu
+    RUN apt-get update && apt-get install -y --no-install-recommends jq && rm -rf /var/lib/apt/lists/*
 
     IF [ !-n "$K8S_DISTRIBUTION"]
         RUN echo "K8S_DISTRIBUTION is not set. Please set K8S_DISTRIBUTION to kubeadm, kubeadm-fips, k3s, nodeadm, rke2 or canonical." && exit 1
@@ -198,7 +197,7 @@ build-provider-images:
 build-provider-images-fips:
    BUILD +build-provider-images
 
-BASE_ALPINE:
+BASE_UBUNTU:
     COMMAND
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
@@ -248,8 +247,8 @@ kairos-agent:
     SAVE ARTIFACT /usr/bin/kairos-agent /kairos-agent
 
 install-k8s:
-    FROM --platform=linux/${ARCH} $ALPINE_IMG
-    DO +BASE_ALPINE
+    FROM --platform=linux/${ARCH} +ubuntu
+    DO +BASE_UBUNTU
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
 
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ] || [ "$K8S_DISTRIBUTION" = "canonical" ]
@@ -451,8 +450,9 @@ uki-genkey:
     END
 
 download-sbctl:
-    FROM $ALPINE_IMG
-    DO +BASE_ALPINE
+    FROM +ubuntu
+    DO +BASE_UBUNTU
+    RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
     RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
     SAVE ARTIFACT /usr/bin/sbctl
 
@@ -1267,7 +1267,8 @@ download-third-party:
     SAVE ARTIFACT /binaries/${binary}/latest/$BIN_TYPE/$TARGETARCH/${binary}.version ${binary}.version
 
 third-party:
-    FROM $ALPINE_IMG
+    FROM +ubuntu
+    RUN apt-get update && apt-get install -y --no-install-recommends upx-ucl && rm -rf /var/lib/apt/lists/*
     ARG binary
     WORKDIR /WORKDIR
 
