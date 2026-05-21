@@ -96,5 +96,7 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 # ENV LB_HOW compile
 # ENTRYPOINT /entry.sh
 
-# to set cgroupv2 as default
-#RUN sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg
+# Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
+RUN if ! grep -q "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
+        sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
+    fi
