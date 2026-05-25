@@ -837,16 +837,18 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
-    IF [ "$DISABLE_SELINUX" = "true" ]
-    # Ensure SElinux gets disabled
-        RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
-            if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
-    END
+    IF [ "$IS_UKI" != "true" ]
+        IF [ "$DISABLE_SELINUX" = "true" ]
+        # Ensure SElinux gets disabled
+            RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+                if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+        END
 
-    # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
-    RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
-            sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
-        fi
+        # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
+        RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
+            fi
+    END
 
 KAIROS_RELEASE:
     COMMAND
