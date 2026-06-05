@@ -127,8 +127,8 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
-ARG STYLUS_BASE=us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-framework-linux-amd64:v0.0.0-32b95ce0
-ARG STYLUS_PACKAGE_BASE=us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-linux-amd64:v0.0.0-32b95ce0
+ARG STYLUS_BASE=us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-framework-linux-amd64:v0.0.0-0eb4785b
+ARG STYLUS_PACKAGE_BASE=us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-linux-amd64:v0.0.0-0eb4785b
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
@@ -240,7 +240,7 @@ stylus-image-pack:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY --keep-ts --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
-    RUN luet util pack us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-framework-linux-amd64:v0.0.0-32b95ce0 stylus.tar stylus-image.tar
+    RUN luet util pack us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-framework-linux-amd64:v0.0.0-0eb4785b stylus.tar stylus-image.tar
     SAVE ARTIFACT --keep-ts stylus-image.tar AS LOCAL ./build/
 
 kairos-agent:
@@ -665,14 +665,14 @@ build-provider-trustedboot-image:
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
-    FROM --platform=linux/${ARCH} us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-framework-linux-amd64:v0.0.0-32b95ce0
+    FROM --platform=linux/${ARCH} us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-framework-linux-amd64:v0.0.0-0eb4785b
     SAVE ARTIFACT --keep-ts --keep-own  ./*
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
 
 stylus-package-image:
-    FROM --platform=linux/${ARCH} us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-linux-amd64:v0.0.0-32b95ce0
+    FROM --platform=linux/${ARCH} us-docker.pkg.dev/palette-images-dev/public/yogi/edge/stylus-linux-amd64:v0.0.0-0eb4785b
     SAVE ARTIFACT --keep-ts --keep-own  ./*
 
 kairos-provider-image:
