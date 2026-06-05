@@ -83,6 +83,10 @@ ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_BRING_YOUR_OWN_KEYS=false
+# When UKI_BRING_YOUR_OWN_KEYS=true, set false to skip merging Spectro extension cert into db
+ARG ENROLL_SPECTRO_EXTENSION_CERT=false
+# OCI image (scratch) with palette-sysext-cert.pem; merged into UEFI db during +uki-genkey
+ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/sysext/palette-sysext-cert:latest
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
@@ -118,8 +122,7 @@ IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
-    # Check for default value for rhel
+ELSE
     ARG BASE_IMAGE
 END
 
@@ -203,6 +206,24 @@ BASE_ALPINE:
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
 
+
+CHECK_SYSTEMD_VERSION:
+    COMMAND
+    RUN SYSTEMCTL="" && \
+        for c in systemctl /usr/bin/systemctl /bin/systemctl /usr/local/bin/systemctl /usr/sbin/systemctl /sbin/systemctl /usr/local/sbin/systemctl; do \
+            if command -v "$c" >/dev/null 2>&1; then SYSTEMCTL="$c"; break; fi; \
+        done && \
+        SYSTEMD_VER=$([ -n "$SYSTEMCTL" ] && "$SYSTEMCTL" --version 2>/dev/null | awk 'NR==1{print $2}') && \
+        case "$SYSTEMD_VER" in ''|*[!0-9]*) SYSTEMD_VER=0 ;; esac && \
+        echo "CHECK_SYSTEMD_VERSION: detected systemd version $SYSTEMD_VER (systemctl: ${SYSTEMCTL:-not found})" && \
+        if [ "$SYSTEMD_VER" -gt "252" ]; then \
+            mkdir -p /etc/spectrocloud && \
+            touch /etc/spectrocloud/.support-systemd-extensions && \
+            echo "CHECK_SYSTEMD_VERSION: systemd > 252 — created /etc/spectrocloud/.support-systemd-extensions"; \
+        else \
+            echo "CHECK_SYSTEMD_VERSION: systemd <= 252 — skipping systemd-extensions marker"; \
+        fi
+
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-ts --keep-own /. rootfs
@@ -224,7 +245,11 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    DO +CHECK_SYSTEMD_VERSION
+    IF [ ! -f /etc/spectrocloud/.support-systemd-extensions ]
+        COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    END
+    RUN rm -f /etc/spectrocloud/.support-systemd-extensions
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
@@ -440,6 +465,10 @@ uki-genkey:
         RUN --no-cache mkdir -p /public-keys
         RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
         RUN --no-cache cd /keys; mv *.pem /public-keys
+        DO +enroll-spectro-extension-cert \
+            --ENROLLMENT_DIR=/keys \
+            --KEK_CERT=/public-keys/KEK.pem \
+            --KEK_KEY=/private-keys/KEK.key
     ELSE
         COPY +uki-byok/ /keys
     END
@@ -455,6 +484,36 @@ download-sbctl:
     DO +BASE_ALPINE
     RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
     SAVE ARTIFACT /usr/bin/sbctl
+
+spectro-extension-cert:
+    FROM --platform=linux/${ARCH} $SPECTRO_EXTENSION_CERT_IMAGE
+    SAVE ARTIFACT /palette-sysext-cert.pem cert.pem
+
+spectro-extension-cert-esl:
+    FROM --platform=linux/${ARCH} $ALPINE_IMG
+    DO +BASE_ALPINE
+    RUN apk add --no-cache efitools
+    COPY +spectro-extension-cert/cert.pem /cert/spectro-cert.pem
+    RUN cert-to-efi-sig-list -g 8be4df61-93ca-11d2-aa0d-00e098032b8c \
+        /cert/spectro-cert.pem /cert/spectro-db.esl
+    SAVE ARTIFACT /cert/spectro-db.esl spectro-db.esl
+
+# Self-contained merge of the Spectro extension cert into the UEFI db enrollment
+# material. Gated on ENROLL_SPECTRO_EXTENSION_CERT: when true, it fetches the ESL,
+# appends it to db.esl and (re)generates db.auth/db.der so the db is fully ready;
+# when false it is a no-op.
+enroll-spectro-extension-cert:
+    COMMAND
+    ARG ENROLLMENT_DIR
+    ARG KEK_CERT
+    ARG KEK_KEY
+    IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
+        COPY +spectro-extension-cert-esl/spectro-db.esl /spectro/spectro-db.esl
+        RUN cat /spectro/spectro-db.esl >> "$ENROLLMENT_DIR/db.esl" && \
+            sign-efi-sig-list -c "$KEK_CERT" -k "$KEK_KEY" db "$ENROLLMENT_DIR/db.esl" "$ENROLLMENT_DIR/db.auth" && \
+            cd "$ENROLLMENT_DIR" && sig-list-to-certs 'db.esl' 'db' && \
+            (cp db-0.der db.der 2>/dev/null || true)
+    END
 
 uki-byok:
     FROM +ubuntu
@@ -485,6 +544,11 @@ uki-byok:
     RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl || true
     RUN [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true
     RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
+
+    DO +enroll-spectro-extension-cert \
+        --ENROLLMENT_DIR=/output \
+        --KEK_CERT=/keys/KEK.pem \
+        --KEK_KEY=/keys/KEK.key
 
     WORKDIR /output
     RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  PK  PK.esl  PK.auth
@@ -585,18 +649,22 @@ provider-image:
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
 
-    IF [ "$IS_UKI" = "true" ]
-        COPY +internal-slink/slink /usr/bin/slink
-        COPY --keep-ts +install-k8s/output/ /k8s
-        RUN slink --source /k8s/ --target /opt/k8s
-        RUN rm -f /usr/bin/slink
-        RUN rm -rf /k8s
-        RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
-    ELSE
-        COPY --keep-ts +install-k8s/output/ /
+    # As part of PE-8315, kairos-provider binaries are in /usr/local/system/providers instead of earlier /system/providers.
+    # To avoid breaking existing functionality for non systemd extensions supported paths we move the binary back to original path.
+    IF [ ! -f /etc/spectrocloud/.support-systemd-extensions ]
+        IF [ "$IS_UKI" = "true" ]
+            COPY +internal-slink/slink /usr/bin/slink
+            COPY --keep-ts +install-k8s/output/ /k8s
+            RUN slink --source /k8s/ --target /opt/k8s
+            RUN rm -f /usr/bin/slink
+            RUN rm -rf /k8s
+            RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+        ELSE
+            COPY --keep-ts +install-k8s/output/ /
+        END
     END
 
-    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli /etc/spectrocloud/.support-systemd-extensions
 
     COPY (+third-party/etcdctl --binary=etcdctl) /usr/bin/
 
@@ -692,6 +760,15 @@ kairos-provider-image:
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-canonical:$CANONICAL_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
+    # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
+    # instead of /system/providers/. Move to /system/providers/ and remove the new
+    # path so consumers always find the binary at the legacy location.
+    RUN PROVIDER_NAME=$(basename /usr/local/system/providers/agent-provider-* 2>/dev/null || true) && \
+        if [ -n "$PROVIDER_NAME" ] && [ ! -f "/system/providers/$PROVIDER_NAME" ]; then \
+            mkdir -p /system/providers && \
+            mv /usr/local/system/providers/$PROVIDER_NAME /system/providers/$PROVIDER_NAME && \
+            rm -rf /usr/local/system/providers; \
+        fi
     SAVE ARTIFACT ./*
 
 # base build image used to create the base image for all other image types
@@ -700,6 +777,8 @@ base-image:
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \
     --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
     --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION .
+
+    DO +CHECK_SYSTEMD_VERSION
 
     IF [ "$IS_JETSON" = "true" ]
         COPY cloudconfigs/mount.yaml /etc/kairos/mount.yaml
@@ -716,14 +795,13 @@ base-image:
 
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+        RUN apt-get update && \
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
             RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
-            apt update && apt-get install -y snapd && \
             pro attach $UBUNTU_PRO_KEY
         END
-
-        RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -938,7 +1016,19 @@ iso-image:
         fi
     END
 
-    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
+    # When systemd >= 252, k8s is delivered via extensions at runtime.
+    # kubeadm preflight requires linux-headers to load the "configs" kernel module;
+    # install them in the installer image so kubeadm init succeeds.
+    IF [ -f /etc/spectrocloud/.support-systemd-extensions ] && \
+       [ "$OS_DISTRIBUTION" = "ubuntu" ] && \
+       [ "$ARCH" = "amd64" ]
+        RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+            if ! ls /usr/src | grep -q "linux-headers-$kernel"; then \
+                apt-get update && apt-get install -y "linux-headers-${kernel}"; \
+            fi
+    END
+
+    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli /etc/spectrocloud/.support-systemd-extensions
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
