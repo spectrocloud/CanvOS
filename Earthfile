@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.8.10
+ARG PE_VERSION=v4.9.10
 ARG KAIROS_VERSION=v4.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -29,11 +29,11 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.7.1
-ARG KUBEADM_PROVIDER_VERSION=v4.7.3
-ARG RKE2_PROVIDER_VERSION=v4.8.1
-ARG NODEADM_PROVIDER_VERSION=v4.6.0
-ARG CANONICAL_PROVIDER_VERSION=v1.3.0
+ARG K3S_PROVIDER_VERSION=v4.9.1
+ARG KUBEADM_PROVIDER_VERSION=v4.9.3
+ARG RKE2_PROVIDER_VERSION=v4.9.1
+ARG NODEADM_PROVIDER_VERSION=v4.9.2
+ARG CANONICAL_PROVIDER_VERSION=v4.9.1
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -62,6 +62,12 @@ ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 
 ARG UPDATE_KERNEL=false
+
+IF [ "$FIPS_ENABLED" = "true" ] && [ "$UPDATE_KERNEL" = "true" ]
+    RUN echo "ERROR: UPDATE_KERNEL and FIPS_ENABLED are mutually exclusive. Cannot set both to true." >&2 && \
+        exit 1
+END
+
 ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
@@ -599,8 +605,8 @@ provider-image:
 
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         RUN apt-get update -y && apt-get install -y gnupg && \
-            /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION --skip validate && \
-            /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION --skip validate && \
+            /opt/nodeadmutil/bin/nodeadm install -p iam-ra $K8S_VERSION && \
+            /opt/nodeadmutil/bin/nodeadm install -p ssm $K8S_VERSION && \
             # ssm-setup-cli fails to install amazon-ssm-agent via snap after downloading the package
             # due to PID 1 not being systemd, so we do it manually
             find /opt/ssm -type f -name "amazon-ssm-agent.deb" -exec sudo dpkg -i {} \; && \
@@ -845,10 +851,17 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
-    IF [ "$DISABLE_SELINUX" = "true" ]
-    # Ensure SElinux gets disabled
-        RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
-            if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+    IF [ "$IS_UKI" != "true" ]
+        IF [ "$DISABLE_SELINUX" = "true" ]
+        # Ensure SElinux gets disabled
+            RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+                if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+        END
+
+        # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
+        RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
+            fi
     END
 
 KAIROS_RELEASE:

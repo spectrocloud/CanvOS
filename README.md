@@ -729,3 +729,25 @@ Example syslog entry
 ```
 
 Entries without these keys in the MSG part of RFC 5424 will still be logged to the stylus-audit.log file but will not be displayed on LocalUI.
+
+# cgroup v2
+
+cgroup v2 is the next version of the Linux cgroup API. cgroup v2 provides a unified control system with enhanced resource management capabilities.
+Kubernetes has deprecated cgroup v1.  Kubelet will no longer start on a cgroup v1 node by default from k8s v1.35.x. To disable this setting a cluster admin should set failCgroupV1 to false in the [kubelet configuration](https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/) file or while building the installer/provider images set cgroup v2 as default.
+
+In the userdata file, while building the installer add systemd.unified_cgroup_hierarchy=1
+
+```
+#cloud-config
+install:
+  grub_options:
+    extra_cmdline: "systemd.unified_cgroup_hierarchy=1"
+```
+
+or if you are upgrading from k8s 1.34.x to 1.35.x and the operating system defaults to cgroup v1, build the provider image with cgroupv2 as default by uncommenting the following line in the Dockerfile.
+```
+RUN sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' \
+    /etc/cos/bootargs.cfg
+```
+
+
