@@ -822,7 +822,7 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
-        RUN yum install -y openssl rsyslog logrotate
+        RUN yum install -y --nobest openssl rsyslog logrotate
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
