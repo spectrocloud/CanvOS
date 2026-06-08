@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.8.10
+ARG PE_VERSION=v4.9.10
 ARG KAIROS_VERSION=v4.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -29,11 +29,11 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.9.0
-ARG KUBEADM_PROVIDER_VERSION=v4.9.1-rc.1
-ARG RKE2_PROVIDER_VERSION=v4.9.0
-ARG NODEADM_PROVIDER_VERSION=v4.9.1
-ARG CANONICAL_PROVIDER_VERSION=v4.9.0
+ARG K3S_PROVIDER_VERSION=v4.9.1
+ARG KUBEADM_PROVIDER_VERSION=v4.9.3
+ARG RKE2_PROVIDER_VERSION=v4.9.1
+ARG NODEADM_PROVIDER_VERSION=v4.9.2
+ARG CANONICAL_PROVIDER_VERSION=v4.9.1
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -915,16 +915,18 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
-    IF [ "$DISABLE_SELINUX" = "true" ]
-    # Ensure SElinux gets disabled
-        RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
-            if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
-    END
+    IF [ "$IS_UKI" != "true" ]
+        IF [ "$DISABLE_SELINUX" = "true" ]
+        # Ensure SElinux gets disabled
+            RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+                if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+        END
 
-    # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
-    RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
-            sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
-        fi
+        # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
+        RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
+            fi
+    END
 
 KAIROS_RELEASE:
     COMMAND
