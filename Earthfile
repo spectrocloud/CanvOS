@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.8.10
+ARG PE_VERSION
 ARG KAIROS_VERSION=v4.0.3
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
@@ -138,7 +138,7 @@ IF [ "$FIPS_ENABLED" = "true" ]
     ARG CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
+    ARG CLI_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
