@@ -49,7 +49,20 @@ ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
-ARG UBUNTU_PRO_KEY
+# Ubuntu Pro toggle. The token itself is NEVER passed as a build arg.
+# Recommended flow: use the earthly.sh wrapper. Set UBUNTU_PRO_ATTACH=true in
+# .arg (or pass --UBUNTU_PRO_ATTACH=true on the CLI), then run e.g.
+#   ./earthly.sh +iso
+# The wrapper prompts for the token without echoing it and forwards it as an
+# Earthly --secret, so the value never lands in .arg, in `docker history`,
+# in build-arg metadata, in the build cache, or in shell history.
+# For non-interactive (CI) runs, export UBUNTU_PRO_KEY before invoking the
+# script and the prompt is skipped:
+#   read -rs UBUNTU_PRO_KEY && export UBUNTU_PRO_KEY
+#   ./earthly.sh +iso
+# Note: `earthly secret set ...` requires Earthly Cloud (earthly account login)
+# and is not available on a stock CLI install - use the earthly.sh flow above.
+ARG UBUNTU_PRO_ATTACH=false
 
 # DRBD version for Piraeus pack
 ARG DRBD_VERSION="9.2.13"
@@ -716,10 +729,23 @@ base-image:
 
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-        IF [ ! -z "$UBUNTU_PRO_KEY" ]
-            RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
-            apt update && apt-get install -y snapd && \
-            pro attach $UBUNTU_PRO_KEY
+        IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
+            # The token is mounted via Earthly's secret store as an env var
+            # that lives only for the duration of this RUN. It is materialized
+            # into an attach-config file using the shell builtin `printf`, so
+            # the value never appears in any process argv (/proc/<pid>/cmdline)
+            # or in docker build history. The env var is unset and the temp
+            # file removed before the RUN exits, so nothing about the token
+            # survives in the resulting layer. If `--secret UBUNTU_PRO_KEY`
+            # is not supplied, Earthly aborts before this RUN is invoked.
+            RUN --secret UBUNTU_PRO_KEY \
+                sed -i '/^[[:space:]]*$/d' /etc/os-release && \
+                apt-get update && apt-get install -y snapd && \
+                umask 077 && \
+                printf 'token: %s\n' "$UBUNTU_PRO_KEY" > /tmp/.pro-attach.yaml && \
+                unset UBUNTU_PRO_KEY && \
+                pro attach --attach-config /tmp/.pro-attach.yaml && \
+                rm -f /tmp/.pro-attach.yaml
         END
 
         RUN apt-get update && \
@@ -791,8 +817,15 @@ base-image:
             RUN /tmp/harden.sh && rm /tmp/harden.sh
         END
 
-        IF [ ! -z "$UBUNTU_PRO_KEY" ]
-            RUN pro detach --assume-yes
+        IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
+            # Detach the entitlement, then scrub any on-disk traces. `pro` may
+            # echo or log token fragments under /var/log/ubuntu-advantage* and
+            # leave private state under /var/lib/ubuntu-advantage/private; we
+            # truncate those so the resulting image carries no residue.
+            RUN pro detach --assume-yes && \
+                find /var/log -maxdepth 3 -name 'ubuntu-advantage*' -type f -exec sh -c ': > "$1"' _ {} \; 2>/dev/null || true && \
+                rm -rf /var/lib/ubuntu-advantage/private 2>/dev/null || true && \
+                rm -f /tmp/.pro-attach.yaml 2>/dev/null || true
         END
 
     # OS == Opensuse

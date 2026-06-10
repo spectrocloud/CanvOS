@@ -20,8 +20,30 @@ FORCE_INTERACTIVE_INSTALL=false
 # Interactive Install Configuration
 # FORCE_INTERACTIVE_INSTALL=true    # Set to true to choose interactive install as the default boot option and launch the Interactive Install TUI
 
-# If you have Ubuntu Pro, use the UBUNTU_PRO_KEY variable to activate it as part of the image build
-# UBUNTU_PRO_KEY=your-key
+# Ubuntu Pro (optional)
+# Do NOT put your Pro token in this file or in any build arg - it would end up
+# in `docker history`, the Earthly build cache, and shell history.
+#
+# Recommended flow (use the earthly.sh wrapper):
+#   1. Uncomment the toggle below:
+#        UBUNTU_PRO_ATTACH=true
+#   2. Run the build as usual:
+#        ./earthly.sh +iso              # or +base-image, +build-all-images, etc.
+#      The script will prompt for the token (input hidden, no echo) and forward
+#      it to Earthly as a secret. The token never lands in `.arg`, on the
+#      earthly command line, in `docker history`, or in shell history.
+#   3. For non-interactive runs (CI), export UBUNTU_PRO_KEY before invoking the
+#      script and the prompt is skipped:
+#        read -rs UBUNTU_PRO_KEY && export UBUNTU_PRO_KEY
+#        ./earthly.sh +iso
+#        unset UBUNTU_PRO_KEY
+#
+# Note: `earthly secret set ...` requires Earthly Cloud (`earthly account login`)
+# and is NOT available on a stock CLI install - use the earthly.sh flow above.
+# Avoid `earthly --secret UBUNTU_PRO_KEY=<token>` on the command line: the token
+# lands in your shell history and /proc/<pid>/cmdline.
+#
+# UBUNTU_PRO_ATTACH=true
 
 # For enabling Secure Boot with Full Disk Encryption
 # IS_UKI=true
