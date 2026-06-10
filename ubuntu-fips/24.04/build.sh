@@ -3,6 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UBUNTU_FIPS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# Repo root is used as the build context so the Dockerfile can COPY hardware/udev rules.
+REPO_ROOT="$(cd "${UBUNTU_FIPS_ROOT}/.." && pwd)"
 
 BASE_IMAGE="${1:-ubuntu-noble-fips}"
 VERSION=24.04
@@ -15,4 +17,4 @@ DOCKER_BUILDKIT=1 docker build \
   --build-arg SKIP_STIG_BANNER="${SKIP_STIG_BANNER}" \
   -t "${BASE_IMAGE}" \
   -f "${SCRIPT_DIR}/Dockerfile.ubuntu${VERSION}-fips" \
-  "${UBUNTU_FIPS_ROOT}"
+  "${REPO_ROOT}"

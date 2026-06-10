@@ -27,6 +27,13 @@ RUN rm -rf /certs
 # This file provides the ability to extend or override GPU specifications in the default lookup table
 COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spectrocloud/custom-hardware-specs-lookup.json
 
+# Vendor-specific and NVMe persistent-naming udev rules.
+# These create stable /dev symlinks (e.g. /dev/boss-os for Dell BOSS-N1) that survive
+# reboots regardless of NVMe enumeration order, so install.device in cloud-config works
+# reliably across hardware generations.  See hardware/udev/README.md for details.
+RUN mkdir -p /etc/udev/rules.d
+COPY hardware/udev/*.rules /etc/udev/rules.d/
+
 
 ########################### Add any other image customizations here #######################
 

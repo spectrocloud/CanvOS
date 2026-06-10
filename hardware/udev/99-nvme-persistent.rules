@@ -1,0 +1,18 @@
+# Generic NVMe persistent naming supplement
+#
+# The standard 60-persistent-storage.rules (systemd) already creates /dev/disk/by-id/
+# and /dev/disk/by-path/ for NVMe drives. This file handles edge cases where those
+# rules may not fire early enough or the wwid/eui is not reported by the firmware.
+#
+# For every NVMe namespace that does not already have a by-id/eui link, create one
+# from the controller's unique serial + namespace ID so installs can use stable paths.
+#
+# Only runs if no existing by-id link was created (ENV check avoids duplicate symlinks).
+SUBSYSTEM=="block", KERNEL=="nvme*", ENV{ID_WWN}=="", ENV{ID_SERIAL}!="", \
+    ENV{ID_NSID}!="", \
+    SYMLINK+="disk/by-id/nvme-$env{ID_SERIAL}-ns$env{ID_NSID}"
+
+# Ensure NVMe namespaces always get a by-path link from PCIe address even when
+# the firmware does not populate wwid. This mirrors what udev does for SATA/SAS.
+SUBSYSTEM=="block", KERNEL=="nvme*", ENV{ID_PATH}!="", \
+    SYMLINK+="disk/by-path/$env{ID_PATH}"

@@ -144,6 +144,11 @@ RUN set -e; \
       ln -sf /dev/null "/etc/systemd/system/$_u"; \
     done
 
+# Vendor-specific and NVMe persistent-naming udev rules — same set as the non-FIPS Dockerfile.
+# kairos-init handles dracut for FIPS; we only need the rules on disk so udevd loads them at boot.
+RUN mkdir -p /etc/udev/rules.d
+COPY hardware/udev/*.rules /etc/udev/rules.d/
+
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 

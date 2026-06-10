@@ -1,0 +1,14 @@
+# HPE NS204i-p / NS204i-r NVMe Boot Controller
+# Used as the OS boot device on HPE ProLiant Gen10+ and Gen11 servers.
+# These controllers may enumerate in non-deterministic order across reboots.
+#
+# Stable symlink: /dev/hpe-boot-os
+# NOTE: model string needs validation against real hardware — obtain via:
+#   udevadm info --name=/dev/nvmeXn1 --attribute-walk | grep model
+SUBSYSTEM=="block", KERNEL=="nvme*", ATTRS{model}=="HPE NS204i-p*", SYMLINK+="hpe-boot-os"
+SUBSYSTEM=="block", KERNEL=="nvme*", ATTRS{model}=="HPE NS204i-r*", SYMLINK+="hpe-boot-os"
+
+# HPE SR-IOV NVMe Storage Controllers (data drives — no stable OS-boot symlink, by-id is sufficient)
+# These are matched here only to ensure by-id/by-path links are always created even if the
+# system udev hwdb does not have an entry for the specific firmware revision.
+SUBSYSTEM=="block", KERNEL=="nvme*", ATTRS{vendor}=="0x1590", ENV{ID_SERIAL}!="", SYMLINK+="disk/by-id/hpe-$env{ID_SERIAL}"

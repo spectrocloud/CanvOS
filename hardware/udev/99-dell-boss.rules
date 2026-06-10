@@ -1,0 +1,13 @@
+# Dell BOSS-N1 (Boot Optimized Storage Solution)
+# Marvell 88NR2241 NVMe RAID controller used as the OS boot device on VXRail/PowerEdge nodes.
+#
+# The BOSS-N1 exposes an NVMe namespace only when a RAID Virtual Disk is configured in iDRAC.
+# NVMe enumeration order (nvme0, nvme1, nvme2) is not guaranteed across reboots, so we create
+# a stable symlink /dev/boss-os that can be used as the install.device target in cloud-config.
+#
+# The wildcard on ATTRS{model} absorbs trailing whitespace that the NVMe subsystem may report.
+# Validated against Dell BOSS-N1 hardware by Kyle Jepson (Loves Energy).
+SUBSYSTEM=="block", KERNEL=="nvme*", ATTRS{model}=="Dell BOSS-N1*", SYMLINK+="boss-os"
+
+# Dell BOSS-S1 (older generation, same role)
+SUBSYSTEM=="block", KERNEL=="nvme*", ATTRS{model}=="Dell BOSS-S1*", SYMLINK+="boss-os"

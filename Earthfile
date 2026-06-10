@@ -774,8 +774,16 @@ base-image:
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
             # Skip dracut when FIPS is enabled - the Dockerfile will include custom dracut modules.fips
             IF [ "$FIPS_ENABLED" = "false" ]
+                # Include NVMe kernel modules and the vendor udev rules (hardware/udev/*.rules)
+                # so that stable symlinks like /dev/boss-os are available during early boot
+                # before the root filesystem is mounted.  Without this, Kairos's unattended
+                # installer may not find the install target if NVMe enumeration order differs
+                # from what was written into cloud-config at image build time.
                 RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-                   dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+                   dracut -f \
+                     --add-drivers "nvme nvme_core nvme_fabrics" \
+                     --install "/etc/udev/rules.d/99-dell-boss.rules /etc/udev/rules.d/99-hpe-nvme.rules /etc/udev/rules.d/99-nvme-persistent.rules" \
+                     "/boot/initrd-${kernel}" "${kernel}" && \
                    ln -sf "initrd-${kernel}" /boot/initrd
             END
             RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
@@ -806,7 +814,12 @@ base-image:
 
         IF [ -e "/usr/bin/dracut" ]
             RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && depmod -a "${kernel}"
-            RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
+            RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                dracut -f \
+                  --add-drivers "nvme nvme_core nvme_fabrics" \
+                  --install "/etc/udev/rules.d/99-dell-boss.rules /etc/udev/rules.d/99-hpe-nvme.rules /etc/udev/rules.d/99-nvme-persistent.rules" \
+                  "/boot/initrd-${kernel}" "${kernel}" && \
+                ln -sf "initrd-${kernel}" /boot/initrd
         END
 
         RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
