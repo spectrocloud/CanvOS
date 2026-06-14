@@ -286,6 +286,11 @@ build-uki-iso:
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
+
+    RUN if [ "$FIPS_ENABLED" = "false" ]; then \
+        sed -i 's/net\.ifnames=1/net.ifnames=1 net.naming-scheme=v252/g' /overlay/boot/grub2/grub.cfg; \
+    fi
+
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
@@ -372,6 +377,11 @@ build-iso:
     # Append Kairos debug flags to installer kernel cmdline when DEBUG is enabled
     RUN if [ "$DEBUG" = "true" ]; then \
         sed -i '/rd.immucore.sysrootwait/s/$/ rd.immucore.debug console=tty0 rd.debug/' /overlay/boot/grub2/grub.cfg; \
+    fi
+
+    # Non-FIPS: pin net naming on live ISO boot (see cloudconfigs/50-canvos-net-naming.hwdb)
+    RUN if [ "$FIPS_ENABLED" = "false" ]; then \
+        sed -i 's/net\.ifnames=1/net.ifnames=1 net.naming-scheme=v252/g' /overlay/boot/grub2/grub.cfg; \
     fi
 
     # Add content files (split if > 3GB)
@@ -791,6 +801,14 @@ base-image:
             RUN /tmp/harden.sh && rm /tmp/harden.sh
         END
 
+        # Non-FIPS HWE kernels (6.8+) append np* port suffixes on multi-port NICs, producing
+        # names too long for VLAN sub-interfaces (15-char Linux limit). FIPS stays on 5.15-fips.
+        IF [ "$FIPS_ENABLED" = "false" ]
+            COPY cloudconfigs/50-canvos-net-naming.hwdb /etc/udev/hwdb.d/50-canvos-net-naming.hwdb
+            RUN udevadm hwdb --update
+            COPY cloudconfigs/80_stylus_net_naming.yaml /etc/kairos/80_stylus_net_naming.yaml
+        END
+
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
             RUN pro detach --assume-yes
         END
@@ -848,6 +866,12 @@ base-image:
         RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
             fi
+
+        IF [ "$FIPS_ENABLED" = "false" ]
+            RUN if ! grep -Fq "net.naming-scheme=v252" /etc/cos/bootargs.cfg; then \
+                    sed -i 's|\(set baseCmd="[^"]*\)"|\1 net.naming-scheme=v252"|' /etc/cos/bootargs.cfg; \
+                fi
+        END
     END
 
 KAIROS_RELEASE:

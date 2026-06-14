@@ -1,0 +1,5 @@
+#cloud-config
+# Non-FIPS: pin systemd net naming to v252 so live/install naming matches older FIPS
+# images and avoids the np* physical-port suffix on multi-port bare-metal NICs.
+grub_options:
+  extra_cmdline: "net.naming-scheme=v252"
