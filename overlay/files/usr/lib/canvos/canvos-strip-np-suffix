@@ -1,8 +1,7 @@
 #!/bin/sh
 # Strip trailing np<N> suffix from predictable interface names assigned by udev.
-# HWE 6.8+ drivers expose phys_port_name; systemd 249 always appends it (no
-# ID_NET_NAME_ALLOW_PHYS_PORT_NAME until systemd 256+). net.naming-scheme=v252
-# does not suppress the suffix on Ubuntu 22.04.
+# Modern drivers expose phys_port_name; older systemd (e.g. 249 on Ubuntu 22.04)
+# always appends it. Names without np* (VMware ens*, AWS ens*, etc.) pass through unchanged.
 set -eu
 
 name=${1:-}

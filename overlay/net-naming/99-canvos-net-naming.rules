@@ -1,6 +1,0 @@
-# Non-FIPS Ubuntu 22.04 (systemd 249): shorten names like eno12399np0 -> eno12399
-# after 80-net-setup-link has computed ID_NET_NAME. Runs late so NAME overrides
-# the default predictable name for this udev event only.
-SUBSYSTEM=="net", ACTION=="add", ENV{ID_NET_NAME}=="?*", \
-  PROGRAM="/usr/lib/canvos/canvos-strip-np-suffix %E{ID_NET_NAME}", \
-  NAME="%c"

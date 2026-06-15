@@ -774,21 +774,6 @@ base-image:
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
 
-            # Non-FIPS HWE kernels (6.8+) append np* port suffixes on multi-port NICs, producing
-            # names too long for VLAN sub-interfaces (15-char Linux limit). FIPS stays on 5.15-fips.
-            # systemd 249 (Ubuntu 22.04) has no ID_NET_NAME_ALLOW_PHYS_PORT_NAME; strip np* via udev.
-            IF [ "$FIPS_ENABLED" = "false" ]
-                COPY overlay/net-naming/canvos-strip-np-suffix /usr/lib/canvos/canvos-strip-np-suffix
-                RUN chmod 755 /usr/lib/canvos/canvos-strip-np-suffix
-                COPY overlay/net-naming/99-canvos-net-naming.rules /etc/udev/rules.d/99-canvos-net-naming.rules
-            END
-
-            # Skip dracut when FIPS is enabled - the Dockerfile will include custom dracut modules.fips
-            IF [ "$FIPS_ENABLED" = "false" ]
-                RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-                   dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
-                   ln -sf "initrd-${kernel}" /boot/initrd
-            END
             RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
            	depmod -a "${kernel}"
 
@@ -817,7 +802,6 @@ base-image:
 
         IF [ -e "/usr/bin/dracut" ]
             RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && depmod -a "${kernel}"
-            RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && dracut -f "/boot/initrd-${kernel}" "${kernel}" && ln -sf "initrd-${kernel}" /boot/initrd
         END
 
         RUN zypper install -y zstd vim iputils bridge-utils curl ethtool tcpdump && \
@@ -834,6 +818,20 @@ base-image:
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
         RUN yum install -y openssl rsyslog logrotate
+    END
+
+    # Non-FIPS: strip np* phys-port suffixes from predictable NIC names (bare metal).
+    # Installed for all OS/arch (ubuntu, opensuse-leap, sles, rhel) and image types
+    # (ISO, UKI, cloud/agent-mode AWS, MAAS). No-op on VMware/AWS ens* interfaces.
+    IF [ "$FIPS_ENABLED" = "false" ]
+        COPY overlay/files/usr/lib/canvos/canvos-strip-np-suffix /usr/lib/canvos/canvos-strip-np-suffix
+        RUN chmod 755 /usr/lib/canvos/canvos-strip-np-suffix
+        COPY overlay/files/etc/udev/rules.d/99-canvos-net-naming.rules /etc/udev/rules.d/99-canvos-net-naming.rules
+        IF [ "$IS_UKI" = "false" ] && [ -e "/usr/bin/dracut" ]
+            RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
+                ln -sf "initrd-${kernel}" /boot/initrd
+        END
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
