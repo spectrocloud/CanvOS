@@ -1,7 +1,7 @@
 #!/bin/sh
 # Strip trailing np<N> suffix from predictable interface names assigned by udev.
-# Modern drivers expose phys_port_name; older systemd (e.g. 249 on Ubuntu 22.04)
-# always appends it. Names without np* (VMware ens*, AWS ens*, etc.) pass through unchanged.
+# Enabled only on fresh installs (marker on /oem or /etc). Legacy nodes pass through.
+# Names without np* (VMware ens*, AWS ens*, etc.) are unchanged either way.
 set -eu
 
 name=${1:-}
@@ -9,6 +9,17 @@ if [ -z "$name" ]; then
 	exit 1
 fi
 
-short=$(printf '%s' "$name" | sed -E 's/np[0-9]+$//')
-# Linux IFNAMSIZ is 16 bytes including the terminating NUL.
-printf '%s\n' "$short" | cut -c1-15
+for marker in \
+	/oem/.canvos-strip-np-enabled \
+	/etc/canvos/strip-np-enabled \
+	/sysroot/oem/.canvos-strip-np-enabled \
+	/sysroot/etc/canvos/strip-np-enabled
+do
+	if [ -f "$marker" ]; then
+		short=$(printf '%s' "$name" | sed -E 's/np[0-9]+$//')
+		printf '%s\n' "$short" | cut -c1-15
+		exit 0
+	fi
+done
+
+printf '%s\n' "$name" | cut -c1-15

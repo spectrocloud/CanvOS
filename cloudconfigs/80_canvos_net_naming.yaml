@@ -1,0 +1,25 @@
+#cloud-config
+stages:
+  after-install:
+    - name: "Enable CanvOS np suffix stripping on fresh install"
+      if: '[ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+      commands:
+        - mkdir -p /etc/canvos
+        - touch /etc/canvos/strip-np-enabled
+    - if: '[ ! -e "/run/cos/uki_boot_mode" ] && [ ! -e "/run/cos/uki_install_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+      name: "Persist CanvOS np suffix stripping marker on oem"
+      commands:
+        - if mount | grep /oem >/dev/null; then umount /oem || /bin/true; fi
+        - mount $(findfs PARTLABEL=oem) /oem
+        - touch /oem/.canvos-strip-np-enabled
+        - umount /oem || /bin/true
+    - if: '[ -e "/run/cos/uki_install_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
+      name: "Persist CanvOS np suffix stripping marker on oem (UKI)"
+      commands:
+        - if mount | grep /oem >/dev/null; then umount /oem || /bin/true; fi
+        - for d in /dev/mapper/*; do if [ ! "$d" = "/dev/mapper/control" ]; then cryptsetup close $d; fi; done
+        - /usr/lib/systemd/systemd-cryptsetup attach oem $(findfs PARTLABEL=oem) - tpm2-device=auto
+        - mount /dev/mapper/oem /oem
+        - touch /oem/.canvos-strip-np-enabled
+        - if mount | grep /oem >/dev/null; then umount /oem || /bin/true; fi
+        - if [ -e /dev/mapper/oem ]; then cryptsetup close /dev/mapper/oem; fi

@@ -821,12 +821,14 @@ base-image:
     END
 
     # Non-FIPS: strip np* phys-port suffixes from predictable NIC names (bare metal).
+    # Install-only via /oem marker (see cloudconfigs/80_canvos_net_naming.yaml).
     # Installed for all OS/arch (ubuntu, opensuse-leap, sles, rhel) and image types
-    # (ISO, UKI, cloud/agent-mode AWS, MAAS). No-op on VMware/AWS ens* interfaces.
+    # (ISO, UKI, cloud/agent-mode AWS, MAAS). Legacy day-2 upgrades keep long names.
     IF [ "$FIPS_ENABLED" = "false" ]
         COPY overlay/files/usr/lib/canvos/canvos-strip-np-suffix /usr/lib/canvos/canvos-strip-np-suffix
         RUN chmod 755 /usr/lib/canvos/canvos-strip-np-suffix
         COPY overlay/files/etc/udev/rules.d/99-canvos-net-naming.rules /etc/udev/rules.d/99-canvos-net-naming.rules
+        COPY cloudconfigs/80_canvos_net_naming.yaml /etc/kairos/80_canvos_net_naming.yaml
         IF [ "$IS_UKI" = "false" ] && [ -e "/usr/bin/dracut" ]
             RUN --no-cache kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
                 dracut -f "/boot/initrd-${kernel}" "${kernel}" && \
