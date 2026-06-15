@@ -1,0 +1,74 @@
+ARG HADRON_VERSION=v0.3.3-rc2
+ARG ARCH=amd64
+ARG HADRON_TOOLCHAIN=ghcr.io/kairos-io/hadron-toolchain:${HADRON_VERSION}
+
+FROM ${HADRON_TOOLCHAIN} AS downloader
+
+
+WORKDIR /sources
+
+ARG JQ_VERSION=1.8.1
+ARG ARCH
+RUN curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-${ARCH}" -o jq
+
+
+ARG LIBTIRPC_VERSION=1.3.7
+RUN curl -L "https://downloads.sourceforge.net/project/libtirpc/libtirpc/${LIBTIRPC_VERSION}/libtirpc-${LIBTIRPC_VERSION}.tar.bz2" -o libtirpc.tar.bz2
+
+ARG CONNTRACK_VERSION=1.4.9
+RUN curl -L "https://www.netfilter.org/pub/conntrack-tools/conntrack-tools-${CONNTRACK_VERSION}.tar.xz"  -o conntrack-tools.tar.xz
+
+
+
+
+FROM ${HADRON_TOOLCHAIN} AS libtirpc-builder
+ARG TARGET_ARCH=x86-64
+ARG BUILD_ARCH=x86_64
+
+RUN mkdir -p /output/usr/include/sys
+WORKDIR /sources
+
+RUN mkdir -p /output/usr/include/sys && \
+    curl -fsSL https://gitlab.alpinelinux.org/alpine/aports/-/raw/master/main/bsd-compat-headers/cdefs.h \
+      -o /output/usr/include/sys/cdefs.h && \
+    curl -fsSL https://gitlab.alpinelinux.org/alpine/aports/-/raw/master/main/bsd-compat-headers/queue.h \
+      -o /output/usr/include/sys/queue.h && \
+    curl -fsSL https://gitlab.alpinelinux.org/alpine/aports/-/raw/master/main/bsd-compat-headers/tree.h \
+      -o /output/usr/include/sys/tree.h
+
+COPY --from=downloader /sources/libtirpc.tar.bz2 /sources/libtirpc.tar.bz2
+
+RUN tar -xf libtirpc.tar.bz2 && mv libtirpc-* libtirpc
+
+WORKDIR /sources/libtirpc
+
+## --enable-rpcdb forces libtirpc to ship the BSD RPC database functions
+## (getrpcent/getrpcbyname/getrpcbynumber/setrpcent/endrpcent). They are
+## OFF by default because glibc ships them in libc, but musl does not and
+## nfs-utils' configure requires them. Without this flag, nfs-utils fails:
+##   configure: error: Neither getrpcbynumber_r nor getrpcbynumber are available
+RUN ./configure ${COMMON_CONFIGURE_ARGS} \
+      --sysconfdir=/etc \
+      --disable-gssapi \
+      --disable-authdes \
+      --enable-rpcdb
+RUN make -s -j${JOBS} -l${MAX_LOAD}
+RUN make -s -j${JOBS} -l${MAX_LOAD} install DESTDIR=/libtirpc
+    
+FROM ${HADRON_TOOLCHAIN} AS conntrack-builder
+
+COPY --from=libtirpc-builder /libtirpc /
+
+WORKDIR /sources
+COPY --from=downloader /sources/conntrack-tools.tar.xz /sources/conntrack-tools.tar.xz
+
+RUN tar -xf conntrack-tools.tar.xz && mv conntrack-tools-* conntrack-tools
+
+WORKDIR /sources/conntrack-tools
+
+RUN ./configure --prefix=/output && make && make install 
+
+
+FROM scratch AS export
+COPY --from=libtirpc-builder /libtirpc /
+# COPY --from=conntrack-builder /output /
