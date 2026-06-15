@@ -1,0 +1,15 @@
+#!/bin/sh
+# Strip trailing np<N> suffix from predictable interface names assigned by udev.
+# HWE 6.8+ drivers expose phys_port_name; systemd 249 always appends it (no
+# ID_NET_NAME_ALLOW_PHYS_PORT_NAME until systemd 256+). net.naming-scheme=v252
+# does not suppress the suffix on Ubuntu 22.04.
+set -eu
+
+name=${1:-}
+if [ -z "$name" ]; then
+	exit 1
+fi
+
+short=$(printf '%s' "$name" | sed -E 's/np[0-9]+$//')
+# Linux IFNAMSIZ is 16 bytes including the terminating NUL.
+printf '%s\n' "$short" | cut -c1-15

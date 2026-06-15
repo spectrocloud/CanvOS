@@ -287,10 +287,6 @@ build-uki-iso:
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
 
-    RUN if [ "$FIPS_ENABLED" = "false" ]; then \
-        sed -i 's/net\.ifnames=1/net.ifnames=1 net.naming-scheme=v252/g' /overlay/boot/grub2/grub.cfg; \
-    fi
-
     COPY --platform=linux/${ARCH} +stylus-image-pack/stylus-image.tar /overlay/stylus-image.tar
     COPY --platform=linux/${ARCH} (+third-party/luet --binary=luet)  /overlay/luet
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
@@ -377,11 +373,6 @@ build-iso:
     # Append Kairos debug flags to installer kernel cmdline when DEBUG is enabled
     RUN if [ "$DEBUG" = "true" ]; then \
         sed -i '/rd.immucore.sysrootwait/s/$/ rd.immucore.debug console=tty0 rd.debug/' /overlay/boot/grub2/grub.cfg; \
-    fi
-
-    # Non-FIPS: pin net naming on live ISO boot (see cloudconfigs/50-canvos-net-naming.hwdb)
-    RUN if [ "$FIPS_ENABLED" = "false" ]; then \
-        sed -i 's/net\.ifnames=1/net.ifnames=1 net.naming-scheme=v252/g' /overlay/boot/grub2/grub.cfg; \
     fi
 
     # Add content files (split if > 3GB)
@@ -782,6 +773,16 @@ base-image:
                 rm -rf /var/lib/apt/lists/*
             RUN kernel=$(ls /boot/vmlinuz-* | tail -n1) && \
            	ln -sf "${kernel#/boot/}" /boot/vmlinuz
+
+            # Non-FIPS HWE kernels (6.8+) append np* port suffixes on multi-port NICs, producing
+            # names too long for VLAN sub-interfaces (15-char Linux limit). FIPS stays on 5.15-fips.
+            # systemd 249 (Ubuntu 22.04) has no ID_NET_NAME_ALLOW_PHYS_PORT_NAME; strip np* via udev.
+            IF [ "$FIPS_ENABLED" = "false" ]
+                COPY overlay/net-naming/canvos-strip-np-suffix /usr/lib/canvos/canvos-strip-np-suffix
+                RUN chmod 755 /usr/lib/canvos/canvos-strip-np-suffix
+                COPY overlay/net-naming/99-canvos-net-naming.rules /etc/udev/rules.d/99-canvos-net-naming.rules
+            END
+
             # Skip dracut when FIPS is enabled - the Dockerfile will include custom dracut modules.fips
             IF [ "$FIPS_ENABLED" = "false" ]
                 RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
@@ -799,14 +800,6 @@ base-image:
         IF [ "$CIS_HARDENING" = "true" ]
             COPY cis-harden/harden.sh /tmp/harden.sh
             RUN /tmp/harden.sh && rm /tmp/harden.sh
-        END
-
-        # Non-FIPS HWE kernels (6.8+) append np* port suffixes on multi-port NICs, producing
-        # names too long for VLAN sub-interfaces (15-char Linux limit). FIPS stays on 5.15-fips.
-        IF [ "$FIPS_ENABLED" = "false" ]
-            COPY cloudconfigs/50-canvos-net-naming.hwdb /etc/udev/hwdb.d/50-canvos-net-naming.hwdb
-            RUN udevadm hwdb --update
-            COPY cloudconfigs/80_stylus_net_naming.yaml /etc/kairos/80_stylus_net_naming.yaml
         END
 
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
@@ -867,11 +860,6 @@ base-image:
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
             fi
 
-        IF [ "$FIPS_ENABLED" = "false" ]
-            RUN if ! grep -Fq "net.naming-scheme=v252" /etc/cos/bootargs.cfg; then \
-                    sed -i 's|\(set baseCmd="[^"]*\)"|\1 net.naming-scheme=v252"|' /etc/cos/bootargs.cfg; \
-                fi
-        END
     END
 
 KAIROS_RELEASE:

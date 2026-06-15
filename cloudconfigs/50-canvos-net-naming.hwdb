@@ -1,5 +1,0 @@
-# Omit physical port suffix (np0/np1/...) on multi-port NICs for shorter predictable
-# interface names on non-FIPS HWE kernels (e.g. enp153s0f0 instead of enp153s0f0np0).
-# See systemd.net-naming-scheme(7).
-ID_NET_NAME_ALLOW_PHYS_PORT_NAME=0
-ID_NET_NAME_ALLOW_DEV_PORT=0
