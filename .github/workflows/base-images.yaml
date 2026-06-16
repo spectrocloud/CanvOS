@@ -12,7 +12,7 @@ on:
         description: "Kairos Init Image"
         required: false
         type: string
-        default: "quay.io/kairos/kairos-init:v0.8.11"
+        default: "quay.io/kairos/kairos-init:v0.14.0"
       arch:
         description: "Architecture"
         required: false
@@ -30,7 +30,7 @@ on:
         description: "Kairos Version"
         required: false
         type: string
-        default: "v4.0.1"
+        default: "v4.0.3"
       trusted_boot:
         description: "Trusted Boot"
         required: false
@@ -91,7 +91,7 @@ jobs:
                   ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
                   ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
                   ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core"),
-                  ("registry.suse.com/suse/sle-micro-rancher/5.4:latest", "kairos-slem:5.4-core"),
+                  ("registry.suse.com/suse/sle-micro-rancher/5.5:latest", "kairos-slem:5.5-core"),
               ]
 
               for base_os, tag_prefix in combinations:
