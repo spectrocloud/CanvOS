@@ -1,9 +1,14 @@
 #cloud-config
+# Install markers gate np* stripping to fresh installs only (see canvos-strip-np-suffix).
+# /etc/canvos/strip-np-enabled is written during after-install on the live installer root;
+# it may not persist after reboot. /oem/.canvos-strip-np-enabled is the durable marker
+# (OEM partition) and is the source of truth on installed nodes.
 stages:
   after-install:
     - name: "Enable CanvOS np suffix stripping on fresh install"
       if: '[ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'
       commands:
+        # Fallback for initramfs/early boot (/sysroot/etc/...); OEM marker below is primary.
         - mkdir -p /etc/canvos
         - touch /etc/canvos/strip-np-enabled
     - if: '[ ! -e "/run/cos/uki_boot_mode" ] && [ ! -e "/run/cos/uki_install_mode" ] && [ ! -f $STYLUS_ROOT/opt/spectrocloud/state/agent-mode ]'

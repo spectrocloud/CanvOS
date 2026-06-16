@@ -9,6 +9,9 @@ if [ -z "$name" ]; then
 	exit 1
 fi
 
+# /etc and /sysroot/etc paths are fallbacks for initramfs/early boot before OEM is
+# mounted. In practice, /oem/.canvos-strip-np-enabled (and /sysroot/oem/...) is the
+# source of truth on installed nodes.
 for marker in \
 	/oem/.canvos-strip-np-enabled \
 	/etc/canvos/strip-np-enabled \

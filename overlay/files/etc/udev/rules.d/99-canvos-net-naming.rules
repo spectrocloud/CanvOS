@@ -1,5 +1,6 @@
 # Shorten bare-metal NIC names like eno12399np0 -> eno12399 after 80-net-setup-link.
 # Install-only: enabled when /oem/.canvos-strip-np-enabled exists (fresh install).
+# /etc/canvos/strip-np-enabled is an initramfs/early-boot fallback; OEM is primary.
 # Safe no-op for legacy nodes, VMware/AWS ens*, and agent-mode cloud VMs.
 SUBSYSTEM=="net", ACTION=="add", ENV{ID_NET_NAME}=="?*", \
   PROGRAM="/usr/lib/canvos/canvos-strip-np-suffix %E{ID_NET_NAME}", \
