@@ -523,10 +523,18 @@ provider-image:
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG IMAGE_REPO
 
+    # Generic, version-agnostic kernel-header installer. Resolves the ABI-exact
+    # headers for the kernel shipped in the base image, falling back to Ubuntu's
+    # immutable snapshot archive when the live mirror has rotated the ABI out
+    # (see scripts/install-kernel-headers.sh). Used by both the kubeadm and the
+    # UPDATE_KERNEL paths below.
+    COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+    RUN chmod 755 /tmp/install-kernel-headers.sh
+
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            RUN /tmp/install-kernel-headers.sh
         END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -537,7 +545,7 @@ provider-image:
     END
     IF [ "$UPDATE_KERNEL" = true ]
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            RUN /tmp/install-kernel-headers.sh
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
             RUN zypper --non-interactive ref && \
                 kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
@@ -650,6 +658,9 @@ provider-image:
         # Disable psql by default, Stylus will enable it when it needs it
         RUN systemctl disable postgresql
     END
+
+    # Build-time helper only; don't ship it in the final image.
+    RUN rm -f /tmp/install-kernel-headers.sh
 
     SAVE IMAGE --push $IMAGE_PATH
 
