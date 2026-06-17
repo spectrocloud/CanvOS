@@ -848,6 +848,12 @@ base-image:
         RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
             fi
+
+        IF [ "$FIPS_ENABLED" = "true" ]
+            RUN if ! grep -Fq "fips=1" /etc/cos/bootargs.cfg; then \
+                    sed -i 's|\(set baseCmd="[^"]*\)"|\1 fips=1"|' /etc/cos/bootargs.cfg; \
+                fi
+        END
     END
 
 KAIROS_RELEASE:
