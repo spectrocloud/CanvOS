@@ -29,11 +29,11 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.9.1
-ARG KUBEADM_PROVIDER_VERSION=v4.9.3
-ARG RKE2_PROVIDER_VERSION=v4.9.1
+ARG K3S_PROVIDER_VERSION=v4.9.0-feat.pe8315
+ARG KUBEADM_PROVIDER_VERSION=v4.9.0-feat.pe8315
+ARG RKE2_PROVIDER_VERSION=v4.9.0-feat.pe8315
 ARG NODEADM_PROVIDER_VERSION=v4.9.2
-ARG CANONICAL_PROVIDER_VERSION=v4.9.1
+ARG CANONICAL_PROVIDER_VERSION=v4.9.0-feat.pe8315
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -465,7 +465,12 @@ uki-genkey:
         RUN --no-cache mkdir -p /public-keys
         RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
         RUN --no-cache cd /keys; mv *.pem /public-keys
-        DO +enroll-spectro-extension-cert \
+        # The osbuilder image (openSUSE Leap) does not ship efitools; install it so the
+        # ENROLL_SPECTRO_EXTENSION_CERT command can re-sign the db when enabled.
+        IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
+            RUN zypper --non-interactive install efitools
+        END
+        DO +ENROLL_SPECTRO_EXTENSION_CERT \
             --ENROLLMENT_DIR=/keys \
             --KEK_CERT=/public-keys/KEK.pem \
             --KEK_KEY=/private-keys/KEK.key
@@ -502,12 +507,18 @@ spectro-extension-cert-esl:
 # material. Gated on ENROLL_SPECTRO_EXTENSION_CERT: when true, it fetches the ESL,
 # appends it to db.esl and (re)generates db.auth/db.der so the db is fully ready;
 # when false it is a no-op.
-enroll-spectro-extension-cert:
+ENROLL_SPECTRO_EXTENSION_CERT:
     COMMAND
     ARG ENROLLMENT_DIR
     ARG KEK_CERT
     ARG KEK_KEY
     IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
+        # Append the Spectro extension cert to the db signature list and re-sign db.auth
+        # with the KEK so the resulting db enrolls both the OS db cert and the Spectro
+        # cert into UEFI firmware. db.der is kept as the OS cert (db-0.der) since the UKI
+        # itself is signed with the OS db key, not the Spectro cert.
+        # efitools (sign-efi-sig-list / sig-list-to-certs) must already be present in the
+        # caller's image: uki-genkey installs it via zypper, uki-byok via apt-get.
         COPY +spectro-extension-cert-esl/spectro-db.esl /spectro/spectro-db.esl
         RUN cat /spectro/spectro-db.esl >> "$ENROLLMENT_DIR/db.esl" && \
             sign-efi-sig-list -c "$KEK_CERT" -k "$KEK_KEY" db "$ENROLLMENT_DIR/db.esl" "$ENROLLMENT_DIR/db.auth" && \
@@ -545,7 +556,7 @@ uki-byok:
     RUN [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true
     RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
 
-    DO +enroll-spectro-extension-cert \
+    DO +ENROLL_SPECTRO_EXTENSION_CERT \
         --ENROLLMENT_DIR=/output \
         --KEK_CERT=/keys/KEK.pem \
         --KEK_KEY=/keys/KEK.key
@@ -643,6 +654,14 @@ provider-image:
     END
 
     COPY --platform=linux/${ARCH} +kairos-provider-image/ /
+    # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
+    # instead of /system/providers/. Move to /system/providers/ and remove the new
+    # path so consumers always find the binary at the legacy location.
+    RUN if ls /usr/local/system/providers/agent-provider-* >/dev/null 2>&1; then \
+            mkdir -p /system/providers && \
+            mv /usr/local/system/providers/agent-provider-* /system/providers/ && \
+            rm -rf /usr/local/system/providers; \
+        fi
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
@@ -760,15 +779,6 @@ kairos-provider-image:
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-canonical:$CANONICAL_PROVIDER_VERSION
     END
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
-    # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
-    # instead of /system/providers/. Move to /system/providers/ and remove the new
-    # path so consumers always find the binary at the legacy location.
-    RUN PROVIDER_NAME=$(basename /usr/local/system/providers/agent-provider-* 2>/dev/null || true) && \
-        if [ -n "$PROVIDER_NAME" ] && [ ! -f "/system/providers/$PROVIDER_NAME" ]; then \
-            mkdir -p /system/providers && \
-            mv /usr/local/system/providers/$PROVIDER_NAME /system/providers/$PROVIDER_NAME && \
-            rm -rf /usr/local/system/providers; \
-        fi
     SAVE ARTIFACT ./*
 
 # base build image used to create the base image for all other image types
@@ -1018,15 +1028,26 @@ iso-image:
         fi
     END
 
-    # When systemd >= 252, k8s is delivered via extensions at runtime.
-    # kubeadm preflight requires linux-headers to load the "configs" kernel module;
-    # install them in the installer image so kubeadm init succeeds.
+    # When systemd >= 252, k8s is delivered via extensions at runtime and kubeadm runs
+    # from this OS installer rootfs. kubeadm's SystemVerification preflight reads the
+    # kernel config (kubernetes/system-validators getKernelConfigReader); when no config
+    # file is found at any known path it falls back to `modprobe configs`, which fails on
+    # these kernels (CONFIG_IKCONFIG is not set, so configs.ko does not exist) with:
+    #   [ERROR SystemVerification]: ... unable to load kernel module: "configs"
+    # The config ships only as /boot/config-$kernel. On UKI boot /boot becomes the ESP and
+    # is not the rootfs the validator reads, so copy it to /usr/lib/modules/$kernel/config
+    # (a validator search path that lives in the squashfs rootfs) so preflight finds it.
+    # $kernel is derived from /lib/modules (the kernel that boots), not `uname -r` which at
+    # build time would return the build host's kernel.
     IF [ -f /etc/spectrocloud/.support-systemd-extensions ] && \
        [ "$OS_DISTRIBUTION" = "ubuntu" ] && \
        [ "$ARCH" = "amd64" ]
         RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-            if ! ls /usr/src | grep -q "linux-headers-$kernel"; then \
-                apt-get update && apt-get install -y "linux-headers-${kernel}"; \
+            if [ -f "/boot/config-$kernel" ]; then \
+                install -D -m 0644 "/boot/config-$kernel" "/usr/lib/modules/$kernel/config"; \
+            else \
+                echo "ERROR: /boot/config-$kernel not found; kubeadm SystemVerification will fail" >&2 && \
+                exit 1; \
             fi
     END
 
