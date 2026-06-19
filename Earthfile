@@ -130,8 +130,8 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
-ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
-ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
+ARG STYLUS_BASE=us-east1-docker.pkg.dev/spectro-images/dev/arun/sysext/edge/stylus-framework-linux-amd64:v0.0.0-cdab8da4
+ARG STYLUS_PACKAGE_BASE=us-east1-docker.pkg.dev/spectro-images/dev/arun/sysext/edge/stylus-linux-amd64:v0.0.0-cdab8da4
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex

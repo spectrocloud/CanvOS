@@ -5,7 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 TARGET=all
 FIPS=false
-ARCH=amd64
 KAIROS_VERSION=v4.1.0
 HADRON_VERSION="${HADRON_VERSION:-v0.4.0}"
 OUTPUT=""
@@ -29,7 +28,6 @@ Targets:
 
 Options:
   --fips              Build with FIPS base image and enable FIPS mode
-  --arch ARCH         Target architecture: amd64 or arm64 (default: amd64)
   --hadron-version V  Upstream Hadron version tag (default: v0.4.0)
   --push              Build modules locally, then push the Hadron image
   --modules-image TAG Modules image reference for the Hadron build
@@ -84,11 +82,9 @@ build_modules() {
 
   echo "Building modules image: ${tag}"
   DOCKER_BUILDKIT=1 docker build \
-    --progress=plain \
-    --platform "linux/${ARCH}" \
+    --platform "linux/amd64,linux/arm64" \
     -f "${SCRIPT_DIR}/Dockerfile.modules" \
     -t "${tag}" \
-    --build-arg ARCH="${ARCH}" \
     --build-arg HADRON_VERSION="${HADRON_VERSION}" \
     "${output_flag}" \
     "${SCRIPT_DIR}"
@@ -104,8 +100,7 @@ build_hadron() {
 
   echo "Building Hadron image: ${hadron_image} (modules: ${modules_image})"
   DOCKER_BUILDKIT=1 docker build \
-    --progress=plain \
-    --platform "linux/${ARCH}" \
+    --platform "linux/amd64,linux/arm64" \
     --build-arg KAIROS_VERSION="${KAIROS_VERSION}" \
     --build-arg HADRON_VERSION="${HADRON_VERSION}" \
     --build-arg FIPS="${FIPS}" \
@@ -127,11 +122,6 @@ while [[ $# -gt 0 ]]; do
     --fips)
       FIPS=true
       shift
-      ;;
-    --arch)
-      [[ $# -gt 1 ]] || { echo "--arch requires an argument" >&2; usage 1; }
-      ARCH="$2"
-      shift 2
       ;;
     --hadron-version)
       [[ $# -gt 1 ]] || { echo "--hadron-version requires an argument" >&2; usage 1; }
@@ -181,6 +171,19 @@ fi
 if [ "${TARGET}" = "hadron" ] || [ "${TARGET}" = "all" ]; then
   HADRON_IMAGE="${HADRON_IMAGE:-$(default_hadron_image)}"
 fi
+
+# List the build configuration
+echo "Build configuration:"
+echo "  Target: ${TARGET}"
+echo "  FIPS: ${FIPS}"
+echo "  Hadron version: ${HADRON_VERSION}"
+echo "  Modules image: ${MODULES_IMAGE}"
+echo "  Output mode: ${OUTPUT:-load}"
+
+if [ "${TARGET}" = "hadron" ] || [ "${TARGET}" = "all" ]; then
+  echo "  Hadron image: ${HADRON_IMAGE}"
+fi
+
 
 
 case "${TARGET}" in
