@@ -1,0 +1,16 @@
+[Unit]
+Description=Palette Edge installer debug log collector (auto)
+# Only ever run on a debug-install boot.
+ConditionKernelCommandLine=palette.debug
+# Run late enough that journald, udev and storage have had a chance to settle.
+DefaultDependencies=no
+After=sysinit.target systemd-journald.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/spectrocloud/bin/collect-debug-bundle.sh --trigger=onfailure
+# Never let a collection failure cascade into the boot.
+SuccessExitStatus=0 1
+TimeoutStartSec=600
+StandardOutput=journal+console
+StandardError=journal+console

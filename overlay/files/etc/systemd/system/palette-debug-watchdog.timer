@@ -1,0 +1,12 @@
+[Unit]
+Description=Palette Edge installer debug watchdog timer
+ConditionKernelCommandLine=palette.debug
+
+[Timer]
+# Give the installer time to either finish or fail on its own, then sweep up
+# logs for the cases that never reach emergency.target (hangs / blank screen).
+OnBootSec=8min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

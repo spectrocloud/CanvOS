@@ -1,0 +1,15 @@
+[Unit]
+Description=Palette Edge installer debug watchdog (collect logs if install stalls/fails)
+ConditionKernelCommandLine=palette.debug
+
+[Service]
+Type=oneshot
+# Fired by palette-debug-watchdog.timer. By the time this runs the install
+# should have completed; if it hasn't (hang, blank screen, silent failure),
+# collect whatever we have. The collector is idempotent, so if an earlier
+# trigger (emergency/OnFailure) already collected, this no-ops.
+ExecStart=/opt/spectrocloud/bin/collect-debug-bundle.sh --trigger=watchdog
+SuccessExitStatus=0 1
+TimeoutStartSec=600
+StandardOutput=journal+console
+StandardError=journal+console
