@@ -21,7 +21,7 @@ variable "KAIROS_VERSION" {
 }
 
 variable "KAIROS_INIT_IMAGE" {
-  default     = "quay.io/kairos/kairos-init:v0.8.11"
+  default     = "quay.io/kairos/kairos-init:v0.8.12"
   description = "Kairos init image for kairosification"
 }
 
