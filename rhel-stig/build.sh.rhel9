@@ -2,27 +2,53 @@
 
 # Run from rhel-stig/ so static/ and stig-remediate.sh are in build context
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR" || exit 1
 
-USERNAME=$1
-PASSWORD=$2
-BASE_IMAGE="${3:-rhel9-byoi-stig}"
-FIPS_ENABLED="${4:-false}"
+usage() {
+    echo "Usage: bash build.sh.rhel9 [BASE_IMAGE] [FIPS_ENABLED]" >&2
+    echo "" >&2
+    echo "  Credentials are read from a YAML file (not from argv — avoids shell history)." >&2
+    echo "  Set RHSM_CREDENTIALS_FILE or edit ./rhsm-credentials.yaml next to this script." >&2
+    echo "" >&2
+    echo "  BASE_IMAGE     default: rhel9-byoi-stig" >&2
+    echo "  FIPS_ENABLED   true | false  (default: false)" >&2
+    exit 1
+}
 
-# BuildKit required for --secret (credentials never stored in image layers)
+if [ "$#" -gt 2 ]; then
+    usage
+fi
+
+BASE_IMAGE="${1:-rhel9-byoi-stig}"
+FIPS_ENABLED="${2:-false}"
+
+if [ "$FIPS_ENABLED" != "true" ] && [ "$FIPS_ENABLED" != "false" ]; then
+    echo "error: FIPS_ENABLED (2nd argument) must be true or false, got: $FIPS_ENABLED" >&2
+    echo "note: Username/password on the command line is no longer supported; use rhsm-credentials.yaml" >&2
+    exit 1
+fi
+
+CRED_FILE="${RHSM_CREDENTIALS_FILE:-$SCRIPT_DIR/rhsm-credentials.yaml}"
+if [ ! -f "$CRED_FILE" ]; then
+    echo "error: RHSM credentials file not found: $CRED_FILE" >&2
+    echo "      Create or fix $CRED_FILE (see rhsm-credentials.yaml) or set RHSM_CREDENTIALS_FILE" >&2
+    exit 1
+fi
+
+if grep -q 'REPLACE_' "$CRED_FILE"; then
+    echo "error: $CRED_FILE still contains placeholder values; edit the file with real credentials" >&2
+    exit 1
+fi
+
+# BuildKit required for --secret (credentials never stored in image layers or build args).
+# The whole YAML file is passed as a single secret — same pattern as ubuntu-fips/pro-attach-config.yaml.
+# Parsing happens inside the Dockerfile with sed, so python3 is not required here.
 export DOCKER_BUILDKIT=1
-
-# Use BuildKit secrets - credentials passed via temp files, never in image layers or build args
-tmpdir=$(mktemp -d)
-trap "rm -rf $tmpdir" EXIT
-echo -n "$USERNAME" > "$tmpdir/rhsm_username"
-echo -n "$PASSWORD" > "$tmpdir/rhsm_password"
-chmod 600 "$tmpdir"/*
 
 if [ "$FIPS_ENABLED" = "true" ]; then
     echo "Building RHEL 9 STIG FIPS image..."
-    docker build --secret id=rhsm_username,src="$tmpdir/rhsm_username" --secret id=rhsm_password,src="$tmpdir/rhsm_password" -t "$BASE_IMAGE" -f Dockerfile.rhel9-fips .
+    docker build --secret id=rhsm-credentials,src="$CRED_FILE" -t "$BASE_IMAGE" -f Dockerfile.rhel9-fips .
 else
     echo "Building RHEL 9 STIG image..."
-    docker build --secret id=rhsm_username,src="$tmpdir/rhsm_username" --secret id=rhsm_password,src="$tmpdir/rhsm_password" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
+    docker build --secret id=rhsm-credentials,src="$CRED_FILE" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
 fi

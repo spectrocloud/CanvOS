@@ -1,23 +1,24 @@
 FROM quay.io/kairos/kairos-init:v0.8.5 AS kairos-init
 FROM registry.access.redhat.com/ubi9-init:9.4-6
 
-ARG USERNAME
-ARG PASSWORD
 ARG KAIROS_VERSION=v4.0.3
 
-# Don't get asked while running apt commands
-ENV DEBIAN_FRONTEND=noninteractive
-
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
-# subscription-manager runs inside the UBI container (host OS does not need to be RHEL). Remove rhsm-host so it does not try to use host entitlements.
-# Uses BuildKit secrets (--secret id=rhsm_username,src=... --secret id=rhsm_password,src=...) - credentials never stored in image
-RUN --mount=type=secret,id=rhsm_username \
-    --mount=type=secret,id=rhsm_password \
-    sh -c 'rm /etc/rhsm-host && subscription-manager register --username "$(cat /run/secrets/rhsm_username)" --password "$(cat /run/secrets/rhsm_password)" \
-  && yum repolist \
-  && subscription-manager attach --auto \
-  && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
-  && yum repolist'
+# Credentials come from a BuildKit secret (never in image layers, build args, or docker history).
+# The YAML file is parsed with sed — no python3 required.
+RUN --mount=type=secret,id=rhsm-credentials \
+    set -e; \
+    _c=/run/secrets/rhsm-credentials; \
+    _u=$(sed -n 's/^username:[[:space:]]*"\([^"]*\)".*/\1/p; s/^username:[[:space:]]*'"'"'\([^'"'"']*\)'"'"'.*/\1/p; s/^username:[[:space:]]*\([^"'"'"'#[:space:]][^#[:space:]]*\).*/\1/p' "$_c" | head -1); \
+    _p=$(sed -n 's/^password:[[:space:]]*"\([^"]*\)".*/\1/p; s/^password:[[:space:]]*'"'"'\([^'"'"']*\)'"'"'.*/\1/p; s/^password:[[:space:]]*\([^"'"'"'#[:space:]][^#[:space:]]*\).*/\1/p' "$_c" | head -1); \
+    [ -n "$_u" ] || { echo "ERROR: could not parse 'username' from rhsm-credentials.yaml" >&2; exit 1; }; \
+    [ -n "$_p" ] || { echo "ERROR: could not parse 'password' from rhsm-credentials.yaml" >&2; exit 1; }; \
+    rm -f /etc/rhsm-host; \
+    subscription-manager register --username "$_u" --password "$_p" \
+    && yum repolist \
+    && subscription-manager attach --auto \
+    && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
+    && yum repolist
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel9/ /
