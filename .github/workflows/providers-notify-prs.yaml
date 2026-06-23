@@ -1,0 +1,76 @@
+name: Providers - Notify open PRs
+
+# Scans every provider repo for OPEN PRs targeting the chosen line's base
+# branch and emails a summary (with links + CI status) to the maintainers.
+# It never merges anything - a human reviews and merges from the email.
+
+on:
+  workflow_dispatch:
+    inputs:
+      line:
+        description: "Release line to scan"
+        required: true
+        type: choice
+        options: ["4.8", "4.7"]
+  # Uncomment to poll every weekday morning (09:00 UTC):
+  # schedule:
+  #   - cron: "0 9 * * 1-5"
+
+permissions:
+  contents: read
+
+env:
+  LINE: ${{ inputs.line || '4.8' }}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect open PRs per provider
+        id: collect
+        env:
+          GH_TOKEN: ${{ secrets.PROVIDER_AUTOMATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          line="$LINE"
+          : > body.html
+          echo "<h3>Open provider PRs &mdash; line ${line}</h3><ul>" >> body.html
+          total=0
+          while read -r repo branch; do
+            prs=$(gh pr list --repo "$repo" --base "$branch" --state open \
+                    --json number,title,url,headRefName,statusCheckRollup \
+                    --jq '.[] | "\(.number)\t\(.title)\t\(.url)\t" +
+                          ([.statusCheckRollup[]?.conclusion] |
+                           if length==0 then "no-checks"
+                           elif (index("FAILURE") or index("TIMED_OUT") or index("CANCELLED")) then "failing"
+                           elif all(.=="SUCCESS" or .=="NEUTRAL" or .=="SKIPPED") then "green"
+                           else "pending" end)')
+            if [[ -z "$prs" ]]; then
+              echo "<li><b>${repo}</b> (<code>${branch}</code>): no open PRs</li>" >> body.html
+              continue
+            fi
+            while IFS=$'\t' read -r num title url status; do
+              total=$((total+1))
+              echo "<li><b>${repo}</b> (<code>${branch}</code>): <a href=\"${url}\">#${num} ${title}</a> &mdash; checks: <b>${status}</b></li>" >> body.html
+            done <<< "$prs"
+          done < <(jq -r --arg line "$line" \
+                    '.providers[] | select(.branches[$line]!=null) | "\(.repo) \(.branches[$line])"' \
+                    .github/provider-automation/providers.json)
+          echo "</ul><p>Total open PRs: <b>${total}</b></p>" >> body.html
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          cat body.html
+
+      - name: Email summary
+        if: steps.collect.outputs.total != '0'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "[Providers ${{ env.LINE }}] ${{ steps.collect.outputs.total }} open PR(s) awaiting review"
+          to: vipin@spectrocloud.com,santhosh@spectrocloud.com,abhinav@spectrocloud.com
+          from: Provider Automation <${{ secrets.MAIL_USERNAME }}>
+          html_body: file://body.html
