@@ -40,7 +40,7 @@ on:
         description: "Registry prefix for output images"
         required: false
         type: string
-        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8215/edge"
+        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8788/edge"
 
 jobs:
   generate-matrix:
@@ -85,12 +85,8 @@ jobs:
               })
 
           else:
-              # Standard builds - all combinations
+              # Standard builds - SUSE only (other images temporarily disabled on this branch)
               combinations = [
-                  ("ubuntu:20.04", "kairos-ubuntu:20.04-core"),
-                  ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
-                  ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
-                  ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core"),
                   ("registry.suse.com/suse/sle-micro/5.5:latest", "kairos-slem:5.5-core"),
               ]
 
