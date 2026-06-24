@@ -25,8 +25,10 @@ RUN if echo "${BASE_OS_IMAGE}" | grep -q "sle-micro"; then \
             'autorefresh=0' \
             'baseurl=https://download.opensuse.org/distribution/leap/15.5/repo/oss/' \
             'gpgcheck=0' \
+            'repo_gpgcheck=0' \
+            'pkg_gpgcheck=0' \
             > /etc/zypp/repos.d/opensuse-oss.repo; \
-        zypper --non-interactive refresh opensuse-oss; \
+        zypper --non-interactive --no-gpg-checks refresh opensuse-oss; \
     fi
 
 COPY --from=kairos-init /kairos-init /kairos-init
