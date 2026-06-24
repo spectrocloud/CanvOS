@@ -18,10 +18,15 @@ ARG BASE_OS_IMAGE
 # matching Leap 15.5 OSS repo (SLE Micro 5.5 == SLE 15 SP5) before kairos-init
 # runs so the kernel install resolves the dependency.
 RUN if echo "${BASE_OS_IMAGE}" | grep -q "sle-micro"; then \
-        zypper --non-interactive removerepo opensuse-oss 2>/dev/null || true; \
-        zypper --non-interactive addrepo --refresh --no-gpgcheck \
-            https://download.opensuse.org/distribution/leap/15.5/repo/oss/ opensuse-oss; \
-        zypper --non-interactive --gpg-auto-import-keys refresh; \
+        printf '%s\n' \
+            '[opensuse-oss]' \
+            'name=opensuse-oss' \
+            'enabled=1' \
+            'autorefresh=0' \
+            'baseurl=https://download.opensuse.org/distribution/leap/15.5/repo/oss/' \
+            'gpgcheck=0' \
+            > /etc/zypp/repos.d/opensuse-oss.repo; \
+        zypper --non-interactive refresh opensuse-oss; \
     fi
 
 COPY --from=kairos-init /kairos-init /kairos-init
