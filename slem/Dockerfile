@@ -1,29 +1,36 @@
-# syntax=docker/dockerfile:1.4
 ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.14.0
 FROM ${KAIROS_INIT_IMAGE} AS kairos-init
 
-# There is no "SLE Micro for Rancher" 5.5 image (the Rancher flavor stopped at
-# 5.4); 5.5 ships only as the standard SLE Micro image.
+# registry.suse.com/suse/sle-micro/5.5 is actually "SLE Micro for Rancher 5.5"
+# (os-release ID=sle-micro-rancher). kairos-init recognises it and builds it by
+# mixing in the openSUSE Leap 15.5 OSS repo; no SUSE subscription is required.
 FROM registry.suse.com/suse/sle-micro/5.5:latest
 
 ARG KAIROS_VERSION=v4.0.3
 ARG TRUSTED_BOOT=false
 
-# Register against SCC to enable the version-matched SLE Micro 5.5 (SLE 15 SP5)
-# update repos plus PackageHub. Using the real product repos (instead of mixing
-# in older openSUSE Leap packages) means kairos-init installs a kernel / dracut /
-# mkinitrd set that actually resolves. The regcode is passed as a BuildKit secret
-# so it never persists in an image layer.
-RUN --mount=type=secret,id=SUSE_REGCODE \
-    SUSEConnect -r "$(cat /run/secrets/SUSE_REGCODE)" && \
-    SUSEConnect -p PackageHub/15.5/x86_64 && \
-    zypper --non-interactive --gpg-auto-import-keys refresh
+# Two 5.5-specific problems must be handled before kairos-init runs:
+#   1. The Leap OSS packages are signed by the "SuSE Package Signing Key"
+#      (70AF9E8139DB7C82), which is not in this image's rpm keyring, so installs
+#      fail with NOKEY. Import it.
+#   2. The base ships a newer dracut (...400) than Leap 15.5 OSS (...360). The
+#      OSS kernel needs the 'mkinitrd' capability that only dracut-mkinitrd-
+#      deprecated (paired with dracut-360) provides, so zypper would have to
+#      *downgrade* dracut and aborts in non-interactive mode. Pre-align dracut
+#      and install the mkinitrd provider here so kairos-init's later
+#      "Install kernel packages" stage resolves cleanly.
+COPY suse-build-key.asc /tmp/suse-build-key.asc
+RUN rpm --import /tmp/suse-build-key.asc && rm -f /tmp/suse-build-key.asc && \
+    printf '%s\n' \
+        '[opensuse-oss]' \
+        'name=opensuse-oss' \
+        'enabled=1' \
+        'autorefresh=0' \
+        'baseurl=https://download.opensuse.org/distribution/leap/15.5/repo/oss/' \
+        > /etc/zypp/repos.d/oss.repo && \
+    zypper --non-interactive --gpg-auto-import-keys refresh && \
+    zypper --non-interactive install --allow-downgrade --allow-vendor-change --force-resolution \
+        dracut dracut-mkinitrd-deprecated
 
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -m "generic" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
-
-# Deregister and scrub subscription data so credentials/repos do not ship in the
-# final image.
-RUN SUSEConnect -d || true; \
-    rm -rf /etc/zypp/credentials.d/* /etc/zypp/services.d/* \
-           /etc/zypp/repos.d/*.repo /etc/SUSEConnect 2>/dev/null || true
