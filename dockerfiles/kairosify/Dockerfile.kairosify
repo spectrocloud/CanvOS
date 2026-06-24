@@ -22,7 +22,7 @@ ARG BASE_OS_IMAGE
 # Signing Key <build@suse.de>" (70AF9E8139DB7C82), which is not in the plain
 # SLE Micro image's rpm keyring, so kairos-init's own `zypper install` fails
 # with NOKEY. Import the vendored key so signatures verify.
-COPY dockerfiles/kairosify/keys/suse-build-key.asc /tmp/suse-build-key.asc
+COPY dockerfiles/kairosify/suse-build-key.asc /tmp/suse-build-key.asc
 RUN if echo "${BASE_OS_IMAGE}" | grep -q "sle-micro"; then \
         rpm --import /tmp/suse-build-key.asc; \
         printf '%s\n' \
