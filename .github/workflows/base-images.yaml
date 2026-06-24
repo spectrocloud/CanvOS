@@ -91,7 +91,7 @@ jobs:
                   ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
                   ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
                   ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core"),
-                  ("registry.suse.com/suse/sle-micro-rancher/5.5:latest", "kairos-slem:5.5-core"),
+                  ("registry.suse.com/suse/sle-micro/5.5:latest", "kairos-slem:5.5-core"),
               ]
 
               for base_os, tag_prefix in combinations:
