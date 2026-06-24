@@ -17,7 +17,14 @@ ARG BASE_OS_IMAGE
 # (provided by dracut-mkinitrd-deprecated in the Leap OSS repo). Add the
 # matching Leap 15.5 OSS repo (SLE Micro 5.5 == SLE 15 SP5) before kairos-init
 # runs so the kernel install resolves the dependency.
+#
+# The SLE-inherited packages in that repo are signed by the "SuSE Package
+# Signing Key <build@suse.de>" (70AF9E8139DB7C82), which is not in the plain
+# SLE Micro image's rpm keyring, so kairos-init's own `zypper install` fails
+# with NOKEY. Import the vendored key so signatures verify.
+COPY dockerfiles/kairosify/keys/suse-build-key.asc /tmp/suse-build-key.asc
 RUN if echo "${BASE_OS_IMAGE}" | grep -q "sle-micro"; then \
+        rpm --import /tmp/suse-build-key.asc; \
         printf '%s\n' \
             '[opensuse-oss]' \
             'name=opensuse-oss' \
@@ -29,7 +36,8 @@ RUN if echo "${BASE_OS_IMAGE}" | grep -q "sle-micro"; then \
             'pkg_gpgcheck=0' \
             > /etc/zypp/repos.d/opensuse-oss.repo; \
         zypper --non-interactive --no-gpg-checks refresh opensuse-oss; \
-    fi
+    fi; \
+    rm -f /tmp/suse-build-key.asc
 
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
