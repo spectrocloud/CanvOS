@@ -9,6 +9,21 @@ ARG KAIROS_VERSION
 ARG TRUSTED_BOOT
 ARG BASE_OS_IMAGE
 
+# Standard (non-Rancher) SLE Micro workaround.
+# kairos-init only adds the openSUSE Leap OSS repo for "SLE Micro for Rancher"
+# images (its OnlyMicroRegex matches "...for Rancher" only). The plain
+# suse/sle-micro image reports as "SLE Micro", so that step is skipped and
+# `zypper install kernel-default` cannot satisfy `mkinitrd >= 2.7.1`
+# (provided by dracut-mkinitrd-deprecated in the Leap OSS repo). Add the
+# matching Leap 15.5 OSS repo (SLE Micro 5.5 == SLE 15 SP5) before kairos-init
+# runs so the kernel install resolves the dependency.
+RUN if echo "${BASE_OS_IMAGE}" | grep -q "sle-micro"; then \
+        zypper --non-interactive removerepo opensuse-oss 2>/dev/null || true; \
+        zypper --non-interactive addrepo --refresh --no-gpgcheck \
+            https://download.opensuse.org/distribution/leap/15.5/repo/oss/ opensuse-oss; \
+        zypper --non-interactive --gpg-auto-import-keys refresh; \
+    fi
+
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
 
