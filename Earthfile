@@ -216,12 +216,12 @@ CHECK_SYSTEMD_VERSION:
         SYSTEMD_VER=$([ -n "$SYSTEMCTL" ] && "$SYSTEMCTL" --version 2>/dev/null | awk 'NR==1{print $2}') && \
         case "$SYSTEMD_VER" in ''|*[!0-9]*) SYSTEMD_VER=0 ;; esac && \
         echo "CHECK_SYSTEMD_VERSION: detected systemd version $SYSTEMD_VER (systemctl: ${SYSTEMCTL:-not found})" && \
-        if [ "$SYSTEMD_VER" -gt "252" ]; then \
+        if [ "$SYSTEMD_VER" -ge "254" ]; then \
             mkdir -p /etc/spectrocloud && \
             touch /etc/spectrocloud/.support-systemd-extensions && \
-            echo "CHECK_SYSTEMD_VERSION: systemd > 252 — created /etc/spectrocloud/.support-systemd-extensions"; \
+            echo "CHECK_SYSTEMD_VERSION: systemd > 254 — created /etc/spectrocloud/.support-systemd-extensions"; \
         else \
-            echo "CHECK_SYSTEMD_VERSION: systemd <= 252 — skipping systemd-extensions marker"; \
+            echo "CHECK_SYSTEMD_VERSION: systemd <= 254 — skipping systemd-extensions marker"; \
         fi
 
 iso-image-rootfs:
@@ -1039,27 +1039,14 @@ iso-image:
         fi
     END
 
-    # When systemd >= 252, k8s is delivered via extensions at runtime and kubeadm runs
-    # from this OS installer rootfs. kubeadm's SystemVerification preflight reads the
-    # kernel config (kubernetes/system-validators getKernelConfigReader); when no config
-    # file is found at any known path it falls back to `modprobe configs`, which fails on
-    # these kernels (CONFIG_IKCONFIG is not set, so configs.ko does not exist) with:
-    #   [ERROR SystemVerification]: ... unable to load kernel module: "configs"
-    # The config ships only as /boot/config-$kernel. On UKI boot /boot becomes the ESP and
-    # is not the rootfs the validator reads, so copy it to /usr/lib/modules/$kernel/config
-    # (a validator search path that lives in the squashfs rootfs) so preflight finds it.
-    # $kernel is derived from /lib/modules (the kernel that boots), not `uname -r` which at
-    # build time would return the build host's kernel.
+
     IF [ -f /etc/spectrocloud/.support-systemd-extensions ] && \
        [ "$OS_DISTRIBUTION" = "ubuntu" ] && \
-       [ "$ARCH" = "amd64" ]
-        RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-            if [ -f "/boot/config-$kernel" ]; then \
-                install -D -m 0644 "/boot/config-$kernel" "/usr/lib/modules/$kernel/config"; \
-            else \
-                echo "ERROR: /boot/config-$kernel not found; kubeadm SystemVerification will fail" >&2 && \
-                exit 1; \
-            fi
+       [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "true" ]
+        COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+        RUN chmod 755 /tmp/install-kernel-headers.sh
+        RUN /tmp/install-kernel-headers.sh
+        RUN rm -rf /tmp/install-kernel-headers.sh /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli /etc/spectrocloud/.support-systemd-extensions
