@@ -1,4 +1,4 @@
-FROM quay.io/kairos/kairos-init:v0.8.5 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 
 FROM registry.suse.com/suse/sle-micro-rancher/5.4:latest
 
