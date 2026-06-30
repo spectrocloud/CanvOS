@@ -5,7 +5,7 @@ FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 # Base ubuntu image (focal)
 FROM ubuntu:focal AS base
 
-ARG KAIROS_VERSION=v4.0.3
+ARG KAIROS_VERSION=v4.0.4
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive

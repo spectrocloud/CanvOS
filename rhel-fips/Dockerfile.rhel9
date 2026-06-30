@@ -8,7 +8,7 @@ ARG USERNAME
 ARG PASSWORD
 
 # Generate os-release file
-ARG KAIROS_VERSION=v4.0.3
+ARG KAIROS_VERSION=v4.0.4
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
