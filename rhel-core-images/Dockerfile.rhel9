@@ -4,7 +4,7 @@ FROM registry.access.redhat.com/ubi9-init:9.4-6
 
 ARG USERNAME
 ARG PASSWORD
-ARG KAIROS_VERSION=v4.0.3
+ARG KAIROS_VERSION=v4.0.4
 
 # EPEL: prefer mirror redirector; dl.fedoraproject.org often returns 503 under load.
 RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm' || \

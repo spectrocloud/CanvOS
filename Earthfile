@@ -20,8 +20,13 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
+<<<<<<< HEAD
 ARG PE_VERSION=v4.9.21-rc.1
 ARG KAIROS_VERSION=v4.0.3
+=======
+ARG PE_VERSION=v4.9.10
+ARG KAIROS_VERSION=v4.0.4
+>>>>>>> a01a947 (chore: update kairos to v4.0.4 (#662))
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
