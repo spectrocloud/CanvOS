@@ -1,7 +1,7 @@
 FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 
 FROM ubuntu:22.04
-ARG VERSION=v4.0.3
+ARG VERSION=v4.0.4
 ARG ENABLE_STIG=1
 ARG SKIP_STIG_BANNER=0
 ENV DEBIAN_FRONTEND=noninteractive
