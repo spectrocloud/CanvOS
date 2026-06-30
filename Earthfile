@@ -72,7 +72,7 @@ ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
 ARG TWO_NODE=false
-ARG KINE_VERSION=0.11.4
+ARG KINE_VERSION=0.15.0
 
 # MAAS Variables
 ARG IS_MAAS=false
