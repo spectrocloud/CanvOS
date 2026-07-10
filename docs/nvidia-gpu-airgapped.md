@@ -193,6 +193,65 @@ lsmod | grep nvidia
 
 ---
 
+## Building the air-gapped content (which images to bundle)
+
+Pre-installing the driver in the OS only removes the **driver image**. The
+operator still deploys everything else as containers, so those images (and a few
+non-image steps) must be handled. **Bundling images alone is not sufficient.**
+
+### Images to mirror into your content bundle
+
+| Image | Needed with `driver.enabled=false`? |
+| --- | --- |
+| `gpu-operator` | Yes |
+| `gpu-operator-validator` | Yes |
+| `container-toolkit` | Yes — **unless** you also pre-installed it on the host (`NVIDIA_INSTALL_CONTAINER_TOOLKIT=true` → then set `toolkit.enabled=false` and skip this image) |
+| `k8s-device-plugin` | Yes |
+| `gpu-feature-discovery` | Yes |
+| `dcgm` + `dcgm-exporter` | Yes, if you want GPU metrics |
+| `node-feature-discovery` | Yes — unless the cluster already runs NFD (`nfd.enabled=false`) |
+| CUDA validation image (`nvcr.io/nvidia/cuda:…`) | Yes — used by the validator init container (easy to miss) |
+| `k8s-mig-manager` | Only if using MIG |
+| **`driver`** | **No — skip it (that's the point of pre-installing)** |
+
+Don't transcribe tags by hand — they change per operator version. Render the
+exact set from the chart and mirror precisely that:
+
+```sh
+helm template gpu-operator nvidia/gpu-operator --version <ver> \
+  --set driver.enabled=false | grep -Eo 'image: *"?[^"]+' | sort -u
+```
+
+### Non-image steps
+
+1. `--set driver.enabled=false`.
+2. Override **every** image `repository` to your bundle/registry and set
+   `imagePullSecrets`.
+3. **Palette Edge (k3s / rke2) gotcha:** the container-toolkit defaults assume
+   stock containerd. On k3s/rke2 you must point it at the right socket and
+   config, e.g.:
+
+   ```
+   --set toolkit.env[0].name=CONTAINERD_CONFIG \
+   --set toolkit.env[0].value=/var/lib/rancher/k3s/agent/etc/containerd/config.toml \
+   --set toolkit.env[1].name=CONTAINERD_SOCKET \
+   --set toolkit.env[1].value=/run/k3s/containerd/containerd.sock \
+   --set toolkit.env[2].name=CONTAINERD_RUNTIME_CLASS \
+   --set toolkit.env[2].value=nvidia
+   ```
+
+   (rke2 paths: `/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl`,
+   `/run/k3s/containerd/containerd.sock`.) Miss this and workloads never get the
+   GPU runtime even though the driver is present.
+
+### Palette content bundle
+
+Add the GPU Operator as a Helm pack in the cluster profile, then build the
+content bundle so it includes the rendered images above (minus `driver`). Images
+set only via `values.yaml` may need to be added to the pack's additional-images
+list if the bundle builder doesn't auto-detect them. Verify on a node with
+`nvidia-smi` and by checking the operator's `*-validator` pods reach `Ready`.
+
 ## Limitations / caveats
 
 - **Secure Boot / UKI is not supported by this path.** When `IS_UKI=true`, DKMS

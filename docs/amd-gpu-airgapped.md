@@ -138,6 +138,59 @@ ls /sys/class/kfd 2>/dev/null && echo "KFD present"
 
 ---
 
+## Building the air-gapped content (which images to bundle)
+
+Pre-installing the driver in the OS removes the **driver-build** images (KMM &
+friends). The operator still deploys the rest as containers, so those images —
+plus cert-manager and a couple of non-image steps — must be handled.
+**Bundling images alone is not sufficient.**
+
+### Images to mirror into your content bundle
+
+| Image | Needed with `driver.enable=false`? |
+| --- | --- |
+| `rocm/gpu-operator` (controller-manager) | Yes |
+| `rocm/gpu-operator-utils` | Yes |
+| `rocm/k8s-device-plugin` | Yes |
+| `rocm/k8s-device-plugin:labeller-*` (node labeller) | Yes |
+| `rocm/device-metrics-exporter` | Yes, if you want metrics |
+| `rocm/device-config-manager` | Yes |
+| `busybox:1.36` (init container) | Yes |
+| `registry.k8s.io/nfd/node-feature-discovery` | Yes — unless the cluster already runs NFD |
+| cert-manager (`controller`, `webhook`, `cainjector`, `acmesolver`) | Yes — hard dependency |
+| KMM images (operator / webhook / worker / signimage) | **No — skip** |
+| `gcr.io/kaniko-project/executor`, `ubuntu:<ver>` (driver build) | **No — skip** |
+| `rocm/test-runner` | Optional (testing only) |
+
+Render the exact set from the chart rather than transcribing tags:
+
+```sh
+helm template amd-gpu ./gpu-operator-<ver>.tgz -f operator-values.yaml \
+  | grep -Eo 'image: *"?[^"]+' | sort -u
+```
+
+### Non-image steps
+
+1. **Install cert-manager first** (with its images pulled from your registry) —
+   the AMD operator will not start without it.
+2. In the `DeviceConfig` CR, set `spec.driver.enable: false`.
+3. Override every image (`controllerManager.manager.image`,
+   `commonConfig.initContainerImage`, `utilsContainer.image`,
+   `devicePlugin.devicePluginImage`, `devicePlugin.nodeLabellerImage`,
+   `metricsExporter.image`, `configManager.image`, and the NFD image) to your
+   bundle/registry; set `imagePullSecrets` as needed.
+4. Ensure GPU nodes are labelled (via NFD or manually):
+   `feature.node.kubernetes.io/amd-gpu=true`.
+
+### Palette content bundle
+
+Add the AMD GPU Operator (and cert-manager) as Helm packs in the cluster profile,
+then build the content bundle so it includes the rendered images above (minus the
+KMM/kaniko/ubuntu build images). Images set only via `values.yaml` may need to be
+added to the pack's additional-images list if the bundle builder doesn't
+auto-detect them. Verify on a node with `lsmod | grep amdgpu` and by checking the
+operator pods reach `Ready`.
+
 ## Limitations / caveats
 
 - **Secure Boot / UKI is not supported by this path** (unsigned DKMS modules
