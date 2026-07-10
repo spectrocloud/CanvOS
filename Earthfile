@@ -63,6 +63,17 @@ ARG no_proxy=${NO_PROXY}
 
 ARG UPDATE_KERNEL=false
 
+# NVIDIA GPU driver pre-install (for air-gapped GPU Operator with driver.enabled=false).
+# When true, the NVIDIA data-center driver + DKMS kernel modules are baked into the
+# Ubuntu base image so GPU nodes need no host-side network at boot.
+ARG INSTALL_NVIDIA_GPU_DRIVERS=false
+ARG NVIDIA_DRIVER_BRANCH=570
+ARG NVIDIA_DRIVER_TYPE=proprietary
+ARG NVIDIA_USE_CUDA_REPO=true
+ARG NVIDIA_INSTALL_FABRICMANAGER=false
+ARG NVIDIA_INSTALL_CONTAINER_TOOLKIT=false
+ARG NVIDIA_REBUILD_INITRD=true
+
 IF [ "$FIPS_ENABLED" = "true" ] && [ "$UPDATE_KERNEL" = "true" ]
     RUN echo "ERROR: UPDATE_KERNEL and FIPS_ENABLED are mutually exclusive. Cannot set both to true." >&2 && \
         exit 1
@@ -795,6 +806,23 @@ base-image:
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
+        END
+
+        # NVIDIA GPU driver + DKMS kernel modules, built against the now-finalized
+        # image kernel. Runs here (not in the Dockerfile) so the kernel is settled
+        # first. Reuses install-kernel-headers.sh for ABI-exact headers.
+        IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ]
+            COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+            COPY scripts/install-nvidia-drivers.sh /tmp/install-nvidia-drivers.sh
+            RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-nvidia-drivers.sh && \
+                NVIDIA_DRIVER_BRANCH="$NVIDIA_DRIVER_BRANCH" \
+                NVIDIA_DRIVER_TYPE="$NVIDIA_DRIVER_TYPE" \
+                NVIDIA_USE_CUDA_REPO="$NVIDIA_USE_CUDA_REPO" \
+                NVIDIA_INSTALL_FABRICMANAGER="$NVIDIA_INSTALL_FABRICMANAGER" \
+                NVIDIA_INSTALL_CONTAINER_TOOLKIT="$NVIDIA_INSTALL_CONTAINER_TOOLKIT" \
+                NVIDIA_REBUILD_INITRD="$NVIDIA_REBUILD_INITRD" \
+                /tmp/install-nvidia-drivers.sh && \
+                rm -f /tmp/install-nvidia-drivers.sh /tmp/install-kernel-headers.sh
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
