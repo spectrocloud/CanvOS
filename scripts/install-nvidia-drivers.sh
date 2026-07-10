@@ -278,10 +278,11 @@ EOF
 cat > /etc/modules-load.d/nvidia.conf <<'EOF'
 # Managed by CanvOS install-nvidia-drivers.sh
 # Load the NVIDIA stack at boot so the GPU Operator sees a ready driver.
+# nvidia_drm is intentionally omitted: it grabs KMS/DRM and on headless GPU
+# nodes can wedge early boot. It loads on demand if anything wants it.
 nvidia
 nvidia_uvm
 nvidia_modeset
-nvidia_drm
 EOF
 
 # NVIDIA driver run-time module options recommended for datacenter use:
@@ -301,7 +302,27 @@ log "Running depmod -a ${KVER} ..."
 depmod -a "${KVER}" || warn "depmod reported an error."
 
 # ---------------------------------------------------------------------------
-# 12. Rebuild the initrd so the nouveau blacklist applies in early boot
+# 12. Make sure the initrd honors the nouveau blacklist and does NOT ship
+#     nouveau.ko. The /etc/modprobe.d/blacklist-nouveau.conf we wrote above
+#     lives on the rootfs and is only consulted AFTER switchroot; by then
+#     nouveau has already been auto-loaded by initramfs udev on modern
+#     NVIDIA data-center GPUs (Ada/Hopper/Blackwell), where nouveau's GSP-RM
+#     support hangs on device init and stalls udev-settle forever.
+#
+#     Fix: write a dracut.conf.d snippet so BOTH this script's dracut
+#     rebuild AND the later Earthfile-driven dracut rebuild produce an
+#     initrd that (a) omits nouveau entirely and (b) carries the modprobe
+#     blacklist file, so initramfs modprobe honors it too.
+# ---------------------------------------------------------------------------
+mkdir -p /etc/dracut.conf.d
+cat > /etc/dracut.conf.d/95-blacklist-nouveau.conf <<'EOF'
+# Managed by CanvOS install-nvidia-drivers.sh
+omit_drivers+=" nouveau lbm-nouveau "
+install_items+=" /etc/modprobe.d/blacklist-nouveau.conf "
+EOF
+
+# ---------------------------------------------------------------------------
+# 12b. Rebuild the initrd so the nouveau blacklist applies in early boot
 # ---------------------------------------------------------------------------
 if [ "${NVIDIA_REBUILD_INITRD}" = "true" ] && command -v dracut >/dev/null 2>&1; then
     log "Rebuilding initrd for ${KVER} (dracut) ..."

@@ -912,6 +912,17 @@ base-image:
         RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
             fi
+
+        # When the NVIDIA driver is pre-installed, block nouveau at the kernel
+        # command line. modprobe.d blacklists don't apply until AFTER switchroot,
+        # by which point initramfs udev has already auto-loaded nouveau on
+        # modern data-center GPUs (Ada/Hopper/Blackwell) and hung in GSP init,
+        # stalling systemd-udev-settle indefinitely.
+        IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ]
+            RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
+                    sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nouveau.modeset=0"|' /etc/cos/bootargs.cfg; \
+                fi
+        END
     END
 
 KAIROS_RELEASE:
