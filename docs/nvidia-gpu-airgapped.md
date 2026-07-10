@@ -10,6 +10,11 @@ in a **fully air-gapped** environment — with **no host-side network access** a
 - Wired into the `base-image` target in the [`Earthfile`](../Earthfile),
   gated by `INSTALL_NVIDIA_GPU_DRIVERS=true`.
 
+**Supported targets:** Ubuntu **22.04** and **24.04**, `amd64`. The script is
+version-agnostic — it derives the CUDA repo tag (`ubuntu2204` / `ubuntu2404`) and
+the kernel codename (`jammy` / `noble`) from the image's `/etc/os-release` at
+build time, so the same script works for both without changes.
+
 ---
 
 ## Why do this (the split of responsibilities)
@@ -108,7 +113,7 @@ It runs in the `base-image` target **after** the kernel is finalized
 
    ```sh
    OS_DISTRIBUTION=ubuntu
-   OS_VERSION=22.04
+   OS_VERSION=22            # or 24 for Ubuntu 24.04
    ARCH=amd64
 
    INSTALL_NVIDIA_GPU_DRIVERS=true
@@ -145,7 +150,7 @@ All variables are optional and have defaults. Set them in `.arg` or pass as
 | Variable | Default | Description |
 | --- | --- | --- |
 | `INSTALL_NVIDIA_GPU_DRIVERS` | `false` | Master switch. When `true`, the driver + DKMS modules are baked into the Ubuntu base image. |
-| `NVIDIA_DRIVER_BRANCH` | `570` | Driver branch to install (e.g. `550`, `570`, `580`). Must be a real `-server` branch — see [Choosing a driver branch](#choosing-a-driver-branch). |
+| `NVIDIA_DRIVER_BRANCH` | `570` | Driver **branch** to install (e.g. `550`, `570`, `580`). apt installs the latest patch within the branch — it is not pinned to an exact point release (e.g. `570.86.15`). Must be a real `-server` branch — see [Choosing a driver branch](#choosing-a-driver-branch). |
 | `NVIDIA_DRIVER_TYPE` | `proprietary` | `proprietary` or `open`. `open` uses the NVIDIA open GPU kernel modules (Turing architecture and newer only). |
 | `NVIDIA_USE_CUDA_REPO` | `true` | Add the NVIDIA CUDA network repo at build time. It carries every `-server` branch; recommended. `false` uses only Ubuntu's own repos. |
 | `NVIDIA_INSTALL_FABRICMANAGER` | `false` | Set `true` for NVSwitch / HGX systems (installs and enables `nvidia-fabricmanager`). |
