@@ -43,7 +43,7 @@
 #
 # TUNABLES (environment variables; all optional)
 #   NVIDIA_DRIVER_BRANCH        Driver branch to install (e.g. 550, 570, 580).
-#                               Default: 570  (a data-center production branch)
+#                               Default: 580  (a data-center production branch)
 #   NVIDIA_DRIVER_TYPE          "proprietary" | "open"   Default: proprietary
 #                               (open = open GPU kernel modules; Turing+ only)
 #   NVIDIA_USE_CUDA_REPO        "true" to add developer.download.nvidia.com CUDA
@@ -68,7 +68,7 @@ die()  { echo "[install-nvidia-drivers] ERROR: $*" >&2; exit 1; }
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-NVIDIA_DRIVER_BRANCH="${NVIDIA_DRIVER_BRANCH:-570}"
+NVIDIA_DRIVER_BRANCH="${NVIDIA_DRIVER_BRANCH:-580}"
 NVIDIA_DRIVER_TYPE="${NVIDIA_DRIVER_TYPE:-proprietary}"
 NVIDIA_USE_CUDA_REPO="${NVIDIA_USE_CUDA_REPO:-true}"
 NVIDIA_INSTALL_FABRICMANAGER="${NVIDIA_INSTALL_FABRICMANAGER:-false}"
@@ -194,8 +194,8 @@ if command -v dkms >/dev/null 2>&1; then
     log "Building NVIDIA DKMS modules for kernel ${KVER} ..."
     # Explicitly (re)build every registered nvidia dkms module for the target.
     # `dkms status` output differs across versions:
-    #   dkms 2.x: "nvidia, 570.86.15, 6.14.0-36-generic, x86_64: installed"
-    #   dkms 3.x: "nvidia/570.86.15, 6.14.0-36-generic, x86_64: installed"
+    #   dkms 2.x: "nvidia, 580.159.03, 6.14.0-36-generic, x86_64: installed"
+    #   dkms 3.x: "nvidia/580.159.03, 6.14.0-36-generic, x86_64: installed"
     # Extract the module name (up to the first , / or :) and the first
     # version-looking token, which works for both formats.
     dkms status 2>/dev/null | grep -i nvidia | while read -r line; do

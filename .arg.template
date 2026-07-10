@@ -37,7 +37,7 @@ FORCE_INTERACTIVE_INSTALL=false
 # kernel modules into the Ubuntu base image so GPU nodes need no host-side network.
 # See scripts/install-nvidia-drivers.sh for details.
 # INSTALL_NVIDIA_GPU_DRIVERS=true
-# NVIDIA_DRIVER_BRANCH=570                  # Driver branch (check: apt-cache search 'nvidia-headless-.*-server')
+# NVIDIA_DRIVER_BRANCH=580                  # Driver branch (check: apt-cache search 'nvidia-headless-.*-server')
 # NVIDIA_DRIVER_TYPE=proprietary            # proprietary | open (open GPU kernel modules; Turing+ only)
 # NVIDIA_USE_CUDA_REPO=true                 # Add NVIDIA CUDA network repo at build time (has every -server branch)
 # NVIDIA_INSTALL_FABRICMANAGER=false        # true for NVSwitch / HGX systems

@@ -67,7 +67,7 @@ ARG UPDATE_KERNEL=false
 # When true, the NVIDIA data-center driver + DKMS kernel modules are baked into the
 # Ubuntu base image so GPU nodes need no host-side network at boot.
 ARG INSTALL_NVIDIA_GPU_DRIVERS=false
-ARG NVIDIA_DRIVER_BRANCH=570
+ARG NVIDIA_DRIVER_BRANCH=580
 ARG NVIDIA_DRIVER_TYPE=proprietary
 ARG NVIDIA_USE_CUDA_REPO=true
 ARG NVIDIA_INSTALL_FABRICMANAGER=false
