@@ -48,6 +48,38 @@ If you also opt in to pre-installing the container toolkit on the host
 
 ---
 
+## Relationship to NVIDIA's "Local Package Repository" section
+
+The NVIDIA air-gapped guide lists these Ubuntu packages under
+**Local Package Repository → Required Packages**:
+
+```
+ubuntu:
+   linux-headers-${KERNEL_VERSION}
+   linux-image-${KERNEL_VERSION}
+   linux-modules-${KERNEL_VERSION}
+```
+
+That list belongs to the **driver-container** strategy: the node runs the GPU
+Operator's *driver container*, which compiles the driver **at runtime** and pulls
+those OS packages from **a local Ubuntu apt mirror you host**. It requires
+`driver.enabled=true` plus a maintained mirror.
+
+This CanvOS integration deliberately uses the **other** supported strategy —
+**pre-installed driver in the OS image** (`driver.enabled=false`) — so **no local
+apt mirror is needed**. The substance of those three packages is still satisfied,
+just at build time inside the image rather than from a runtime mirror:
+
+| NVIDIA-required package | How this integration satisfies it |
+| --- | --- |
+| `linux-headers-${KERNEL_VERSION}` | Installed at build time by `install-kernel-headers.sh` (ABI-exact; DKMS builds against these). |
+| `linux-image-${KERNEL_VERSION}` | Already shipped in the Kairos base image (the bootable kernel). |
+| `linux-modules-${KERNEL_VERSION}` | Already shipped in the Kairos base image (`/lib/modules/${KERNEL_VERSION}/`). |
+
+If you specifically want the driver-container + local-mirror model instead, this
+script is not the right tool — you would host an apt mirror serving the packages
+above and leave `driver.enabled=true`.
+
 ## The key build-time problem this solves
 
 Inside the Earthly/Docker build, `uname -r` is the **builder host's** kernel, **not**
