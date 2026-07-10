@@ -15,6 +15,10 @@ version-agnostic — it derives the CUDA repo tag (`ubuntu2204` / `ubuntu2404`) 
 the kernel codename (`jammy` / `noble`) from the image's `/etc/os-release` at
 build time, so the same script works for both without changes.
 
+> For AMD Instinct GPUs, see [`amd-gpu-airgapped.md`](./amd-gpu-airgapped.md).
+> The two are **mutually exclusive** — enabling both `INSTALL_NVIDIA_GPU_DRIVERS`
+> and `INSTALL_AMD_GPU_DRIVERS` fails the build.
+
 ---
 
 ## Why do this (the split of responsibilities)

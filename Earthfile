@@ -74,6 +74,19 @@ ARG NVIDIA_INSTALL_FABRICMANAGER=false
 ARG NVIDIA_INSTALL_CONTAINER_TOOLKIT=false
 ARG NVIDIA_REBUILD_INITRD=true
 
+# AMD Instinct GPU driver pre-install (for air-gapped AMD GPU Operator with
+# driver.enable=false). When true, the amdgpu-dkms kernel driver is baked into
+# the Ubuntu base image so GPU nodes need no host-side network at boot.
+ARG INSTALL_AMD_GPU_DRIVERS=false
+ARG AMDGPU_ROCM_VERSION=7.2.4
+ARG AMDGPU_REBUILD_INITRD=true
+
+# NVIDIA and AMD driver pre-install are mutually exclusive within a single image.
+IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ] && [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
+    RUN echo "ERROR: INSTALL_NVIDIA_GPU_DRIVERS and INSTALL_AMD_GPU_DRIVERS are mutually exclusive. Enable only one." >&2 && \
+        exit 1
+END
+
 IF [ "$FIPS_ENABLED" = "true" ] && [ "$UPDATE_KERNEL" = "true" ]
     RUN echo "ERROR: UPDATE_KERNEL and FIPS_ENABLED are mutually exclusive. Cannot set both to true." >&2 && \
         exit 1
@@ -823,6 +836,18 @@ base-image:
                 NVIDIA_REBUILD_INITRD="$NVIDIA_REBUILD_INITRD" \
                 /tmp/install-nvidia-drivers.sh && \
                 rm -f /tmp/install-nvidia-drivers.sh /tmp/install-kernel-headers.sh
+        END
+
+        # AMD Instinct GPU driver (amdgpu-dkms) + kernel module, built against the
+        # now-finalized image kernel. Mutually exclusive with the NVIDIA block above.
+        IF [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
+            COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+            COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+            RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
+                AMDGPU_ROCM_VERSION="$AMDGPU_ROCM_VERSION" \
+                AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                /tmp/install-amdgpu-drivers.sh && \
+                rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
         END
 
         IF [ "$CIS_HARDENING" = "true" ]

@@ -43,3 +43,11 @@ FORCE_INTERACTIVE_INSTALL=false
 # NVIDIA_INSTALL_FABRICMANAGER=false        # true for NVSwitch / HGX systems
 # NVIDIA_INSTALL_CONTAINER_TOOLKIT=false    # true to also pre-install nvidia-container-toolkit on host (then toolkit.enabled=false)
 # NVIDIA_REBUILD_INITRD=true                # Rebuild initrd so the nouveau blacklist applies at early boot
+
+# AMD Instinct GPU driver pre-install (for running the AMD GPU Operator in air-gapped
+# environments with driver.enable=false). Bakes the amdgpu-dkms kernel driver into the
+# Ubuntu base image so GPU nodes need no host-side network. Mutually exclusive with the
+# NVIDIA options above. See scripts/install-amdgpu-drivers.sh for details.
+# INSTALL_AMD_GPU_DRIVERS=true
+# AMDGPU_ROCM_VERSION=7.2.4                  # ROCm/driver release; must match your bundled operator images (see repo.radeon.com/amdgpu-install/)
+# AMDGPU_REBUILD_INITRD=true                 # Rebuild initrd for the image kernel
