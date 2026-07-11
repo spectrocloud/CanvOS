@@ -44,8 +44,15 @@
 # TUNABLES (environment variables; all optional)
 #   NVIDIA_DRIVER_BRANCH        Driver branch to install (e.g. 550, 570, 580).
 #                               Default: 580  (a data-center production branch)
-#   NVIDIA_DRIVER_TYPE          "proprietary" | "open"   Default: proprietary
-#                               (open = open GPU kernel modules; Turing+ only)
+#   NVIDIA_DRIVER_TYPE          "proprietary" | "open"   Default: open
+#                               "open" is REQUIRED on Hopper (H100/H200) and
+#                               Blackwell (RTX PRO 6000 Blackwell, B100, B200,
+#                               GB200) — the closed modules fail with
+#                               "RmInitAdapter (0x22:0x56:897)" on those GPUs
+#                               and `nvidia-smi` reports "No devices were found".
+#                               Also safe on Turing/Ampere/Ada. Override to
+#                               "proprietary" only for pre-Turing hardware
+#                               (Pascal/Volta).
 #   NVIDIA_USE_CUDA_REPO        "true" to add developer.download.nvidia.com CUDA
 #                               repo (recommended, has every -server branch).
 #                               "false" to use only Ubuntu's own repos.
@@ -69,7 +76,7 @@ die()  { echo "[install-nvidia-drivers] ERROR: $*" >&2; exit 1; }
 # Config
 # ---------------------------------------------------------------------------
 NVIDIA_DRIVER_BRANCH="${NVIDIA_DRIVER_BRANCH:-580}"
-NVIDIA_DRIVER_TYPE="${NVIDIA_DRIVER_TYPE:-proprietary}"
+NVIDIA_DRIVER_TYPE="${NVIDIA_DRIVER_TYPE:-open}"
 NVIDIA_USE_CUDA_REPO="${NVIDIA_USE_CUDA_REPO:-true}"
 NVIDIA_INSTALL_FABRICMANAGER="${NVIDIA_INSTALL_FABRICMANAGER:-false}"
 NVIDIA_INSTALL_CONTAINER_TOOLKIT="${NVIDIA_INSTALL_CONTAINER_TOOLKIT:-false}"

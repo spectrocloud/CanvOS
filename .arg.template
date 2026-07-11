@@ -38,7 +38,8 @@ FORCE_INTERACTIVE_INSTALL=false
 # See scripts/install-nvidia-drivers.sh for details.
 # INSTALL_NVIDIA_GPU_DRIVERS=true
 # NVIDIA_DRIVER_BRANCH=580                  # Driver branch (check: apt-cache search 'nvidia-headless-.*-server')
-# NVIDIA_DRIVER_TYPE=proprietary            # proprietary | open (open GPU kernel modules; Turing+ only)
+# NVIDIA_DRIVER_TYPE=open                   # open | proprietary. Default "open" (REQUIRED on Hopper/Blackwell,
+#                                            safe on Turing/Ampere/Ada). Set "proprietary" only for pre-Turing GPUs.
 # NVIDIA_USE_CUDA_REPO=true                 # Add NVIDIA CUDA network repo at build time (has every -server branch)
 # NVIDIA_INSTALL_FABRICMANAGER=false        # true for NVSwitch / HGX systems
 # NVIDIA_INSTALL_CONTAINER_TOOLKIT=false    # true to also pre-install nvidia-container-toolkit on host (then toolkit.enabled=false)

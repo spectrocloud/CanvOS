@@ -155,7 +155,7 @@ All variables are optional and have defaults. Set them in `.arg` or pass as
 | --- | --- | --- |
 | `INSTALL_NVIDIA_GPU_DRIVERS` | `false` | Master switch. When `true`, the driver + DKMS modules are baked into the Ubuntu base image. |
 | `NVIDIA_DRIVER_BRANCH` | `580` | Driver **branch** to install (e.g. `550`, `570`, `580`). apt installs the latest patch within the branch — it is not pinned to an exact point release (e.g. `580.159.03`). Must be a real `-server` branch — see [Choosing a driver branch](#choosing-a-driver-branch). |
-| `NVIDIA_DRIVER_TYPE` | `proprietary` | `proprietary` or `open`. `open` uses the NVIDIA open GPU kernel modules (Turing architecture and newer only). |
+| `NVIDIA_DRIVER_TYPE` | `open` | `open` or `proprietary`. `open` uses the NVIDIA open GPU kernel modules and is **required** on Hopper (H100/H200) and Blackwell (RTX PRO 6000 Blackwell, B100/B200/GB200); the closed modules fail with `RmInitAdapter (0x22:0x56:897)` on those GPUs. Also safe on Turing/Ampere/Ada. Override to `proprietary` only for pre-Turing hardware (Pascal/Volta). See [Choosing the module flavor](#choosing-the-module-flavor-nvidia_driver_type). |
 | `NVIDIA_USE_CUDA_REPO` | `true` | Add the NVIDIA CUDA network repo at build time. It carries every `-server` branch; recommended. `false` uses only Ubuntu's own repos. |
 | `NVIDIA_INSTALL_FABRICMANAGER` | `false` | Set `true` for NVSwitch / HGX systems (installs and enables `nvidia-fabricmanager`). |
 | `NVIDIA_INSTALL_CONTAINER_TOOLKIT` | `false` | Set `true` to also pre-install `nvidia-container-toolkit` **on the host**. Then set `toolkit.enabled=false` in the operator. Off by default because the operator ships the toolkit. |
@@ -172,6 +172,30 @@ apt-cache search 'nvidia-headless-.*-server'
 
 Pick a branch supported by both your GPU generation and the CUDA/toolkit versions
 of the operator images you're bundling.
+
+### Choosing the module flavor (`NVIDIA_DRIVER_TYPE`)
+
+The default is `open`. It works on every server GPU generation Turing and newer,
+and is **required** for Hopper and Blackwell. Override to `proprietary` only for
+pre-Turing hardware.
+
+| GPU generation | Example cards                                          | Required `NVIDIA_DRIVER_TYPE` |
+| -------------- | ------------------------------------------------------ | ----------------------------- |
+| Blackwell      | RTX PRO 6000 Blackwell, B100, B200, GB200              | `open` (only)                 |
+| Hopper         | H100, H200                                             | `open` (only)                 |
+| Ada Lovelace   | L4, L40, L40S, RTX 6000 Ada                            | either (`open` recommended)   |
+| Ampere         | A100, A10, A30, A40                                    | either                        |
+| Turing         | T4, RTX 20xx                                           | either                        |
+| Pre-Turing     | V100, P100, P40                                        | `proprietary` (only)          |
+
+Symptom of the wrong choice on Hopper/Blackwell: `nvidia-smi` reports
+`No devices were found`, and `dmesg` shows one line per GPU of the form
+`NVRM: GPU <bus>: RmInitAdapter failed! (0x22:0x56:897)`. In that state the
+GPU Operator's toolkit init container loops on
+`Attempting to validate a driver container installation`, containerd never
+registers the `nvidia` runtime handler, the device plugin never advertises
+`nvidia.com/gpu`, and workload pods stay `Pending` on
+`Insufficient nvidia.com/gpu`.
 
 ---
 
