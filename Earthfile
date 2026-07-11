@@ -83,9 +83,12 @@ ARG INSTALL_AMD_GPU_DRIVERS=false
 # fails against your image kernel and you accept the in-tree driver's feature set.
 ARG AMDGPU_DRIVER_SOURCE=dkms
 # amdgpu-install release marker (URL segment under repo.radeon.com/amdgpu-install/<x>/).
-# Default 31.30 ships amdgpu-dkms 6.19.4, which builds against Linux kernels through
-# 6.17 (Ubuntu 22.04 & 24.04 HWE range). See docs/amd-gpu-airgapped.md for the mapping.
-ARG AMDGPU_DRIVER_RELEASE=31.30
+# Default 7.2.1 pairs with AMD GPU Operator v1.5.0 (per its release notes) and installs
+# amdgpu-dkms 6.16.13 (30.30.1 line). Empirically builds cleanly against Linux kernels
+# through 6.17 on Ubuntu 24.04. AMD publishes both ROCm-alias (7.2.1) and driver-release-
+# marker (30.30.1, 31.30) URL segments; either form is accepted here. The 31.x line is
+# tech-preview -- do not mix with a production operator. See docs/amd-gpu-airgapped.md.
+ARG AMDGPU_DRIVER_RELEASE=7.2.1
 ARG AMDGPU_REBUILD_INITRD=true
 
 # NVIDIA and AMD driver pre-install are mutually exclusive within a single image.

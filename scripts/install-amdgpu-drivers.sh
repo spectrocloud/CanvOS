@@ -47,10 +47,15 @@
 # TUNABLES (environment variables; all optional)
 #   AMDGPU_DRIVER_SOURCE     dkms | inbox. Default: dkms.
 #   AMDGPU_DRIVER_RELEASE    amdgpu-install release marker (URL segment under
-#                            repo.radeon.com/amdgpu-install/<x>/), e.g. 31.30,
-#                            31.10, 30.30.4. Default: 31.30. Ignored in inbox
-#                            mode. See docs/amd-gpu-airgapped.md for a snapshot
-#                            of release-to-kernel compatibility.
+#                            repo.radeon.com/amdgpu-install/<x>/). AMD publishes
+#                            both ROCm-alias paths (7.2.1, 7.2.4) and driver-
+#                            release-marker paths (30.30.1, 30.30.4, 31.30);
+#                            either form is accepted. Default: 7.2.1 -- pairs
+#                            with GPU Operator v1.5.0 per its release notes.
+#                            The 31.x line is tech-preview and pairs only with
+#                            ROCm 7.13.0 tech-preview; do not mix with a
+#                            production operator. Ignored in inbox mode. See
+#                            docs/amd-gpu-airgapped.md for the compat matrix.
 #   AMDGPU_REBUILD_INITRD    "true" to rebuild the initrd for the image kernel.
 #                            Default: true.
 #
@@ -65,7 +70,7 @@ die()  { echo "[install-amdgpu-drivers] ERROR: $*" >&2; exit 1; }
 # Config
 # ---------------------------------------------------------------------------
 AMDGPU_DRIVER_SOURCE="${AMDGPU_DRIVER_SOURCE:-dkms}"
-AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE:-31.30}"
+AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE:-7.2.1}"
 AMDGPU_REBUILD_INITRD="${AMDGPU_REBUILD_INITRD:-true}"
 
 case "${AMDGPU_DRIVER_SOURCE}" in

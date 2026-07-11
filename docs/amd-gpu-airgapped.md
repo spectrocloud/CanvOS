@@ -107,7 +107,7 @@ In `inbox` mode steps 2–5 are skipped entirely; the script only ensures
 
    INSTALL_AMD_GPU_DRIVERS=true
    AMDGPU_DRIVER_SOURCE=dkms      # or "inbox" — see modes above
-   AMDGPU_DRIVER_RELEASE=31.30    # amdgpu-install release marker (dkms mode only)
+   AMDGPU_DRIVER_RELEASE=7.2.1    # pairs with GPU Operator v1.5.0 (dkms mode only)
    ```
 
 2. Build as usual, e.g.:
@@ -121,7 +121,7 @@ In `inbox` mode steps 2–5 are skipped entirely; the script only ensures
    ```sh
    ./earthly.sh +base-image --ARCH=amd64 \
        --INSTALL_AMD_GPU_DRIVERS=true \
-       --AMDGPU_DRIVER_RELEASE=31.30
+       --AMDGPU_DRIVER_RELEASE=7.2.1
    ```
 
    If the `dkms` build fails on your image kernel (see the mapping table
@@ -139,56 +139,84 @@ In `inbox` mode steps 2–5 are skipped entirely; the script only ensures
 | --- | --- | --- |
 | `INSTALL_AMD_GPU_DRIVERS` | `false` | Master switch. Enables the AMD pre-install pipeline. |
 | `AMDGPU_DRIVER_SOURCE` | `dkms` | `dkms` (build AMD's out-of-tree driver against the image kernel) or `inbox` (skip the AMD repo and use the in-tree amdgpu). See modes above. |
-| `AMDGPU_DRIVER_RELEASE` | `31.30` | **`dkms` mode only.** `amdgpu-install` release marker (URL segment under `repo.radeon.com/amdgpu-install/<x>/`, e.g. `31.30`, `31.10`, `30.30.4`). Note this is AMD's *driver-release* identifier, not a ROCm x.y.z version — the two schemes coexist and only a subset of ROCm aliases are published as URL paths. |
+| `AMDGPU_DRIVER_RELEASE` | `7.2.1` | **`dkms` mode only.** `amdgpu-install` URL segment under `repo.radeon.com/amdgpu-install/<x>/`. AMD publishes both ROCm-alias paths (e.g. `7.2.1`, `7.2.4`) and driver-release-marker paths (e.g. `30.30.1`, `30.30.4`, `31.30`) — either form works. Default `7.2.1` pairs with **GPU Operator v1.5.0** (per AMD's release notes) → **ROCm 7.2.1** → **amdgpu-dkms 6.16.13** (30.30.1 build). |
 | `AMDGPU_REBUILD_INITRD` | `true` | Rebuild the initrd for the image kernel. |
 
-### Choosing a driver release (snapshot, 2026-07-11)
+### Version alignment across the stack (snapshot, 2026-07-11)
 
-The table below is a **snapshot** as of 2026-07-11 of what
-`repo.radeon.com/amdgpu/<release>/ubuntu/dists/{jammy,noble}/…/Packages`
-publishes for `amdgpu-dkms`. AMD adds new releases periodically — always
-cross-check the authoritative matrix before pinning a value:
+Five things have to line up to have a supportable node. Start from the operator
+version you bundle and follow AMD's release notes / compat matrix from there:
 
-- [AMD ROCm on Linux — system requirements](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html) (canonical kernel matrix)
-- Repo index: <https://repo.radeon.com/amdgpu-install/> (published release markers)
+```
+        GPU Operator  ─┐   AMD release notes pair the operator with a specific
+                       │   ROCm user-space release
+        ROCm user-space (device-plugin / metrics-exporter / etc)
+                       │   AMD user↔kernel compat matrix pairs ROCm with a
+                       │   driver-release marker
+        amdgpu driver (amdgpu-dkms) → this is what this script installs
+                       │   The DKMS source has a supported kernel window
+        Image kernel   ─┘
+        Kubernetes version — validated per operator release
+```
 
-| `AMDGPU_DRIVER_RELEASE` | `amdgpu-dkms` source | Notes |
-| --- | --- | --- |
-| `30.30.4` | `6.16.13` | Paired with ROCm 7.2.4. Empirically **does not build against Linux 6.17** despite AMD docs listing it as supported for 24.04.4 HWE. Was CanvOS's default before this fix. |
-| `31.10` | `6.18.4` | Newer source; picks up mainline through ~6.18. |
-| `31.20` | `6.19.0` | |
-| **`31.30` (current default)** | `6.19.4` | Confirmed builds against Linux 6.17 on Ubuntu 22.04 / 24.04. Publishes for jammy, noble, and resolute (25.04). |
+**Two parallel driver tracks** — do not mix them:
 
-**How to pick:** the default `31.30` is fine for anyone on 22.04 or 24.04 in
-mid-2026. Bump it only when a newer release is required to match the ROCm
-user-space release of the operator images you bundle, or if AMD publishes a
-release with fixes for your specific silicon. Check AMD's release notes for the
-authoritative ROCm ↔ driver-release pairing; the URL scheme intentionally does
-**not** encode ROCm x.y.z in the release marker.
+| Track | `AMDGPU_DRIVER_RELEASE` values | ROCm user-space | Paired GPU Operator |
+| --- | --- | --- | --- |
+| **Production** | `7.2.1` (= `30.30.1`), `7.2.4` (= `30.30.4`), etc. | ROCm 7.2.x | **v1.5.0 (what CanvOS bundles)** |
+| Tech preview | `31.10` / `31.20` / `31.30` | ROCm 7.13.0 tech-preview | not yet paired with a released operator |
 
-> **Docs vs reality:** AMD's system-requirements page has been observed to list
-> kernel support that the shipped driver source doesn't yet build against
-> (e.g. 30.30.4 with 6.17 on 24.04). Trust the empirical result: if the build
-> fails, bump the release or fall back to `inbox`.
+Authoritative references:
+- [AMD GPU Operator v1.5.0 release notes](https://instinct.docs.amd.com/projects/gpu-operator/en/main/releasenotes.html#gpu-operator-v1-5-0-release-notes)
+- [ROCm user↔kernel compat matrix](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/user-kernel-space-compat-matrix.html)
+- [ROCm on Linux system requirements](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html)
+- Repo index: <https://repo.radeon.com/amdgpu-install/>
+
+Snapshot of what `repo.radeon.com/amdgpu/<release>/ubuntu/dists/noble/…/Packages`
+publishes for `amdgpu-dkms`:
+
+| `AMDGPU_DRIVER_RELEASE` | `amdgpu-dkms` build | Track | Paired with |
+| --- | --- | --- | --- |
+| **`7.2.1` (= `30.30.1`, default)** | `6.16.13-2303411` | Production | ROCm 7.2.1 → GPU Operator v1.5.0 |
+| `7.2.4` (= `30.30.4`) | `6.16.13-2341068` | Production | ROCm 7.2.4 |
+| `31.10` | `6.18.4` | Tech preview | ROCm 7.13.0 tech-preview |
+| `31.30` | `6.19.4` | Tech preview | ROCm 7.13.0 tech-preview |
+
+The whole 30.30.x line uses the same driver *source* (`6.16.13`); only the build
+number and paired user-space differ. Empirically, this source **builds cleanly
+against Ubuntu 24.04's edge kernel 6.17** — the "EFI variables are not supported
+on this system" line printed during postinst is a cosmetic mokutil warning
+(sign_tool step); DKMS proceeds and lands the module under `updates/dkms/`.
+
+**How to pick:** default to the release marker paired with the operator you're
+bundling. Bump only when you're also moving the operator to a paired version.
+Do not switch to `31.x` for kernel-newness alone — that crosses into tech
+preview and won't be validated with a production operator.
 
 ### When the DKMS build fails
 
-The most common cause is a **kernel newer than what the chosen driver release
-supports** (e.g. running Linux 6.17 with `AMDGPU_DRIVER_RELEASE=30.30.4`,
-whose 6.16.13 source doesn't build against 6.17). The build will fail loudly
-with the `make.log` tail and a pointer at this document.
+Common causes:
 
-Two ways to unblock:
+1. **Kernel outside the driver's supported window** — `make.log` shows
+   `configure: cannot detect CFLAGS` or unresolved kernel symbols. Prefer
+   moving the image kernel into range (or the operator/ROCm/driver combo up
+   as a set) over jumping to a tech-preview driver.
+2. **`linux-headers-<kver>` not installed for the image kernel** — check the
+   earlier log lines from `install-kernel-headers.sh`. Fix the headers.
+3. **DKMS module signing (mokutil) failure in the container** — surfaces as
+   "EFI variables are not supported on this system / /sys/firmware/efi/efivars
+   not found, aborting." The script writes
+   `/etc/dkms/framework.conf.d/canvos-no-mok-signing.conf` (empty `sign_tool`)
+   before the apt install to sidestep this. In 30.30.x the AMD postinst
+   already tolerates the missing EFI vars (it prints the warning and
+   continues); the sign_tool drop-in is defensive belt-and-suspenders for
+   31.x and future releases that may treat it as fatal.
 
-1. **Bump `AMDGPU_DRIVER_RELEASE`** to a newer marker whose source supports
-   your kernel (see the table above). This keeps you on AMD's out-of-tree
-   driver.
-2. **Rebuild with `AMDGPU_DRIVER_SOURCE=inbox`** if no supported release
-   exists yet, or if you're willing to trade the OOT driver's newer
-   SMU/per-SKU support for whatever the in-tree amdgpu ships with your kernel.
-   Enumeration and compute typically work on established silicon (e.g. MI300
-   family) with the in-tree driver; expect the operator to lose the
-   `amd.com/gpu.driver-version` node label.
+The script prints the last 60 lines of `make.log` on failure. Read it —
+the class of failure matters for the fix. Workaround for any of the above:
+rerun with `AMDGPU_DRIVER_SOURCE=inbox` to use the in-tree amdgpu (accepts
+the caveats above about missing driver-version label + SMU IF mismatch on
+newer silicon).
 
 ---
 

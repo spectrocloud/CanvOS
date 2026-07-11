@@ -56,9 +56,12 @@ FORCE_INTERACTIVE_INSTALL=false
 #                                            #   and skips the AMD apt repo entirely — use
 #                                            #   when the DKMS build fails against your image
 #                                            #   kernel (see docs).
-# AMDGPU_DRIVER_RELEASE=31.30                # Only used with dkms mode. amdgpu-install
-#                                            #   release marker (URL segment under
-#                                            #   repo.radeon.com/amdgpu-install/<x>/, e.g.
-#                                            #   31.30, 31.10, 30.30.4). See the version-
-#                                            #   pick table in docs/amd-gpu-airgapped.md.
+# AMDGPU_DRIVER_RELEASE=7.2.1                # Only used with dkms mode. amdgpu-install
+#                                            #   release marker. Default 7.2.1 pairs with
+#                                            #   GPU Operator v1.5.0 (ROCm 7.2.1). AMD also
+#                                            #   publishes driver-release-marker paths like
+#                                            #   30.30.1 / 30.30.4 / 31.30; either form works.
+#                                            #   31.x is tech-preview -- do not mix with a
+#                                            #   production operator. See the version-
+#                                            #   alignment table in docs/amd-gpu-airgapped.md.
 # AMDGPU_REBUILD_INITRD=true                 # Rebuild initrd for the image kernel
