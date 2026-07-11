@@ -89,6 +89,12 @@ ARG AMDGPU_DRIVER_SOURCE=dkms
 # marker (30.30.1, 31.30) URL segments; either form is accepted here. The 31.x line is
 # tech-preview -- do not mix with a production operator. See docs/amd-gpu-airgapped.md.
 ARG AMDGPU_DRIVER_RELEASE=7.2.1
+# Path to a driver artifact produced by scripts/prebuild-amdgpu-artifact.sh
+# on the build host. Threaded in by earthly.sh when INSTALL_AMD_GPU_DRIVERS=true
+# and AMDGPU_DRIVER_SOURCE=dkms. When set, the base-image AMD block skips the
+# in-buildkit DKMS install (which fails in buildkit's RUN sandbox -- see docs)
+# and simply extracts the pre-built modules + firmware + config drop-ins.
+ARG AMDGPU_ARTIFACT_PATH=""
 ARG AMDGPU_REBUILD_INITRD=true
 
 # NVIDIA and AMD driver pre-install are mutually exclusive within a single image.
@@ -851,24 +857,39 @@ base-image:
         # AMD Instinct GPU driver (amdgpu-dkms) + kernel module, built against the
         # now-finalized image kernel. Mutually exclusive with the NVIDIA block above.
         IF [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
-            COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
-            COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
-            # --privileged is required for AMD's amdgpu-dkms ./configure step:
-            # its "detect CFLAGS" probe invokes Kbuild in a way that fails in
-            # buildkit's default unprivileged sandbox with
-            #   "configure: error: cannot detect CFLAGS..."
-            #   "make: *** No rule to make target 'amd/dkms/config/config.h'"
-            # Reproduced against the plain `docker run --privileged` baseline
-            # succeeding on the same host with the same script + base image.
-            # Caller must pass --allow-privileged to earthly (already required
-            # by other steps in this repo).
-            RUN --privileged \
-                chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
-                AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
-                AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
-                AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
-                /tmp/install-amdgpu-drivers.sh && \
-                rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
+            # dkms mode with a pre-built artifact (default path when earthly.sh
+            # produced one via scripts/prebuild-amdgpu-artifact.sh). Buildkit's
+            # RUN sandbox breaks AMD's amdgpu-dkms ./configure heredoc probe --
+            # see docs/amd-gpu-airgapped.md. The prebuild runs on the host in a
+            # plain `docker run --privileged` against the same base image, and
+            # this stage just extracts the resulting modules + firmware + drop-ins.
+            IF [ "$AMDGPU_DRIVER_SOURCE" = "dkms" ] && [ "$AMDGPU_ARTIFACT_PATH" != "" ]
+                COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+                COPY "$AMDGPU_ARTIFACT_PATH" /tmp/amdgpu-artifact.tar.gz
+                RUN --privileged \
+                    chmod 755 /tmp/install-amdgpu-drivers.sh && \
+                    AMDGPU_DRIVER_SOURCE=dkms \
+                    AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
+                    AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                    AMDGPU_ARTIFACT_PATH=/tmp/amdgpu-artifact.tar.gz \
+                    /tmp/install-amdgpu-drivers.sh && \
+                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/amdgpu-artifact.tar.gz
+            ELSE
+                # inbox mode, OR dkms mode without a pre-built artifact (which
+                # will fail in buildkit's sandbox, but we let install-amdgpu-
+                # drivers.sh emit its own clear error rather than short-circuit
+                # here). install-kernel-headers.sh is only needed for the
+                # in-buildkit DKMS path; inbox mode doesn't use it.
+                COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+                COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+                RUN --privileged \
+                    chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
+                    AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
+                    AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
+                    AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                    /tmp/install-amdgpu-drivers.sh && \
+                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
+            END
         END
 
         IF [ "$CIS_HARDENING" = "true" ]

@@ -6,20 +6,24 @@
 # Ubuntu base image, so a node booted from the image can run the AMD GPU Operator
 # with `driver.enable=false` in a fully air-gapped environment.
 #
-# TWO MODES (AMDGPU_DRIVER_SOURCE)
-# --------------------------------
-#   dkms  (default) -- download AMD's amdgpu-dkms source from repo.radeon.com and
-#                      DKMS-build it against the image kernel. Recommended for
-#                      Instinct/MI silicon, where the in-tree driver typically
-#                      lags on SMU firmware interfaces and per-SKU features.
+# MODES (AMDGPU_DRIVER_SOURCE)
+# ----------------------------
+#   dkms  (default) -- install AMD's amdgpu-dkms. Two execution paths:
+#                        (a) if AMDGPU_ARTIFACT_PATH is set (Earthly build via
+#                            earthly.sh's prebuild helper), extract the pre-
+#                            compiled modules + firmware + drop-ins from the
+#                            tarball, depmod, rebuild initrd. Fast.
+#                        (b) otherwise download from repo.radeon.com and
+#                            DKMS-build against the image kernel in-place.
+#                            Works under `docker run --privileged`; FAILS in
+#                            Earthly's buildkit RUN sandbox at AMD's ./configure
+#                            step -- use path (a) for Earthly.
 #   inbox           -- do NOT install the AMD apt repo or amdgpu-dkms. Rely on
 #                      the in-tree `amdgpu` module that Ubuntu ships with
 #                      linux-modules-$(uname -r) and the firmware blobs in
 #                      linux-firmware. Only ensures amdgpu autoloads. Choose
-#                      this when the DKMS build fails against your image kernel
-#                      (e.g. AMD hasn't published a driver release supporting
-#                      your kernel yet) and you accept the in-tree driver's
-#                      feature set (may miss recent SMU / per-SKU support).
+#                      this when you accept the in-tree driver's feature set
+#                      (may miss recent SMU / per-SKU support).
 #
 # WHAT THIS COVERS (dkms mode, OS side only)
 # ------------------------------------------
@@ -148,7 +152,66 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
-# DKMS MODE begins here.
+# DKMS MODE with a pre-built artifact (produced by
+# scripts/prebuild-amdgpu-artifact.sh on the build host).
+#
+# Buildkit's RUN sandbox breaks AMD's amdgpu-dkms ./configure heredoc probe,
+# so we compile outside Earthly in `docker run --privileged` and consume the
+# resulting tarball here. Structurally this branch just extracts the tarball,
+# runs depmod against the target kernel, and rebuilds the initrd.
+# ---------------------------------------------------------------------------
+AMDGPU_ARTIFACT_PATH="${AMDGPU_ARTIFACT_PATH:-}"
+if [ "${AMDGPU_DRIVER_SOURCE}" = "dkms" ] && [ -n "${AMDGPU_ARTIFACT_PATH}" ]; then
+    log "dkms mode: consuming pre-built artifact ${AMDGPU_ARTIFACT_PATH}"
+    [ -s "${AMDGPU_ARTIFACT_PATH}" ] || die "AMDGPU_ARTIFACT_PATH='${AMDGPU_ARTIFACT_PATH}' \
+is not a non-empty file inside the build container. Verify the earthly.sh \
+wrapper produced it and Earthly COPYed it in."
+
+    log "Extracting artifact into root filesystem ..."
+    tar -xzf "${AMDGPU_ARTIFACT_PATH}" -C / \
+        || die "tar extraction of ${AMDGPU_ARTIFACT_PATH} failed."
+
+    MODDIR="/lib/modules/${KVER}"
+    if ! find "${MODDIR}/updates/dkms" -name 'amdgpu.ko*' 2>/dev/null | grep -q .; then
+        find "${MODDIR}" -name 'amdgpu.ko*' 2>/dev/null | sed 's/^/    /' >&2 || true
+        die "amdgpu module missing under ${MODDIR}/updates/dkms after extract. \
+Artifact was built for a different kernel? Delete build/amdgpu-artifact-*.tar.gz \
+and rebuild (AMDGPU_FORCE_REBUILD=1) or verify BASE_IMAGE matches."
+    fi
+
+    log "Running depmod -a ${KVER} ..."
+    depmod -a "${KVER}" || die "depmod failed for ${KVER}."
+
+    if [ "${AMDGPU_REBUILD_INITRD}" = "true" ]; then
+        if command -v dracut >/dev/null 2>&1; then
+            log "Rebuilding initrd for ${KVER} (dracut) ..."
+            dracut -f "/boot/initrd-${KVER}" "${KVER}"
+            ln -sf "initrd-${KVER}" /boot/initrd
+        elif command -v update-initramfs >/dev/null 2>&1; then
+            log "Rebuilding initramfs for ${KVER} (update-initramfs) ..."
+            update-initramfs -u -k "${KVER}"
+        else
+            warn "no dracut or update-initramfs found; skipping initrd rebuild."
+        fi
+    fi
+
+    # Marker written by the prebuild is preserved from the tar. Overwrite
+    # any prebuild-mode marker with the final in-image reality.
+    printf 'AMDGPU_DRIVER_SOURCE=dkms (artifact)\nAMDGPU_DRIVER_RELEASE=%s\nKVER=%s\n' \
+        "${AMDGPU_DRIVER_RELEASE}" "${KVER}" > /etc/canvos/amdgpu-driver-source
+
+    log "Done. AMD amdgpu driver (release ${AMDGPU_DRIVER_RELEASE}, artifact) baked in for kernel ${KVER}."
+    log "Reminder: install the AMD GPU Operator with 'driver.enable=false'."
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# DKMS MODE in-buildkit (fallback). Runs the full apt + DKMS build inside
+# the image. This path fails inside Earthly's buildkit RUN sandbox at AMD's
+# ./configure step (see docs) but is retained for:
+#   - direct `docker run --privileged` invocations (proven working),
+#   - the scripts/prebuild-amdgpu-artifact.sh helper, which uses this same
+#     script inside the container it spawns.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------

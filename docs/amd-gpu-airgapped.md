@@ -68,31 +68,42 @@ needed at boot**.
 ## The key build-time problem this solves (dkms mode)
 
 Inside the Earthly/Docker build, `uname -r` is the **builder host's** kernel, not
-the kernel baked into the image. In `dkms` mode the script therefore:
+the kernel baked into the image. In `dkms` mode the driver must be compiled
+against the image kernel's headers.
 
-1. derives the **target kernel** from `/lib/modules/*`,
-2. installs **ABI-exact kernel headers** for it (reusing
-   [`install-kernel-headers.sh`](../scripts/install-kernel-headers.sh)) plus
-   `linux-modules-extra-<kernel>`,
-3. registers the AMD driver apt repo via the release-matched `amdgpu-install`
-   package (auto-discovered from `repo.radeon.com/amdgpu-install/<release>/`),
-4. installs `amdgpu-dkms` and forces **DKMS build + install + `depmod`** against
-   the target kernel, and
-5. **verifies** an `amdgpu.ko` landed under
-   `/lib/modules/<image-kernel>/updates/dkms/` **and** that `dkms status`
-   reports the module as `installed` for that kernel — the in-tree module
-   shipped under `kernel/…` is *not* accepted. Failing either check aborts
-   the image build with a pointer at `AMDGPU_DRIVER_RELEASE` and the inbox
-   fallback.
+We ran into a second problem too: Earthly's buildkit `RUN` sandbox breaks
+AMD's `amdgpu-dkms` `./configure` heredoc probe with
+`"cannot detect CFLAGS…"`, even though the same script + base image + host
+succeed under plain `docker run --privileged`. Rather than debug buildkit
+(some seccomp/apparmor/mount detail we don't control from the Earthfile),
+`dkms` mode uses a **two-stage build**:
 
-It runs in the `base-image` target **after** the kernel is finalized.
+1. **Prebuild on the host** (via `scripts/prebuild-amdgpu-artifact.sh`,
+   auto-invoked by `./earthly.sh`). Runs a plain `docker run --privileged`
+   against the same kairos base image, executes the DKMS install inside,
+   tars the resulting `/lib/modules/<kver>/updates/dkms/` + firmware +
+   drop-ins into `build/amdgpu-artifact-<release>-<kver>-<digest>.tar.gz`.
+   Cached by (release × base-image digest × kver); ~8–10 min the first
+   time, instant on cache hit.
+2. **Consume in Earthly**: the `base-image` target `COPY`s the tarball and
+   extracts it, runs `depmod` against the image kernel, and rebuilds the
+   initrd. No `./configure`, no compile inside buildkit.
+
+Both stages use the same `scripts/install-amdgpu-drivers.sh` — the in-buildkit
+step just takes the `AMDGPU_ARTIFACT_PATH` fast path. The result on-node is
+identical to a native DKMS install.
+
+`inbox` mode skips both stages entirely and only ensures the in-tree amdgpu
+autoloads.
 
 > **No blacklist needed.** Unlike NVIDIA (where `nouveau` must be blacklisted),
 > the DKMS `amdgpu` module replaces the in-tree one via `depmod`'s `updates/`
 > override. The script just autoloads `amdgpu`.
 
-In `inbox` mode steps 2–5 are skipped entirely; the script only ensures
-`amdgpu` autoloads and rebuilds the initrd.
+> **When is the prebuild helper invoked?** `./earthly.sh` triggers it
+> automatically when `INSTALL_AMD_GPU_DRIVERS=true` and
+> `AMDGPU_DRIVER_SOURCE=dkms` (either from `.arg` or a CLI override). No
+> extra command needed. It's skipped for `inbox`, or for any non-AMD build.
 
 ---
 
