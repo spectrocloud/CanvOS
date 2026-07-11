@@ -138,14 +138,22 @@ docker run --rm --privileged \
         tar -czf - "${TAR_INPUTS[@]}"
     ' > "${STAGE_DIR}/artifact.tar.gz"
 
-# Sanity: tar file must be non-empty and contain the amdgpu module.
+# Move the artifact to its final path IMMEDIATELY so a subsequent verify
+# failure leaves a diagnosable file behind (STAGE_DIR is wiped by the trap).
 [ -s "${STAGE_DIR}/artifact.tar.gz" ] || die "prebuild produced an empty artifact."
-if ! tar -tzf "${STAGE_DIR}/artifact.tar.gz" | grep -q "updates/dkms/amdgpu.ko"; then
-    die "artifact does not contain an amdgpu module under updates/dkms/; \
-inspect ${STAGE_DIR}/artifact.tar.gz."
+mv "${STAGE_DIR}/artifact.tar.gz" "${ARTIFACT_PATH}"
+
+# Sanity: tar file must be a valid gzip and contain the amdgpu module.
+tar_listing="$(tar -tzf "${ARTIFACT_PATH}" 2>&1)" \
+    || die "artifact ${ARTIFACT_PATH} is not a valid gzipped tar. Head of output: $(printf '%s\n' "${tar_listing}" | head -3)"
+if ! printf '%s\n' "${tar_listing}" | grep -qE "updates/dkms/.*amdgpu\.ko"; then
+    log "Artifact contents (first 40 entries):"
+    printf '%s\n' "${tar_listing}" | head -40 | sed 's/^/    /' >&2
+    die "artifact ${ARTIFACT_PATH} does not contain an amdgpu module under updates/dkms/. \
+The tarball is preserved for inspection. Delete it and rerun with \
+AMDGPU_FORCE_REBUILD=1 to try again."
 fi
 
-mv "${STAGE_DIR}/artifact.tar.gz" "${ARTIFACT_PATH}"
 log "Artifact produced ($(du -h "${ARTIFACT_PATH}" | awk '{print $1}'))."
 
 # --- output ---------------------------------------------------------------
