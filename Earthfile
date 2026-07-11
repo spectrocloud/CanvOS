@@ -853,7 +853,17 @@ base-image:
         IF [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
             COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
             COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
-            RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
+            # --privileged is required for AMD's amdgpu-dkms ./configure step:
+            # its "detect CFLAGS" probe invokes Kbuild in a way that fails in
+            # buildkit's default unprivileged sandbox with
+            #   "configure: error: cannot detect CFLAGS..."
+            #   "make: *** No rule to make target 'amd/dkms/config/config.h'"
+            # Reproduced against the plain `docker run --privileged` baseline
+            # succeeding on the same host with the same script + base image.
+            # Caller must pass --allow-privileged to earthly (already required
+            # by other steps in this repo).
+            RUN --privileged \
+                chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
                 AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
                 AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
                 AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
