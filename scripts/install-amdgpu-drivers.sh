@@ -156,10 +156,23 @@ fi
 # ---------------------------------------------------------------------------
 log "Installing build toolchain ..."
 apt-get update || true
+# The full Kbuild bootstrap: gcc/make/libc from build-essential PLUS the
+# tools that recent kernel Makefiles pull in unconditionally. Missing any of
+# these fails AMD's amdgpu-dkms ./configure at "cannot detect CFLAGS..." --
+# the failure mode is silent because CFLAGS-detection just runs `make -f -`
+# and swallows stderr. We enumerate them explicitly instead of relying on
+# --install-recommends (which would also pull other unwanted docs/data).
+#   bc, bison, flex   : referenced by kernel Kbuild machinery
+#   libelf-dev        : module utilities (modpost) + BPF
+#   libssl-dev        : signing certificates / hash routines
+#   dwarves           : pahole for BTF debuginfo (amdgpu-dkms explicitly Recommends this)
+#   cpio, xz-utils    : initramfs assembly (may be needed by initramfs-tools trigger)
 apt-get install -y --no-install-recommends \
     ca-certificates curl wget gnupg \
     build-essential gcc make \
     dkms kmod libc6-dev initramfs-tools \
+    bc bison flex libelf-dev libssl-dev dwarves \
+    cpio xz-utils \
     || die "failed to install build toolchain."
 
 # ---------------------------------------------------------------------------
