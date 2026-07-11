@@ -384,9 +384,19 @@ if [ "$INSTALL_AMD_GPU_DRIVERS_EFFECTIVE" = "true" ] && [ "$AMDGPU_DRIVER_SOURCE
     [ -s "$AMDGPU_ARTIFACT_PATH" ] || { echo "Prebuild did not emit AMDGPU_ARTIFACT_PATH; aborting." >&2; exit 1; }
     echo "    Artifact: $AMDGPU_ARTIFACT_PATH"
 
-    # Thread the artifact path through to Earthly. Its Earthfile ARG (added in
-    # the companion commit) picks this up and consumes the tarball.
-    set -- "$@" "--AMDGPU_ARTIFACT_PATH=$AMDGPU_ARTIFACT_PATH"
+    # Earthly's COPY reads from the repo build-context (the directory containing
+    # the Earthfile), not from the host filesystem, so we must pass a path
+    # relative to the repo root -- not the absolute host path.
+    repo_root="$(pwd)"
+    case "$AMDGPU_ARTIFACT_PATH" in
+        "$repo_root"/*) AMDGPU_ARTIFACT_REL="${AMDGPU_ARTIFACT_PATH#$repo_root/}" ;;
+        *) echo "Prebuild artifact '$AMDGPU_ARTIFACT_PATH' is outside repo root '$repo_root'; \
+COPY into Earthly would fail. Move the artifact under the repo tree." >&2 ; exit 1 ;;
+    esac
+
+    # Thread the (repo-relative) artifact path through to Earthly. Its Earthfile
+    # ARG (added in the companion commit) picks this up and consumes the tarball.
+    set -- "$@" "--AMDGPU_ARTIFACT_PATH=$AMDGPU_ARTIFACT_REL"
 fi
 
 # Normal build flow for other targets
