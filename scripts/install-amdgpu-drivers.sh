@@ -218,6 +218,31 @@ rm -f /tmp/amdgpu-install.deb
 apt-get update || warn "apt-get update after adding the AMD repo failed."
 
 # ---------------------------------------------------------------------------
+# 4b. Disable DKMS module signing before installing amdgpu-dkms.
+#
+# amdgpu-dkms (>= 6.18 range, and observed on 31.x releases) invokes mokutil
+# from the DKMS sign_tool hook to enroll a Machine Owner Key, which reads
+# /sys/firmware/efi/efivars. Docker/Earthly build containers don't expose
+# efivars, so mokutil aborts with:
+#     "EFI variables are not supported on this system /
+#      /sys/firmware/efi/efivars not found, aborting."
+# and the amdgpu-dkms postinst returns non-zero. Empty sign_tool tells DKMS
+# to skip signing entirely, sidestepping the mokutil invocation.
+#
+# CAVEAT: modules produced this way are unsigned -- consistent with the
+# Secure Boot / UKI limitation already documented in docs/amd-gpu-airgapped.md.
+# ---------------------------------------------------------------------------
+log "Disabling DKMS module signing (container has no UEFI efivars) ..."
+mkdir -p /etc/dkms/framework.conf.d
+cat > /etc/dkms/framework.conf.d/canvos-no-mok-signing.conf <<'EOF'
+# Managed by CanvOS install-amdgpu-drivers.sh
+# Empty sign_tool tells DKMS to skip module signing. Required for building
+# amdgpu-dkms inside container image builds where /sys/firmware/efi/efivars
+# is not available. Modules are unsigned; this path does not support Secure Boot.
+sign_tool=""
+EOF
+
+# ---------------------------------------------------------------------------
 # 5. Install the kernel-mode driver (amdgpu-dkms + firmware).
 #    Any apt/postinst failure surfaces here -- DO NOT swallow errors; a broken
 #    DKMS build must fail the image build so the user can fix AMDGPU_DRIVER_RELEASE
@@ -229,8 +254,10 @@ if ! apt-get install -y --no-install-recommends amdgpu-dkms amdgpu-dkms-firmware
 kernel ${KVER}. Inspect /var/lib/dkms/amdgpu/*/build/make.log inside the failed \
 build layer. Common causes: (1) the AMD driver source in this release does not \
 support this kernel -- bump AMDGPU_DRIVER_RELEASE to a newer marker (see \
-docs/amd-gpu-airgapped.md); (2) linux-headers-${KVER} not installed. \
-As a workaround, rerun with AMDGPU_DRIVER_SOURCE=inbox to use the in-tree amdgpu."
+docs/amd-gpu-airgapped.md); (2) linux-headers-${KVER} not installed; \
+(3) DKMS module signing failed reaching /sys/firmware/efi/efivars -- normally \
+handled by the sign_tool='' drop-in above; check it exists and is readable. \
+Workaround: rerun with AMDGPU_DRIVER_SOURCE=inbox to use the in-tree amdgpu."
 fi
 
 # ---------------------------------------------------------------------------
