@@ -46,9 +46,19 @@ FORCE_INTERACTIVE_INSTALL=false
 # NVIDIA_REBUILD_INITRD=true                # Rebuild initrd so the nouveau blacklist applies at early boot
 
 # AMD Instinct GPU driver pre-install (for running the AMD GPU Operator in air-gapped
-# environments with driver.enable=false). Bakes the amdgpu-dkms kernel driver into the
-# Ubuntu base image so GPU nodes need no host-side network. Mutually exclusive with the
-# NVIDIA options above. See scripts/install-amdgpu-drivers.sh for details.
+# environments with driver.enable=false). Mutually exclusive with the NVIDIA options
+# above. See scripts/install-amdgpu-drivers.sh and docs/amd-gpu-airgapped.md for details.
 # INSTALL_AMD_GPU_DRIVERS=true
-# AMDGPU_ROCM_VERSION=7.2.4                  # ROCm/driver release; must match your bundled operator images (see repo.radeon.com/amdgpu-install/)
+# AMDGPU_DRIVER_SOURCE=dkms                  # dkms | inbox. "dkms" bakes AMD's amdgpu-dkms
+#                                            #   built against the image kernel (recommended
+#                                            #   for Instinct/MI silicon). "inbox" uses the
+#                                            #   in-tree amdgpu module from linux-modules-*
+#                                            #   and skips the AMD apt repo entirely — use
+#                                            #   when the DKMS build fails against your image
+#                                            #   kernel (see docs).
+# AMDGPU_DRIVER_RELEASE=31.30                # Only used with dkms mode. amdgpu-install
+#                                            #   release marker (URL segment under
+#                                            #   repo.radeon.com/amdgpu-install/<x>/, e.g.
+#                                            #   31.30, 31.10, 30.30.4). See the version-
+#                                            #   pick table in docs/amd-gpu-airgapped.md.
 # AMDGPU_REBUILD_INITRD=true                 # Rebuild initrd for the image kernel

@@ -75,10 +75,17 @@ ARG NVIDIA_INSTALL_CONTAINER_TOOLKIT=false
 ARG NVIDIA_REBUILD_INITRD=true
 
 # AMD Instinct GPU driver pre-install (for air-gapped AMD GPU Operator with
-# driver.enable=false). When true, the amdgpu-dkms kernel driver is baked into
-# the Ubuntu base image so GPU nodes need no host-side network at boot.
+# driver.enable=false). See scripts/install-amdgpu-drivers.sh + docs/amd-gpu-airgapped.md.
 ARG INSTALL_AMD_GPU_DRIVERS=false
-ARG AMDGPU_ROCM_VERSION=7.2.4
+# dkms | inbox. "dkms" builds AMD's amdgpu-dkms against the image kernel (default,
+# recommended for Instinct silicon). "inbox" uses the in-tree amdgpu module shipped
+# with linux-modules-* and skips the AMD apt repo — use only when the DKMS build
+# fails against your image kernel and you accept the in-tree driver's feature set.
+ARG AMDGPU_DRIVER_SOURCE=dkms
+# amdgpu-install release marker (URL segment under repo.radeon.com/amdgpu-install/<x>/).
+# Default 31.30 ships amdgpu-dkms 6.19.4, which builds against Linux kernels through
+# 6.17 (Ubuntu 22.04 & 24.04 HWE range). See docs/amd-gpu-airgapped.md for the mapping.
+ARG AMDGPU_DRIVER_RELEASE=31.30
 ARG AMDGPU_REBUILD_INITRD=true
 
 # NVIDIA and AMD driver pre-install are mutually exclusive within a single image.
@@ -844,7 +851,8 @@ base-image:
             COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
             COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
             RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
-                AMDGPU_ROCM_VERSION="$AMDGPU_ROCM_VERSION" \
+                AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
+                AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
                 AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
                 /tmp/install-amdgpu-drivers.sh && \
                 rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
