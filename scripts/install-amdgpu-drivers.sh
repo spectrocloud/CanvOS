@@ -255,14 +255,30 @@ EOF
 # ---------------------------------------------------------------------------
 log "Installing amdgpu-dkms + amdgpu-dkms-firmware ..."
 if ! apt-get install -y --no-install-recommends amdgpu-dkms amdgpu-dkms-firmware; then
+    # apt/postinst failure -- dump the DKMS build artifacts so root-causing
+    # doesn't require an interactive session (Earthly's -i tty is often broken).
+    log "apt install failed. Dumping DKMS build artifacts for diagnosis:"
+    log "--- dkms status ---"
+    dkms status 2>&1 | sed 's/^/    /' || true
+    for f in /var/lib/dkms/amdgpu/*/build/make.log; do
+        [ -r "$f" ] || continue
+        log "--- ${f} (tail -150) ---"
+        tail -n 150 "$f" | sed 's/^/    /' || true
+    done
+    log "--- environment probes ---"
+    log "    kernel: $(uname -r); target KVER: ${KVER}"
+    log "    linux-headers pkg: $(dpkg -l "linux-headers-${KVER}" 2>/dev/null | awk '/^ii/{print $2, $3}')"
+    log "    /lib/modules/${KVER}/build: $(readlink -f "/lib/modules/${KVER}/build" 2>/dev/null || echo MISSING)"
+    log "    /usr/src/linux-headers-${KVER}/Module.symvers: $(test -s "/usr/src/linux-headers-${KVER}/Module.symvers" && echo present || echo missing/empty)"
+    log "    sign_tool drop-in: $(test -r /etc/dkms/framework.conf.d/canvos-no-mok-signing.conf && grep -E '^sign_tool' /etc/dkms/framework.conf.d/canvos-no-mok-signing.conf || echo MISSING)"
+    log "    memory: $(awk '/MemAvailable/{print $2/1024" MiB avail"}' /proc/meminfo)"
     die "failed to install amdgpu-dkms (release '${AMDGPU_DRIVER_RELEASE}') for \
-kernel ${KVER}. Inspect /var/lib/dkms/amdgpu/*/build/make.log inside the failed \
-build layer. Common causes: (1) the AMD driver source in this release does not \
-support this kernel -- bump AMDGPU_DRIVER_RELEASE to a newer marker (see \
-docs/amd-gpu-airgapped.md); (2) linux-headers-${KVER} not installed; \
-(3) DKMS module signing failed reaching /sys/firmware/efi/efivars -- normally \
-handled by the sign_tool='' drop-in above; check it exists and is readable. \
-Workaround: rerun with AMDGPU_DRIVER_SOURCE=inbox to use the in-tree amdgpu."
+kernel ${KVER}. See make.log tail above. Common causes: (1) the AMD driver source \
+in this release does not support this kernel -- bump AMDGPU_DRIVER_RELEASE (see \
+docs/amd-gpu-airgapped.md); (2) linux-headers-${KVER} not installed / Module.symvers \
+empty; (3) DKMS module signing failed reaching /sys/firmware/efi/efivars -- normally \
+handled by the sign_tool='' drop-in above. Workaround: rerun with \
+AMDGPU_DRIVER_SOURCE=inbox to use the in-tree amdgpu."
 fi
 
 # ---------------------------------------------------------------------------
