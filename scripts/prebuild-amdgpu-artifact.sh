@@ -111,8 +111,9 @@ docker run --rm --privileged \
     "${BASE_IMAGE}" \
     -c '
         set -eo pipefail
-        chmod +x /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
-        /tmp/install-amdgpu-drivers.sh 1>&2
+        # Scripts are bind-mounted read-only from the host; invoke via `bash`
+        # so we don t need chmod +x (which would fail on the RO mount).
+        bash /tmp/install-amdgpu-drivers.sh 1>&2
 
         # Verify the module actually landed.
         MODDIR="/lib/modules/${KVER_EXPECTED}/updates/dkms"
