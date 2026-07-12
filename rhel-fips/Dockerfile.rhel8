@@ -3,9 +3,6 @@
 FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 FROM registry.access.redhat.com/ubi8/ubi-init:8.7-10 AS base
 
-ARG USERNAME
-ARG PASSWORD
-
 # Generate os-release file
 ARG KAIROS_VERSION=v4.0.4
 
@@ -15,13 +12,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm' || \
     dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm'
 
-# Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
-RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
+# Register with Red Hat, enable the appstream repo, install packages.
+# Uses BuildKit secrets (docker build --secret id=rhsm_username,src=... --secret id=rhsm_password,src=...)
+# so credentials are mounted only for the lifetime of this RUN and never enter image layers.
+# Mirrors the pattern in rhel-stig/Dockerfile.rhel9.
+RUN --mount=type=secret,id=rhsm_username \
+    --mount=type=secret,id=rhsm_password \
+    sh -c 'rm /etc/rhsm-host && subscription-manager register --username "$(cat /run/secrets/rhsm_username)" --password "$(cat /run/secrets/rhsm_password)" \
     && yum repolist \
     && subscription-manager attach --auto \
     && subscription-manager repos --enable rhel-8-for-x86_64-appstream-rpms \
     && yum repolist \
-    && dnf clean all
+    && dnf clean all'
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel8/ /
@@ -121,3 +123,8 @@ RUN rm -rf /boot/initramfs-*
 COPY overlay/rhel8/ /
 
 RUN if [ ! -f /boot/efi/EFI/redhat/shim.efi ]; then cp /boot/efi/EFI/redhat/shimx64.efi /boot/efi/EFI/redhat/shim.efi; fi
+
+# Detach the subscription so the built image is not tied to the builder's RHSM
+# account. Clean up entitlement/consumer state that would otherwise persist.
+RUN subscription-manager unregister || true \
+ && rm -rf /etc/pki/entitlement/* /var/lib/rhsm/consumer/* /var/lib/rhsm/facts/* /var/lib/rhsm/repo_server_val/* 2>/dev/null || true
