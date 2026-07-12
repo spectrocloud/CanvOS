@@ -20,15 +20,17 @@ if [ "$MATRIX_OS" = "ubuntu" ]; then
     os_version="${MATRIX_VERSION%%.*}"
 fi
 
-earthly --ci -P \
+# Earthly syntax: `earthly [OPTIONS] +TARGET [--BUILD_ARG=VALUE ...]`
+# Build args go AFTER the target; before, they're parsed as global options
+# and earthly prints help + exits 1 on the unknown flag.
+earthly --ci -P +iso \
     "--PE_VERSION=$PE_VERSION" \
     "--OS_DISTRIBUTION=$MATRIX_OS" \
     "--OS_VERSION=$os_version" \
     "--K8S_DISTRIBUTION=$K8S_DISTRIBUTION" \
     "--ARCH=$ARCH" \
     "--IS_UKI=${MATRIX_UKI:-false}" \
-    "--FIPS_ENABLED=${MATRIX_FIPS:-false}" \
-    "+iso"
+    "--FIPS_ENABLED=${MATRIX_FIPS:-false}"
 
 mkdir -p build
 [ -d ./build ] && ls -la ./build || true
