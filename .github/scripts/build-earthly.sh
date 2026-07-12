@@ -20,7 +20,7 @@ if [ "$MATRIX_OS" = "ubuntu" ]; then
     os_version="${MATRIX_VERSION%%.*}"
 fi
 
-./earthly --ci -P \
+earthly --ci -P \
     "--PE_VERSION=$PE_VERSION" \
     "--OS_DISTRIBUTION=$MATRIX_OS" \
     "--OS_VERSION=$os_version" \
