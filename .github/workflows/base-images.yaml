@@ -2,152 +2,54 @@ name: Build Kairos Init Base Images
 
 # Unified base-image build.
 #
-# One workflow_dispatch that fans out to every OS/variant the release needs:
-#   - Ubuntu 20.04 / 22.04 / 24.04 (standard, trusted-boot, FIPS)
-#   - OpenSUSE Leap (standard, trusted-boot)
-#   - RHEL 8 / 9 (standard, FIPS)  -- via RHSM or Satellite
-#   - SLE Micro (SLEM)             -- requires a self-hosted SLEM runner; see slem/README.md
+# By default this builds every OS the release ships:
+#   - Ubuntu 20.04, 22.04    (standard)
+#   - OpenSUSE Leap 15.6     (standard)
+#   - RHEL 8, RHEL 9         (standard — needs RHSM creds; skipped if blank)
+#   - SLE Micro 5.4          (needs SUSE reg code; skipped if blank)
 #
-# Rules:
-#   - Any variant checkbox left off  -> that variant is not in the matrix at all.
-#   - Any credential input left blank -> the family that needs it is skipped
-#     (with an explicit error if the user asked for that family).
-#   - Credentials are masked on first read (::add-mask::), written to files
-#     with umask 077, and passed to docker/earthly via BuildKit --secret.
-#     They never enter $GITHUB_ENV, never appear in a `run:` line, and are
-#     shredded in an if: always() cleanup step.
+# Two checkboxes expand the set:
+#   - trusted_boot → adds UKI variants for Ubuntu + OpenSUSE
+#   - fips         → adds Ubuntu FIPS (20/22/24) and RHEL 8/9 FIPS
+#
+# Credentials are masked on first read (::add-mask::), written to files
+# with umask 077, and passed to docker/earthly via BuildKit --secret.
+# They never enter $GITHUB_ENV, never appear in a `run:` line, and are
+# shredded in an if: always() cleanup step.
 
 on:
   workflow_dispatch:
     inputs:
-
-      # ── Release tagging ────────────────────────────────────────────────
       pe_version:
         description: 'PE version (e.g. v4.9.21). Used for image tags.'
         required: true
         default: 'v4.9.21'
-      kairos_version:
-        description: 'Kairos version override (blank -> Earthfile default)'
-        required: false
-      custom_tag:
-        description: 'Suffix appended to IMAGE_TAG (optional)'
-        required: false
-      image_registry:
-        description: 'Destination registry (blank -> artifacts only, no push)'
-        required: false
-      arch:
-        description: 'Target architecture'
-        required: true
-        default: 'amd64'
-        type: choice
-        options: [amd64, arm64]
 
-      # ── Which OS families to build ────────────────────────────────────
-      build_ubuntu:
-        description: 'Build Ubuntu images'
-        type: boolean
-        default: true
-      build_opensuse:
-        description: 'Build OpenSUSE Leap images'
-        type: boolean
-        default: true
-      build_rhel8:
-        description: 'Build RHEL 8 images (needs RHSM or Satellite creds)'
-        type: boolean
-        default: false
-      build_rhel9:
-        description: 'Build RHEL 9 images (needs RHSM or Satellite creds)'
-        type: boolean
-        default: false
-      build_slem:
-        description: 'Build SLE Micro images (needs self-hosted SLEM runner)'
+      trusted_boot:
+        description: 'Also build Trusted Boot (UKI) variants — Ubuntu + OpenSUSE.'
         type: boolean
         default: false
 
-      # ── Ubuntu version selection ──────────────────────────────────────
-      ubuntu_versions:
-        description: 'Comma-separated Ubuntu versions: 20.04,22.04,24.04'
-        required: false
-        default: '22.04,24.04'
-
-      # ── Variant checkboxes (apply to every selected OS that supports them) ──
-      variant_standard:
-        description: 'Build standard (non-FIPS, non-TB) variants'
-        type: boolean
-        default: true
-      variant_trusted_boot:
-        description: 'Build Trusted Boot (UKI) variants — Ubuntu + OpenSUSE only'
-        type: boolean
-        default: false
-      variant_fips:
-        description: 'Build FIPS variants — RHEL-FIPS + Ubuntu-FIPS. Needs creds.'
+      fips:
+        description: 'Also build FIPS variants — Ubuntu FIPS + RHEL FIPS.'
         type: boolean
         default: false
 
-      # ── RHEL subscription: RHSM path ──────────────────────────────────
       rhel_subscription_username:
-        description: 'RHSM username (leave blank if using Satellite)'
+        description: 'RHSM username (leave blank to skip RHEL builds).'
         required: false
+
       rhel_subscription_password:
-        description: 'RHSM password (leave blank if using Satellite) — MASKED on read'
+        description: 'RHSM password (leave blank to skip RHEL builds) — masked.'
         required: false
 
-      # ── RHEL subscription: Satellite path (alternative to RHSM) ──────
-      rhel_satellite_hostname:
-        description: 'Satellite hostname (e.g. katello.example.com)'
-        required: false
-      rhel_satellite_org:
-        description: 'Satellite organization'
-        required: false
-      rhel_satellite_key:
-        description: 'Satellite activation key — MASKED on read'
-        required: false
-      rhel_base_image:
-        description: 'Mirrored UBI base image (Satellite path only)'
-        required: false
-      rhel_kairos_framework_image:
-        description: 'Mirrored Kairos framework image (Satellite path only)'
-        required: false
-
-      # ── Ubuntu Pro (needed for Ubuntu FIPS) ───────────────────────────
       ubuntu_pro_token:
-        description: 'Ubuntu Pro token — required for Ubuntu FIPS. MASKED on read.'
+        description: 'Ubuntu Pro token — required when fips=true. Masked.'
         required: false
 
-      # ── Ubuntu FIPS extras ────────────────────────────────────────────
-      ubuntu_fips_enable_stig:
-        description: 'Ubuntu FIPS: run DISA STIG remediation (default: yes)'
-        type: boolean
-        default: true
-      ubuntu_fips_skip_stig_banner:
-        description: 'Ubuntu FIPS: keep stock Ubuntu banners instead of USG DoD banner'
-        type: boolean
-        default: false
-
-      # ── SUSE (SLEM) ───────────────────────────────────────────────────
       suse_registration_code:
-        description: 'SUSE registration code — required for SLEM. MASKED on read.'
+        description: 'SUSE registration code (leave blank to skip SLEM). Masked.'
         required: false
-
-      # ── Build-time toggles from Earthfile ─────────────────────────────
-      k8s_distribution:
-        description: 'Kubernetes distribution'
-        required: true
-        default: 'kubeadm'
-        type: choice
-        options: [kubeadm, kubeadm-fips, k3s, rke2, nodeadm, canonical]
-      cis_hardening:
-        description: 'Apply CIS hardening'
-        type: boolean
-        default: false
-      is_maas:
-        description: 'Build MAAS variant (Ubuntu only)'
-        type: boolean
-        default: false
-      update_kernel:
-        description: 'Update to HWE kernel (mutually exclusive with FIPS)'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -158,29 +60,20 @@ concurrency:
 
 jobs:
 
-  # ─────────────────────────────────────────────────────────────────────
-  # 1. Validate inputs, mask credentials, compute build matrix.
-  # No credentials survive this job — the build job re-reads them from
-  # inputs via env in a controlled way.
-  # ─────────────────────────────────────────────────────────────────────
   validate:
     name: Validate inputs and compute matrix
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
-      empty: ${{ steps.plan.outputs.empty }}
+      empty:  ${{ steps.plan.outputs.empty }}
     steps:
       - name: Mask credentials
         env:
-          RHSM_PASSWORD: ${{ inputs.rhel_subscription_password }}
-          SATELLITE_KEY: ${{ inputs.rhel_satellite_key }}
+          RHSM_PASSWORD:    ${{ inputs.rhel_subscription_password }}
           UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
-          SUSE_REG_CODE: ${{ inputs.suse_registration_code }}
+          SUSE_REG_CODE:    ${{ inputs.suse_registration_code }}
         run: |
-          # ::add-mask:: replaces the given value with *** in all subsequent
-          # log lines. Do this before any other step touches these values.
-          # Empty values are silently ignored by add-mask.
-          for v in "$RHSM_PASSWORD" "$SATELLITE_KEY" "$UBUNTU_PRO_TOKEN" "$SUSE_REG_CODE"; do
+          for v in "$RHSM_PASSWORD" "$UBUNTU_PRO_TOKEN" "$SUSE_REG_CODE"; do
             [ -n "$v" ] && echo "::add-mask::$v"
           done
           echo "Credentials masked (empty values skipped)."
@@ -190,32 +83,14 @@ jobs:
       - name: Plan matrix
         id: plan
         env:
-          IN_BUILD_UBUNTU:   ${{ inputs.build_ubuntu }}
-          IN_BUILD_OPENSUSE: ${{ inputs.build_opensuse }}
-          IN_BUILD_RHEL8:    ${{ inputs.build_rhel8 }}
-          IN_BUILD_RHEL9:    ${{ inputs.build_rhel9 }}
-          IN_BUILD_SLEM:     ${{ inputs.build_slem }}
-          IN_UBUNTU_VERSIONS: ${{ inputs.ubuntu_versions }}
-          IN_VARIANT_STANDARD:     ${{ inputs.variant_standard }}
-          IN_VARIANT_TRUSTED_BOOT: ${{ inputs.variant_trusted_boot }}
-          IN_VARIANT_FIPS:         ${{ inputs.variant_fips }}
-          IN_UPDATE_KERNEL: ${{ inputs.update_kernel }}
-          IN_ARCH:          ${{ inputs.arch }}
-          # For "has creds?" checks. We do NOT need the actual value here — just
-          # whether it is non-empty. But env-substitution still lands the raw
-          # value in the runner, so the mask step above is what protects logs.
-          HAS_RHSM_USER: ${{ inputs.rhel_subscription_username != '' }}
-          HAS_RHSM_PASS: ${{ inputs.rhel_subscription_password != '' }}
-          HAS_SAT_HOST:  ${{ inputs.rhel_satellite_hostname != '' }}
-          HAS_SAT_ORG:   ${{ inputs.rhel_satellite_org != '' }}
-          HAS_SAT_KEY:   ${{ inputs.rhel_satellite_key != '' }}
-          HAS_UBUNTU_PRO: ${{ inputs.ubuntu_pro_token != '' }}
-          HAS_SUSE_REG:   ${{ inputs.suse_registration_code != '' }}
+          IN_TRUSTED_BOOT: ${{ inputs.trusted_boot }}
+          IN_FIPS:         ${{ inputs.fips }}
+          HAS_RHSM_USER:   ${{ inputs.rhel_subscription_username != '' }}
+          HAS_RHSM_PASS:   ${{ inputs.rhel_subscription_password != '' }}
+          HAS_UBUNTU_PRO:  ${{ inputs.ubuntu_pro_token != '' }}
+          HAS_SUSE_REG:    ${{ inputs.suse_registration_code != '' }}
         run: bash .github/scripts/build_matrix.sh
 
-  # ─────────────────────────────────────────────────────────────────────
-  # 2. Build fan-out. One matrix row per (family × os × version × variant).
-  # ─────────────────────────────────────────────────────────────────────
   build:
     name: Build ${{ matrix.family }} · ${{ matrix.os }} ${{ matrix.version }} · ${{ matrix.variant }}
     needs: validate
@@ -232,27 +107,17 @@ jobs:
       MATRIX_VARIANT: ${{ matrix.variant }}
       MATRIX_UKI:     ${{ matrix.uki }}
       MATRIX_FIPS:    ${{ matrix.fips }}
-      MATRIX_SUBSCRIPTION: ${{ matrix.subscription }}
       PE_VERSION:     ${{ inputs.pe_version }}
-      KAIROS_VERSION: ${{ inputs.kairos_version }}
-      CUSTOM_TAG:     ${{ inputs.custom_tag }}
-      IMAGE_REGISTRY: ${{ inputs.image_registry }}
-      ARCH:           ${{ inputs.arch }}
-      K8S_DISTRIBUTION: ${{ inputs.k8s_distribution }}
-      CIS_HARDENING:  ${{ inputs.cis_hardening }}
-      IS_MAAS:        ${{ inputs.is_maas }}
-      UPDATE_KERNEL:  ${{ inputs.update_kernel }}
-      UBUNTU_FIPS_ENABLE_STIG:      ${{ inputs.ubuntu_fips_enable_stig }}
-      UBUNTU_FIPS_SKIP_STIG_BANNER: ${{ inputs.ubuntu_fips_skip_stig_banner }}
+      ARCH:           amd64
+      K8S_DISTRIBUTION: kubeadm
     steps:
       - name: Re-mask credentials
         env:
-          RHSM_PASSWORD: ${{ inputs.rhel_subscription_password }}
-          SATELLITE_KEY: ${{ inputs.rhel_satellite_key }}
+          RHSM_PASSWORD:    ${{ inputs.rhel_subscription_password }}
           UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
-          SUSE_REG_CODE: ${{ inputs.suse_registration_code }}
+          SUSE_REG_CODE:    ${{ inputs.suse_registration_code }}
         run: |
-          for v in "$RHSM_PASSWORD" "$SATELLITE_KEY" "$UBUNTU_PRO_TOKEN" "$SUSE_REG_CODE"; do
+          for v in "$RHSM_PASSWORD" "$UBUNTU_PRO_TOKEN" "$SUSE_REG_CODE"; do
             [ -n "$v" ] && echo "::add-mask::$v"
           done
 
@@ -267,15 +132,9 @@ jobs:
           version: v0.8.15
 
       - name: Materialize credentials
-        id: creds
         env:
-          RHSM_USER: ${{ inputs.rhel_subscription_username }}
-          RHSM_PASS: ${{ inputs.rhel_subscription_password }}
-          SAT_HOST: ${{ inputs.rhel_satellite_hostname }}
-          SAT_ORG:  ${{ inputs.rhel_satellite_org }}
-          SAT_KEY:  ${{ inputs.rhel_satellite_key }}
-          SAT_BASE: ${{ inputs.rhel_base_image }}
-          SAT_KFI:  ${{ inputs.rhel_kairos_framework_image }}
+          RHSM_USER:        ${{ inputs.rhel_subscription_username }}
+          RHSM_PASS:        ${{ inputs.rhel_subscription_password }}
           UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
           SUSE_REG_CODE:    ${{ inputs.suse_registration_code }}
         run: bash .github/scripts/materialize_credentials.sh
@@ -291,8 +150,6 @@ jobs:
               find "$CREDS_DIR" -type f -delete
             rmdir "$CREDS_DIR" 2>/dev/null || true
           fi
-          # Kill any container that survived the build so registration state
-          # cannot leak to another job on the same runner.
           if command -v docker >/dev/null 2>&1; then
             docker ps -q --filter "label=canvos.build=${MATRIX_OS}-${MATRIX_VERSION}" \
               | xargs -r docker rm -f || true
@@ -302,7 +159,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-${{ matrix.version }}-${{ matrix.variant }}-${{ inputs.arch }}
+          name: ${{ matrix.os }}-${{ matrix.version }}-${{ matrix.variant }}
           path: build/**
           if-no-files-found: warn
           retention-days: 14

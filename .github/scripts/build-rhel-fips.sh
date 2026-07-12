@@ -2,10 +2,9 @@
 #
 # build-rhel-fips.sh — RHEL 8/9 FIPS build.
 #
-# Uses rhel-fips/Dockerfile.rhel{8,9}. Same credential concern as
-# build-rhel-core.sh: the Dockerfile must have been ported to BuildKit
-# --mount=type=secret before this script can run. The port is a separate
-# commit on this branch.
+# Same credential concern as build-rhel-core.sh: the Dockerfile must be
+# ported from ARG USERNAME/PASSWORD to BuildKit --mount=type=secret
+# before this script can run.
 
 set -euo pipefail
 
@@ -13,7 +12,7 @@ set -euo pipefail
 : "${CREDS_DIR:?}"
 : "${PE_VERSION:?}"
 
-image_tag="${IMAGE_REGISTRY:+$IMAGE_REGISTRY/}rhel${MATRIX_VERSION}-byoi-fips:${PE_VERSION}${CUSTOM_TAG:+-$CUSTOM_TAG}"
+image_tag="rhel${MATRIX_VERSION}-byoi-fips:${PE_VERSION}"
 build_label="canvos.build=${MATRIX_OS}-${MATRIX_VERSION}"
 
 export DOCKER_BUILDKIT=1
@@ -40,7 +39,3 @@ docker build \
 
 mkdir -p build
 docker save "$image_tag" | gzip > "build/rhel${MATRIX_VERSION}-fips.tar.gz"
-
-if [ -n "${IMAGE_REGISTRY:-}" ]; then
-    docker push "$image_tag"
-fi
