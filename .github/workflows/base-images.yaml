@@ -73,8 +73,10 @@ jobs:
           UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu_pro_token }}
           SUSE_REG_CODE:    ${{ inputs.suse_registration_code }}
         run: |
+          # `if` (not `[ ... ] && cmd`) so the loop's last exit code is 0
+          # under GitHub's `bash -e` even when every credential is empty.
           for v in "$RHSM_PASSWORD" "$UBUNTU_PRO_TOKEN" "$SUSE_REG_CODE"; do
-            [ -n "$v" ] && echo "::add-mask::$v"
+            if [ -n "$v" ]; then echo "::add-mask::$v"; fi
           done
           echo "Credentials masked (empty values skipped)."
 
@@ -118,7 +120,7 @@ jobs:
           SUSE_REG_CODE:    ${{ inputs.suse_registration_code }}
         run: |
           for v in "$RHSM_PASSWORD" "$UBUNTU_PRO_TOKEN" "$SUSE_REG_CODE"; do
-            [ -n "$v" ] && echo "::add-mask::$v"
+            if [ -n "$v" ]; then echo "::add-mask::$v"; fi
           done
 
       - uses: actions/checkout@v4
