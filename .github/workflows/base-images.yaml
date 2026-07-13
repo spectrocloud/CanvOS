@@ -1,10 +1,27 @@
 name: Build Kairos Init Base Images
 
+# Unified base-image build.
+#
+# Preserves the existing kairos-init workflow (kairosify on Ubuntu, OpenSUSE,
+# SLEM; Trusted Boot for Ubuntu 24) and adds two extensions gated on user
+# input:
+#
+#   fips=true + rhel_subscription_*   → build RHEL 8/9 FIPS base images
+#              + no fips              → also build RHEL 8/9 non-FIPS
+#   fips=true + ubuntu_pro_token       → build Ubuntu 20.04/22.04 FIPS
+#
+# Blank credential input → that family is skipped with a warning. If fips is
+# checked but the required credential is empty → hard error before any
+# container starts.
+#
+# All families push to the same $registry_prefix on us-east1-docker.pkg.dev
+# using US_EAST_JSON_KEY_B64.
+
 on:
   workflow_dispatch:
     inputs:
       base_os_image:
-        description: "Base OS Image"
+        description: "Base OS Image (kairosify override; leave blank for the default set)"
         required: false
         type: string
         default: ""
@@ -32,17 +49,42 @@ on:
         type: string
         default: "v4.0.1"
       trusted_boot:
-        description: "Trusted Boot"
+        description: "Trusted Boot (kairosify: build the Ubuntu 24.04 UKI variant)"
         required: false
         type: boolean
         default: false
+      fips:
+        description: "FIPS (build RHEL FIPS and Ubuntu FIPS variants — needs creds)"
+        required: false
+        type: boolean
+        default: false
+      rhel_subscription_username_encrypted:
+        description: "RHSM username — age-encrypted ciphertext (see scripts/encrypt-creds.sh; blank -> skip RHEL builds)"
+        required: false
+        type: string
+        default: ""
+      rhel_subscription_password_encrypted:
+        description: "RHSM password — age-encrypted ciphertext (blank -> skip RHEL builds)"
+        required: false
+        type: string
+        default: ""
+      ubuntu_pro_token_encrypted:
+        description: "Ubuntu Pro token — age-encrypted ciphertext (required when fips=true)"
+        required: false
+        type: string
+        default: ""
       registry_prefix:
         description: "Registry prefix for output images"
         required: false
         type: string
         default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8215/edge"
 
+permissions:
+  contents: read
+
 jobs:
+
+  # ── Kairosify (Ubuntu / OpenSUSE / SLEM / TB) — unchanged from prior ───
   generate-matrix:
     runs-on: Luet-BigRunner
     outputs:
@@ -65,27 +107,17 @@ jobs:
           matrix = []
 
           if base_os_image:
-              # Custom base OS image
+              # base_os_image is an explicit "just build this one custom OS"
+              # override — stays exclusive of the default combinations.
               simple_name = base_os_image.split('/')[-1].replace(':', '-')
               tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{kairos_version}"
               if trusted_boot:
                   tag += "-uki"
-
-              matrix.append({
-                  "base_os": base_os_image,
-                  "tag": tag,
-              })
-
-          elif trusted_boot:
-              # UKI builds - only Ubuntu 24.04
-              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
-              matrix.append({
-                  "base_os": "ubuntu:24.04",
-                  "tag": tag,
-              })
-
+              matrix.append({"base_os": base_os_image, "tag": tag, "trusted_boot": trusted_boot})
           else:
-              # Standard builds - all combinations
+              # Standard builds — always run so a single dispatch produces
+              # the full release set. Standard rows are NEVER UKI, even when
+              # the trusted_boot checkbox is on.
               combinations = [
                   ("ubuntu:20.04", "kairos-ubuntu:20.04-core"),
                   ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
@@ -93,17 +125,19 @@ jobs:
                   ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core"),
                   ("registry.suse.com/suse/sle-micro-rancher/5.4:latest", "kairos-slem:5.4-core"),
               ]
-
               for base_os, tag_prefix in combinations:
                   tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
-                  matrix.append({
-                      "base_os": base_os,
-                      "tag": tag,
-                  })
+                  matrix.append({"base_os": base_os, "tag": tag, "trusted_boot": False})
+
+              # trusted_boot ADDS the Ubuntu 24.04 UKI variant on top of the
+              # standard set — not a replacement. Same additive semantics as
+              # the `fips` checkbox in the extensions job.
+              if trusted_boot:
+                  tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
+                  matrix.append({"base_os": "ubuntu:24.04", "tag": tag, "trusted_boot": True})
 
           matrix_json = json.dumps(matrix)
           print(f"Generated matrix: {matrix_json}")
-
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write(f"matrix={matrix_json}\n")
           EOF
@@ -136,7 +170,7 @@ jobs:
             kairosify.args.BASE_OS_IMAGE=${{ matrix.base_os }}
             kairosify.args.KAIROS_INIT_IMAGE=${{ github.event.inputs.kairos_init_image }}
             kairosify.args.KAIROS_VERSION=${{ github.event.inputs.kairos_version }}
-            kairosify.args.TRUSTED_BOOT=${{ github.event.inputs.trusted_boot }}
+            kairosify.args.TRUSTED_BOOT=${{ matrix.trusted_boot }}
             kairosify.args.MODEL=${{ github.event.inputs.model }}
             kairosify.tags=${{ matrix.tag }}
         env:
@@ -150,14 +184,183 @@ jobs:
       - name: Upload build results
         uses: actions/upload-artifact@v4
         with:
-          name: build-result-${{ strategy.job-index }}-${{ hashFiles('**/matrix.*') }}
+          name: build-result-kairosify-${{ strategy.job-index }}
           path: /tmp/results/built_tags.txt
 
-  collect-outputs:
-    needs: kairosify
+  # ── Extensions matrix (RHEL + Ubuntu FIPS) ─────────────────────────────
+  generate-extensions-matrix:
     runs-on: Luet-BigRunner
     outputs:
-      built_tags: ${{ steps.combine-tags.outputs.tags }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      empty:  ${{ steps.set-matrix.outputs.empty }}
+    steps:
+      # No plaintext to mask in this job — only ciphertexts flow through, which
+      # are useless without the private key (held as a repo secret and only
+      # decrypted inside the extensions job).
+
+      - name: Compute matrix
+        id: set-matrix
+        env:
+          REGISTRY_PREFIX: ${{ github.event.inputs.registry_prefix }}
+          ARCH:            ${{ github.event.inputs.arch }}
+          MODEL:           ${{ github.event.inputs.model }}
+          KAIROS_VERSION:  ${{ github.event.inputs.kairos_version }}
+          IN_FIPS:         ${{ github.event.inputs.fips }}
+          # HAS_* is a proxy: ciphertext non-empty ⇒ credential supplied.
+          HAS_RHSM_USER:   ${{ github.event.inputs.rhel_subscription_username_encrypted != '' }}
+          HAS_RHSM_PASS:   ${{ github.event.inputs.rhel_subscription_password_encrypted != '' }}
+          HAS_UBUNTU_PRO:  ${{ github.event.inputs.ubuntu_pro_token_encrypted != '' }}
+        run: |
+          python3 <<'PY'
+          import json, os, sys
+
+          def bool_(v): return str(v).lower() == "true"
+
+          registry = os.environ["REGISTRY_PREFIX"]
+          arch     = os.environ["ARCH"]
+          model    = os.environ["MODEL"]
+          kver     = os.environ["KAIROS_VERSION"]
+          fips     = bool_(os.environ["IN_FIPS"])
+          has_rhsm = bool_(os.environ["HAS_RHSM_USER"]) and bool_(os.environ["HAS_RHSM_PASS"])
+          has_pro  = bool_(os.environ["HAS_UBUNTU_PRO"])
+
+          if fips and not has_pro:
+              print("::error::fips=true but ubuntu_pro_token is empty — Ubuntu FIPS needs it.")
+              sys.exit(1)
+
+          rows = []
+          # RHEL 8/9 std — gated on RHSM
+          if has_rhsm:
+              for v in ("8", "9"):
+                  rows.append({
+                      "family":  "rhel-core",
+                      "version": v,
+                      "tag":     f"{registry}/kairos-rhel:{v}-core-{arch}-{model}-{kver}",
+                      "dockerfile":    f"rhel-core-images/Dockerfile.rhel{v}",
+                      "build_context": "rhel-core-images",
+                  })
+          else:
+              print("::warning::rhel_subscription_username/password blank — skipping RHEL 8/9 std.")
+
+          # RHEL 8/9 FIPS — gated on RHSM + fips checkbox
+          if fips:
+              if has_rhsm:
+                  for v in ("8", "9"):
+                      rows.append({
+                          "family":  "rhel-fips",
+                          "version": v,
+                          "tag":     f"{registry}/kairos-rhel:{v}-core-{arch}-{model}-{kver}-fips",
+                          "dockerfile":    f"rhel-fips/Dockerfile.rhel{v}",
+                          "build_context": "rhel-fips",
+                      })
+              else:
+                  print("::warning::fips=true but no RHSM creds — skipping RHEL 8/9 FIPS.")
+
+              # Ubuntu FIPS 20.04, 22.04 (24.04 not present on kairos-init branch).
+              # Build context = the version subdir (matches each version's own
+              # build.sh); the Dockerfile refers to fix.sh / modules.fips by
+              # bare filename which must resolve in the context root.
+              for v in ("20.04", "22.04"):
+                  dockerfile = "ubuntu-fips/20.04/Dockerfile" if v == "20.04" \
+                               else f"ubuntu-fips/{v}/Dockerfile.ubuntu{v}-fips"
+                  rows.append({
+                      "family":  "ubuntu-fips",
+                      "version": v,
+                      "tag":     f"{registry}/kairos-ubuntu:{v}-core-{arch}-{model}-{kver}-fips",
+                      "dockerfile":    dockerfile,
+                      "build_context": f"ubuntu-fips/{v}",
+                  })
+
+          empty = "true" if not rows else "false"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"matrix={json.dumps({'include': rows})}\n")
+              f.write(f"empty={empty}\n")
+          print(json.dumps({"include": rows}, indent=2))
+          PY
+
+  extensions:
+    needs: generate-extensions-matrix
+    if: needs.generate-extensions-matrix.outputs.empty != 'true'
+    runs-on: Luet-BigRunner
+    strategy:
+      matrix: ${{ fromJson(needs.generate-extensions-matrix.outputs.matrix) }}
+      fail-fast: false
+    env:
+      MATRIX_FAMILY:  ${{ matrix.family }}
+      MATRIX_VERSION: ${{ matrix.version }}
+      MATRIX_TAG:     ${{ matrix.tag }}
+      MATRIX_DOCKERFILE: ${{ matrix.dockerfile }}
+      MATRIX_CONTEXT: ${{ matrix.build_context }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry
+        run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
+
+      - name: Install age
+        run: |
+          # `age` isn't pre-installed on Luet-BigRunner; fetch the static
+          # binary release and put it on PATH.
+          if ! command -v age >/dev/null 2>&1; then
+            curl -sSL -o /tmp/age.tar.gz \
+              https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+            tar -xzf /tmp/age.tar.gz -C /tmp
+            sudo install -m 0755 /tmp/age/age /usr/local/bin/age
+            rm -rf /tmp/age /tmp/age.tar.gz
+          fi
+          age --version
+
+      - name: Decrypt credentials
+        env:
+          # Ciphertexts are safe to have in an env dump — they cannot be
+          # decrypted without the private key.
+          RHEL_USER_CIPHER: ${{ github.event.inputs.rhel_subscription_username_encrypted }}
+          RHEL_PASS_CIPHER: ${{ github.event.inputs.rhel_subscription_password_encrypted }}
+          PRO_TOKEN_CIPHER: ${{ github.event.inputs.ubuntu_pro_token_encrypted }}
+          # Private key from repo secret — GitHub Actions auto-masks
+          # secrets.* values from the moment they enter the runner, so this
+          # env dump shows `DECRYPT_KEY: ***`.
+          DECRYPT_KEY: ${{ secrets.WORKFLOW_DECRYPT_KEY }}
+        run: bash .github/scripts/decrypt-creds.sh
+
+      - name: Materialize credentials
+        # RHSM_USER / RHSM_PASS / UBUNTU_PRO_TOKEN arrive via $GITHUB_ENV set
+        # by the Decrypt step above. They're already masked; we don't
+        # re-declare them here, because listing them in `env:` would trigger
+        # an env dump in the log (masked, but still noise).
+        run: bash .github/scripts/materialize_credentials.sh
+
+      - name: Build and push
+        run: bash .github/scripts/build-extension.sh
+
+      - name: Cleanup credentials
+        if: always()
+        run: |
+          if [ -n "${CREDS_DIR:-}" ] && [ -d "$CREDS_DIR" ]; then
+            find "$CREDS_DIR" -type f -exec shred -u {} + 2>/dev/null || \
+              find "$CREDS_DIR" -type f -delete
+            rmdir "$CREDS_DIR" 2>/dev/null || true
+          fi
+
+      - name: Save build result
+        run: |
+          mkdir -p /tmp/results
+          echo "${{ matrix.tag }}" >> /tmp/results/built_tags.txt
+
+      - name: Upload build results
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-result-extensions-${{ strategy.job-index }}
+          path: /tmp/results/built_tags.txt
+
+  # ── Aggregate all tags into the run summary ────────────────────────────
+  collect-outputs:
+    needs: [kairosify, extensions]
+    if: always()
+    runs-on: Luet-BigRunner
     steps:
       - name: Download all build results
         uses: actions/download-artifact@v4
@@ -169,20 +372,22 @@ jobs:
         id: combine-tags
         run: |
           ALL_TAGS=$(find /tmp/results -name "*.txt" -type f -exec cat {} \; | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "tags=$ALL_TAGS" >> $GITHUB_OUTPUT
-          echo "All built tags: $ALL_TAGS"
+          echo "tags=$ALL_TAGS" >> "$GITHUB_OUTPUT"
 
       - name: Summary
         run: |
-          echo "## Kairosify Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Input Parameters:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Base OS Image: ${{ github.event.inputs.base_os_image || 'Default combinations' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Kairos Init Image: ${{ github.event.inputs.kairos_init_image }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Architecture: ${{ github.event.inputs.arch }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Model: ${{ github.event.inputs.model }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Kairos Version: ${{ github.event.inputs.kairos_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Trusted Boot: ${{ github.event.inputs.trusted_boot }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Built Images:**" >> $GITHUB_STEP_SUMMARY
-          echo '${{ steps.combine-tags.outputs.tags }}' | jq -r '.[] | "- " + .' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Base Image Build Summary"
+            echo ""
+            echo "**Input Parameters:**"
+            echo "- Base OS Image: ${{ github.event.inputs.base_os_image || 'Default combinations' }}"
+            echo "- Kairos Init Image: ${{ github.event.inputs.kairos_init_image }}"
+            echo "- Architecture: ${{ github.event.inputs.arch }}"
+            echo "- Model: ${{ github.event.inputs.model }}"
+            echo "- Kairos Version: ${{ github.event.inputs.kairos_version }}"
+            echo "- Trusted Boot: ${{ github.event.inputs.trusted_boot }}"
+            echo "- FIPS: ${{ github.event.inputs.fips }}"
+            echo ""
+            echo "**Built Images:**"
+            echo '${{ steps.combine-tags.outputs.tags }}' | jq -r '.[] | "- " + .'
+          } >> "$GITHUB_STEP_SUMMARY"
