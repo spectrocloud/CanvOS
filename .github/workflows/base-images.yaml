@@ -107,15 +107,17 @@ jobs:
           matrix = []
 
           if base_os_image:
+              # base_os_image is an explicit "just build this one custom OS"
+              # override — stays exclusive of the default combinations.
               simple_name = base_os_image.split('/')[-1].replace(':', '-')
               tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{kairos_version}"
               if trusted_boot:
                   tag += "-uki"
-              matrix.append({"base_os": base_os_image, "tag": tag})
-          elif trusted_boot:
-              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
-              matrix.append({"base_os": "ubuntu:24.04", "tag": tag})
+              matrix.append({"base_os": base_os_image, "tag": tag, "trusted_boot": trusted_boot})
           else:
+              # Standard builds — always run so a single dispatch produces
+              # the full release set. Standard rows are NEVER UKI, even when
+              # the trusted_boot checkbox is on.
               combinations = [
                   ("ubuntu:20.04", "kairos-ubuntu:20.04-core"),
                   ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
@@ -125,7 +127,14 @@ jobs:
               ]
               for base_os, tag_prefix in combinations:
                   tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
-                  matrix.append({"base_os": base_os, "tag": tag})
+                  matrix.append({"base_os": base_os, "tag": tag, "trusted_boot": False})
+
+              # trusted_boot ADDS the Ubuntu 24.04 UKI variant on top of the
+              # standard set — not a replacement. Same additive semantics as
+              # the `fips` checkbox in the extensions job.
+              if trusted_boot:
+                  tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
+                  matrix.append({"base_os": "ubuntu:24.04", "tag": tag, "trusted_boot": True})
 
           matrix_json = json.dumps(matrix)
           print(f"Generated matrix: {matrix_json}")
@@ -161,7 +170,7 @@ jobs:
             kairosify.args.BASE_OS_IMAGE=${{ matrix.base_os }}
             kairosify.args.KAIROS_INIT_IMAGE=${{ github.event.inputs.kairos_init_image }}
             kairosify.args.KAIROS_VERSION=${{ github.event.inputs.kairos_version }}
-            kairosify.args.TRUSTED_BOOT=${{ github.event.inputs.trusted_boot }}
+            kairosify.args.TRUSTED_BOOT=${{ matrix.trusted_boot }}
             kairosify.args.MODEL=${{ github.event.inputs.model }}
             kairosify.tags=${{ matrix.tag }}
         env:
