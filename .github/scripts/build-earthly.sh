@@ -32,7 +32,10 @@ if [ "${MATRIX_UKI:-false}" = "true" ] && [ ! -d ./secure-boot/enrollment ]; the
     echo "→ UKI build: generating ephemeral Secure Boot keys (CI-only; not for a real release)"
     # ARCH is required — +uki-genkey does FROM --platform=linux/${ARCH};
     # without it the platform parses as "linux/" and earthly rejects it.
-    earthly --ci -P +uki-genkey \
+    # --output is REQUIRED alongside --ci: --ci implies --no-output which
+    # suppresses `SAVE ARTIFACT ... AS LOCAL`. Without it, +uki-genkey
+    # silently produces no local secure-boot/ dirs and +iso then fails.
+    earthly --ci --output -P +uki-genkey \
         "--ARCH=$ARCH" \
         --MY_ORG="Palette CI"
 fi
@@ -40,7 +43,10 @@ fi
 # Earthly syntax: `earthly [OPTIONS] +TARGET [--BUILD_ARG=VALUE ...]`
 # Build args go AFTER the target; before, they're parsed as global options
 # and earthly prints help + exits 1 on the unknown flag.
-earthly --ci -P +iso \
+# --output is REQUIRED alongside --ci: without it, +iso's terminal
+# `SAVE ARTIFACT /build/* AS LOCAL ./build/` produces no local files
+# and the upload-artifact step ends up with an empty tree (silent warn).
+earthly --ci --output -P +iso \
     "--PE_VERSION=$PE_VERSION" \
     "--OS_DISTRIBUTION=$MATRIX_OS" \
     "--OS_VERSION=$os_version" \
