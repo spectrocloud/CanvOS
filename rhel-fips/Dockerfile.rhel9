@@ -1,10 +1,8 @@
+# syntax=docker/dockerfile:1
 # Kairos init image
 FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 
 FROM registry.access.redhat.com/ubi9-init:9.4-6 AS base
-
-ARG USERNAME
-ARG PASSWORD
 
 # Generate os-release file
 ARG KAIROS_VERSION=v3.5.9
@@ -13,12 +11,16 @@ ARG KAIROS_VERSION=v3.5.9
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
-# Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
-RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
+# Register with Red Hat, enable the appstream repo, install packages.
+# Uses BuildKit secrets (docker build --secret id=rhsm_username,src=... --secret id=rhsm_password,src=...)
+# so credentials are mounted only for the lifetime of this RUN and never enter image layers.
+RUN --mount=type=secret,id=rhsm_username \
+    --mount=type=secret,id=rhsm_password \
+    sh -c 'rm /etc/rhsm-host && subscription-manager register --username "$(cat /run/secrets/rhsm_username)" --password "$(cat /run/secrets/rhsm_password)" \
     && yum repolist \
     && subscription-manager attach --auto \
     && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
-    && yum repolist
+    && yum repolist'
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel9/ /
@@ -113,3 +115,8 @@ RUN echo "SELINUX=disabled" > /etc/selinux/config
 RUN rm -rf /boot/initramfs-*
 
 COPY overlay/rhel9/ /
+
+# Detach the subscription so the built image is not tied to the builder's RHSM
+# account. Clean up entitlement/consumer state that would otherwise persist.
+RUN subscription-manager unregister || true \
+ && rm -rf /etc/pki/entitlement/* /var/lib/rhsm/consumer/* /var/lib/rhsm/facts/* /var/lib/rhsm/repo_server_val/* 2>/dev/null || true
