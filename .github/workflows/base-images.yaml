@@ -58,18 +58,18 @@ on:
         required: false
         type: boolean
         default: false
-      rhel_subscription_username:
-        description: "RHSM username (blank -> skip RHEL builds)"
+      rhel_subscription_username_encrypted:
+        description: "RHSM username — age-encrypted ciphertext (see scripts/encrypt-creds.sh; blank -> skip RHEL builds)"
         required: false
         type: string
         default: ""
-      rhel_subscription_password:
-        description: "RHSM password (masked; blank -> skip RHEL builds)"
+      rhel_subscription_password_encrypted:
+        description: "RHSM password — age-encrypted ciphertext (blank -> skip RHEL builds)"
         required: false
         type: string
         default: ""
-      ubuntu_pro_token:
-        description: "Ubuntu Pro token (masked; required when fips=true)"
+      ubuntu_pro_token_encrypted:
+        description: "Ubuntu Pro token — age-encrypted ciphertext (required when fips=true)"
         required: false
         type: string
         default: ""
@@ -194,18 +194,9 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       empty:  ${{ steps.set-matrix.outputs.empty }}
     steps:
-      - name: Mask credentials
-        env:
-          RHSM_USERNAME:    ${{ github.event.inputs.rhel_subscription_username }}
-          RHSM_PASSWORD:    ${{ github.event.inputs.rhel_subscription_password }}
-          UBUNTU_PRO_TOKEN: ${{ github.event.inputs.ubuntu_pro_token }}
-        run: |
-          # Mask the username too — it's an email address / personal identifier
-          # for the RHSM account holder and shouldn't sit in the run's log.
-          for v in "$RHSM_USERNAME" "$RHSM_PASSWORD" "$UBUNTU_PRO_TOKEN"; do
-            if [ -n "$v" ]; then echo "::add-mask::$v"; fi
-          done
-          echo "Credentials masked (empty values skipped)."
+      # No plaintext to mask in this job — only ciphertexts flow through, which
+      # are useless without the private key (held as a repo secret and only
+      # decrypted inside the extensions job).
 
       - name: Compute matrix
         id: set-matrix
@@ -215,9 +206,10 @@ jobs:
           MODEL:           ${{ github.event.inputs.model }}
           KAIROS_VERSION:  ${{ github.event.inputs.kairos_version }}
           IN_FIPS:         ${{ github.event.inputs.fips }}
-          HAS_RHSM_USER:   ${{ github.event.inputs.rhel_subscription_username != '' }}
-          HAS_RHSM_PASS:   ${{ github.event.inputs.rhel_subscription_password != '' }}
-          HAS_UBUNTU_PRO:  ${{ github.event.inputs.ubuntu_pro_token != '' }}
+          # HAS_* is a proxy: ciphertext non-empty ⇒ credential supplied.
+          HAS_RHSM_USER:   ${{ github.event.inputs.rhel_subscription_username_encrypted != '' }}
+          HAS_RHSM_PASS:   ${{ github.event.inputs.rhel_subscription_password_encrypted != '' }}
+          HAS_UBUNTU_PRO:  ${{ github.event.inputs.ubuntu_pro_token_encrypted != '' }}
         run: |
           python3 <<'PY'
           import json, os, sys
@@ -300,15 +292,6 @@ jobs:
       MATRIX_DOCKERFILE: ${{ matrix.dockerfile }}
       MATRIX_CONTEXT: ${{ matrix.build_context }}
     steps:
-      - name: Re-mask credentials
-        env:
-          RHSM_PASSWORD:    ${{ github.event.inputs.rhel_subscription_password }}
-          UBUNTU_PRO_TOKEN: ${{ github.event.inputs.ubuntu_pro_token }}
-        run: |
-          for v in "$RHSM_PASSWORD" "$UBUNTU_PRO_TOKEN"; do
-            if [ -n "$v" ]; then echo "::add-mask::$v"; fi
-          done
-
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
@@ -317,11 +300,37 @@ jobs:
       - name: Login to registry
         run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
 
-      - name: Materialize credentials
+      - name: Install age
+        run: |
+          # `age` isn't pre-installed on Luet-BigRunner; fetch the static
+          # binary release and put it on PATH.
+          if ! command -v age >/dev/null 2>&1; then
+            curl -sSL -o /tmp/age.tar.gz \
+              https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+            tar -xzf /tmp/age.tar.gz -C /tmp
+            sudo install -m 0755 /tmp/age/age /usr/local/bin/age
+            rm -rf /tmp/age /tmp/age.tar.gz
+          fi
+          age --version
+
+      - name: Decrypt credentials
         env:
-          RHSM_USER:        ${{ github.event.inputs.rhel_subscription_username }}
-          RHSM_PASS:        ${{ github.event.inputs.rhel_subscription_password }}
-          UBUNTU_PRO_TOKEN: ${{ github.event.inputs.ubuntu_pro_token }}
+          # Ciphertexts are safe to have in an env dump — they cannot be
+          # decrypted without the private key.
+          RHEL_USER_CIPHER: ${{ github.event.inputs.rhel_subscription_username_encrypted }}
+          RHEL_PASS_CIPHER: ${{ github.event.inputs.rhel_subscription_password_encrypted }}
+          PRO_TOKEN_CIPHER: ${{ github.event.inputs.ubuntu_pro_token_encrypted }}
+          # Private key from repo secret — GitHub Actions auto-masks
+          # secrets.* values from the moment they enter the runner, so this
+          # env dump shows `DECRYPT_KEY: ***`.
+          DECRYPT_KEY: ${{ secrets.WORKFLOW_DECRYPT_KEY }}
+        run: bash .github/scripts/decrypt-creds.sh
+
+      - name: Materialize credentials
+        # RHSM_USER / RHSM_PASS / UBUNTU_PRO_TOKEN arrive via $GITHUB_ENV set
+        # by the Decrypt step above. They're already masked; we don't
+        # re-declare them here, because listing them in `env:` would trigger
+        # an env dump in the log (masked, but still noise).
         run: bash .github/scripts/materialize_credentials.sh
 
       - name: Build and push
