@@ -30,7 +30,11 @@ fi
 # every release.
 if [ "${MATRIX_UKI:-false}" = "true" ] && [ ! -d ./secure-boot/enrollment ]; then
     echo "→ UKI build: generating ephemeral Secure Boot keys (CI-only; not for a real release)"
-    earthly --ci -P +uki-genkey --MY_ORG="Palette CI"
+    # ARCH is required — +uki-genkey does FROM --platform=linux/${ARCH};
+    # without it the platform parses as "linux/" and earthly rejects it.
+    earthly --ci -P +uki-genkey \
+        "--ARCH=$ARCH" \
+        --MY_ORG="Palette CI"
 fi
 
 # Earthly syntax: `earthly [OPTIONS] +TARGET [--BUILD_ARG=VALUE ...]`
