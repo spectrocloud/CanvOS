@@ -196,10 +196,13 @@ jobs:
     steps:
       - name: Mask credentials
         env:
+          RHSM_USERNAME:    ${{ github.event.inputs.rhel_subscription_username }}
           RHSM_PASSWORD:    ${{ github.event.inputs.rhel_subscription_password }}
           UBUNTU_PRO_TOKEN: ${{ github.event.inputs.ubuntu_pro_token }}
         run: |
-          for v in "$RHSM_PASSWORD" "$UBUNTU_PRO_TOKEN"; do
+          # Mask the username too — it's an email address / personal identifier
+          # for the RHSM account holder and shouldn't sit in the run's log.
+          for v in "$RHSM_USERNAME" "$RHSM_PASSWORD" "$UBUNTU_PRO_TOKEN"; do
             if [ -n "$v" ]; then echo "::add-mask::$v"; fi
           done
           echo "Credentials masked (empty values skipped)."
@@ -261,14 +264,19 @@ jobs:
               else:
                   print("::warning::fips=true but no RHSM creds — skipping RHEL 8/9 FIPS.")
 
-              # Ubuntu FIPS 20.04, 22.04 (24.04 not present on kairos-init branch)
-              for v, code in (("20.04", "focal"), ("22.04", "jammy")):
+              # Ubuntu FIPS 20.04, 22.04 (24.04 not present on kairos-init branch).
+              # Build context = the version subdir (matches each version's own
+              # build.sh); the Dockerfile refers to fix.sh / modules.fips by
+              # bare filename which must resolve in the context root.
+              for v in ("20.04", "22.04"):
+                  dockerfile = "ubuntu-fips/20.04/Dockerfile" if v == "20.04" \
+                               else f"ubuntu-fips/{v}/Dockerfile.ubuntu{v}-fips"
                   rows.append({
                       "family":  "ubuntu-fips",
                       "version": v,
                       "tag":     f"{registry}/kairos-ubuntu:{v}-core-{arch}-{model}-{kver}-fips",
-                      "dockerfile":    f"ubuntu-fips/{v}/Dockerfile.ubuntu{v}-fips" if v != "20.04" else "ubuntu-fips/20.04/Dockerfile",
-                      "build_context": "ubuntu-fips" if v != "20.04" else "ubuntu-fips/20.04",
+                      "dockerfile":    dockerfile,
+                      "build_context": f"ubuntu-fips/{v}",
                   })
 
           empty = "true" if not rows else "false"
