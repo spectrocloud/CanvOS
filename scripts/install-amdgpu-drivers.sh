@@ -61,7 +61,12 @@
 #                            production operator. Ignored in inbox mode. See
 #                            docs/amd-gpu-airgapped.md for the compat matrix.
 #   AMDGPU_REBUILD_INITRD    "true" to rebuild the initrd for the image kernel.
-#                            Default: true.
+#                            Default: false. amdgpu is intentionally NOT
+#                            included in the initrd (see the dracut omit
+#                            drop-in the script writes). The base image's
+#                            existing initrd already handles rootfs mount;
+#                            amdgpu loads after switch-root via
+#                            /etc/modules-load.d/amdgpu.conf.
 #
 set -eo pipefail
 set -u
@@ -75,7 +80,7 @@ die()  { echo "[install-amdgpu-drivers] ERROR: $*" >&2; exit 1; }
 # ---------------------------------------------------------------------------
 AMDGPU_DRIVER_SOURCE="${AMDGPU_DRIVER_SOURCE:-dkms}"
 AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE:-7.2.1}"
-AMDGPU_REBUILD_INITRD="${AMDGPU_REBUILD_INITRD:-true}"
+AMDGPU_REBUILD_INITRD="${AMDGPU_REBUILD_INITRD:-false}"
 
 case "${AMDGPU_DRIVER_SOURCE}" in
     dkms|inbox) ;;
@@ -131,9 +136,28 @@ EOF
     log "Running depmod -a ${KVER} ..."
     depmod -a "${KVER}"
 
+    # Even if AMDGPU_REBUILD_INITRD=true, we explicitly OMIT amdgpu from the
+    # initrd. On multi-GPU MI systems (e.g. 8x MI325X, 8 XCP partitions each)
+    # amdgpu init emits so many udev events that dracut's initqueue times out
+    # waiting for udev-settle before rootfs pivot, leaving the node in
+    # dracut-emergency. amdgpu isn't needed to mount root (NVMe/SATA use their
+    # own drivers) so it's safe to load it *after* switch-root via
+    # /etc/modules-load.d/amdgpu.conf where there is no timeout pressure.
+    log "Configuring dracut to OMIT amdgpu from initrd (avoid init-time udev storm) ..."
+    mkdir -p /etc/dracut.conf.d
+    cat > /etc/dracut.conf.d/98-canvos-amdgpu-omit.conf <<'EOF'
+# Managed by CanvOS install-amdgpu-drivers.sh
+# Keep amdgpu (and its DKMS helpers) OUT of the initrd. amdgpu emits enough
+# udev events at load time (per-XCP-partition, per-ring) to blow past dracut's
+# initqueue timeout on multi-GPU systems, dropping the node into emergency
+# mode. amdgpu is not required to mount the rootfs; systemd loads it via
+# modules-load.d after switch-root.
+omit_drivers+=" amdgpu amdttm amdkcl amd-sched amddrm_ttm_helper amddrm_buddy amddrm_exec amdxcp "
+EOF
+
     if [ "${AMDGPU_REBUILD_INITRD}" = "true" ]; then
         if command -v dracut >/dev/null 2>&1; then
-            log "Rebuilding initrd for ${KVER} (dracut) ..."
+            log "Rebuilding initrd for ${KVER} (dracut, amdgpu omitted) ..."
             dracut -f "/boot/initrd-${KVER}" "${KVER}"
             ln -sf "initrd-${KVER}" /boot/initrd
         elif command -v update-initramfs >/dev/null 2>&1; then
@@ -182,9 +206,28 @@ and rebuild (AMDGPU_FORCE_REBUILD=1) or verify BASE_IMAGE matches."
     log "Running depmod -a ${KVER} ..."
     depmod -a "${KVER}" || die "depmod failed for ${KVER}."
 
+    # Even if AMDGPU_REBUILD_INITRD=true, we explicitly OMIT amdgpu from the
+    # initrd. On multi-GPU MI systems (e.g. 8x MI325X, 8 XCP partitions each)
+    # amdgpu init emits so many udev events that dracut's initqueue times out
+    # waiting for udev-settle before rootfs pivot, leaving the node in
+    # dracut-emergency. amdgpu isn't needed to mount root (NVMe/SATA use their
+    # own drivers) so it's safe to load it *after* switch-root via
+    # /etc/modules-load.d/amdgpu.conf where there is no timeout pressure.
+    log "Configuring dracut to OMIT amdgpu from initrd (avoid init-time udev storm) ..."
+    mkdir -p /etc/dracut.conf.d
+    cat > /etc/dracut.conf.d/98-canvos-amdgpu-omit.conf <<'EOF'
+# Managed by CanvOS install-amdgpu-drivers.sh
+# Keep amdgpu (and its DKMS helpers) OUT of the initrd. amdgpu emits enough
+# udev events at load time (per-XCP-partition, per-ring) to blow past dracut's
+# initqueue timeout on multi-GPU systems, dropping the node into emergency
+# mode. amdgpu is not required to mount the rootfs; systemd loads it via
+# modules-load.d after switch-root.
+omit_drivers+=" amdgpu amdttm amdkcl amd-sched amddrm_ttm_helper amddrm_buddy amddrm_exec amdxcp "
+EOF
+
     if [ "${AMDGPU_REBUILD_INITRD}" = "true" ]; then
         if command -v dracut >/dev/null 2>&1; then
-            log "Rebuilding initrd for ${KVER} (dracut) ..."
+            log "Rebuilding initrd for ${KVER} (dracut, amdgpu omitted) ..."
             dracut -f "/boot/initrd-${KVER}" "${KVER}"
             ln -sf "initrd-${KVER}" /boot/initrd
         elif command -v update-initramfs >/dev/null 2>&1; then
@@ -447,10 +490,22 @@ log "Running depmod -a ${KVER} ..."
 depmod -a "${KVER}" || warn "depmod reported an error."
 
 # ---------------------------------------------------------------------------
-# 10. Rebuild the initrd for the target kernel
+# 10. Drop dracut config that OMITS amdgpu from any rebuilt initrd. See the
+# equivalent block in the artifact / inbox branches for full rationale --
+# multi-GPU amdgpu init blows past initqueue's timeout when loaded early.
+# ---------------------------------------------------------------------------
+mkdir -p /etc/dracut.conf.d
+cat > /etc/dracut.conf.d/98-canvos-amdgpu-omit.conf <<'EOF'
+# Managed by CanvOS install-amdgpu-drivers.sh
+# Keep amdgpu (and its DKMS helpers) OUT of the initrd. See install script.
+omit_drivers+=" amdgpu amdttm amdkcl amd-sched amddrm_ttm_helper amddrm_buddy amddrm_exec amdxcp "
+EOF
+
+# ---------------------------------------------------------------------------
+# 11. Rebuild the initrd for the target kernel (amdgpu omitted per above).
 # ---------------------------------------------------------------------------
 if [ "${AMDGPU_REBUILD_INITRD}" = "true" ] && command -v dracut >/dev/null 2>&1; then
-    log "Rebuilding initrd for ${KVER} (dracut) ..."
+    log "Rebuilding initrd for ${KVER} (dracut, amdgpu omitted) ..."
     if dracut -f "/boot/initrd-${KVER}" "${KVER}"; then
         ln -sf "initrd-${KVER}" /boot/initrd
     else

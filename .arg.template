@@ -64,4 +64,8 @@ FORCE_INTERACTIVE_INSTALL=false
 #                                            #   31.x is tech-preview -- do not mix with a
 #                                            #   production operator. See the version-
 #                                            #   alignment table in docs/amd-gpu-airgapped.md.
-# AMDGPU_REBUILD_INITRD=true                 # Rebuild initrd for the image kernel
+# AMDGPU_REBUILD_INITRD=false                # Default false. amdgpu is intentionally
+#                                            #   kept out of the initrd (multi-GPU init
+#                                            #   emits enough udev events to time out
+#                                            #   dracut-initqueue). It loads after
+#                                            #   switch-root via modules-load.d.

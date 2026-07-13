@@ -95,7 +95,12 @@ ARG AMDGPU_DRIVER_RELEASE=7.2.1
 # in-buildkit DKMS install (which fails in buildkit's RUN sandbox -- see docs)
 # and simply extracts the pre-built modules + firmware + config drop-ins.
 ARG AMDGPU_ARTIFACT_PATH=""
-ARG AMDGPU_REBUILD_INITRD=true
+# Default false: amdgpu is intentionally omitted from the initrd (see
+# scripts/install-amdgpu-drivers.sh -- multi-GPU amdgpu init emits enough
+# udev events to blow past dracut-initqueue's udev-settle timeout, dropping
+# the node into emergency mode). amdgpu loads after switch-root via
+# /etc/modules-load.d/amdgpu.conf where there is no timeout pressure.
+ARG AMDGPU_REBUILD_INITRD=false
 
 # NVIDIA and AMD driver pre-install are mutually exclusive within a single image.
 IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ] && [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
