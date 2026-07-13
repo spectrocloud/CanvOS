@@ -20,6 +20,19 @@ if [ "$MATRIX_OS" = "ubuntu" ]; then
     os_version="${MATRIX_VERSION%%.*}"
 fi
 
+# Trusted Boot / UKI builds require Secure Boot signing keys under
+# ./secure-boot/{enrollment,private-keys,public-keys}. Those aren't
+# committed (they're private keys). The Earthfile provides `+uki-genkey`
+# to generate them locally. If the dirs are missing, generate fresh
+# per-run keys — fine for CI test-builds; a real release must supply
+# stable pre-generated keys (e.g., extracted from a repo secret before
+# this script runs) so Secure Boot enrollment doesn't need to be redone
+# every release.
+if [ "${MATRIX_UKI:-false}" = "true" ] && [ ! -d ./secure-boot/enrollment ]; then
+    echo "→ UKI build: generating ephemeral Secure Boot keys (CI-only; not for a real release)"
+    earthly --ci -P +uki-genkey --MY_ORG="Palette CI"
+fi
+
 # Earthly syntax: `earthly [OPTIONS] +TARGET [--BUILD_ARG=VALUE ...]`
 # Build args go AFTER the target; before, they're parsed as global options
 # and earthly prints help + exits 1 on the unknown flag.
