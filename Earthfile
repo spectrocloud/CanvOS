@@ -770,6 +770,12 @@ base-image:
         COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
     END
 
+    # Ensure the Renesas xHCI (USB 3.0) host controller driver is bundled into the
+    # initramfs so installation from USB media works on hardware using that chipset.
+    # Must run before the distro dracut regeneration below so the driver is included.
+    RUN mkdir -p /etc/dracut.conf.d && \
+        printf '%s\n' 'hostonly="no"' 'add_drivers+=" xhci_pci_renesas "' 'force_drivers+=" xhci_pci_renesas "' > /etc/dracut.conf.d/99-usb-media.conf
+
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
