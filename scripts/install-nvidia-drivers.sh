@@ -260,18 +260,28 @@ fi
 #    Required on HGX H100/H200, HGX B200, DGX, GB200 for multi-GPU NVLink.
 #    libnvidia-nscq-<branch> is a fabricmanager dep and gets pulled in
 #    transitively -- listed explicitly so the install fails loudly if the
-#    CUDA repo ever drops the auto-dep. Harmless on non-NVSwitch hosts:
-#    the daemon exits ("No NvSwitch found") and the unit stays failed with
-#    no kernel side effect and no restart loop.
+#    CUDA repo ever drops the auto-dep.
+#
+#    infiniband-diags provides `ibstat`, which NVIDIA's shipped unit wrapper
+#    /usr/share/nvidia/fabricmanager/nvidia-fabricmanager-start.sh calls to
+#    gate FM startup on the IB fabric being up (needed for GB200 NVL72
+#    multi-node NVLink Sharp; the wrapper is present in ALL FM packages
+#    now). Without ibstat the unit fails immediately with 'ibstat command
+#    not found', regardless of hardware -- so we install infiniband-diags
+#    whenever FM is installed. ~5-8 MB, no runtime side effect.
+#
+#    On non-NVSwitch hosts FM still exits ("No NvSwitch found") and the
+#    unit stays failed with no kernel side effect and no restart loop.
 # ---------------------------------------------------------------------------
 if [ "${NVIDIA_INSTALL_FABRICMANAGER}" = "true" ]; then
     FM_PKG="nvidia-fabricmanager-${NVIDIA_DRIVER_BRANCH}"
     NSCQ_PKG="libnvidia-nscq-${NVIDIA_DRIVER_BRANCH}"
-    log "Installing ${FM_PKG} + ${NSCQ_PKG} ..."
-    if apt-get install -y --no-install-recommends "${FM_PKG}" "${NSCQ_PKG}"; then
+    log "Installing ${FM_PKG} + ${NSCQ_PKG} + infiniband-diags (for ibstat) ..."
+    if apt-get install -y --no-install-recommends \
+            "${FM_PKG}" "${NSCQ_PKG}" infiniband-diags; then
         systemctl enable nvidia-fabricmanager.service 2>/dev/null || true
     else
-        warn "could not install ${FM_PKG} / ${NSCQ_PKG}; skipping fabric manager."
+        warn "could not install ${FM_PKG} / ${NSCQ_PKG} / infiniband-diags; skipping fabric manager."
     fi
 fi
 
