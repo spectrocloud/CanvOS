@@ -17,7 +17,9 @@
 #   * the NVIDIA kernel modules (nvidia, nvidia-uvm, nvidia-modeset,
 #     nvidia-drm, nvidia-peermem) built with DKMS against the IMAGE kernel
 #   * nouveau blacklist + nvidia module autoload + nvidia-persistenced
-#   * (optional) nvidia-fabricmanager for HGX / NVSwitch systems
+#   * nvidia-fabricmanager + libnvidia-nscq for HGX / NVSwitch systems
+#     (HGX H100/H200, HGX B200, DGX, GB200) -- required for multi-GPU NVLink
+#   * nvidia-imex for GB200 NVL72 multi-node NVLink Sharp (Blackwell)
 #
 # WHAT THIS DOES *NOT* COVER (ships as container images in your content bundle,
 # deployed by the GPU Operator itself):
@@ -57,7 +59,22 @@
 #                               repo (recommended, has every -server branch).
 #                               "false" to use only Ubuntu's own repos.
 #                               Default: true
-#   NVIDIA_INSTALL_FABRICMANAGER  "true" for NVSwitch/HGX boxes. Default: false
+#   NVIDIA_INSTALL_FABRICMANAGER  "true" for NVSwitch/HGX boxes (H100/B200 HGX,
+#                               DGX, GB200). Default: true. Harmless on non-
+#                               NVSwitch hosts: the unit exits early and stays
+#                               inactive; no restart loop, no kernel effect,
+#                               ~60-90 MB image cost. Also installs the
+#                               matching libnvidia-nscq-<branch> explicitly.
+#                               See docs/nvidia-gpu-airgapped.md.
+#   NVIDIA_INSTALL_IMEX         "true" to also install nvidia-imex-<branch>,
+#                               the Internode Memory Exchange daemon required
+#                               for GB200 NVL72 multi-node NVLink Sharp
+#                               (Blackwell, driver 570+). Default: true.
+#                               Harmless on non-NVL72 boxes: without
+#                               /etc/nvidia-imex/nodes_config.cfg the daemon
+#                               exits and the unit stays inactive. Best-effort
+#                               -- skipped with a warning on branches that
+#                               predate IMEX (pre-570).
 #   NVIDIA_INSTALL_CONTAINER_TOOLKIT  "true" to ALSO pre-install
 #                               nvidia-container-toolkit on the host (then set
 #                               toolkit.enabled=false in the operator).
@@ -78,7 +95,8 @@ die()  { echo "[install-nvidia-drivers] ERROR: $*" >&2; exit 1; }
 NVIDIA_DRIVER_BRANCH="${NVIDIA_DRIVER_BRANCH:-580}"
 NVIDIA_DRIVER_TYPE="${NVIDIA_DRIVER_TYPE:-open}"
 NVIDIA_USE_CUDA_REPO="${NVIDIA_USE_CUDA_REPO:-true}"
-NVIDIA_INSTALL_FABRICMANAGER="${NVIDIA_INSTALL_FABRICMANAGER:-false}"
+NVIDIA_INSTALL_FABRICMANAGER="${NVIDIA_INSTALL_FABRICMANAGER:-true}"
+NVIDIA_INSTALL_IMEX="${NVIDIA_INSTALL_IMEX:-true}"
 NVIDIA_INSTALL_CONTAINER_TOOLKIT="${NVIDIA_INSTALL_CONTAINER_TOOLKIT:-false}"
 NVIDIA_REBUILD_INITRD="${NVIDIA_REBUILD_INITRD:-true}"
 
@@ -238,15 +256,41 @@ matching gcc are installed."
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Optional: NVIDIA Fabric Manager (NVSwitch / HGX systems only)
+# 8. NVIDIA Fabric Manager + libnvidia-nscq (HGX / NVSwitch systems)
+#    Required on HGX H100/H200, HGX B200, DGX, GB200 for multi-GPU NVLink.
+#    libnvidia-nscq-<branch> is a fabricmanager dep and gets pulled in
+#    transitively -- listed explicitly so the install fails loudly if the
+#    CUDA repo ever drops the auto-dep. Harmless on non-NVSwitch hosts:
+#    the daemon exits ("No NvSwitch found") and the unit stays failed with
+#    no kernel side effect and no restart loop.
 # ---------------------------------------------------------------------------
 if [ "${NVIDIA_INSTALL_FABRICMANAGER}" = "true" ]; then
     FM_PKG="nvidia-fabricmanager-${NVIDIA_DRIVER_BRANCH}"
-    log "Installing ${FM_PKG} ..."
-    if apt-get install -y --no-install-recommends "${FM_PKG}"; then
+    NSCQ_PKG="libnvidia-nscq-${NVIDIA_DRIVER_BRANCH}"
+    log "Installing ${FM_PKG} + ${NSCQ_PKG} ..."
+    if apt-get install -y --no-install-recommends "${FM_PKG}" "${NSCQ_PKG}"; then
         systemctl enable nvidia-fabricmanager.service 2>/dev/null || true
     else
-        warn "could not install ${FM_PKG}; skipping fabric manager."
+        warn "could not install ${FM_PKG} / ${NSCQ_PKG}; skipping fabric manager."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 8b. NVIDIA IMEX -- Internode Memory Exchange daemon
+#     Required for GB200 NVL72 multi-node NVLink Sharp (Blackwell, driver
+#     570+). Not needed for single-node HGX B200 or HGX H100. Package is
+#     part of the CUDA repo; older driver branches (pre-570) do not publish
+#     it, so this is best-effort. On single-node boxes the daemon has no
+#     /etc/nvidia-imex/nodes_config.cfg and exits cleanly -- unit stays
+#     inactive, ~10-20 MB image cost.
+# ---------------------------------------------------------------------------
+if [ "${NVIDIA_INSTALL_IMEX}" = "true" ]; then
+    IMEX_PKG="nvidia-imex-${NVIDIA_DRIVER_BRANCH}"
+    log "Installing ${IMEX_PKG} (GB200 NVL72 multi-node NVLink Sharp) ..."
+    if apt-get install -y --no-install-recommends "${IMEX_PKG}"; then
+        systemctl enable nvidia-imex.service 2>/dev/null || true
+    else
+        warn "${IMEX_PKG} not available (branch ${NVIDIA_DRIVER_BRANCH} may predate IMEX -- 570+ only). Skipping."
     fi
 fi
 
