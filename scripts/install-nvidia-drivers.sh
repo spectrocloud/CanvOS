@@ -262,23 +262,51 @@ fi
 #    transitively -- listed explicitly so the install fails loudly if the
 #    CUDA repo ever drops the auto-dep.
 #
-#    infiniband-diags provides `ibstat`, which NVIDIA's shipped unit wrapper
-#    /usr/share/nvidia/fabricmanager/nvidia-fabricmanager-start.sh calls to
-#    gate FM startup on the IB fabric being up (needed for GB200 NVL72
-#    multi-node NVLink Sharp; the wrapper is present in ALL FM packages
-#    now). Without ibstat the unit fails immediately with 'ibstat command
-#    not found', regardless of hardware -- so we install infiniband-diags
-#    whenever FM is installed. ~5-8 MB, no runtime side effect.
+#    Wrapper bypass. NVIDIA 570+ packages ship a systemd unit whose
+#    ExecStart is /usr/share/nvidia/fabricmanager/nvidia-fabricmanager-start.sh,
+#    a wrapper added to gate FM startup on the GB200 NVL72 NVLink subnet
+#    coming up: it shells out to `ibstat` (infiniband-diags) and `nvlsm`
+#    (the NVIDIA Subnet Manager, shipped separately in UFM/MLNX-OFED, not
+#    in this package). On every non-NVL72 host -- standalone HGX H100/B200,
+#    single-node DGX, workstations, dev boxes -- one of those deps is
+#    absent and the unit fails with either:
+#       "ibstat command not found! Please install ibstat."
+#     or a similar 'nvlsm not found' error, before nv-fabricmanager is
+#    ever invoked. That breaks FM on the entire non-NVL72 fleet.
 #
-#    On non-NVSwitch hosts FM still exits ("No NvSwitch found") and the
-#    unit stays failed with no kernel side effect and no restart loop.
+#    Fix: install a drop-in that overrides ExecStart back to calling
+#    nv-fabricmanager directly (pre-wrapper behavior). FM then correctly
+#    initializes NVSwitch on HGX/DGX, and cleanly exits "No NvSwitch found"
+#    on non-NVSwitch hosts.
+#
+#    GB200 NVL72 caveat: the drop-in also removes the IB/nvlsm precondition
+#    that NVL72 legitimately needs. Deployments targeting NVL72 should
+#    remove /etc/systemd/system/nvidia-fabricmanager.service.d/10-bypass-wrapper.conf
+#    via user-data and ensure ibstat + nvlsm are provisioned.
+#
+#    infiniband-diags is still installed defensively (~5-8 MB): the drop-in
+#    is easy to override and having ibstat present means the vendor wrapper
+#    at least clears its first gate if a user reverts to it.
 # ---------------------------------------------------------------------------
 if [ "${NVIDIA_INSTALL_FABRICMANAGER}" = "true" ]; then
     FM_PKG="nvidia-fabricmanager-${NVIDIA_DRIVER_BRANCH}"
     NSCQ_PKG="libnvidia-nscq-${NVIDIA_DRIVER_BRANCH}"
-    log "Installing ${FM_PKG} + ${NSCQ_PKG} + infiniband-diags (for ibstat) ..."
+    log "Installing ${FM_PKG} + ${NSCQ_PKG} + infiniband-diags ..."
     if apt-get install -y --no-install-recommends \
             "${FM_PKG}" "${NSCQ_PKG}" infiniband-diags; then
+        log "Installing systemd drop-in to bypass GB200 NVL72 wrapper (ibstat/nvlsm gate) ..."
+        mkdir -p /etc/systemd/system/nvidia-fabricmanager.service.d
+        cat > /etc/systemd/system/nvidia-fabricmanager.service.d/10-bypass-wrapper.conf <<'EOF'
+# Managed by CanvOS install-nvidia-drivers.sh
+# NVIDIA 570+ FM packages wrap ExecStart in nvidia-fabricmanager-start.sh,
+# which probes for ibstat + nvlsm to gate startup on the GB200 NVL72 NVLink
+# subnet. On non-NVL72 hardware nvlsm is absent and the wrapper fails before
+# nv-fabricmanager is ever invoked. Bypass it and call the daemon directly.
+# GB200 NVL72 deployments should remove this drop-in via user-data.
+[Service]
+ExecStart=
+ExecStart=/usr/bin/nv-fabricmanager -c /usr/share/nvidia/nvswitch/fabricmanager.cfg
+EOF
         systemctl enable nvidia-fabricmanager.service 2>/dev/null || true
     else
         warn "could not install ${FM_PKG} / ${NSCQ_PKG} / infiniband-diags; skipping fabric manager."
