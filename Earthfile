@@ -129,7 +129,7 @@ ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_BRING_YOUR_OWN_KEYS=false
 
-ARG CMDLINE="stylus.registration"
+ARG CMDLINE="stylus.registration rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
 ARG FORCE_INTERACTIVE_INSTALL=false
 
@@ -976,6 +976,21 @@ base-image:
                     sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nouveau.modeset=0"|' /etc/cos/bootargs.cfg; \
                 fi
         END
+
+        # Block Intel QAT 4xxx driver at the kernel command line. On Xeon
+        # Scalable 4th/5th gen hosts with QAT devices, udev auto-loads
+        # qat_4xxx in initramfs and its probe/firmware-load stalls boot for
+        # minutes. rd.driver.blacklist= is the load-bearing flag (dracut
+        # honors it before udev fires); modprobe.blacklist= is belt-and-braces
+        # for post-switchroot. Applied unconditionally — CanvOS does not
+        # consume QAT acceleration.
+        RUN if ! grep -Fq "rd.driver.blacklist=qat_4xxx" /etc/cos/bootargs.cfg; then \
+                if grep -Fq "rd.driver.blacklist=" /etc/cos/bootargs.cfg; then \
+                    sed -i 's|\(rd\.driver\.blacklist=[^ "]*\)|\1,qat_4xxx|; s|\(modprobe\.blacklist=[^ "]*\)|\1,qat_4xxx|' /etc/cos/bootargs.cfg; \
+                else \
+                    sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=qat_4xxx modprobe.blacklist=qat_4xxx"|' /etc/cos/bootargs.cfg; \
+                fi \
+            fi
     END
 
 KAIROS_RELEASE:
