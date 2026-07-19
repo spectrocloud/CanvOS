@@ -130,7 +130,7 @@ ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_BRING_YOUR_OWN_KEYS=false
 
-ARG CMDLINE="stylus.registration rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0"
+ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
 ARG FORCE_INTERACTIVE_INSTALL=false
 
@@ -968,30 +968,27 @@ base-image:
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
             fi
 
-        # When the NVIDIA driver is pre-installed, block nouveau at the kernel
-        # command line. modprobe.d blacklists don't apply until AFTER switchroot,
-        # by which point initramfs udev has already auto-loaded nouveau on
-        # modern data-center GPUs (Ada/Hopper/Blackwell) and hung in GSP init,
-        # stalling systemd-udev-settle indefinitely.
-        IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ]
-            RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
-                    sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nouveau.modeset=0"|' /etc/cos/bootargs.cfg; \
-                fi
-        END
-
-        # Block Intel QAT 4xxx driver at the kernel command line. On Xeon
-        # Scalable 4th/5th gen hosts with QAT devices, udev auto-loads
-        # qat_4xxx in initramfs and its probe/firmware-load stalls boot for
-        # minutes. rd.driver.blacklist= is the load-bearing flag (dracut
-        # honors it before udev fires); modprobe.blacklist= is belt-and-braces
-        # for post-switchroot. Applied unconditionally — CanvOS does not
-        # consume QAT acceleration.
-        RUN if ! grep -Fq "rd.driver.blacklist=qat_4xxx" /etc/cos/bootargs.cfg; then \
-                if grep -Fq "rd.driver.blacklist=" /etc/cos/bootargs.cfg; then \
-                    sed -i 's|\(rd\.driver\.blacklist=[^ "]*\)|\1,qat_4xxx|; s|\(modprobe\.blacklist=[^ "]*\)|\1,qat_4xxx|' /etc/cos/bootargs.cfg; \
-                else \
-                    sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=qat_4xxx modprobe.blacklist=qat_4xxx"|' /etc/cos/bootargs.cfg; \
-                fi \
+        # Block nouveau and qat_4xxx at the kernel command line on every
+        # build, and pin PCI BAR layout to firmware assignments.
+        #
+        # nouveau: modern NVIDIA data-center GPUs (Ada/Hopper/Blackwell)
+        # hang in GSP init when initramfs udev auto-loads nouveau before
+        # switchroot, stalling systemd-udev-settle indefinitely. Applied
+        # unconditionally — the image may be installed onto NVIDIA hardware
+        # even when INSTALL_NVIDIA_GPU_DRIVERS=false. rd.driver.blacklist=
+        # is the load-bearing flag (dracut honors it before udev fires);
+        # modprobe.blacklist= is belt-and-braces for post-switchroot.
+        # Harmless when no NVIDIA GPU is present.
+        #
+        # qat_4xxx: on Xeon Scalable 4th/5th gen hosts with QAT devices,
+        # udev auto-loads qat_4xxx in initramfs and its probe/firmware-load
+        # stalls boot for minutes. CanvOS does not consume QAT acceleration.
+        #
+        # pci=realloc=off: firmware-assigned PCI resource layout is
+        # authoritative; kernel-side reallocation has caused BAR conflicts
+        # on some server platforms. Mirrors the installer ISO cmdline.
+        RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0 pci=realloc=off"|' /etc/cos/bootargs.cfg; \
             fi
     END
 
