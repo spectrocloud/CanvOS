@@ -286,6 +286,36 @@ if [ "${NVIDIA_INSTALL_FABRICMANAGER}" = "true" ]; then
     if apt-get install -y --no-install-recommends \
             "${FM_PKG}" "${NSCQ_PKG}" nvlsm infiniband-diags; then
         systemctl enable nvidia-fabricmanager.service 2>/dev/null || true
+
+        # --- ib_umad autoload for fabricmanager precheck --------------------
+        # NVIDIA 570+ nvidia-fabricmanager-start.sh --mode precheck (invoked
+        # by the systemd unit's ExecStartPre) takes the "Detected NVL5+
+        # system" branch on HGX B200 / GB200 hardware and requires the
+        # ib_umad kernel module to be loaded before nv-fabricmanager can
+        # start -- the wrapper opens /dev/infiniband/umad* to send MADs to
+        # the NVSwitch fabric (NVSwitch reuses the InfiniBand management-
+        # datagram shape). Kairos edge images ship the module (it's in the
+        # kernel-modules-extra set) but don't auto-load it, so precheck
+        # dies with:
+        #   Detected NVL5+ system
+        #   Kernel module "ib_umad" has not been loaded,
+        #     fabric manager cannot be started
+        #   Please run "modprobe ib_umad" before starting fabric manager
+        # Load it at boot so the service comes up on NVSwitch hardware
+        # without any operator intervention. Verified live on 8x HGX B200
+        # (driver 580.159.03): with this in place nvidia-fabricmanager.service
+        # goes active in ~3s at boot and downstream nvidia-cuda-validator
+        # exits 0 on the next GPU-operator reconcile.
+        #
+        # On non-NVSwitch hosts the module load costs ~10 KiB of RSS and has
+        # no other side effect; fabricmanager still exits "No NvSwitch found"
+        # and the unit stays inactive as before.
+        cat > /etc/modules-load.d/nvidia-fabricmanager.conf <<'EOF'
+# Managed by CanvOS install-nvidia-drivers.sh
+# Required by nvidia-fabricmanager-start.sh --mode precheck on NVL5+
+# systems (HGX B200, GB200) -- see /usr/bin/nvidia-fabricmanager-start.sh.
+ib_umad
+EOF
     else
         warn "could not install ${FM_PKG} / ${NSCQ_PKG} / nvlsm / infiniband-diags; skipping fabric manager."
     fi
