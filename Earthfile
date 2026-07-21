@@ -20,8 +20,8 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.9.10
-ARG KAIROS_VERSION=v4.0.3
+ARG PE_VERSION=v4.9.21
+ARG KAIROS_VERSION=v4.1.2
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -32,7 +32,7 @@ ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.10.0
 ARG KUBEADM_PROVIDER_VERSION=v4.10.0
 ARG RKE2_PROVIDER_VERSION=v4.10.0
-ARG NODEADM_PROVIDER_VERSION=v4.9.2
+ARG NODEADM_PROVIDER_VERSION=v4.9.3
 ARG CANONICAL_PROVIDER_VERSION=v4.10.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
@@ -72,7 +72,7 @@ ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
 ARG TWO_NODE=false
-ARG KINE_VERSION=0.11.4
+ARG KINE_VERSION=0.15.0
 
 # MAAS Variables
 ARG IS_MAAS=false
@@ -99,14 +99,6 @@ ARG EFI_IMG_SIZE=2200
 # internal variables
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
-
-# Pin UKI to Kairos v3.5.9: systemd 257.x dropped the boot-assessment
-# suffix from sd-boot entry IDs, breaking `bootentry` selection and
-# assessment fallback on newer builds (refs: kairos-io/kairos#3831,
-# kairos-io/kairos#4046). v3.5.9 ships systemd 256.x where it still works.
-IF [ "$IS_UKI" = "true" ]
-    LET KAIROS_VERSION=v3.5.9
-END
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
