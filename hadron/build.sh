@@ -3,113 +3,117 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-TARGET=all
+TARGET=hadron
 FIPS=false
-KAIROS_VERSION=v4.1.0
-HADRON_VERSION="${HADRON_VERSION:-v0.4.0}"
-OUTPUT=""
-MODULES_IMAGE="${MODULES_IMAGE:-}"
-HADRON_IMAGE=""
+IS_UKI=false
+OUTPUT=load
+HADRON_VERSION="${HADRON_VERSION:-v0.5.1}"
+KAIROS_VERSION="${KAIROS_VERSION:-v4.1.2}"
+KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION:-v0.16.1}"
+SPECTRO_REPO="${SPECTRO_REPO:-us-east1-docker.pkg.dev/spectro-images/dev/arun}"
+MODULES_IMAGE=""
 
 default_modules_image() {
-  echo "us-east1-docker.pkg.dev/spectro-images/dev/arun/hadron/modules:${HADRON_VERSION}"
+	echo "$SPECTRO_REPO/base/hadron-modules:${HADRON_VERSION}"
 }
+
+hadron_image_tag() {
+	local variant=""
+	if [ "${FIPS}" = "true" ]; then
+		variant="-fips"
+	elif [ "${IS_UKI}" = "true" ]; then
+		variant="-uki"
+	fi
+	echo "${SPECTRO_REPO}/base/hadron${variant}-${HADRON_VERSION}:${KAIROS_VERSION}"
+}
+
+platforms() {
+	# Multi-arch on push, linux/amd64 on local load (BuildKit can't load multi-arch
+	# images into the local docker daemon).
+	if [ "${OUTPUT}" = "push" ]; then
+	  	echo "linux/amd64,linux/arm64"
+	else
+	  	echo "linux/amd64"
+	fi
+}
+
+build_modules_image() {
+	docker buildx build \
+		--progress=plain \
+		--platform "$(platforms)" \
+		-f "${SCRIPT_DIR}/Dockerfile.modules" \
+		-t "${MODULES_IMAGE}" \
+		--build-arg HADRON_VERSION="${HADRON_VERSION}" \
+		"--${OUTPUT}" \
+		"${SCRIPT_DIR}"
+}
+
+build_hadron_image() {
+	docker buildx build \
+		--progress=plain \
+		--platform "$(platforms)" \
+		--build-arg KAIROS_VERSION="${KAIROS_VERSION}" \
+		--build-arg KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION}" \
+		--build-arg HADRON_VERSION="${HADRON_VERSION}" \
+		--build-arg FIPS="${FIPS}" \
+		--build-arg IS_UKI="${IS_UKI}" \
+		--build-arg MODULES_IMAGE="${MODULES_IMAGE}" \
+		-f "${SCRIPT_DIR}/Dockerfile" \
+		-t "${HADRON_IMAGE}" \
+		"--${OUTPUT}" \
+		"${SCRIPT_DIR}"
+}
+
+
+validate() {
+	if ! command -v docker >/dev/null 2>&1; then
+		echo "Error: docker not found on PATH" >&2
+		exit 1
+	fi
+
+  	case "${TARGET}" in
+  	  	modules|hadron) ;;
+  	  	*) echo "Invalid target: ${TARGET} (expected modules or hadron)" >&2; usage 1 ;;
+  	esac
+
+  	if [ "${FIPS}" = "true" ] && [ "${IS_UKI}" = "true" ]; then
+    	echo "Error: --fips and --uki cannot be combined (UKI is not supported in FIPS mode)" >&2
+    	exit 1
+  	fi
+}
+
 
 usage() {
   cat <<'EOF'
 Usage: build.sh [OPTIONS]
 
-Build Spectro modules (additional OS packages for hadron) and/or the Hadron base image.
-
-Targets:
-  --target modules    Build the modules image only
-  --target hadron     Build the Hadron base image only
-  --target all        Build modules, then Hadron (default)
+Build the Hadron base image (default) or the Spectro modules image.
 
 Options:
-  --fips              Build with FIPS base image and enable FIPS mode
-  --hadron-version V  Upstream Hadron version tag (default: v0.4.0)
-  --push              Build modules locally, then push the Hadron image
-  --modules-image TAG Modules image reference for the Hadron build
-  --hadron-image TAG  Hadron image reference (overrides default)
-  -h, --help          Show this help
+  --target {hadron|modules}   Image to build (default: hadron)
+  --fips                      Use the FIPS base image and enable FIPS mode
+  --uki                       Trusted boot. Not compatible with --fips.
+  --push                      Push the resulting image (multi-arch:
+                              linux/amd64,linux/arm64). Default(--load).
+  --modules-image TAG         Override the modules image tag. Defaults to
+                              ${SPECTRO_REPO}/base/hadron-modules:${HADRON_VERSION}.
+  -h, --help                  Show this help
 
-Defaults:
-  ./build.sh                  Build modules and Hadron, load both locally
-  ./build.sh --push           Build modules locally, then build and push Hadron
-  ./build.sh --target hadron  Build Hadron only, load locally
-  ./build.sh --target modules Build modules only, load locally
-
-Environment:
-  MODULES_IMAGE     Modules image reference (same as --modules-image)
-  HADRON_VERSION    Upstream Hadron version tag (same as --hadron-version)
+Environment (override defaults; CLI flags always win):
+  HADRON_VERSION          Upstream Hadron version tag (default: v0.5.1)
+  KAIROS_VERSION          Kairos version passed to kairos-init (default: v4.1.2)
+  KAIROS_INIT_VERSION     kairos-init image tag        (default: v0.16.1)
+  SPECTRO_REPO            Registry + org prefix for all built images
+                          (default: us-east1-docker.pkg.dev/spectro-images/dev/arun)
 
 Examples:
-  ./build.sh
-  ./build.sh --push
-  ./build.sh --hadron-version v0.5.0
-  ./build.sh --target hadron --modules-image hadron-modules-local:dev
-  ./build.sh --hadron-image myrepo/hadron:latest
-  ./build.sh --target modules --push
+  ./build.sh --fips --push                              # FIPS variant, pushed
+  ./build.sh --uki                                      # UKI variant, loaded locally
+  ./build.sh --target modules --push                    # build & push modules only
+  HADRON_VERSION=v0.6.0 ./build.sh --push               # override Hadron version via env
+  SPECTRO_REPO=myrepo.example.com/team ./build.sh --push  # publish under a different registry/org
 EOF
   exit "${1:-0}"
-}
-
-default_hadron_image() {
-  if [ "${FIPS}" = "true" ]; then
-    echo "us-east1-docker.pkg.dev/spectro-images/dev/arun/base/hadron-fips-${HADRON_VERSION}:${KAIROS_VERSION}"
-  else
-    echo "us-east1-docker.pkg.dev/spectro-images/dev/arun/base/hadron-${HADRON_VERSION}:${KAIROS_VERSION}"
-  fi
-}
-
-local_modules_tag() {
-  echo "hadron-modules-local:$(date +%s)"
-}
-
-docker_output_flag() {
-  case "$1" in
-    load|push) echo "--$1" ;;
-    *) echo "unknown docker output mode: $1" >&2; exit 1 ;;
-  esac
-}
-
-build_modules() {
-  local tag="$1"
-  local output_mode="$2"
-  local output_flag
-  output_flag="$(docker_output_flag "${output_mode}")"
-
-  echo "Building modules image: ${tag}"
-  DOCKER_BUILDKIT=1 docker build \
-    --platform "linux/amd64,linux/arm64" \
-    -f "${SCRIPT_DIR}/Dockerfile.modules" \
-    -t "${tag}" \
-    --build-arg HADRON_VERSION="${HADRON_VERSION}" \
-    "${output_flag}" \
-    "${SCRIPT_DIR}"
-  echo "Built modules: ${tag}"
-}
-
-build_hadron() {
-  local modules_image="$1"
-  local hadron_image="$2"
-  local output_mode="$3"
-  local output_flag
-  output_flag="$(docker_output_flag "${output_mode}")"
-
-  echo "Building Hadron image: ${hadron_image} (modules: ${modules_image})"
-  DOCKER_BUILDKIT=1 docker build \
-    --platform "linux/amd64,linux/arm64" \
-    --build-arg KAIROS_VERSION="${KAIROS_VERSION}" \
-    --build-arg HADRON_VERSION="${HADRON_VERSION}" \
-    --build-arg FIPS="${FIPS}" \
-    --build-arg MODULES_IMAGE="${modules_image}" \
-    -f "${SCRIPT_DIR}/Dockerfile" \
-    -t "${hadron_image}" \
-    "${output_flag}" \
-    "${SCRIPT_DIR}"
-  echo "Built Hadron: ${hadron_image}"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -119,88 +123,36 @@ while [[ $# -gt 0 ]]; do
       TARGET="$2"
       shift 2
       ;;
-    --fips)
-      FIPS=true
-      shift
-      ;;
-    --hadron-version)
-      [[ $# -gt 1 ]] || { echo "--hadron-version requires an argument" >&2; usage 1; }
-      HADRON_VERSION="$2"
-      shift 2
-      ;;
-    --push)
-      OUTPUT=push
-      shift
-      ;;
+    --fips)          FIPS=true;   shift ;;
+    --uki)           IS_UKI=true; shift ;;
+    --push)          OUTPUT=push; shift ;;
     --modules-image)
       [[ $# -gt 1 ]] || { echo "--modules-image requires an argument" >&2; usage 1; }
-      MODULES_IMAGE="$2"
-      shift 2
-      ;;
-    --hadron-image)
-      [[ $# -gt 1 ]] || { echo "--hadron-image requires an argument" >&2; usage 1; }
-      HADRON_IMAGE="$2"
-      shift 2
-      ;;
-    -h|--help)
-      usage 0
-      ;;
-    --*)
-      echo "Unknown option: $1" >&2
-      usage 1
-      ;;
-    *)
-      echo "Unexpected argument: $1" >&2
-      usage 1
-      ;;
+      MODULES_IMAGE="$2"; shift 2 ;;
+    -h|--help) usage 0 ;;
+    *) echo "Unknown option: $1" >&2; usage 1 ;;
   esac
 done
 
-case "${TARGET}" in
-  modules|hadron|all) ;;
-  *)
-    echo "Invalid target: ${TARGET} (expected modules, hadron, or all)" >&2
-    usage 1
-    ;;
-esac
 
-if [ "${TARGET}" = "modules" ] || [ "${TARGET}" = "all" ]; then
-  MODULES_IMAGE="${MODULES_IMAGE:-$(local_modules_tag)}"
-fi
+validate
 
-if [ "${TARGET}" = "hadron" ] || [ "${TARGET}" = "all" ]; then
-  HADRON_IMAGE="${HADRON_IMAGE:-$(default_hadron_image)}"
-fi
-
-# List the build configuration
 echo "Build configuration:"
 echo "  Target: ${TARGET}"
 echo "  FIPS: ${FIPS}"
+echo "  Trusted Boot (UKI): ${IS_UKI}"
 echo "  Hadron version: ${HADRON_VERSION}"
-echo "  Modules image: ${MODULES_IMAGE}"
-echo "  Output mode: ${OUTPUT:-load}"
+echo "  Output mode: ${OUTPUT}"
 
-if [ "${TARGET}" = "hadron" ] || [ "${TARGET}" = "all" ]; then
-  echo "  Hadron image: ${HADRON_IMAGE}"
+MODULES_IMAGE="${MODULES_IMAGE:-$(default_modules_image)}"
+echo "  Modules image: ${MODULES_IMAGE}"
+
+if [ "${TARGET}" = "modules" ]; then
+  build_modules_image
+  exit 0
 fi
 
+HADRON_IMAGE="$(hadron_image_tag)"
+echo "  Hadron image: ${HADRON_IMAGE}"
 
-
-case "${TARGET}" in
-  modules)
-    build_modules "${MODULES_IMAGE}" "${OUTPUT:-load}"
-    ;;
-  hadron)
-    build_hadron "${MODULES_IMAGE:-$(default_modules_image)}" "${HADRON_IMAGE}" "${OUTPUT:-load}"
-    ;;
-  all)
-    modules_output="load"
-    if [ "${OUTPUT}" = "push" ]; then
-      hadron_output="push"
-    else
-      hadron_output="load"
-    fi
-    build_modules "${MODULES_IMAGE}" "${modules_output}"
-    build_hadron "${MODULES_IMAGE}" "${HADRON_IMAGE}" "${hadron_output}"
-    ;;
-esac
+build_hadron_image
