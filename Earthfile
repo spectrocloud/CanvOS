@@ -715,6 +715,7 @@ provider-image:
                 DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl && \
                 install -d /usr/share/postgresql-common/pgdg && \
                 curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                DEBIAN_FRONTEND=noninteractive apt-get install -y lsb-release && \
                 echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
                 apt-get update && \
                 DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-16 postgresql-contrib-16 iputils-ping
