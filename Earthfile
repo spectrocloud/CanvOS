@@ -21,7 +21,7 @@ ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.9.21
-ARG KAIROS_VERSION=v4.0.4
+ARG KAIROS_VERSION=v4.1.2
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -29,11 +29,11 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.9.0-feat.pe8315
-ARG KUBEADM_PROVIDER_VERSION=v4.9.0-feat.pe8315
-ARG RKE2_PROVIDER_VERSION=v4.9.0-feat.pe8315
-ARG NODEADM_PROVIDER_VERSION=v4.9.2
-ARG CANONICAL_PROVIDER_VERSION=v4.9.0-feat.pe8315
+ARG K3S_PROVIDER_VERSION=v4.10.0
+ARG KUBEADM_PROVIDER_VERSION=v4.10.0
+ARG RKE2_PROVIDER_VERSION=v4.10.0
+ARG NODEADM_PROVIDER_VERSION=v4.9.3
+ARG CANONICAL_PROVIDER_VERSION=v4.10.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -84,7 +84,7 @@ ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_BRING_YOUR_OWN_KEYS=false
 # When UKI_BRING_YOUR_OWN_KEYS=true, set false to skip merging Spectro extension cert into db
-ARG ENROLL_SPECTRO_EXTENSION_CERT=false
+ARG ENROLL_SPECTRO_EXTENSION_CERT=true
 # OCI image (scratch) with palette-sysext-cert.pem; merged into UEFI db during +uki-genkey
 ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/sysext/palette-sysext-cert:latest
 
@@ -99,14 +99,6 @@ ARG EFI_IMG_SIZE=2200
 # internal variables
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
-
-# Pin UKI to Kairos v3.5.9: systemd 257.x dropped the boot-assessment
-# suffix from sd-boot entry IDs, breaking `bootentry` selection and
-# assessment fallback on newer builds (refs: kairos-io/kairos#3831,
-# kairos-io/kairos#4046). v3.5.9 ships systemd 256.x where it still works.
-IF [ "$IS_UKI" = "true" ]
-    LET KAIROS_VERSION=v3.5.9
-END
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
@@ -216,12 +208,12 @@ CHECK_SYSTEMD_VERSION:
         SYSTEMD_VER=$([ -n "$SYSTEMCTL" ] && "$SYSTEMCTL" --version 2>/dev/null | awk 'NR==1{print $2}') && \
         case "$SYSTEMD_VER" in ''|*[!0-9]*) SYSTEMD_VER=0 ;; esac && \
         echo "CHECK_SYSTEMD_VERSION: detected systemd version $SYSTEMD_VER (systemctl: ${SYSTEMCTL:-not found})" && \
-        if [ "$SYSTEMD_VER" -gt "252" ]; then \
+        if [ "$SYSTEMD_VER" -ge "254" ]; then \
             mkdir -p /etc/spectrocloud && \
             touch /etc/spectrocloud/.support-systemd-extensions && \
-            echo "CHECK_SYSTEMD_VERSION: systemd > 252 — created /etc/spectrocloud/.support-systemd-extensions"; \
+            echo "CHECK_SYSTEMD_VERSION: systemd > 254 — created /etc/spectrocloud/.support-systemd-extensions"; \
         else \
-            echo "CHECK_SYSTEMD_VERSION: systemd <= 252 — skipping systemd-extensions marker"; \
+            echo "CHECK_SYSTEMD_VERSION: systemd <= 254 — skipping systemd-extensions marker"; \
         fi
 
 iso-image-rootfs:
@@ -469,11 +461,11 @@ uki-genkey:
         # ENROLL_SPECTRO_EXTENSION_CERT command can re-sign the db when enabled.
         IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
             RUN zypper --non-interactive install efitools
+            DO +ENROLL_SPECTRO_EXTENSION_CERT \
+                --ENROLLMENT_DIR=/keys \
+                --KEK_CERT=/public-keys/KEK.pem \
+                --KEK_KEY=/private-keys/KEK.key
         END
-        DO +ENROLL_SPECTRO_EXTENSION_CERT \
-            --ENROLLMENT_DIR=/keys \
-            --KEK_CERT=/public-keys/KEK.pem \
-            --KEK_KEY=/private-keys/KEK.key
     ELSE
         COPY +uki-byok/ /keys
     END
@@ -512,19 +504,17 @@ ENROLL_SPECTRO_EXTENSION_CERT:
     ARG ENROLLMENT_DIR
     ARG KEK_CERT
     ARG KEK_KEY
-    IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
-        # Append the Spectro extension cert to the db signature list and re-sign db.auth
-        # with the KEK so the resulting db enrolls both the OS db cert and the Spectro
-        # cert into UEFI firmware. db.der is kept as the OS cert (db-0.der) since the UKI
-        # itself is signed with the OS db key, not the Spectro cert.
-        # efitools (sign-efi-sig-list / sig-list-to-certs) must already be present in the
-        # caller's image: uki-genkey installs it via zypper, uki-byok via apt-get.
-        COPY +spectro-extension-cert-esl/spectro-db.esl /spectro/spectro-db.esl
-        RUN cat /spectro/spectro-db.esl >> "$ENROLLMENT_DIR/db.esl" && \
-            sign-efi-sig-list -c "$KEK_CERT" -k "$KEK_KEY" db "$ENROLLMENT_DIR/db.esl" "$ENROLLMENT_DIR/db.auth" && \
-            cd "$ENROLLMENT_DIR" && sig-list-to-certs 'db.esl' 'db' && \
-            (cp db-0.der db.der 2>/dev/null || true)
-    END
+    # Append the Spectro extension cert to the db signature list and re-sign db.auth
+    # with the KEK so the resulting db enrolls both the OS db cert and the Spectro
+    # cert into UEFI firmware. db.der is kept as the OS cert (db-0.der) since the UKI
+    # itself is signed with the OS db key, not the Spectro cert.
+    # efitools (sign-efi-sig-list / sig-list-to-certs) must already be present in the
+    # caller's image: uki-genkey installs it via zypper, uki-byok via apt-get.
+    COPY +spectro-extension-cert-esl/spectro-db.esl /spectro/spectro-db.esl
+    RUN cat /spectro/spectro-db.esl >> "$ENROLLMENT_DIR/db.esl" && \
+        sign-efi-sig-list -c "$KEK_CERT" -k "$KEK_KEY" db "$ENROLLMENT_DIR/db.esl" "$ENROLLMENT_DIR/db.auth" && \
+        cd "$ENROLLMENT_DIR" && sig-list-to-certs 'db.esl' 'db' && \
+        (cp db-0.der db.der 2>/dev/null || true)
 
 uki-byok:
     FROM +ubuntu
@@ -556,10 +546,12 @@ uki-byok:
     RUN [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true
     RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
 
-    DO +ENROLL_SPECTRO_EXTENSION_CERT \
-        --ENROLLMENT_DIR=/output \
-        --KEK_CERT=/keys/KEK.pem \
-        --KEK_KEY=/keys/KEK.key
+    IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
+        DO +ENROLL_SPECTRO_EXTENSION_CERT \
+            --ENROLLMENT_DIR=/output \
+            --KEK_CERT=/keys/KEK.pem \
+            --KEK_KEY=/keys/KEK.key
+    END
 
     WORKDIR /output
     RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  PK  PK.esl  PK.auth
@@ -1039,27 +1031,14 @@ iso-image:
         fi
     END
 
-    # When systemd >= 252, k8s is delivered via extensions at runtime and kubeadm runs
-    # from this OS installer rootfs. kubeadm's SystemVerification preflight reads the
-    # kernel config (kubernetes/system-validators getKernelConfigReader); when no config
-    # file is found at any known path it falls back to `modprobe configs`, which fails on
-    # these kernels (CONFIG_IKCONFIG is not set, so configs.ko does not exist) with:
-    #   [ERROR SystemVerification]: ... unable to load kernel module: "configs"
-    # The config ships only as /boot/config-$kernel. On UKI boot /boot becomes the ESP and
-    # is not the rootfs the validator reads, so copy it to /usr/lib/modules/$kernel/config
-    # (a validator search path that lives in the squashfs rootfs) so preflight finds it.
-    # $kernel is derived from /lib/modules (the kernel that boots), not `uname -r` which at
-    # build time would return the build host's kernel.
+
     IF [ -f /etc/spectrocloud/.support-systemd-extensions ] && \
        [ "$OS_DISTRIBUTION" = "ubuntu" ] && \
-       [ "$ARCH" = "amd64" ]
-        RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
-            if [ -f "/boot/config-$kernel" ]; then \
-                install -D -m 0644 "/boot/config-$kernel" "/usr/lib/modules/$kernel/config"; \
-            else \
-                echo "ERROR: /boot/config-$kernel not found; kubeadm SystemVerification will fail" >&2 && \
-                exit 1; \
-            fi
+       [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "true" ]
+        COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+        RUN chmod 755 /tmp/install-kernel-headers.sh
+        RUN /tmp/install-kernel-headers.sh
+        RUN rm -rf /tmp/install-kernel-headers.sh /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli /etc/spectrocloud/.support-systemd-extensions
