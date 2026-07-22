@@ -31,3 +31,41 @@ FORCE_INTERACTIVE_INSTALL=false
 # AUTO_ENROLL_SECUREBOOT_KEYS=false     # Set to true to automatically enroll certificates on devices in Setup Mode, useful for flashing devices without user interaction
 
 # DRBD_VERSION=9.2.13  # This variable is required for Piraeus pack for drbd module installtion.
+
+# NVIDIA GPU driver pre-install (for running the NVIDIA GPU Operator in air-gapped
+# environments with driver.enabled=false). Bakes the datacenter driver + DKMS
+# kernel modules into the Ubuntu base image so GPU nodes need no host-side network.
+# See scripts/install-nvidia-drivers.sh for details.
+# INSTALL_NVIDIA_GPU_DRIVERS=true
+# NVIDIA_DRIVER_BRANCH=580                  # Driver branch (check: apt-cache search 'nvidia-headless-.*-server')
+# NVIDIA_DRIVER_TYPE=open                   # open | proprietary. Default "open" (REQUIRED on Hopper/Blackwell,
+#                                            safe on Turing/Ampere/Ada). Set "proprietary" only for pre-Turing GPUs.
+# NVIDIA_USE_CUDA_REPO=true                 # Add NVIDIA CUDA network repo at build time (has every -server branch)
+# NVIDIA_INSTALL_FABRICMANAGER=false        # true for NVSwitch / HGX systems
+# NVIDIA_INSTALL_CONTAINER_TOOLKIT=false    # true to also pre-install nvidia-container-toolkit on host (then toolkit.enabled=false)
+# NVIDIA_REBUILD_INITRD=true                # Rebuild initrd so the nouveau blacklist applies at early boot
+
+# AMD Instinct GPU driver pre-install (for running the AMD GPU Operator in air-gapped
+# environments with driver.enable=false). Mutually exclusive with the NVIDIA options
+# above. See scripts/install-amdgpu-drivers.sh and docs/amd-gpu-airgapped.md for details.
+# INSTALL_AMD_GPU_DRIVERS=true
+# AMDGPU_DRIVER_SOURCE=dkms                  # dkms | inbox. "dkms" bakes AMD's amdgpu-dkms
+#                                            #   built against the image kernel (recommended
+#                                            #   for Instinct/MI silicon). "inbox" uses the
+#                                            #   in-tree amdgpu module from linux-modules-*
+#                                            #   and skips the AMD apt repo entirely — use
+#                                            #   when the DKMS build fails against your image
+#                                            #   kernel (see docs).
+# AMDGPU_DRIVER_RELEASE=7.2.1                # Only used with dkms mode. amdgpu-install
+#                                            #   release marker. Default 7.2.1 pairs with
+#                                            #   GPU Operator v1.5.0 (ROCm 7.2.1). AMD also
+#                                            #   publishes driver-release-marker paths like
+#                                            #   30.30.1 / 30.30.4 / 31.30; either form works.
+#                                            #   31.x is tech-preview -- do not mix with a
+#                                            #   production operator. See the version-
+#                                            #   alignment table in docs/amd-gpu-airgapped.md.
+# AMDGPU_REBUILD_INITRD=false                # Default false. amdgpu is intentionally
+#                                            #   kept out of the initrd (multi-GPU init
+#                                            #   emits enough udev events to time out
+#                                            #   dracut-initqueue). It loads after
+#                                            #   switch-root via modules-load.d.

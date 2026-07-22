@@ -309,6 +309,96 @@ if [[ "$1" == "+maas-image" ]]; then
     exit 0
 fi
 
+# ---------------------------------------------------------------------------
+# AMD GPU driver prebuild (dkms mode only).
+#
+# amdgpu-dkms's ./configure fails inside Earthly's buildkit RUN sandbox
+# (see docs/amd-gpu-airgapped.md). We pre-compile the module in a plain
+# `docker run --privileged` container here on the build host -- the exact
+# environment we verified works end-to-end -- and pass the resulting tarball
+# to Earthly for a simple COPY + tar-extract + depmod inside the base image.
+# ---------------------------------------------------------------------------
+
+# Read a --FOO=bar override out of $@ without consuming it. Prints the value
+# or empty; the arg is still passed through to earthly untouched.
+peek_arg() {
+    local key="$1"
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --${key}=*) printf '%s' "${a#--${key}=}"; return ;;
+        esac
+    done
+}
+
+INSTALL_AMD_GPU_DRIVERS_EFFECTIVE="$(peek_arg INSTALL_AMD_GPU_DRIVERS "$@")"
+INSTALL_AMD_GPU_DRIVERS_EFFECTIVE="${INSTALL_AMD_GPU_DRIVERS_EFFECTIVE:-${INSTALL_AMD_GPU_DRIVERS:-false}}"
+AMDGPU_DRIVER_SOURCE_EFFECTIVE="$(peek_arg AMDGPU_DRIVER_SOURCE "$@")"
+AMDGPU_DRIVER_SOURCE_EFFECTIVE="${AMDGPU_DRIVER_SOURCE_EFFECTIVE:-${AMDGPU_DRIVER_SOURCE:-dkms}}"
+
+if [ "$INSTALL_AMD_GPU_DRIVERS_EFFECTIVE" = "true" ] && [ "$AMDGPU_DRIVER_SOURCE_EFFECTIVE" = "dkms" ]; then
+    # Derive the same BASE_IMAGE the Earthfile derives, so we compile against
+    # the same rootfs Earthly is about to build on. Only Ubuntu is supported
+    # for AMD driver pre-install; the AMD mutual-exclusion + Ubuntu-only checks
+    # elsewhere handle other OS_DISTRIBUTIONs.
+    AMDGPU_BASE_IMAGE="$(peek_arg BASE_IMAGE "$@")"
+    AMDGPU_BASE_IMAGE="${AMDGPU_BASE_IMAGE:-${BASE_IMAGE:-}}"
+    if [ -z "$AMDGPU_BASE_IMAGE" ]; then
+        _os_dist="$(peek_arg OS_DISTRIBUTION "$@")"; _os_dist="${_os_dist:-${OS_DISTRIBUTION:-ubuntu}}"
+        _os_ver="$(peek_arg OS_VERSION "$@")";       _os_ver="${_os_ver:-${OS_VERSION:-24.04}}"
+        _arch="$(peek_arg ARCH "$@")";               _arch="${_arch:-${ARCH:-amd64}}"
+        _kairos_ver="$(peek_arg KAIROS_VERSION "$@")"; _kairos_ver="${_kairos_ver:-${KAIROS_VERSION:-v4.0.4}}"
+        _kairos_url="$(peek_arg KAIROS_BASE_IMAGE_URL "$@")"; _kairos_url="${_kairos_url:-${KAIROS_BASE_IMAGE_URL:-$SPECTRO_PUB_REPO/edge}}"
+        _is_uki="$(peek_arg IS_UKI "$@")";           _is_uki="${_is_uki:-${IS_UKI:-false}}"
+
+        if [ "$_os_dist" != "ubuntu" ]; then
+            echo "AMD GPU driver pre-install requires OS_DISTRIBUTION=ubuntu (got: $_os_dist)." >&2
+            exit 1
+        fi
+        # Same tag formula as Earthfile lines ~141-151.
+        if [ "$_os_ver" = "22" ] || [ "$_os_ver" = "20" ]; then
+            _tag="kairos-${_os_dist}:${_os_ver}.04-core-${_arch}-generic-${_kairos_ver}"
+        elif [ "$_is_uki" = "true" ]; then
+            _tag="kairos-${_os_dist}:${_os_ver}-core-${_arch}-generic-${_kairos_ver}-uki"
+        else
+            _tag="kairos-${_os_dist}:${_os_ver}-core-${_arch}-generic-${_kairos_ver}"
+        fi
+        AMDGPU_BASE_IMAGE="${_kairos_url}/${_tag}"
+    fi
+
+    AMDGPU_DRIVER_RELEASE_EFFECTIVE="$(peek_arg AMDGPU_DRIVER_RELEASE "$@")"
+    AMDGPU_DRIVER_RELEASE_EFFECTIVE="${AMDGPU_DRIVER_RELEASE_EFFECTIVE:-${AMDGPU_DRIVER_RELEASE:-7.2.1}}"
+
+    echo "=== Pre-building AMD amdgpu driver (dkms mode) ==="
+    echo "    BASE_IMAGE:            $AMDGPU_BASE_IMAGE"
+    echo "    AMDGPU_DRIVER_RELEASE: $AMDGPU_DRIVER_RELEASE_EFFECTIVE"
+    prebuild_out="$(
+        BASE_IMAGE="$AMDGPU_BASE_IMAGE" \
+        AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE_EFFECTIVE" \
+        AMDGPU_ARTIFACT_DIR="$(pwd)/build" \
+        bash scripts/prebuild-amdgpu-artifact.sh
+    )" || { echo "AMD driver pre-build failed. See lines above." >&2; exit 1; }
+
+    # Last line of prebuild output is: AMDGPU_ARTIFACT_PATH=<abs-path>
+    AMDGPU_ARTIFACT_PATH="$(printf '%s\n' "$prebuild_out" | tail -1 | sed -n 's/^AMDGPU_ARTIFACT_PATH=//p')"
+    [ -s "$AMDGPU_ARTIFACT_PATH" ] || { echo "Prebuild did not emit AMDGPU_ARTIFACT_PATH; aborting." >&2; exit 1; }
+    echo "    Artifact: $AMDGPU_ARTIFACT_PATH"
+
+    # Earthly's COPY reads from the repo build-context (the directory containing
+    # the Earthfile), not from the host filesystem, so we must pass a path
+    # relative to the repo root -- not the absolute host path.
+    repo_root="$(pwd)"
+    case "$AMDGPU_ARTIFACT_PATH" in
+        "$repo_root"/*) AMDGPU_ARTIFACT_REL="${AMDGPU_ARTIFACT_PATH#$repo_root/}" ;;
+        *) echo "Prebuild artifact '$AMDGPU_ARTIFACT_PATH' is outside repo root '$repo_root'; \
+COPY into Earthly would fail. Move the artifact under the repo tree." >&2 ; exit 1 ;;
+    esac
+
+    # Thread the (repo-relative) artifact path through to Earthly. Its Earthfile
+    # ARG (added in the companion commit) picks this up and consumes the tarball.
+    set -- "$@" "--AMDGPU_ARTIFACT_PATH=$AMDGPU_ARTIFACT_REL"
+fi
+
 # Normal build flow for other targets
 if [ -z "$HTTP_PROXY" ] && [ -z "$HTTPS_PROXY" ] && [ -z "$(find certs -type f ! -name '.*' -print -quit)" ]; then
     build_without_proxy "$@"

@@ -112,6 +112,11 @@ RUN cd /usr/lib/dracut/modules.d/95iscsi && patch < /dracut-broken-iscsi-ubuntu-
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
+# Bundle the Renesas xHCI (USB 3.0) host controller driver into the initramfs so
+# installation from USB media works on hardware using that chipset. Consumed by the
+# `kairos-init -s init` dracut run below (the Earthfile skips dracut for FIPS builds).
+COPY 99-usb-media.conf /etc/dracut.conf.d/99-usb-media.conf
+
 # Copy the custom dracut modules.fips that includes 2 missing modules
 COPY modules.fips /tmp/modules.fips
 RUN kernel=$(ls /lib/modules | grep fips | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
