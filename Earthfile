@@ -63,52 +63,6 @@ ARG no_proxy=${NO_PROXY}
 
 ARG UPDATE_KERNEL=false
 
-# NVIDIA GPU driver pre-install (for air-gapped GPU Operator with driver.enabled=false).
-# When true, the NVIDIA data-center driver + DKMS kernel modules are baked into the
-# Ubuntu base image so GPU nodes need no host-side network at boot.
-ARG INSTALL_NVIDIA_GPU_DRIVERS=false
-ARG NVIDIA_DRIVER_BRANCH=580
-ARG NVIDIA_DRIVER_TYPE=open
-ARG NVIDIA_USE_CUDA_REPO=true
-ARG NVIDIA_INSTALL_FABRICMANAGER=true
-ARG NVIDIA_INSTALL_IMEX=true
-ARG NVIDIA_INSTALL_CONTAINER_TOOLKIT=false
-ARG NVIDIA_REBUILD_INITRD=true
-
-# AMD Instinct GPU driver pre-install (for air-gapped AMD GPU Operator with
-# driver.enable=false). See scripts/install-amdgpu-drivers.sh + docs/amd-gpu-airgapped.md.
-ARG INSTALL_AMD_GPU_DRIVERS=false
-# dkms | inbox. "dkms" builds AMD's amdgpu-dkms against the image kernel (default,
-# recommended for Instinct silicon). "inbox" uses the in-tree amdgpu module shipped
-# with linux-modules-* and skips the AMD apt repo — use only when the DKMS build
-# fails against your image kernel and you accept the in-tree driver's feature set.
-ARG AMDGPU_DRIVER_SOURCE=dkms
-# amdgpu-install release marker (URL segment under repo.radeon.com/amdgpu-install/<x>/).
-# Default 7.2.1 pairs with AMD GPU Operator v1.5.0 (per its release notes) and installs
-# amdgpu-dkms 6.16.13 (30.30.1 line). Empirically builds cleanly against Linux kernels
-# through 6.17 on Ubuntu 24.04. AMD publishes both ROCm-alias (7.2.1) and driver-release-
-# marker (30.30.1, 31.30) URL segments; either form is accepted here. The 31.x line is
-# tech-preview -- do not mix with a production operator. See docs/amd-gpu-airgapped.md.
-ARG AMDGPU_DRIVER_RELEASE=7.2.1
-# Path to a driver artifact produced by scripts/prebuild-amdgpu-artifact.sh
-# on the build host. Threaded in by earthly.sh when INSTALL_AMD_GPU_DRIVERS=true
-# and AMDGPU_DRIVER_SOURCE=dkms. When set, the base-image AMD block skips the
-# in-buildkit DKMS install (which fails in buildkit's RUN sandbox -- see docs)
-# and simply extracts the pre-built modules + firmware + config drop-ins.
-ARG AMDGPU_ARTIFACT_PATH=""
-# Default false: amdgpu is intentionally omitted from the initrd (see
-# scripts/install-amdgpu-drivers.sh -- multi-GPU amdgpu init emits enough
-# udev events to blow past dracut-initqueue's udev-settle timeout, dropping
-# the node into emergency mode). amdgpu loads after switch-root via
-# /etc/modules-load.d/amdgpu.conf where there is no timeout pressure.
-ARG AMDGPU_REBUILD_INITRD=false
-
-# NVIDIA and AMD driver pre-install are mutually exclusive within a single image.
-IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ] && [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
-    RUN echo "ERROR: INSTALL_NVIDIA_GPU_DRIVERS and INSTALL_AMD_GPU_DRIVERS are mutually exclusive. Enable only one." >&2 && \
-        exit 1
-END
-
 IF [ "$FIPS_ENABLED" = "true" ] && [ "$UPDATE_KERNEL" = "true" ]
     RUN echo "ERROR: UPDATE_KERNEL and FIPS_ENABLED are mutually exclusive. Cannot set both to true." >&2 && \
         exit 1
@@ -853,12 +807,6 @@ base-image:
         COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
     END
 
-    # Ensure the Renesas xHCI (USB 3.0) host controller driver is bundled into the
-    # initramfs so installation from USB media works on hardware using that chipset.
-    # Must run before the distro dracut regeneration below so the driver is included.
-    RUN mkdir -p /etc/dracut.conf.d && \
-        printf '%s\n' 'hostonly="no"' 'add_drivers+=" xhci_pci_renesas "' 'force_drivers+=" xhci_pci_renesas "' > /etc/dracut.conf.d/99-usb-media.conf
-
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         RUN apt-get update && \
@@ -868,9 +816,6 @@ base-image:
             RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
             pro attach $UBUNTU_PRO_KEY
         END
-
-        RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -931,62 +876,6 @@ base-image:
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
-        END
-
-        # NVIDIA GPU driver + DKMS kernel modules, built against the now-finalized
-        # image kernel. Runs here (not in the Dockerfile) so the kernel is settled
-        # first. Reuses install-kernel-headers.sh for ABI-exact headers.
-        IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ]
-            COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
-            COPY scripts/install-nvidia-drivers.sh /tmp/install-nvidia-drivers.sh
-            RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-nvidia-drivers.sh && \
-                NVIDIA_DRIVER_BRANCH="$NVIDIA_DRIVER_BRANCH" \
-                NVIDIA_DRIVER_TYPE="$NVIDIA_DRIVER_TYPE" \
-                NVIDIA_USE_CUDA_REPO="$NVIDIA_USE_CUDA_REPO" \
-                NVIDIA_INSTALL_FABRICMANAGER="$NVIDIA_INSTALL_FABRICMANAGER" \
-                NVIDIA_INSTALL_IMEX="$NVIDIA_INSTALL_IMEX" \
-                NVIDIA_INSTALL_CONTAINER_TOOLKIT="$NVIDIA_INSTALL_CONTAINER_TOOLKIT" \
-                NVIDIA_REBUILD_INITRD="$NVIDIA_REBUILD_INITRD" \
-                /tmp/install-nvidia-drivers.sh && \
-                rm -f /tmp/install-nvidia-drivers.sh /tmp/install-kernel-headers.sh
-        END
-
-        # AMD Instinct GPU driver (amdgpu-dkms) + kernel module, built against the
-        # now-finalized image kernel. Mutually exclusive with the NVIDIA block above.
-        IF [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
-            # dkms mode with a pre-built artifact (default path when earthly.sh
-            # produced one via scripts/prebuild-amdgpu-artifact.sh). Buildkit's
-            # RUN sandbox breaks AMD's amdgpu-dkms ./configure heredoc probe --
-            # see docs/amd-gpu-airgapped.md. The prebuild runs on the host in a
-            # plain `docker run --privileged` against the same base image, and
-            # this stage just extracts the resulting modules + firmware + drop-ins.
-            IF [ "$AMDGPU_DRIVER_SOURCE" = "dkms" ] && [ "$AMDGPU_ARTIFACT_PATH" != "" ]
-                COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
-                COPY "$AMDGPU_ARTIFACT_PATH" /tmp/amdgpu-artifact.tar.gz
-                RUN --privileged \
-                    chmod 755 /tmp/install-amdgpu-drivers.sh && \
-                    AMDGPU_DRIVER_SOURCE=dkms \
-                    AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
-                    AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
-                    AMDGPU_ARTIFACT_PATH=/tmp/amdgpu-artifact.tar.gz \
-                    /tmp/install-amdgpu-drivers.sh && \
-                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/amdgpu-artifact.tar.gz
-            ELSE
-                # inbox mode, OR dkms mode without a pre-built artifact (which
-                # will fail in buildkit's sandbox, but we let install-amdgpu-
-                # drivers.sh emit its own clear error rather than short-circuit
-                # here). install-kernel-headers.sh is only needed for the
-                # in-buildkit DKMS path; inbox mode doesn't use it.
-                COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
-                COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
-                RUN --privileged \
-                    chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
-                    AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
-                    AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
-                    AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
-                    /tmp/install-amdgpu-drivers.sh && \
-                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
-            END
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
@@ -1050,29 +939,6 @@ base-image:
         # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
         RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
-            fi
-
-        # Block nouveau and qat_4xxx at the kernel command line on every
-        # build, and pin PCI BAR layout to firmware assignments.
-        #
-        # nouveau: modern NVIDIA data-center GPUs (Ada/Hopper/Blackwell)
-        # hang in GSP init when initramfs udev auto-loads nouveau before
-        # switchroot, stalling systemd-udev-settle indefinitely. Applied
-        # unconditionally — the image may be installed onto NVIDIA hardware
-        # even when INSTALL_NVIDIA_GPU_DRIVERS=false. rd.driver.blacklist=
-        # is the load-bearing flag (dracut honors it before udev fires);
-        # modprobe.blacklist= is belt-and-braces for post-switchroot.
-        # Harmless when no NVIDIA GPU is present.
-        #
-        # qat_4xxx: on Xeon Scalable 4th/5th gen hosts with QAT devices,
-        # udev auto-loads qat_4xxx in initramfs and its probe/firmware-load
-        # stalls boot for minutes. CanvOS does not consume QAT acceleration.
-        #
-        # pci=realloc=off: firmware-assigned PCI resource layout is
-        # authoritative; kernel-side reallocation has caused BAR conflicts
-        # on some server platforms. Mirrors the installer ISO cmdline.
-        RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
-                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0 pci=realloc=off"|' /etc/cos/bootargs.cfg; \
             fi
     END
 
