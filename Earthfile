@@ -508,6 +508,7 @@ uki-genkey:
         IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
             RUN zypper --non-interactive install efitools
             DO +ENROLL_SPECTRO_EXTENSION_CERT \
+                --ARCH=$ARCH \
                 --ENROLLMENT_DIR=/keys \
                 --KEK_CERT=/public-keys/KEK.pem \
                 --KEK_KEY=/private-keys/KEK.key
@@ -529,14 +530,16 @@ download-sbctl:
     SAVE ARTIFACT /usr/bin/sbctl
 
 spectro-extension-cert:
+    ARG ARCH
     FROM --platform=linux/${ARCH} $SPECTRO_EXTENSION_CERT_IMAGE
     SAVE ARTIFACT /palette-sysext-cert.pem cert.pem
 
 spectro-extension-cert-esl:
+    ARG ARCH
     FROM --platform=linux/${ARCH} $ALPINE_IMG
     DO +BASE_ALPINE
     RUN apk add --no-cache efitools
-    COPY +spectro-extension-cert/cert.pem /cert/spectro-cert.pem
+    COPY (+spectro-extension-cert/cert.pem --ARCH=$ARCH) /cert/spectro-cert.pem
     RUN cert-to-efi-sig-list -g 8be4df61-93ca-11d2-aa0d-00e098032b8c \
         /cert/spectro-cert.pem /cert/spectro-db.esl
     SAVE ARTIFACT /cert/spectro-db.esl spectro-db.esl
@@ -547,6 +550,7 @@ spectro-extension-cert-esl:
 # when false it is a no-op.
 ENROLL_SPECTRO_EXTENSION_CERT:
     COMMAND
+    ARG ARCH
     ARG ENROLLMENT_DIR
     ARG KEK_CERT
     ARG KEK_KEY
@@ -556,7 +560,10 @@ ENROLL_SPECTRO_EXTENSION_CERT:
     # itself is signed with the OS db key, not the Spectro cert.
     # efitools (sign-efi-sig-list / sig-list-to-certs) must already be present in the
     # caller's image: uki-genkey installs it via zypper, uki-byok via apt-get.
-    COPY +spectro-extension-cert-esl/spectro-db.esl /spectro/spectro-db.esl
+    # With --arg-scope-and-set, CLI build-arg overrides (e.g. --MY_ORG / --EXPIRATION_IN_DAYS)
+    # cause COPY +target inside a COMMAND to see only the COMMAND's args — not .arg
+    # globals like ARCH. Forward ARCH explicitly.
+    COPY (+spectro-extension-cert-esl/spectro-db.esl --ARCH=$ARCH) /spectro/spectro-db.esl
     RUN cat /spectro/spectro-db.esl >> "$ENROLLMENT_DIR/db.esl" && \
         sign-efi-sig-list -c "$KEK_CERT" -k "$KEK_KEY" db "$ENROLLMENT_DIR/db.esl" "$ENROLLMENT_DIR/db.auth" && \
         cd "$ENROLLMENT_DIR" && sig-list-to-certs 'db.esl' 'db' && \
@@ -594,6 +601,7 @@ uki-byok:
 
     IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
         DO +ENROLL_SPECTRO_EXTENSION_CERT \
+            --ARCH=$ARCH \
             --ENROLLMENT_DIR=/output \
             --KEK_CERT=/keys/KEK.pem \
             --KEK_KEY=/keys/KEK.key
