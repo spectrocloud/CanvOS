@@ -245,10 +245,11 @@ BASE_ALPINE:
     RUN update-ca-certificates
 
 
-CHECK_SYSTEMD_VERSION:
+# Probe $BASE_IMAGE for systemd >= 254; used only by +CHECK_SYSTEMD_VERSION.
+systemd-extensions-support:
     FROM --platform=linux/${ARCH} $BASE_IMAGE
     # Missing/failed systemctl detection must not fail the RUN under set -e;
-    # treat as version 0 and skip the systemd-extensions marker.
+    # always emit supports-systemd-extensions as "true" or "false".
     RUN SYSTEMCTL="" ; \
         for c in systemctl /usr/bin/systemctl /bin/systemctl /usr/local/bin/systemctl /usr/sbin/systemctl /sbin/systemctl /usr/local/sbin/systemctl; do \
             if command -v "$c" >/dev/null 2>&1; then SYSTEMCTL="$c"; break; fi; \
@@ -260,13 +261,20 @@ CHECK_SYSTEMD_VERSION:
         case "$SYSTEMD_VER" in ''|*[!0-9]*) SYSTEMD_VER=0 ;; esac ; \
         echo "CHECK_SYSTEMD_VERSION: detected systemd version $SYSTEMD_VER (systemctl: ${SYSTEMCTL:-not found})" ; \
         if [ "$SYSTEMD_VER" -ge 254 ]; then \
-            mkdir -p /etc/spectrocloud && \
-            touch /etc/spectrocloud/.support-systemd-extensions && \
-            echo "CHECK_SYSTEMD_VERSION: systemd >= 254 — created /etc/spectrocloud/.support-systemd-extensions"; \
+            echo true > /supports-systemd-extensions ; \
+            echo "CHECK_SYSTEMD_VERSION: systemd >= 254 — supports-systemd-extensions=true"; \
         else \
-            echo "CHECK_SYSTEMD_VERSION: systemd < 254 — skipping systemd-extensions marker"; \
+            echo false > /supports-systemd-extensions ; \
+            echo "CHECK_SYSTEMD_VERSION: systemd < 254 — supports-systemd-extensions=false"; \
         fi
-    SAVE ARTIFACT --if-exists /etc/spectrocloud/.support-systemd-extensions .support-systemd-extensions
+    SAVE ARTIFACT /supports-systemd-extensions
+
+# Loads true/false into the caller's build env at /tmp/supports-systemd-extensions.
+# Usage: DO +CHECK_SYSTEMD_VERSION then IF [ "$(cat /tmp/supports-systemd-extensions)" = "true" ]
+CHECK_SYSTEMD_VERSION:
+    COMMAND
+    COPY --platform=linux/${ARCH} +systemd-extensions-support/supports-systemd-extensions /tmp/supports-systemd-extensions
+    RUN echo "SUPPORTS_SYSTEMD_EXTENSIONS=$(cat /tmp/supports-systemd-extensions)"
 
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
@@ -289,11 +297,10 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --if-exists --platform=linux/${ARCH} +CHECK_SYSTEMD_VERSION/.support-systemd-extensions /etc/spectrocloud/.support-systemd-extensions
-    IF [ ! -f /etc/spectrocloud/.support-systemd-extensions ]
+    DO +CHECK_SYSTEMD_VERSION
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
         COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     END
-    RUN rm -f /etc/spectrocloud/.support-systemd-extensions
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
@@ -713,7 +720,8 @@ provider-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    IF [ ! -f /etc/spectrocloud/.support-systemd-extensions ]
+    DO +CHECK_SYSTEMD_VERSION
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
         COPY --platform=linux/${ARCH} +kairos-provider-image/ /
         # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
         # instead of /system/providers/. Move to /system/providers/ and remove the new
@@ -732,7 +740,7 @@ provider-image:
 
     # As part of PE-8315, kairos-provider binaries are in /usr/local/system/providers instead of earlier /system/providers.
     # To avoid breaking existing functionality for non systemd extensions supported paths we move the binary back to original path.
-    IF [ ! -f /etc/spectrocloud/.support-systemd-extensions ]
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
         IF [ "$IS_UKI" = "true" ]
             COPY +internal-slink/slink /usr/bin/slink
             COPY --keep-ts +install-k8s/output/ /k8s
@@ -745,7 +753,7 @@ provider-image:
         END
     END
 
-    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli /etc/spectrocloud/.support-systemd-extensions
+    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
     COPY (+third-party/etcdctl --binary=etcdctl) /usr/bin/
 
@@ -853,8 +861,6 @@ base-image:
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \
     --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
     --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION .
-
-    COPY --if-exists --platform=linux/${ARCH} +CHECK_SYSTEMD_VERSION/.support-systemd-extensions /etc/spectrocloud/.support-systemd-extensions
 
     IF [ "$IS_JETSON" = "true" ]
         COPY cloudconfigs/mount.yaml /etc/kairos/mount.yaml
@@ -1136,7 +1142,8 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
-    
+
+    DO +CHECK_SYSTEMD_VERSION
 
     IF [ "$IS_UKI" = "false" ]
         COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
@@ -1183,7 +1190,7 @@ iso-image:
     END
 
 
-    IF [ -f /etc/spectrocloud/.support-systemd-extensions ] && \
+    IF [ "$(cat /tmp/supports-systemd-extensions)" = "true" ] && \
        [ "$OS_DISTRIBUTION" = "ubuntu" ] && \
        [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "true" ]
         COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
@@ -1192,7 +1199,7 @@ iso-image:
         RUN rm -rf /tmp/install-kernel-headers.sh /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
     END
 
-    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli /etc/spectrocloud/.support-systemd-extensions
+    RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
 
