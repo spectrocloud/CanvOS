@@ -24,7 +24,9 @@ hadron_image_tag() {
 	elif [ "${IS_UKI}" = "true" ]; then
 		variant="-uki"
 	fi
-	echo "${SPECTRO_REPO}/base/hadron${variant}-${HADRON_VERSION}:${KAIROS_VERSION}"
+	# Tagged with the kairos-init version, matching the base-images pipeline —
+	# kairos-init is what determines the layout and contents of the image.
+	echo "${SPECTRO_REPO}/base/hadron${variant}-${HADRON_VERSION}:${KAIROS_INIT_VERSION}"
 }
 
 platforms() {
@@ -101,8 +103,10 @@ Options:
 
 Environment (override defaults; CLI flags always win):
   HADRON_VERSION          Upstream Hadron version tag (default: v0.5.1)
-  KAIROS_VERSION          Kairos version passed to kairos-init (default: v4.1.2)
-  KAIROS_INIT_VERSION     kairos-init image tag        (default: v0.16.1)
+  KAIROS_VERSION          Kairos version passed to kairos-init --version
+                          (default: v4.1.2). Not used in the image tag.
+  KAIROS_INIT_VERSION     kairos-init image tag (default: v0.16.1). This is
+                          also the tag of the built Hadron image.
   SPECTRO_REPO            Registry + org prefix for all built images
                           (default: us-east1-docker.pkg.dev/spectro-images/dev/arun)
 
@@ -142,6 +146,8 @@ echo "  Target: ${TARGET}"
 echo "  FIPS: ${FIPS}"
 echo "  Trusted Boot (UKI): ${IS_UKI}"
 echo "  Hadron version: ${HADRON_VERSION}"
+echo "  Kairos version: ${KAIROS_VERSION}"
+echo "  kairos-init version: ${KAIROS_INIT_VERSION}"
 echo "  Output mode: ${OUTPUT}"
 
 MODULES_IMAGE="${MODULES_IMAGE:-$(default_modules_image)}"
