@@ -1086,15 +1086,11 @@ base-image:
         # modprobe.blacklist= is belt-and-braces for post-switchroot.
         # Harmless when no NVIDIA GPU is present.
         #
-        # qat_4xxx: on Xeon Scalable 4th/5th gen hosts with QAT devices,
-        # udev auto-loads qat_4xxx in initramfs and its probe/firmware-load
-        # stalls boot for minutes. CanvOS does not consume QAT acceleration.
-        #
         # pci=realloc=off: firmware-assigned PCI resource layout is
         # authoritative; kernel-side reallocation has caused BAR conflicts
         # on some server platforms. Mirrors the installer ISO cmdline.
         RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
-                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0 pci=realloc=off"|' /etc/cos/bootargs.cfg; \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nouveau.modeset=0 pci=realloc=off"|' /etc/cos/bootargs.cfg; \
             fi
     END
 
