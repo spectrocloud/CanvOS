@@ -247,6 +247,8 @@ BASE_ALPINE:
 
 # Probe $BASE_IMAGE for systemd >= 254; used only by +CHECK_SYSTEMD_VERSION.
 systemd-extensions-support:
+    ARG ARCH
+    ARG BASE_IMAGE
     FROM --platform=linux/${ARCH} $BASE_IMAGE
     # Missing/failed systemctl detection must not fail the RUN under set -e;
     # always emit supports-systemd-extensions as "true" or "false".
@@ -270,10 +272,11 @@ systemd-extensions-support:
     SAVE ARTIFACT /supports-systemd-extensions
 
 # Loads true/false into the caller's build env at /tmp/supports-systemd-extensions.
-# Usage: DO +CHECK_SYSTEMD_VERSION then IF [ "$(cat /tmp/supports-systemd-extensions)" = "true" ]
 CHECK_SYSTEMD_VERSION:
     COMMAND
-    COPY --platform=linux/${ARCH} +systemd-extensions-support/supports-systemd-extensions /tmp/supports-systemd-extensions
+    ARG ARCH
+    ARG BASE_IMAGE
+    COPY (+systemd-extensions-support/supports-systemd-extensions --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE) /tmp/supports-systemd-extensions
     RUN echo "SUPPORTS_SYSTEMD_EXTENSIONS=$(cat /tmp/supports-systemd-extensions)"
 
 iso-image-rootfs:
@@ -720,7 +723,7 @@ provider-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    DO +CHECK_SYSTEMD_VERSION
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE
     IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
         COPY --platform=linux/${ARCH} +kairos-provider-image/ /
         # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
@@ -884,15 +887,12 @@ base-image:
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
 
         IF [ ! -z "$UBUNTU_PRO_KEY" ]
             RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
             pro attach $UBUNTU_PRO_KEY
         END
-
-        RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -1143,7 +1143,7 @@ iso-image:
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
 
-    DO +CHECK_SYSTEMD_VERSION
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE
 
     IF [ "$IS_UKI" = "false" ]
         COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
