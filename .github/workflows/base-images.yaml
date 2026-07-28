@@ -87,7 +87,7 @@ jobs:
           else:
               # Standard builds - all combinations
               combinations = [
-                  ("registry.suse.com/suse/sle-micro-rancher/5.5:latest", "kairos-slem:5.5-core"),
+                  ("registry.suse.com/suse/sle-micro/5.5:latest", "kairos-slem:5.5-core"),
               ]
 
               for base_os, tag_prefix in combinations:
