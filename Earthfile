@@ -20,8 +20,8 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.8.10
-ARG KAIROS_VERSION=v4.0.3
+ARG PE_VERSION=v4.9.21
+ARG KAIROS_VERSION=v4.0.4
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -29,11 +29,11 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.7.1
-ARG KUBEADM_PROVIDER_VERSION=v4.9.0-alpha.1
-ARG RKE2_PROVIDER_VERSION=v4.8.1
-ARG NODEADM_PROVIDER_VERSION=v4.9.0-rc.1
-ARG CANONICAL_PROVIDER_VERSION=v1.3.0
+ARG K3S_PROVIDER_VERSION=v4.9.4
+ARG KUBEADM_PROVIDER_VERSION=v4.9.8
+ARG RKE2_PROVIDER_VERSION=v4.9.3
+ARG NODEADM_PROVIDER_VERSION=v4.9.3
+ARG CANONICAL_PROVIDER_VERSION=v4.9.3
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -72,7 +72,7 @@ ARG ETCD_VERSION="v3.5.13"
 
 # Two node variables
 ARG TWO_NODE=false
-ARG KINE_VERSION=0.11.4
+ARG KINE_VERSION=0.15.0
 
 # MAAS Variables
 ARG IS_MAAS=false
@@ -523,10 +523,18 @@ provider-image:
     # added PROVIDER_K8S_VERSION to fix missing image in ghcr.io/kairos-io/provider-*
     ARG IMAGE_REPO
 
+    # Generic, version-agnostic kernel-header installer. Resolves the ABI-exact
+    # headers for the kernel shipped in the base image, falling back to Ubuntu's
+    # immutable snapshot archive when the live mirror has rotated the ABI out
+    # (see scripts/install-kernel-headers.sh). Used by both the kubeadm and the
+    # UPDATE_KERNEL paths below.
+    COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+    RUN chmod 755 /tmp/install-kernel-headers.sh
+
     IF [ "$K8S_DISTRIBUTION" = "kubeadm" ] || [ "$K8S_DISTRIBUTION" = "kubeadm-fips" ] || [ "$K8S_DISTRIBUTION" = "nodeadm" ]
         ARG BASE_K8S_VERSION=$K8S_VERSION
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ] && [ "$K8S_DISTRIBUTION" = "kubeadm" ]
-            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            RUN /tmp/install-kernel-headers.sh
         END
     ELSE IF [ "$K8S_DISTRIBUTION" = "k3s" ]
         ARG K8S_DISTRIBUTION_TAG=$K3S_FLAVOR_TAG
@@ -537,7 +545,7 @@ provider-image:
     END
     IF [ "$UPDATE_KERNEL" = true ]
         IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-            RUN kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && if ! ls /usr/src | grep linux-headers-$kernel; then apt-get update && apt-get install -y "linux-headers-${kernel}"; fi
+            RUN /tmp/install-kernel-headers.sh
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
             RUN zypper --non-interactive ref && \
                 kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
@@ -650,6 +658,9 @@ provider-image:
         # Disable psql by default, Stylus will enable it when it needs it
         RUN systemctl disable postgresql
     END
+
+    # Build-time helper only; don't ship it in the final image.
+    RUN rm -f /tmp/install-kernel-headers.sh
 
     SAVE IMAGE --push $IMAGE_PATH
 
@@ -837,10 +848,17 @@ base-image:
         chmod 444 /etc/machine-id
     RUN rm /tmp/* -rf
 
-    IF [ "$DISABLE_SELINUX" = "true" ]
-    # Ensure SElinux gets disabled
-        RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
-            if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+    IF [ "$IS_UKI" != "true" ]
+        IF [ "$DISABLE_SELINUX" = "true" ]
+        # Ensure SElinux gets disabled
+            RUN if grep "security=selinux" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/security=selinux //g' /etc/cos/bootargs.cfg; fi &&\
+                if grep "selinux=1" /etc/cos/bootargs.cfg > /dev/null; then sed -i 's/selinux=1/selinux=0/g' /etc/cos/bootargs.cfg; fi
+        END
+
+        # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
+        RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
+            fi
     END
 
 KAIROS_RELEASE:

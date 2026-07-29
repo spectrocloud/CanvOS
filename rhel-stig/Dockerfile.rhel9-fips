@@ -1,7 +1,7 @@
-FROM quay.io/kairos/kairos-init:v0.8.5 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 FROM registry.access.redhat.com/ubi9-init:9.4-6
 
-ARG KAIROS_VERSION=v4.0.3
+ARG KAIROS_VERSION=v4.0.4
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
 # Credentials come from a BuildKit secret (never in image layers, build args, or docker history).
