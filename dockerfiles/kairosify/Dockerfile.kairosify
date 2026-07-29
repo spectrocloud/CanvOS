@@ -12,10 +12,16 @@ ARG BASE_OS_IMAGE
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
 
+# open-vm-tools: kairos-init installs the VMware guest agent for the SUSE family
+# but not for Debian/Ubuntu, and the ubuntu-kairos-base Dockerfile that used to
+# install it explicitly is no longer part of this build. Without vmtoolsd running,
+# vSphere reports blank IP Addresses / DNS Name for the guest (PE-9173).
 RUN if echo "${BASE_OS_IMAGE}" | grep -q ubuntu; then \
         apt-get update && apt-get install -y --no-install-recommends \
             dracut dracut-network isc-dhcp-common isc-dhcp-client cloud-guest-utils \
+            open-vm-tools \
             $([ "$BASE_OS_IMAGE" != "ubuntu:20.04" ] && echo "dracut-live"); \
+        systemctl enable open-vm-tools.service; \
     fi
 
 RUN if echo "${BASE_OS_IMAGE}" | grep -q opensuse; then \
