@@ -66,8 +66,7 @@ RUN zypper --non-interactive rm -y --clean-deps \
           /etc/dracut.conf.d/99-elemental-systemd.conf \
           /etc/dracut.conf.d/02-elemental-immutable-rootfs.conf \
           /etc/dracut.conf.d/02-elemental-setup-initramfs.conf \
-          /etc/dracut.conf.d/50-elemental-initrd.conf; \
-    rm -rf /usr/lib/dracut/modules.d/35network-legacy
+          /etc/dracut.conf.d/50-elemental-initrd.conf
 
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -m "generic" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
