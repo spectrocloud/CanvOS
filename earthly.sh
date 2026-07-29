@@ -53,10 +53,11 @@ function build_with_proxy() {
         -e HTTP_PROXY="$HTTP_PROXY" \
         -e NO_PROXY="$NO_PROXY" \
         -e no_proxy="$NO_PROXY" \
+        "${DOCKER_SECRET_ENV[@]}" \
         -v "$(pwd)":/workspace \
         -v "$(pwd)/certs:/usr/local/share/ca-certificates:ro" \
         --entrypoint /workspace/earthly-entrypoint.sh \
-        "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "$@"
+        "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "${EARTHLY_SECRET_ARGS[@]}" "$@"
 }
 
 function build_without_proxy() {
@@ -67,7 +68,7 @@ function build_without_proxy() {
     fi
     
     # Run Earthly in Docker to create artifacts  Variables are passed from the .arg file
-    docker run --privileged ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "$@"
+    docker run --privileged ${DOCKER_CONFIG_MOUNT:+"$DOCKER_CONFIG_MOUNT"} -v /var/run/docker.sock:/var/run/docker.sock --rm --env EARTHLY_BUILD_ARGS -t -e GLOBAL_CONFIG="$global_config" "${DOCKER_SECRET_ENV[@]}" -v "$(pwd)":/workspace "$SPECTRO_PUB_REPO"/third-party/edge/earthly/earthly:"$EARTHLY_VERSION" --allow-privileged "${EARTHLY_SECRET_ARGS[@]}" "$@"
 }
 
 function print_os_pack() {
@@ -107,6 +108,66 @@ PE_VERSION=$(git describe --abbrev=0 --tags)
 SPECTRO_PUB_REPO=us-docker.pkg.dev/palette-images
 EARTHLY_VERSION=v0.8.15
 source .arg
+
+# ---------------------------------------------------------------------------
+# Secret handling
+#
+# Some build inputs (currently only the Ubuntu Pro token) must NEVER appear in
+# `docker history`, Earthly build-arg metadata, the build cache, shell history,
+# or any process argv. We collect them here, prompt for any that aren't
+# pre-exported, and forward them into the build via:
+#   - `docker run -e NAME` (no =value)         -> passthrough into the earthly
+#                                                 container's env
+#   - `earthly --secret NAME` (no =value)      -> Earthly reads the value from
+#                                                 its env and hands it to
+#                                                 BuildKit as a secret, which
+#                                                 the Earthfile consumes via
+#                                                 `RUN --secret NAME ...`
+# Both forms keep the value off the command line.
+# ---------------------------------------------------------------------------
+EARTHLY_SECRET_ARGS=()
+DOCKER_SECRET_ENV=()
+
+if [ "${UBUNTU_PRO_ATTACH:-false}" = "true" ]; then
+    # Catch the legacy pattern (token sitting in `.arg`) early - that's the
+    # exact thing we're trying to avoid.
+    if [ -f .arg ] && grep -qE '^[[:space:]]*UBUNTU_PRO_KEY[[:space:]]*=' .arg; then
+        echo >&2 "WARNING: UBUNTU_PRO_KEY is set in .arg. Remove it - tokens placed there"
+        echo >&2 "         leak via the build cache and process listings. Provide it via"
+        echo >&2 "         the UBUNTU_PRO_KEY env var or the interactive prompt instead."
+    fi
+
+    if [ -z "${UBUNTU_PRO_KEY:-}" ]; then
+        # Prompt without echoing. Prefer /dev/tty so the prompt works even when
+        # stdin has been redirected (common in CI wrappers).
+        if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+            printf "Enter Ubuntu Pro token (input hidden): " >/dev/tty
+            stty -echo </dev/tty
+            IFS= read -r UBUNTU_PRO_KEY </dev/tty
+            stty echo </dev/tty
+            printf "\n" >/dev/tty
+        elif [ -t 0 ]; then
+            read -rs -p "Enter Ubuntu Pro token (input hidden): " UBUNTU_PRO_KEY
+            echo
+        else
+            echo >&2 "Error: UBUNTU_PRO_ATTACH=true but UBUNTU_PRO_KEY is not set and"
+            echo >&2 "       no terminal is available to prompt for it. Export"
+            echo >&2 "       UBUNTU_PRO_KEY before invoking earthly.sh, e.g.:"
+            echo >&2 "         read -rs UBUNTU_PRO_KEY && export UBUNTU_PRO_KEY"
+            echo >&2 "         ./earthly.sh +iso"
+            exit 1
+        fi
+    fi
+
+    if [ -z "${UBUNTU_PRO_KEY:-}" ]; then
+        echo >&2 "Error: Empty Ubuntu Pro token. Aborting."
+        exit 1
+    fi
+
+    export UBUNTU_PRO_KEY
+    DOCKER_SECRET_ENV=(-e UBUNTU_PRO_KEY)
+    EARTHLY_SECRET_ARGS=(--secret UBUNTU_PRO_KEY)
+fi
 
 # Workaround to support deprecated field PROXY_CERT_PATH
 if [ -n "$PROXY_CERT_PATH" ]; then
