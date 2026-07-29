@@ -29,11 +29,19 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.9.5
-ARG KUBEADM_PROVIDER_VERSION=v4.9.8
-ARG RKE2_PROVIDER_VERSION=v4.9.3
-ARG NODEADM_PROVIDER_VERSION=v4.9.3
-ARG CANONICAL_PROVIDER_VERSION=v4.9.3
+# Release-stream suffix for the GCS "latest stable" marker files (rc-4.9 -> 49, rc-4.8 -> 48).
+# Derived from the git branch name, falling back to PE_VERSION for feature branches.
+ARG PROVIDER_VERSION_STREAM=$(s=$(echo "${EARTHLY_GIT_BRANCH}" | grep -oE '[0-9]+\.[0-9]+' | head -n1); [ -z "$s" ] && s=$(echo "${PE_VERSION}" | grep -oE '[0-9]+\.[0-9]+' | head -n1); echo "$s" | tr -d '.')
+ARG PROVIDER_MARKER_BASE_URL=https://storage.googleapis.com/spectro-prow-artifacts/release
+
+# Provider versions are read at build time from the GCS marker files
+# (<provider>/latest_stable_image_<stream>.txt) and printed to the build log.
+# If a marker can't be fetched, the pinned fallback after "||" keeps the build working.
+ARG K3S_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-k3s/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.5; echo "provider-k3s (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG KUBEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-kubeadm/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.8; echo "provider-kubeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG RKE2_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-rke2/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.3; echo "provider-rke2 (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG NODEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-nodeadm/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.3; echo "provider-nodeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG CANONICAL_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-canonical/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.3; echo "provider-canonical (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -702,6 +710,7 @@ kairos-provider-image:
     ELSE IF [ "$K8S_DISTRIBUTION" = "canonical" ]
          ARG PROVIDER_BASE=$SPECTRO_PUB_REPO/edge/kairos-io/provider-canonical:$CANONICAL_PROVIDER_VERSION
     END
+    RUN echo "==> Using provider image (K8S_DISTRIBUTION=${K8S_DISTRIBUTION}): ${PROVIDER_BASE}"
     FROM --platform=linux/${ARCH} $PROVIDER_BASE
     SAVE ARTIFACT ./*
 
