@@ -10,35 +10,55 @@ RHEL 9 STIG (Security Technical Implementation Guide) compliance is required for
 
 ### Prerequisites
 
-- Red Hat subscription credentials (username and password)
+- Red Hat subscription credentials (username and password), stored in a **YAML file** (not on the shell — avoids history and process listings)
 - Docker installed and running (BuildKit enabled; the build script sets `DOCKER_BUILDKIT=1`)
 - Access to Red Hat repositories (RHEL 9 packages required)
 
 **Building on non-RHEL hosts (Ubuntu, etc.):** subscription-manager runs inside the UBI container, so the host OS does not need to be RHEL. The build works on any Docker host.
 
+### RHSM credentials file
+
+Same idea as `ubuntu-fips/*/pro-attach-config.yaml`: edit `rhel-stig/rhsm-credentials.yaml` in the repo (placeholders until you set real values). Restrict permissions on the machine where you build:
+
+```bash
+cd rhel-stig
+# Edit username / password in rhsm-credentials.yaml, then:
+chmod 600 rhsm-credentials.yaml
+```
+
+Do not commit real RHSM credentials; only placeholder values belong in version control.
+
+| Environment variable | Default | Meaning |
+| -------------------- | ------- | ------- |
+| `RHSM_CREDENTIALS_FILE` | `rhel-stig/rhsm-credentials.yaml` next to `build.sh.rhel9` | Path to YAML with `username` and `password` keys |
+
 ### Building Non-FIPS STIG Image
 
 ```bash
-bash build.sh.rhel9 <username> <password> [<base image name>] [false]
+bash build.sh.rhel9 [BASE_IMAGE] [false]
 ```
 
 Example:
+
 ```bash
-bash build.sh.rhel9 myuser@example.com mypassword rhel9-byoi-stig false
+cd rhel-stig
+bash build.sh.rhel9 rhel9-byoi-stig false
 ```
 
 ### Building FIPS STIG Image
 
 ```bash
-bash build.sh.rhel9 <username> <password> [<base image name>] [true]
+bash build.sh.rhel9 [BASE_IMAGE] [true]
 ```
 
 Example:
+
 ```bash
-bash build.sh.rhel9 myuser@example.com mypassword rhel9-byoi-stig-fips true
+cd rhel-stig
+bash build.sh.rhel9 rhel9-byoi-stig-fips true
 ```
 
-**Note**: Red Hat subscription credentials are required to build these images as RHEL 9 STIG packages are only available through Red Hat repositories. Credentials are passed via Docker BuildKit secrets (not build args) and are never stored in image layers. Requires Docker BuildKit (default in Docker 23+; set `DOCKER_BUILDKIT=1` for older versions).
+**Note**: Red Hat subscription credentials are required to build these images as RHEL 9 STIG packages are only available through Red Hat repositories. The whole YAML file is passed to Docker as a BuildKit secret (same pattern as `ubuntu-fips/pro-attach-config.yaml`) — credentials are parsed inside the Dockerfile with `sed` and never appear in image layers, build args, or `docker history`. Requires Docker BuildKit (default in Docker 23+; set `DOCKER_BUILDKIT=1` for older versions).
 
 ## Using the Base Image
 
