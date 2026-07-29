@@ -47,6 +47,28 @@ RUN rpm --import /tmp/suse-build-key.asc && rm -f /tmp/suse-build-key.asc && \
     echo "=== enabled repositories ===" && zypper --non-interactive lr --uri && \
     zypper --non-interactive --gpg-auto-import-keys refresh
 
+# SLE Micro for Rancher ships Rancher Elemental, a competing immutable-OS stack.
+# Its dracut modules, systemd services and /system/oem layout files race with
+# Kairos immucore and prevent sysroot.mount from landing. Remove before kairos-init.
+RUN zypper --non-interactive rm -y --clean-deps \
+        elemental elemental-register1.5 elemental-support1.5 \
+        elemental-system-agent elemental-toolkit elemental-updater \
+      2>/dev/null || true; \
+    for svc in elemental-setup-reconcile elemental-register-reset \
+               elemental-register elemental-setup-network \
+               elemental-setup-fs elemental-populate-node-labels \
+               elemental-system-agent elemental-setup-rootfs \
+               elemental-setup-boot elemental-setup-initramfs \
+               elemental-register-install elemental-immutable-rootfs; do \
+      systemctl mask "${svc}.service" 2>/dev/null || true; \
+    done; \
+    rm -f /system/oem/*_elemental-* \
+          /etc/dracut.conf.d/99-elemental-systemd.conf \
+          /etc/dracut.conf.d/02-elemental-immutable-rootfs.conf \
+          /etc/dracut.conf.d/02-elemental-setup-initramfs.conf \
+          /etc/dracut.conf.d/50-elemental-initrd.conf; \
+    rm -rf /usr/lib/dracut/modules.d/35network-legacy
+
 COPY --from=kairos-init /kairos-init /kairos-init
 RUN /kairos-init -l debug -m "generic" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
 
