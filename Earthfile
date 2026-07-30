@@ -1192,9 +1192,9 @@ iso-image:
     # branding" cp writes to a tmpfs path that is lost on reboot, so
     # /grubmenu never lands on the persistent state partition and GRUB
     # cannot find the Palette Registration menuentry. See
-    # slem/oem/09_grub_branding_fixup.yaml for full explanation.
+    # slem/5.5/oem/09_grub_branding_fixup.yaml for full explanation.
     IF [ "$OS_DISTRIBUTION" = "sles" ] && [ "$OS_VERSION" = "5.5" ]
-        COPY slem/oem/09_grub_branding_fixup.yaml /system/oem/09_grub_branding_fixup.yaml
+        COPY slem/5.5/oem/09_grub_branding_fixup.yaml /system/oem/09_grub_branding_fixup.yaml
     END
 
     IF [ "$IS_CLOUD_IMAGE" = "true" ]
