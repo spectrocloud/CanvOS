@@ -9,7 +9,7 @@ on:
         type: string
         default: ""
       kairos_init_image:
-        description: "Kairos Init Image"
+        description: "Kairos Init Image (its version tags the built base images)"
         required: false
         type: string
         default: "quay.io/kairos/kairos-init:v0.16.1"
@@ -27,7 +27,7 @@ on:
         type: string
         default: "generic"
       kairos_version:
-        description: "Kairos Version"
+        description: "Kairos Version (passed to kairos-init --version; not used in the image tag)"
         required: false
         type: string
         default: "v4.1.2"
@@ -40,7 +40,7 @@ on:
         description: "Registry prefix for output images"
         required: false
         type: string
-        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8787-vipsharm/edge"
+        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8787/edge"
 
 jobs:
   generate-matrix:
@@ -59,15 +59,33 @@ jobs:
           registry_prefix = "${{ github.event.inputs.registry_prefix }}"
           arch = "${{ github.event.inputs.arch }}"
           model = "${{ github.event.inputs.model }}"
-          kairos_version = "${{ github.event.inputs.kairos_version }}"
+          kairos_init_image = "${{ github.event.inputs.kairos_init_image }}"
           trusted_boot = "${{ github.event.inputs.trusted_boot }}" == "true"
+
+          def kairos_init_version(image):
+              """Version component of the kairos-init image reference.
+
+              Base images are tagged with the kairos-init version (not the
+              Kairos version) because kairos-init is what determines the
+              layout and contents of the produced image. Earthfile's
+              KAIROS_INIT_VERSION must match this.
+              """
+              ref = image.rsplit('/', 1)[-1]
+              if '@' in ref:  # digest form: kairos-init@sha256:abc...
+                  return ref.split('@', 1)[1].replace(':', '-')
+              if ':' in ref:
+                  return ref.split(':', 1)[1]
+              return 'latest'
+
+          init_version = kairos_init_version(kairos_init_image)
+          print(f"Tagging with kairos-init version: {init_version}")
 
           matrix = []
 
           if base_os_image:
               # Custom base OS image
               simple_name = base_os_image.split('/')[-1].replace(':', '-')
-              tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{kairos_version}"
+              tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{init_version}"
               if trusted_boot:
                   tag += "-uki"
 
@@ -78,7 +96,7 @@ jobs:
 
           elif trusted_boot:
               # UKI builds - only Ubuntu 24.04
-              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
+              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{init_version}-uki"
               matrix.append({
                   "base_os": "ubuntu:24.04",
                   "tag": tag,
@@ -87,11 +105,15 @@ jobs:
           else:
               # Standard builds - all combinations
               combinations = [
-                  ("registry.suse.com/suse/sle-micro/5.5:latest", "kairos-slem:5.5-core"),
+                  ("ubuntu:20.04", "kairos-ubuntu:20.04-core"),
+                  ("ubuntu:22.04", "kairos-ubuntu:22.04-core"),
+                  ("ubuntu:24.04", "kairos-ubuntu:24.04-core"),
+                  ("opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core"),
+                  ("registry.suse.com/suse/sle-micro-rancher/5.4:latest", "kairos-slem:5.4-core"),
               ]
 
               for base_os, tag_prefix in combinations:
-                  tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
+                  tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{init_version}"
                   matrix.append({
                       "base_os": base_os,
                       "tag": tag,
@@ -174,10 +196,10 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Input Parameters:**" >> $GITHUB_STEP_SUMMARY
           echo "- Base OS Image: ${{ github.event.inputs.base_os_image || 'Default combinations' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Kairos Init Image: ${{ github.event.inputs.kairos_init_image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Kairos Init Image: ${{ github.event.inputs.kairos_init_image }} (its version tags the built images)" >> $GITHUB_STEP_SUMMARY
           echo "- Architecture: ${{ github.event.inputs.arch }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model: ${{ github.event.inputs.model }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Kairos Version: ${{ github.event.inputs.kairos_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Kairos Version: ${{ github.event.inputs.kairos_version }} (passed to kairos-init --version)" >> $GITHUB_STEP_SUMMARY
           echo "- Trusted Boot: ${{ github.event.inputs.trusted_boot }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Built Images:**" >> $GITHUB_STEP_SUMMARY
