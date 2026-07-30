@@ -1186,6 +1186,17 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+
+    # Workaround for kairos-agent v2.30.2 install-time mount-lifecycle bug on
+    # SLE Micro Rancher 5.5: /system/oem/08_grub.yaml's after-install "Grub
+    # branding" cp writes to a tmpfs path that is lost on reboot, so
+    # /grubmenu never lands on the persistent state partition and GRUB
+    # cannot find the Palette Registration menuentry. See
+    # slem/oem/09_grub_branding_fixup.yaml for full explanation.
+    IF [ "$OS_DISTRIBUTION" = "sles" ] && [ "$OS_VERSION" = "5.5" ]
+        COPY slem/oem/09_grub_branding_fixup.yaml /system/oem/09_grub_branding_fixup.yaml
+    END
+
     IF [ "$IS_CLOUD_IMAGE" = "true" ]
         COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
         COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
