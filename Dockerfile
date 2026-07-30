@@ -34,11 +34,11 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 
 ### To install the nginx package for Ubuntu  ###
 
-#TODO: Remove the following line. This is only for dev purpose.
+#TODO: Remove the following line. This is only for QA/dev purpose.
 
-# RUN useradd -m kairos && echo "kairos:kairos" | chpasswd
-# RUN adduser kairos sudo
-# RUN echo '%sudo ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+RUN useradd -m qauser && echo "qauser:qauser" | chpasswd
+RUN adduser qauser sudo
+RUN echo '%sudo ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
 # sbctl and mokutil are useful tools to check secure boot status, manage secure boot keys.
 # RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
