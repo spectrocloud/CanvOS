@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 ARG BASE_IMAGE=registry.access.redhat.com/ubi10-init:10.2
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.16.1
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.16.2
 
 FROM $KAIROS_INIT_IMAGE AS kairos-init
 FROM $BASE_IMAGE
@@ -28,10 +28,10 @@ RUN dnf config-manager --disable \
 # in `docker history`. ORGNAME and SATHOSTNAME are not secret and stay as build args:
 RUN rm /etc/rhsm-host
 RUN rpm -Uvh http://${SATHOSTNAME}/pub/katello-ca-consumer-latest.noarch.rpm
-RUN --mount=type=secret,id=SAT_ACTIVATION_KEY,env=SAT_ACTIVATION_KEY \
-  : "${SAT_ACTIVATION_KEY:?missing --secret id=SAT_ACTIVATION_KEY,env=SAT_ACTIVATION_KEY}" \
+RUN --mount=type=secret,id=KEYNAME,env=KEYNAME \
+  : "${KEYNAME:?missing --secret id=KEYNAME,env=KEYNAME}" \
   && : "${ORGNAME:?missing --build-arg ORGNAME}" \
-  && subscription-manager register --org="${ORGNAME}" --activationkey="${SAT_ACTIVATION_KEY}" \
+  && subscription-manager register --org="${ORGNAME}" --activationkey="${KEYNAME}" \
   && yum repolist \
   && dnf clean all
 

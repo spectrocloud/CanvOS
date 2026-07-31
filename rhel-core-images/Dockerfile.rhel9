@@ -1,9 +1,7 @@
 # syntax=docker/dockerfile:1
-FROM quay.io/kairos/kairos-init:v0.16.1 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.16.2 AS kairos-init
 FROM registry.access.redhat.com/ubi9-init:9.4-6
 
-ARG USERNAME
-ARG PASSWORD
 ARG KAIROS_VERSION=v4.1.2
 
 # EPEL: prefer mirror redirector; dl.fedoraproject.org often returns 503 under load.
@@ -11,7 +9,12 @@ RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-lat
     dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm'
 
 # Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
-RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
+RUN --mount=type=secret,id=RHSM_USERNAME,env=RHSM_USERNAME \
+    --mount=type=secret,id=RHSM_PASSWORD,env=RHSM_PASSWORD \
+  : "${RHSM_USERNAME:?missing --secret id=RHSM_USERNAME,env=RHSM_USERNAME}" \
+  && : "${RHSM_PASSWORD:?missing --secret id=RHSM_PASSWORD,env=RHSM_PASSWORD}" \
+  && rm /etc/rhsm-host \
+  && subscription-manager register --username "${RHSM_USERNAME}" --password "${RHSM_PASSWORD}" \
   && yum repolist \
   && subscription-manager attach --auto \
   && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \

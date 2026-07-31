@@ -4,38 +4,49 @@
 
 Follow steps below to execute the build process on the host with access to Red Hat Subscription Management system (redhat.com) and by using Red Hat username and password.
 
-To build the image provide username and password for Red Hat Subscription Manager to register the system and install packages during the build process.
+### Quick start (recommended): `build.sh`
+
+```bash
+export RHSM_USERNAME='<RHSM username>'
+export RHSM_PASSWORD='<RHSM password>'
+
+bash build.sh --ver 8     # -> palette-rhel8:latest
+bash build.sh --ver 9     # -> palette-rhel9:latest
+bash build.sh --ver 10    # -> palette-rhel10:latest
+
+# custom name, and push to a registry in one step
+bash build.sh --ver 10 --tag <local-registry>/<image>:<tag> --push
+```
+
+| flag | |
+|---|---|
+| `--ver <8\|9\|10>` | RHEL major version; selects `Dockerfile.rhel<N>` (required) |
+| `--tag <image>` | image name to build (default `palette-rhel<N>:latest`) |
+| `--push` | `docker push` the image after a successful build; requires `--tag` |
+
+`--push` refuses to run without `--tag`, since the default name is unqualified and pushing it
+would fail or silently target Docker Hub. Log in to the registry (`docker login`) first.
+
+**Credentials are exported, not passed as `--build-arg`.** The build fails immediately naming the missing variable if either is unset.
+
+The raw `docker build` invocations below are equivalent — use them if you need to pass extra
+flags. Note they now require `--secret` rather than `--build-arg USERNAME=... PASSWORD=...`.
 
 To build RHEL 8 Kairos Image, execute:
 ```
-docker build -t <local-registry>/<image>:<image-tag> --build-arg USERNAME=<RHSM username> --build-arg PASSWORD='<RHSM password>' -f Dockerfile.rhel8.
+docker build -t <local-registry>/<image>:<image-tag> --secret id=RHSM_USERNAME,env=RHSM_USERNAME --secret id=RHSM_PASSWORD,env=RHSM_PASSWORD -f Dockerfile.rhel8 .
 ```
 
 To build RHEL 9 Kairos Image, execute:
 ```
-docker build -t <local-registry>/<image>:<image-tag> --build-arg USERNAME=<RHSM username> --build-arg PASSWORD='<RHSM password>' -f Dockerfile.rhel9 .
+docker build -t <local-registry>/<image>:<image-tag> --secret id=RHSM_USERNAME,env=RHSM_USERNAME --secret id=RHSM_PASSWORD,env=RHSM_PASSWORD -f Dockerfile.rhel9 .
 ```
 
 To build RHEL 10 Kairos Image, execute:
 ```
-export RHSM_USERNAME='<RHSM username>'
-export RHSM_PASSWORD='<RHSM password>'
-
-docker build -t <local-registry>/<image>:<image-tag> \
-  --secret id=RHSM_USERNAME,env=RHSM_USERNAME \
-  --secret id=RHSM_PASSWORD,env=RHSM_PASSWORD \
-  -f Dockerfile.rhel10 .
+docker build -t <local-registry>/<image>:<image-tag> --secret id=RHSM_USERNAME,env=RHSM_USERNAME --secret id=RHSM_PASSWORD,env=RHSM_PASSWORD -f Dockerfile.rhel10 .
 ```
 
-Unlike the RHEL 8 and RHEL 9 Dockerfiles, RHEL 10 takes the subscription credentials as
-BuildKit secrets sourced from environment variables rather than as `--build-arg`. They are
-exposed as environment variables only inside the single `RUN` that registers the system, so
-they never become build args and never appear in an image layer or in `docker history`. The
-build fails immediately with a message naming the missing flag if either secret is absent.
-
-If you prefer keeping credentials in a file instead of the environment, `--secret
-id=RHSM_USERNAME,src=<file>` works the same way; `rhel-stig/` uses that variant with a
-`rhsm-credentials.yaml`.
 
 ### RHEL 10 notes
 
@@ -70,7 +81,23 @@ The build must run on an `x86_64` host. Emulating `linux/amd64` on Apple Silicon
 
 ## Build the image using Red Hat Satellite and mirrored repositories
 
-This scenario is for the environment where Red Hat Satellite must be used and access to public Red Hat repositories is not possible. For this case use Dockerfiles `Dockerfile.rhel9.sat` and `Dockerfile.rhel8.sat` - these files are modified to use Red Hat Satellite Activation key to register host and install all required packages.
+This scenario is for the environment where Red Hat Satellite must be used and access to public Red Hat repositories is not possible. For this case use Dockerfiles `Dockerfile.rhel8.sat`, `Dockerfile.rhel9.sat` and `Dockerfile.rhel10.sat` - these files are modified to use Red Hat Satellite Activation key to register host and install all required packages.
+
+### Quick start (recommended): `build-sat.sh`
+
+```bash
+export KEYNAME='<activation key>'
+
+bash build-sat.sh 9 --org <Satellite org> --satellite <Satellite hostname> \
+  --base-image <mirrored ubi image> \
+  --kairos-init <mirrored kairos-init image> \
+  --tag <local-registry>/<image>:<tag>
+```
+
+Only `--org` and `--satellite` are required; `--base-image`, `--kairos-init` and `--tag` fall
+back to the Dockerfile defaults and `palette-rhel<N>:latest`.
+
+**The activation key is exported, not passed as `--build-arg`.** The build fails immediately if `KEYNAME` is unset or `--org`/`--satellite` are missing.
 
 ### Prerequisites
 
@@ -114,41 +141,40 @@ KEYNAME - Name of the Activation key with repositories attached, for example `rh
 
 To build RHEL 8 Kairos Image, execute:
 ```
-docker build -t <local-registry>/<image>:<image-tag> --build-arg BASE_IMAGE=<base image path> --build-arg KAIROS_FRAMEWORK_IMAGE='<Kairos Framework Path>' --build-arg SATHOSTNAME=<Satellite hostname>  --build-arg ORGNAME=<Satellite Org Name> --build-arg KEYNAME=<Activation key name> -f Dockerfile.rhel8.sat .
+docker build -t <local-registry>/<image>:<image-tag> --secret id=KEYNAME,env=KEYNAME --build-arg BASE_IMAGE=<base image path> --build-arg KAIROS_FRAMEWORK_IMAGE='<Kairos Framework Path>' --build-arg SATHOSTNAME=<Satellite hostname> --build-arg ORGNAME=<Satellite Org Name> -f Dockerfile.rhel8.sat .
 ```
 
 To build RHEL 9 Kairos Image, execute:
 ```
-docker build -t <local-registry>/<image>:<image-tag> --build-arg BASE_IMAGE=<base image path> --build-arg KAIROS_FRAMEWORK_IMAGE='<Kairos Framework Path>' --build-arg SATHOSTNAME=<Satellite hostname>  --build-arg ORGNAME=<Satellite Org Name> --build-arg KEYNAME=<Activation key name> -f Dockerfile.rhel9.sat .
+docker build -t <local-registry>/<image>:<image-tag> --secret id=KEYNAME,env=KEYNAME --build-arg BASE_IMAGE=<base image path> --build-arg KAIROS_FRAMEWORK_IMAGE='<Kairos Framework Path>' --build-arg SATHOSTNAME=<Satellite hostname> --build-arg ORGNAME=<Satellite Org Name> -f Dockerfile.rhel9.sat .
 ```
 
 For example, to build RHEL9 image:
 ```
-docker build -t localhost/palette-rhel9:latest --build-arg BASE_IMAGE=redhat.spectrocloud.dev/ubi9-init:9.4-6 --build-arg KAIROS_FRAMEWORK_IMAGE=quay.spectrocloud.dev/kairos/framework:v2.7.33 --build-arg SATHOSTNAME=katello.spectrocloud.dev  --build-arg ORGNAME=test-org --build-arg KEYNAME=rhel9-canvos-key -f Dockerfile.rhel9.sat .
+docker build -t localhost/palette-rhel9:latest --secret id=KEYNAME,env=KEYNAME --build-arg BASE_IMAGE=redhat.spectrocloud.dev/ubi9-init:9.4-6 --build-arg KAIROS_FRAMEWORK_IMAGE=quay.spectrocloud.dev/kairos/framework:v2.7.33 --build-arg SATHOSTNAME=katello.spectrocloud.dev --build-arg ORGNAME=test-org -f Dockerfile.rhel9.sat .
 ```
 
 For example, to build RHEL8 image:
 ```
-docker build -t localhost/palette-rhel8:latest --build-arg BASE_IMAGE=redhat.spectrocloud.dev/ubi8/ubi-init:8.7-10 --build-arg KAIROS_FRAMEWORK_IMAGE=quay.spectrocloud.dev/kairos/framework:v2.7.33 --build-arg SATHOSTNAME=katello.spectrocloud.dev  --build-arg ORGNAME=test-org --build-arg KEYNAME=rhel8-canvos-key -f Dockerfile.rhel8.sat .
+docker build -t localhost/palette-rhel8:latest --secret id=KEYNAME,env=KEYNAME --build-arg BASE_IMAGE=redhat.spectrocloud.dev/ubi8/ubi-init:8.7-10 --build-arg KAIROS_FRAMEWORK_IMAGE=quay.spectrocloud.dev/kairos/framework:v2.7.33 --build-arg SATHOSTNAME=katello.spectrocloud.dev --build-arg ORGNAME=test-org -f Dockerfile.rhel8.sat .
 ```
 
 To build RHEL 10 Kairos Image via Satellite, execute:
 ```
-export SAT_ACTIVATION_KEY='<Activation key name>'
+export KEYNAME='<Activation key name>'
 
 docker build -t <local-registry>/<image>:<image-tag> \
-  --secret id=SAT_ACTIVATION_KEY,env=SAT_ACTIVATION_KEY \
+  --secret id=KEYNAME,env=KEYNAME \
   --build-arg ORGNAME=<Satellite Org Name> \
   --build-arg SATHOSTNAME=<Satellite hostname> \
   --build-arg BASE_IMAGE=<mirrored ubi10-init path> \
   -f Dockerfile.rhel10.sat .
 ```
 
-`Dockerfile.rhel10.sat` differs from the RHEL 8/9 Satellite files in three ways, all forced by RHEL 10:
+`Dockerfile.rhel10.sat` differs from the RHEL 8/9 Satellite files in two ways, both forced by RHEL 10:
 
-* **The activation key is a BuildKit secret, not a `--build-arg`.** An activation key is a credential; passing it as a build arg puts it in `docker history`. `ORGNAME` and `SATHOSTNAME` are not secret and remain build args. This matches `Dockerfile.rhel10`.
 * **No `subscription-manager attach --auto`** — the `attach` module was removed in RHEL 10.
-* **No `KAIROS_FRAMEWORK_IMAGE`** — the RHEL 10 files use `kairos-init` (`KAIROS_INIT_IMAGE`), not the older framework image. Mirror `quay.io/kairos/kairos-init:v0.16.1` instead and pass it via `--build-arg KAIROS_INIT_IMAGE=`.
+* **No `KAIROS_FRAMEWORK_IMAGE`** — the RHEL 10 files use `kairos-init` (`KAIROS_INIT_IMAGE`), not the older framework image. Mirror `quay.io/kairos/kairos-init:v0.16.2` instead and pass it via `--build-arg KAIROS_INIT_IMAGE=`.
 
 It also mirrors `Dockerfile.rhel10` rather than `Dockerfile.rhel9.sat`, so `kairos-init` runs *before* the extra package install — that is the ordering verified end to end on RHEL 10. The resulting package set is identical either way.
 
