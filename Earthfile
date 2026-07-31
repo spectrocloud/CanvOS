@@ -262,7 +262,7 @@ BASE_ALPINE:
     RUN update-ca-certificates
 
 
-# Probe $BASE_IMAGE for systemd >= 254; used only by +CHECK_SYSTEMD_VERSION.
+# Probe $BASE_IMAGE for systemd >= 255; used only by +CHECK_SYSTEMD_VERSION.
 systemd-extensions-support:
     ARG ARCH
     ARG BASE_IMAGE
@@ -279,12 +279,12 @@ systemd-extensions-support:
         fi ; \
         case "$SYSTEMD_VER" in ''|*[!0-9]*) SYSTEMD_VER=0 ;; esac ; \
         echo "CHECK_SYSTEMD_VERSION: detected systemd version $SYSTEMD_VER (systemctl: ${SYSTEMCTL:-not found})" ; \
-        if [ "$SYSTEMD_VER" -ge 254 ]; then \
+        if [ "$SYSTEMD_VER" -ge 255 ]; then \
             echo true > /supports-systemd-extensions ; \
-            echo "CHECK_SYSTEMD_VERSION: systemd >= 254 — supports-systemd-extensions=true"; \
+            echo "CHECK_SYSTEMD_VERSION: systemd >= 255 — supports-systemd-extensions=true"; \
         else \
             echo false > /supports-systemd-extensions ; \
-            echo "CHECK_SYSTEMD_VERSION: systemd < 254 — supports-systemd-extensions=false"; \
+            echo "CHECK_SYSTEMD_VERSION: systemd < 255 — supports-systemd-extensions=false"; \
         fi
     SAVE ARTIFACT /supports-systemd-extensions
 
