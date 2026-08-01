@@ -1089,6 +1089,39 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+
+    # Bootable ISOs need the CD/removable GRUB, not the installed-system one.
+    #
+    # Ubuntu's grub-efi-*-signed package ships two signed builds:
+    #   grubx64.efi.signed  - prefix /EFI/ubuntu, for systems installed to disk
+    #   gcdx64.efi.signed   - prefix /boot/grub,  for CD / removable media
+    #
+    # osbuilder's copyGrub walks a hardcoded candidate list (kairos-sdk
+    # utils.GetEfiGrubFiles), takes the first path that exists, and names the
+    # destination after the source. On Ubuntu that always resolves to
+    # grubx64.efi.signed - there is no gcd candidate in the list at all.
+    #
+    # The installed-system binary hangs immediately when launched from removable
+    # media on UEFI firmware (reproduced on Supermicro + ATEN BMC: no output, the
+    # firmware reads ~23MB and executes nothing). Booting only ever worked in
+    # Dual/CSM mode, which uses the BIOS El Torito image and never touches this
+    # binary. Verified by substitution: the same GRUB package version taken from
+    # an Ubuntu ISO (the gcd build) boots correctly on the same hardware.
+    #
+    # Stage the CD variant over the path osbuilder looks for. ISO rootfs only -
+    # cloud/raw disk images are installed systems and want the original binary.
+    IF [ "$IS_CLOUD_IMAGE" = "false" ]
+        RUN for pair in "x86_64-efi-signed:gcdx64:grubx64" "arm64-efi-signed:gcdaa64:grubaa64"; do \
+                dir="/usr/lib/grub/$(echo "$pair" | cut -d: -f1)"; \
+                gcd="$dir/$(echo "$pair" | cut -d: -f2).efi.signed"; \
+                grb="$dir/$(echo "$pair" | cut -d: -f3).efi.signed"; \
+                if [ -f "$gcd" ]; then \
+                    cp -f "$gcd" "$grb" && \
+                    echo "iso-image: staged $(basename "$gcd") over $(basename "$grb")"; \
+                fi; \
+            done
+    END
+
     IF [ "$IS_CLOUD_IMAGE" = "true" ]
         COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
         COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
