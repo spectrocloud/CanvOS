@@ -1109,8 +1109,10 @@ iso-image:
     # an Ubuntu ISO (the gcd build) boots correctly on the same hardware.
     #
     # Stage the CD variant over the path osbuilder looks for. ISO rootfs only -
-    # cloud/raw disk images are installed systems and want the original binary.
-    IF [ "$IS_CLOUD_IMAGE" = "false" ]
+    # cloud/raw disk images (including MAAS, which invokes +iso-image via
+    # +kairos-raw-image without --IS_CLOUD_IMAGE=true) are installed systems and
+    # want the original binary.
+    IF [ "$IS_CLOUD_IMAGE" = "false" ] && [ "$IS_MAAS" = "false" ]
         RUN for pair in "x86_64-efi-signed:gcdx64:grubx64" "arm64-efi-signed:gcdaa64:grubaa64"; do \
                 dir="/usr/lib/grub/$(echo "$pair" | cut -d: -f1)"; \
                 gcd="$dir/$(echo "$pair" | cut -d: -f2).efi.signed"; \
