@@ -317,7 +317,7 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    DO +CHECK_SYSTEMD_VERSION
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE
     IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
         COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     END
