@@ -56,14 +56,18 @@ FORCE_INTERACTIVE_INSTALL=false
 #                                            #   and skips the AMD apt repo entirely — use
 #                                            #   when the DKMS build fails against your image
 #                                            #   kernel (see docs).
-# AMDGPU_DRIVER_RELEASE=7.2.1                # Only used with dkms mode. amdgpu-install
-#                                            #   release marker. Default 7.2.1 pairs with
-#                                            #   GPU Operator v1.5.0 (ROCm 7.2.1). AMD also
-#                                            #   publishes driver-release-marker paths like
-#                                            #   30.30.1 / 30.30.4 / 31.30; either form works.
-#                                            #   31.x is tech-preview -- do not mix with a
-#                                            #   production operator. See the version-
-#                                            #   alignment table in docs/amd-gpu-airgapped.md.
+# AMDGPU_DRIVER_RELEASE=31.40                # Only used with dkms mode. amdgpu-install
+#                                            #   release marker. Default 31.40 = ROCm 7.14
+#                                            #   GA (amdgpu 6.19.14), production driver for
+#                                            #   GPU Operator v1.5.1 and MI350P / Radeon AI
+#                                            #   PRO (RDNA4). For an older fleet on Operator
+#                                            #   v1.5.0 use 7.2.1 (amdgpu 6.16.13). AMD
+#                                            #   publishes both ROCm-alias (7.2.1, 7.2.4) and
+#                                            #   marker (30.30.x, 31.40) paths; either works.
+#                                            #   See the compatibility table in docs/.
+# AMDGPU_INSTALL_SMI=true                    # Default true. Install amd-smi/rocm-smi host
+#                                            #   CLI on PATH (parity with nvidia-smi). Pulls
+#                                            #   a small slice of ROCm user-space; best-effort.
 # AMDGPU_REBUILD_INITRD=false                # Default false. amdgpu is intentionally
 #                                            #   kept out of the initrd (multi-GPU init
 #                                            #   emits enough udev events to time out
