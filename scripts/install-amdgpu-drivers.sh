@@ -32,6 +32,8 @@
 #   * linux-modules-extra for the image kernel
 #   * amdgpu-dkms + amdgpu-dkms-firmware, built against the IMAGE kernel
 #   * amdgpu module autoload + initrd refresh
+#   * amd-smi / rocm-smi host CLI on PATH (parity with nvidia-smi) when
+#     AMDGPU_INSTALL_SMI=true (default)
 #   * a marker at /etc/canvos/amdgpu-driver-source recording which mode ran
 #
 # WHAT THIS DOES *NOT* COVER (both modes) -- ship these as container images in
@@ -53,13 +55,24 @@
 #   AMDGPU_DRIVER_RELEASE    amdgpu-install release marker (URL segment under
 #                            repo.radeon.com/amdgpu-install/<x>/). AMD publishes
 #                            both ROCm-alias paths (7.2.1, 7.2.4) and driver-
-#                            release-marker paths (30.30.1, 30.30.4, 31.30);
-#                            either form is accepted. Default: 7.2.1 -- pairs
-#                            with GPU Operator v1.5.0 per its release notes.
-#                            The 31.x line is tech-preview and pairs only with
-#                            ROCm 7.13.0 tech-preview; do not mix with a
-#                            production operator. Ignored in inbox mode. See
-#                            docs/amd-gpu-airgapped.md for the compat matrix.
+#                            release-marker paths (30.30.x, 31.40); either form
+#                            is accepted. Default: 31.40 -- ROCm 7.14 GA (amdgpu
+#                            6.19.14), a PRODUCTION driver (7.14 went GA on
+#                            2026-07-15; the earlier "31.x = tech-preview" note
+#                            referred to the ROCm 7.13.0 preview and is obsolete).
+#                            31.40 is the baseline for GPU Operator v1.5.1 and
+#                            for MI350P + Radeon AI PRO (RDNA4). For an older
+#                            fleet staying on Operator v1.5.0, use 7.2.1 (amdgpu
+#                            6.16.13, 30.30.1 line). Ignored in inbox mode. See
+#                            docs/amd-gpu-airgapped.md for the operator<->driver
+#                            compatibility matrix.
+#   AMDGPU_INSTALL_SMI       true | false. Default: true. Install the amd-smi
+#                            (and rocm-smi) host CLI and symlink into /usr/bin,
+#                            for parity with nvidia-smi. Pulls a small slice of
+#                            ROCm user-space from repo.radeon.com/rocm. Best-
+#                            effort: a failure warns but does not fail the build.
+#   AMDGPU_ROCM_APT_VERSION  ROCm apt repo version used only to fetch amd-smi
+#                            when it is not already available. Default: latest.
 #   AMDGPU_REBUILD_INITRD    "true" to rebuild the initrd for the image kernel.
 #                            Default: false. amdgpu is intentionally NOT
 #                            included in the initrd (see the dracut omit
@@ -76,11 +89,78 @@ warn() { echo "[install-amdgpu-drivers] WARNING: $*" >&2; }
 die()  { echo "[install-amdgpu-drivers] ERROR: $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
+# ensure_rocm_repo: make amd-smi-lib installable. Returns 0 if amd-smi-lib can
+# be resolved (either the amdgpu-install deb already configured the ROCm repo,
+# as in the in-buildkit dkms path, or we add repo.radeon.com/rocm/apt here).
+# ---------------------------------------------------------------------------
+ensure_rocm_repo() {
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg >/dev/null 2>&1 || true
+    apt-get update >/dev/null 2>&1 || true
+    if apt-cache show amd-smi-lib >/dev/null 2>&1; then
+        return 0   # already available (repo configured by amdgpu-install)
+    fi
+    log "Adding ROCm apt repo (repo.radeon.com/rocm/apt/${AMDGPU_ROCM_APT_VERSION}) for amd-smi ..."
+    install -d -m 0755 /etc/apt/keyrings
+    if ! curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key \
+        | gpg --dearmor -o /etc/apt/keyrings/rocm.gpg 2>/dev/null; then
+        warn "could not fetch/dearmor the ROCm gpg key."
+        return 1
+    fi
+    chmod a+r /etc/apt/keyrings/rocm.gpg
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${AMDGPU_ROCM_APT_VERSION} ${codename} main" \
+        > /etc/apt/sources.list.d/rocm.list
+    apt-get update >/dev/null 2>&1 || { warn "apt-get update after adding ROCm repo failed."; return 1; }
+    apt-cache show amd-smi-lib >/dev/null 2>&1 || { warn "amd-smi-lib not found even after adding the ROCm repo."; return 1; }
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# install_amd_smi: install the amd-smi (and rocm-smi) host CLI and put it on
+# PATH at /usr/bin, mirroring how nvidia-utils gives /usr/bin/nvidia-smi.
+# Best-effort by design -- a diagnostic tool must never fail the image build.
+# ---------------------------------------------------------------------------
+install_amd_smi() {
+    if [ "${AMDGPU_INSTALL_SMI}" != "true" ]; then
+        log "AMDGPU_INSTALL_SMI=false; skipping amd-smi host CLI."
+        return 0
+    fi
+    log "Installing amd-smi host CLI (parity with nvidia-smi) ..."
+    if ! ensure_rocm_repo; then
+        warn "ROCm repo unavailable; skipping amd-smi. Set AMDGPU_INSTALL_SMI=false to silence."
+        return 0
+    fi
+    # rocm-smi-lib pulls Python deps; if the combined install fails, fall back
+    # to just amd-smi-lib (the modern, recommended tool that supersedes rocm-smi).
+    if ! apt-get install -y --no-install-recommends amd-smi-lib rocm-smi-lib; then
+        warn "amd-smi-lib + rocm-smi-lib install failed; retrying with amd-smi-lib only."
+        apt-get install -y --no-install-recommends amd-smi-lib \
+            || { warn "amd-smi-lib install failed; continuing without amd-smi."; return 0; }
+    fi
+    # The tools install under /opt/rocm*/bin, which is not on the default PATH.
+    # Symlink into /usr/bin so `amd-smi` works ootb like `nvidia-smi`.
+    for tool in amd-smi rocm-smi; do
+        bin="$(ls /opt/rocm*/bin/${tool} 2>/dev/null | sort -V | tail -1)"
+        if [ -n "${bin}" ]; then
+            ln -sf "${bin}" "/usr/bin/${tool}"
+            log "Linked ${bin} -> /usr/bin/${tool}"
+        fi
+    done
+    if [ -x /usr/bin/amd-smi ]; then
+        AMDGPU_SMI_INSTALLED="yes"
+    else
+        warn "amd-smi binary not found under /opt/rocm*/bin after install."
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 AMDGPU_DRIVER_SOURCE="${AMDGPU_DRIVER_SOURCE:-dkms}"
-AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE:-7.2.1}"
+AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE:-31.40}"
 AMDGPU_REBUILD_INITRD="${AMDGPU_REBUILD_INITRD:-false}"
+AMDGPU_INSTALL_SMI="${AMDGPU_INSTALL_SMI:-true}"
+AMDGPU_ROCM_APT_VERSION="${AMDGPU_ROCM_APT_VERSION:-latest}"
+AMDGPU_SMI_INSTALLED=""   # set to "yes" by install_amd_smi on success
 
 case "${AMDGPU_DRIVER_SOURCE}" in
     dkms|inbox) ;;
@@ -168,7 +248,13 @@ EOF
         fi
     fi
 
-    printf 'AMDGPU_DRIVER_SOURCE=inbox\nKVER=%s\n' "${KVER}" > /etc/canvos/amdgpu-driver-source
+    install_amd_smi
+
+    printf 'AMDGPU_DRIVER_SOURCE=inbox\nAMDGPU_SMI=%s\nKVER=%s\n' \
+        "${AMDGPU_SMI_INSTALLED:-no}" "${KVER}" > /etc/canvos/amdgpu-driver-source
+
+    apt-get clean || true
+    rm -rf /var/lib/apt/lists/*
 
     log "Done. Using in-tree amdgpu driver for kernel ${KVER}."
     log "Reminder: install the AMD GPU Operator with 'driver.enable=false'."
@@ -238,10 +324,15 @@ EOF
         fi
     fi
 
+    install_amd_smi
+
     # Marker written by the prebuild is preserved from the tar. Overwrite
     # any prebuild-mode marker with the final in-image reality.
-    printf 'AMDGPU_DRIVER_SOURCE=dkms (artifact)\nAMDGPU_DRIVER_RELEASE=%s\nKVER=%s\n' \
-        "${AMDGPU_DRIVER_RELEASE}" "${KVER}" > /etc/canvos/amdgpu-driver-source
+    printf 'AMDGPU_DRIVER_SOURCE=dkms (artifact)\nAMDGPU_DRIVER_RELEASE=%s\nAMDGPU_SMI=%s\nKVER=%s\n' \
+        "${AMDGPU_DRIVER_RELEASE}" "${AMDGPU_SMI_INSTALLED:-no}" "${KVER}" > /etc/canvos/amdgpu-driver-source
+
+    apt-get clean || true
+    rm -rf /var/lib/apt/lists/*
 
     log "Done. AMD amdgpu driver (release ${AMDGPU_DRIVER_RELEASE}, artifact) baked in for kernel ${KVER}."
     log "Reminder: install the AMD GPU Operator with 'driver.enable=false'."
@@ -517,10 +608,17 @@ elif [ "${AMDGPU_REBUILD_INITRD}" = "true" ] && command -v update-initramfs >/de
 fi
 
 # ---------------------------------------------------------------------------
-# 11. Record what we did so ops can query it on-node.
+# 11b. Install the amd-smi / rocm-smi host CLI (parity with nvidia-smi). The
+# amdgpu-install deb above may already have configured the ROCm repo; if not,
+# install_amd_smi adds it. Best-effort -- never fails the build.
 # ---------------------------------------------------------------------------
-printf 'AMDGPU_DRIVER_SOURCE=dkms\nAMDGPU_DRIVER_RELEASE=%s\nAMDGPU_DKMS_MODULE=%s/%s\nKVER=%s\n' \
-    "${AMDGPU_DRIVER_RELEASE}" "${mod}" "${ver}" "${KVER}" \
+install_amd_smi
+
+# ---------------------------------------------------------------------------
+# 11c. Record what we did so ops can query it on-node.
+# ---------------------------------------------------------------------------
+printf 'AMDGPU_DRIVER_SOURCE=dkms\nAMDGPU_DRIVER_RELEASE=%s\nAMDGPU_DKMS_MODULE=%s/%s\nAMDGPU_SMI=%s\nKVER=%s\n' \
+    "${AMDGPU_DRIVER_RELEASE}" "${mod}" "${ver}" "${AMDGPU_SMI_INSTALLED:-no}" "${KVER}" \
     > /etc/canvos/amdgpu-driver-source
 
 # ---------------------------------------------------------------------------
