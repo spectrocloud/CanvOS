@@ -1,19 +1,22 @@
+# syntax=docker/dockerfile:1
 ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-init:8.7-10
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.8.12
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.16.2
 
-FROM $KAIROS_INIT_IMAGE as kairos-init
+FROM $KAIROS_INIT_IMAGE AS kairos-init
 
 FROM $BASE_IMAGE
 
 ARG ORGNAME
-ARG KEYNAME
 ARG SATHOSTNAME
-ARG KAIROS_VERSION=v4.0.4
+ARG KAIROS_VERSION=v4.1.2
 
 RUN dnf config-manager --disable ubi-8-appstream-rpms ubi-8-baseos-rpms ubi-8-codeready-builder-rpms
 RUN rm /etc/rhsm-host
 RUN rpm -Uvh http://${SATHOSTNAME}/pub/katello-ca-consumer-latest.noarch.rpm
-RUN subscription-manager register --org=${ORGNAME} --activationkey=${KEYNAME}
+RUN --mount=type=secret,id=KEYNAME,env=KEYNAME \
+    : "${KEYNAME:?missing --secret id=KEYNAME,env=KEYNAME}" \
+    && : "${ORGNAME:?missing --build-arg ORGNAME}" \
+    && subscription-manager register --org="${ORGNAME}" --activationkey="${KEYNAME}"
 
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 

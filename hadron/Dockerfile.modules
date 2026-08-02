@@ -1,0 +1,21 @@
+ARG HADRON_VERSION=v0.5.1
+ARG JQ_VERSION=1.8.1
+ARG DRBD_VERSION=9.3.3
+
+FROM ghcr.io/kairos-io/hadron-layers/drbd:${DRBD_VERSION} as drbd-layer
+FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_VERSION} AS builder
+
+# Install jq
+ARG JQ_VERSION
+ARG TARGETARCH
+WORKDIR /output
+RUN mkdir -p /output/usr/bin && \
+    curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-${TARGETARCH}" -o /output/usr/bin/jq && \
+    chmod +x /output/usr/bin/jq
+
+# Install rsyslog
+
+
+FROM scratch AS export
+COPY --from=builder /output /
+COPY --from=drbd-layer / /

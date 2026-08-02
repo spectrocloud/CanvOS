@@ -1,0 +1,100 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE=registry.access.redhat.com/ubi10-init:10.2
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.16.2
+
+FROM $KAIROS_INIT_IMAGE AS kairos-init
+FROM $BASE_IMAGE
+
+ARG ORGNAME
+ARG SATHOSTNAME
+ARG KAIROS_VERSION=v4.1.2
+
+# Unlike Dockerfile.rhel10 there is no EPEL install here — EPEL 10 must already be synced on
+# the Satellite and attached to the activation key. It is mandatory, not optional: RHEL 10
+# ships none of systemd-networkd, systemd-timesyncd, livecd-tools or haveged, so a Satellite
+# without an EPEL 10 repo fails later in the big dnf install with unresolvable packages.
+#
+# Disable the UBI repos baked into the base image so everything resolves from Satellite.
+# These are the repo IDs ubi10-init actually reports (they are not named like the ubi-9-* ones).
+RUN dnf config-manager --disable \
+      ubi-10-for-x86_64-baseos-rpms \
+      ubi-10-for-x86_64-appstream-rpms \
+      codeready-builder-for-ubi-10-x86_64-rpms
+
+# Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host and register against Satellite
+#
+# The activation key is a secret and is passed as a BuildKit secret sourced from an
+# environment variable, so it never becomes a build arg and never lands in an image layer or
+# in `docker history`. ORGNAME and SATHOSTNAME are not secret and stay as build args:
+RUN rm /etc/rhsm-host
+RUN rpm -Uvh http://${SATHOSTNAME}/pub/katello-ca-consumer-latest.noarch.rpm
+RUN --mount=type=secret,id=KEYNAME,env=KEYNAME \
+  : "${KEYNAME:?missing --secret id=KEYNAME,env=KEYNAME}" \
+  && : "${ORGNAME:?missing --build-arg ORGNAME}" \
+  && subscription-manager register --org="${ORGNAME}" --activationkey="${KEYNAME}" \
+  && yum repolist \
+  && dnf clean all
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug --version "${KAIROS_VERSION}" -m "generic" -t "false"
+
+RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
+# Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+RUN uuidgen > /etc/machine-id && dnf install -y \
+  livecd-tools \
+  efibootmgr \
+  systemd-networkd \
+  systemd-timesyncd \
+  haveged \
+  ncurses \
+  open-vm-tools \
+  iscsi-initiator-utils \
+  iproute-tc conntrack-tools ethtool socat \
+  parted \
+  kbd \
+  coreutils-single && dnf clean all
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
+
+# Configure the box. The ubi image masks services for containers, we unmask them
+RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
+RUN systemctl enable getty@tty1.service
+RUN systemctl enable getty@tty2.service
+RUN systemctl enable getty@tty3.service
+RUN systemctl enable systemd-networkd
+RUN systemctl enable systemd-resolved
+RUN systemctl enable sshd
+RUN systemctl disable selinux-autorelabel-mark.service || true
+
+# Avoid clashes with systemd-networkd (Kairos/RHEL guidance).
+#
+# RHEL 9 uninstalls NetworkManager for this. That is not possible on RHEL 10: dracut-network
+# requires "NetworkManager >= 1.20" unconditionally, so removing it would also drag out
+# dracut-network and leave the final initramfs with no network module. Mask it instead — see
+# Dockerfile.rhel10 for the full explanation.
+#
+# This must run *after* the unmask-everything step above, otherwise that step unmasks it again.
+RUN if rpm -q NetworkManager >/dev/null 2>&1; then \
+      systemctl disable NetworkManager.service NetworkManager-wait-online.service NetworkManager-dispatcher.service 2>/dev/null || true; \
+      systemctl mask NetworkManager.service NetworkManager-wait-online.service NetworkManager-dispatcher.service; \
+    fi
+
+COPY overlay/rhel10/ /
+
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+  ln -sf "${kernel#/boot/}" /boot/vmlinuz
+RUN kernel=$(ls /lib/modules | head -n1) && \
+  dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
+  ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+RUN rm -rf /boot/initramfs-*
+
+RUN mkdir -p /etc/luet/repos.conf.d
+## Clear cache
+RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
+
+RUN subscription-manager unregister

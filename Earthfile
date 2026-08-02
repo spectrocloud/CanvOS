@@ -21,7 +21,11 @@ ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
 ARG PE_VERSION=v4.9.21
-ARG KAIROS_VERSION=v4.0.4
+ARG KAIROS_VERSION=v4.1.2
+# Version component of the base image tags produced by .github/workflows/base-images.yaml.
+# Those images are tagged with the kairos-init version, so this must track the
+# kairos_init_image input of that workflow — NOT KAIROS_VERSION.
+ARG KAIROS_INIT_VERSION=v0.16.2
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -29,11 +33,11 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.9.1
-ARG KUBEADM_PROVIDER_VERSION=v4.9.3
-ARG RKE2_PROVIDER_VERSION=v4.9.1
-ARG NODEADM_PROVIDER_VERSION=v4.9.2
-ARG CANONICAL_PROVIDER_VERSION=v4.9.1
+ARG K3S_PROVIDER_VERSION=v4.10.0
+ARG KUBEADM_PROVIDER_VERSION=v4.10.0
+ARG RKE2_PROVIDER_VERSION=v4.10.0
+ARG NODEADM_PROVIDER_VERSION=v4.9.3
+ARG CANONICAL_PROVIDER_VERSION=v4.10.0
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -49,7 +53,20 @@ ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
-ARG UBUNTU_PRO_KEY
+# Ubuntu Pro toggle. The token itself is NEVER passed as a build arg.
+# Recommended flow: use the earthly.sh wrapper. Set UBUNTU_PRO_ATTACH=true in
+# .arg (or pass --UBUNTU_PRO_ATTACH=true on the CLI), then run e.g.
+#   ./earthly.sh +iso
+# The wrapper prompts for the token without echoing it and forwards it as an
+# Earthly --secret, so the value never lands in .arg, in `docker history`,
+# in build-arg metadata, in the build cache, or in shell history.
+# For non-interactive (CI) runs, export UBUNTU_PRO_KEY before invoking the
+# script and the prompt is skipped:
+#   read -rs UBUNTU_PRO_KEY && export UBUNTU_PRO_KEY
+#   ./earthly.sh +iso
+# Note: `earthly secret set ...` requires Earthly Cloud (earthly account login)
+# and is not available on a stock CLI install - use the earthly.sh flow above.
+ARG UBUNTU_PRO_ATTACH=false
 
 # DRBD version for Piraeus pack
 ARG DRBD_VERSION="9.2.13"
@@ -134,6 +151,10 @@ ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_BRING_YOUR_OWN_KEYS=false
+# When UKI_BRING_YOUR_OWN_KEYS=true, set false to skip merging Spectro extension cert into db
+ARG ENROLL_SPECTRO_EXTENSION_CERT=true
+# OCI image (scratch) with palette-sysext-cert.pem; merged into UEFI db during +uki-genkey
+ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/sysext/palette-sysext-cert:latest
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
@@ -147,30 +168,21 @@ ARG EFI_IMG_SIZE=2200
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
 
-# Pin UKI to Kairos v3.5.9: systemd 257.x dropped the boot-assessment
-# suffix from sd-boot entry IDs, breaking `bootentry` selection and
-# assessment fallback on newer builds (refs: kairos-io/kairos#3831,
-# kairos-io/kairos#4046). v3.5.9 ships systemd 256.x where it still works.
-IF [ "$IS_UKI" = "true" ]
-    LET KAIROS_VERSION=v3.5.9
-END
-
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
-        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
+        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_INIT_VERSION
     ELSE
         IF [ "$IS_UKI" = "true" ]
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION-uki
         ELSE
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
         END
     END
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
-    ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+    ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
-    # Check for default value for rhel
+ELSE
     ARG BASE_IMAGE
 END
 
@@ -254,6 +266,41 @@ BASE_ALPINE:
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
 
+
+# Probe $BASE_IMAGE for systemd >= 255; used only by +CHECK_SYSTEMD_VERSION.
+systemd-extensions-support:
+    ARG ARCH
+    ARG BASE_IMAGE
+    FROM --platform=linux/${ARCH} $BASE_IMAGE
+    # Missing/failed systemctl detection must not fail the RUN under set -e;
+    # always emit supports-systemd-extensions as "true" or "false".
+    RUN SYSTEMCTL="" ; \
+        for c in systemctl /usr/bin/systemctl /bin/systemctl /usr/local/bin/systemctl /usr/sbin/systemctl /sbin/systemctl /usr/local/sbin/systemctl; do \
+            if command -v "$c" >/dev/null 2>&1; then SYSTEMCTL="$c"; break; fi; \
+        done ; \
+        SYSTEMD_VER=0 ; \
+        if [ -n "$SYSTEMCTL" ]; then \
+            SYSTEMD_VER=$("$SYSTEMCTL" --version 2>/dev/null | awk 'NR==1{print $2}') || SYSTEMD_VER=0 ; \
+        fi ; \
+        case "$SYSTEMD_VER" in ''|*[!0-9]*) SYSTEMD_VER=0 ;; esac ; \
+        echo "CHECK_SYSTEMD_VERSION: detected systemd version $SYSTEMD_VER (systemctl: ${SYSTEMCTL:-not found})" ; \
+        if [ "$SYSTEMD_VER" -ge 255 ]; then \
+            echo true > /supports-systemd-extensions ; \
+            echo "CHECK_SYSTEMD_VERSION: systemd >= 255 — supports-systemd-extensions=true"; \
+        else \
+            echo false > /supports-systemd-extensions ; \
+            echo "CHECK_SYSTEMD_VERSION: systemd < 255 — supports-systemd-extensions=false"; \
+        fi
+    SAVE ARTIFACT /supports-systemd-extensions
+
+# Loads true/false into the caller's build env at /tmp/supports-systemd-extensions.
+CHECK_SYSTEMD_VERSION:
+    COMMAND
+    ARG ARCH
+    ARG BASE_IMAGE
+    COPY (+systemd-extensions-support/supports-systemd-extensions --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE) /tmp/supports-systemd-extensions
+    RUN echo "SUPPORTS_SYSTEMD_EXTENSIONS=$(cat /tmp/supports-systemd-extensions)"
+
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-ts --keep-own /. rootfs
@@ -275,7 +322,10 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
+        COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    END
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
@@ -491,6 +541,16 @@ uki-genkey:
         RUN --no-cache mkdir -p /public-keys
         RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
         RUN --no-cache cd /keys; mv *.pem /public-keys
+        # The osbuilder image (openSUSE Leap) does not ship efitools; install it so the
+        # ENROLL_SPECTRO_EXTENSION_CERT command can re-sign the db when enabled.
+        IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
+            RUN zypper --non-interactive install efitools
+            DO +ENROLL_SPECTRO_EXTENSION_CERT \
+                --ARCH=$ARCH \
+                --ENROLLMENT_DIR=/keys \
+                --KEK_CERT=/public-keys/KEK.pem \
+                --KEK_KEY=/private-keys/KEK.key
+        END
     ELSE
         COPY +uki-byok/ /keys
     END
@@ -506,6 +566,46 @@ download-sbctl:
     DO +BASE_ALPINE
     RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
     SAVE ARTIFACT /usr/bin/sbctl
+
+spectro-extension-cert:
+    ARG ARCH
+    FROM --platform=linux/${ARCH} $SPECTRO_EXTENSION_CERT_IMAGE
+    SAVE ARTIFACT /palette-sysext-cert.pem cert.pem
+
+spectro-extension-cert-esl:
+    ARG ARCH
+    FROM --platform=linux/${ARCH} $ALPINE_IMG
+    DO +BASE_ALPINE
+    RUN apk add --no-cache efitools
+    COPY (+spectro-extension-cert/cert.pem --ARCH=$ARCH) /cert/spectro-cert.pem
+    RUN cert-to-efi-sig-list -g 8be4df61-93ca-11d2-aa0d-00e098032b8c \
+        /cert/spectro-cert.pem /cert/spectro-db.esl
+    SAVE ARTIFACT /cert/spectro-db.esl spectro-db.esl
+
+# Self-contained merge of the Spectro extension cert into the UEFI db enrollment
+# material. Gated on ENROLL_SPECTRO_EXTENSION_CERT: when true, it fetches the ESL,
+# appends it to db.esl and (re)generates db.auth/db.der so the db is fully ready;
+# when false it is a no-op.
+ENROLL_SPECTRO_EXTENSION_CERT:
+    COMMAND
+    ARG ARCH
+    ARG ENROLLMENT_DIR
+    ARG KEK_CERT
+    ARG KEK_KEY
+    # Append the Spectro extension cert to the db signature list and re-sign db.auth
+    # with the KEK so the resulting db enrolls both the OS db cert and the Spectro
+    # cert into UEFI firmware. db.der is kept as the OS cert (db-0.der) since the UKI
+    # itself is signed with the OS db key, not the Spectro cert.
+    # efitools (sign-efi-sig-list / sig-list-to-certs) must already be present in the
+    # caller's image: uki-genkey installs it via zypper, uki-byok via apt-get.
+    # With --arg-scope-and-set, CLI build-arg overrides (e.g. --MY_ORG / --EXPIRATION_IN_DAYS)
+    # cause COPY +target inside a COMMAND to see only the COMMAND's args — not .arg
+    # globals like ARCH. Forward ARCH explicitly.
+    COPY (+spectro-extension-cert-esl/spectro-db.esl --ARCH=$ARCH) /spectro/spectro-db.esl
+    RUN cat /spectro/spectro-db.esl >> "$ENROLLMENT_DIR/db.esl" && \
+        sign-efi-sig-list -c "$KEK_CERT" -k "$KEK_KEY" db "$ENROLLMENT_DIR/db.esl" "$ENROLLMENT_DIR/db.auth" && \
+        cd "$ENROLLMENT_DIR" && sig-list-to-certs 'db.esl' 'db' && \
+        (cp db-0.der db.der 2>/dev/null || true)
 
 uki-byok:
     FROM +ubuntu
@@ -536,6 +636,14 @@ uki-byok:
     RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl || true
     RUN [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true
     RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
+
+    IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
+        DO +ENROLL_SPECTRO_EXTENSION_CERT \
+            --ARCH=$ARCH \
+            --ENROLLMENT_DIR=/output \
+            --KEK_CERT=/keys/KEK.pem \
+            --KEK_KEY=/keys/KEK.key
+    END
 
     WORKDIR /output
     RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  PK  PK.esl  PK.auth
@@ -637,22 +745,37 @@ provider-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
+        COPY --platform=linux/${ARCH} +kairos-provider-image/ /
+        # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
+        # instead of /system/providers/. Move to /system/providers/ and remove the new
+        # path so consumers always find the binary at the legacy location.
+        RUN if ls /usr/local/system/providers/agent-provider-* >/dev/null 2>&1; then \
+                mkdir -p /system/providers && \
+                mv /usr/local/system/providers/agent-provider-* /system/providers/ && \
+                rm -rf /usr/local/system/providers; \
+            fi
+    END
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
 
-    IF [ "$IS_UKI" = "true" ]
-        COPY +internal-slink/slink /usr/bin/slink
-        COPY --keep-ts +install-k8s/output/ /k8s
-        RUN slink --source /k8s/ --target /opt/k8s
-        RUN rm -f /usr/bin/slink
-        RUN rm -rf /k8s
-        RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
-    ELSE
-        COPY --keep-ts +install-k8s/output/ /
+    # As part of PE-8315, kairos-provider binaries are in /usr/local/system/providers instead of earlier /system/providers.
+    # To avoid breaking existing functionality for non systemd extensions supported paths we move the binary back to original path.
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
+        IF [ "$IS_UKI" = "true" ]
+            COPY +internal-slink/slink /usr/bin/slink
+            COPY --keep-ts +install-k8s/output/ /k8s
+            RUN slink --source /k8s/ --target /opt/k8s
+            RUN rm -f /usr/bin/slink
+            RUN rm -rf /k8s
+            RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+        ELSE
+            COPY --keep-ts +install-k8s/output/ /
+        END
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
@@ -687,6 +810,7 @@ provider-image:
                 DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl && \
                 install -d /usr/share/postgresql-common/pgdg && \
                 curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                DEBIAN_FRONTEND=noninteractive apt-get install -y lsb-release && \
                 echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
                 apt-get update && \
                 DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-16 postgresql-contrib-16 iputils-ping
@@ -784,14 +908,26 @@ base-image:
 
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
-        IF [ ! -z "$UBUNTU_PRO_KEY" ]
-            RUN sed -i '/^[[:space:]]*$/d' /etc/os-release && \
-            apt update && apt-get install -y snapd && \
-            pro attach $UBUNTU_PRO_KEY
-        END
-
         RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
+            
+        IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
+            # The token is mounted via Earthly's secret store as an env var
+            # that lives only for the duration of this RUN. It is materialized
+            # into an attach-config file using the shell builtin `printf`, so
+            # the value never appears in any process argv (/proc/<pid>/cmdline)
+            # or in docker build history. The env var is unset and the temp
+            # file removed before the RUN exits, so nothing about the token
+            # survives in the resulting layer. If `--secret UBUNTU_PRO_KEY`
+            # is not supplied, Earthly aborts before this RUN is invoked.
+            RUN --secret UBUNTU_PRO_KEY \
+                sed -i '/^[[:space:]]*$/d' /etc/os-release && \
+                umask 077 && \
+                printf 'token: %s\n' "$UBUNTU_PRO_KEY" > /tmp/.pro-attach.yaml && \
+                unset UBUNTU_PRO_KEY && \
+                pro attach --attach-config /tmp/.pro-attach.yaml && \
+                rm -f /tmp/.pro-attach.yaml
+        END
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -917,8 +1053,15 @@ base-image:
             RUN /tmp/harden.sh && rm /tmp/harden.sh
         END
 
-        IF [ ! -z "$UBUNTU_PRO_KEY" ]
-            RUN pro detach --assume-yes
+        IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
+            # Detach the entitlement, then scrub any on-disk traces. `pro` may
+            # echo or log token fragments under /var/log/ubuntu-advantage* and
+            # leave private state under /var/lib/ubuntu-advantage/private; we
+            # truncate those so the resulting image carries no residue.
+            RUN pro detach --assume-yes && \
+                find /var/log -maxdepth 3 -name 'ubuntu-advantage*' -type f -exec sh -c ': > "$1"' _ {} \; 2>/dev/null || true && \
+                rm -rf /var/lib/ubuntu-advantage/private 2>/dev/null || true && \
+                rm -f /tmp/.pro-attach.yaml 2>/dev/null || true
         END
 
     # OS == Opensuse
@@ -987,15 +1130,11 @@ base-image:
         # modprobe.blacklist= is belt-and-braces for post-switchroot.
         # Harmless when no NVIDIA GPU is present.
         #
-        # qat_4xxx: on Xeon Scalable 4th/5th gen hosts with QAT devices,
-        # udev auto-loads qat_4xxx in initramfs and its probe/firmware-load
-        # stalls boot for minutes. CanvOS does not consume QAT acceleration.
-        #
         # pci=realloc=off: firmware-assigned PCI resource layout is
         # authoritative; kernel-side reallocation has caused BAR conflicts
         # on some server platforms. Mirrors the installer ISO cmdline.
         RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
-                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0 pci=realloc=off"|' /etc/cos/bootargs.cfg; \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nouveau.modeset=0 pci=realloc=off"|' /etc/cos/bootargs.cfg; \
             fi
     END
 
@@ -1043,7 +1182,8 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
-    
+
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE
 
     IF [ "$IS_UKI" = "false" ]
         COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
@@ -1053,6 +1193,17 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+
+    # Workaround for kairos-agent v2.30.2 install-time mount-lifecycle bug on
+    # SLE Micro Rancher 5.5: /system/oem/08_grub.yaml's after-install "Grub
+    # branding" cp writes to a tmpfs path that is lost on reboot, so
+    # /grubmenu never lands on the persistent state partition and GRUB
+    # cannot find the Palette Registration menuentry. See
+    # slem/5.5/oem/09_grub_branding_fixup.yaml for full explanation.
+    IF [ "$OS_DISTRIBUTION" = "sles" ] && [ "$OS_VERSION" = "5.5" ]
+        COPY slem/5.5/oem/09_grub_branding_fixup.yaml /system/oem/09_grub_branding_fixup.yaml
+    END
+
     IF [ "$IS_CLOUD_IMAGE" = "true" ]
         COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
         COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
@@ -1087,6 +1238,16 @@ iso-image:
             tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
             rm -f /opt/spectrocloud/local-ui.tar; \
         fi
+    END
+
+
+    IF [ "$(cat /tmp/supports-systemd-extensions)" = "true" ] && \
+       [ "$OS_DISTRIBUTION" = "ubuntu" ] && \
+       [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "true" ]
+        COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+        RUN chmod 755 /tmp/install-kernel-headers.sh
+        RUN /tmp/install-kernel-headers.sh
+        RUN rm -rf /tmp/install-kernel-headers.sh /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
