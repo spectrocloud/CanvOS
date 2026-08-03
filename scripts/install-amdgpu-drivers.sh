@@ -32,8 +32,8 @@
 #   * linux-modules-extra for the image kernel
 #   * amdgpu-dkms + amdgpu-dkms-firmware, built against the IMAGE kernel
 #   * amdgpu module autoload + initrd refresh
-#   * amd-smi / rocm-smi host CLI on PATH (parity with nvidia-smi) when
-#     AMDGPU_INSTALL_SMI=true (default)
+#   * amd-smi host CLI on PATH (parity with nvidia-smi) when
+#     AMDGPU_INSTALL_SMI=true (default). rocm-smi is deprecated and NOT installed.
 #   * a marker at /etc/canvos/amdgpu-driver-source recording which mode ran
 #
 # WHAT THIS DOES *NOT* COVER (both modes) -- ship these as container images in
@@ -177,17 +177,16 @@ install_amd_smi() {
         apt-get install -y --no-install-recommends "${AMDSMI_PKG}" \
             || { warn "${AMDSMI_PKG} install failed; continuing without amd-smi."; return 0; }
     fi
-    # Tools land under /opt/rocm*/bin (legacy amd-smi-lib) or /opt/rocm*/core-*/bin
-    # (repo.amd.com core-SDK layout); neither is on the default PATH. Symlink into
-    # /usr/bin so `amd-smi` works ootb like `nvidia-smi`. rocm-smi is not shipped
-    # by amdrocm-amdsmi (amd-smi supersedes it), so it is linked only when present.
-    for tool in amd-smi rocm-smi; do
-        bin="$(ls /opt/rocm*/core-*/bin/${tool} /opt/rocm*/bin/${tool} 2>/dev/null | sort -V | tail -1 || true)"
-        if [ -n "${bin}" ]; then
-            ln -sf "${bin}" "/usr/bin/${tool}"
-            log "Linked ${bin} -> /usr/bin/${tool}"
-        fi
-    done
+    # The amd-smi binary lands under /opt/rocm*/bin (legacy amd-smi-lib) or
+    # /opt/rocm*/core-*/bin (repo.amd.com core-SDK layout); neither is on the
+    # default PATH. Symlink it into /usr/bin so `amd-smi` works ootb like
+    # `nvidia-smi`. rocm-smi is intentionally NOT installed -- it is deprecated
+    # and fully superseded by amd-smi.
+    smi_bin="$(ls /opt/rocm*/core-*/bin/amd-smi /opt/rocm*/bin/amd-smi 2>/dev/null | sort -V | tail -1 || true)"
+    if [ -n "${smi_bin}" ]; then
+        ln -sf "${smi_bin}" /usr/bin/amd-smi
+        log "Linked ${smi_bin} -> /usr/bin/amd-smi"
+    fi
     if [ -x /usr/bin/amd-smi ]; then
         AMDGPU_SMI_INSTALLED="yes"
     else
@@ -655,9 +654,9 @@ elif [ "${AMDGPU_REBUILD_INITRD}" = "true" ] && command -v update-initramfs >/de
 fi
 
 # ---------------------------------------------------------------------------
-# 11b. Install the amd-smi / rocm-smi host CLI (parity with nvidia-smi). The
-# amdgpu-install deb above may already have configured the ROCm repo; if not,
-# install_amd_smi adds it. Best-effort -- never fails the build.
+# 11b. Install the amd-smi host CLI (parity with nvidia-smi). The amdgpu-install
+# deb above may already have configured the ROCm repo; if not, install_amd_smi
+# adds repo.amd.com. Best-effort -- never fails the build.
 # ---------------------------------------------------------------------------
 install_amd_smi || true   # best-effort; must never fail the build
 
