@@ -248,7 +248,7 @@ EOF
         fi
     fi
 
-    install_amd_smi
+    install_amd_smi || true   # best-effort; must never fail the build
 
     printf 'AMDGPU_DRIVER_SOURCE=inbox\nAMDGPU_SMI=%s\nKVER=%s\n' \
         "${AMDGPU_SMI_INSTALLED:-no}" "${KVER}" > /etc/canvos/amdgpu-driver-source
@@ -324,7 +324,7 @@ EOF
         fi
     fi
 
-    install_amd_smi
+    install_amd_smi || true   # best-effort; must never fail the build
 
     # Marker written by the prebuild is preserved from the tar. Overwrite
     # any prebuild-mode marker with the final in-image reality.
@@ -612,7 +612,7 @@ fi
 # amdgpu-install deb above may already have configured the ROCm repo; if not,
 # install_amd_smi adds it. Best-effort -- never fails the build.
 # ---------------------------------------------------------------------------
-install_amd_smi
+install_amd_smi || true   # best-effort; must never fail the build
 
 # ---------------------------------------------------------------------------
 # 11c. Record what we did so ops can query it on-node.
