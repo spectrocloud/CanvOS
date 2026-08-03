@@ -129,11 +129,17 @@ install_amd_smi() {
         warn "ROCm repo unavailable; skipping amd-smi. Set AMDGPU_INSTALL_SMI=false to silence."
         return 0
     fi
+    # amd-smi dlopens libdrm_amdgpu.so.1 at runtime to enumerate GPUs (it is NOT
+    # a linked dependency, so apt won't pull it -- and --no-install-recommends
+    # would drop it anyway). Without it amd-smi fails with
+    #   "Fail to open libdrm_amdgpu.so.1 ... Unable to detect any GPU devices"
+    # even when amdgpu is loaded. libdrm-amdgpu1 (from the base Ubuntu repo)
+    # provides the SONAME, so install it explicitly alongside the SMI tools.
     # rocm-smi-lib pulls Python deps; if the combined install fails, fall back
-    # to just amd-smi-lib (the modern, recommended tool that supersedes rocm-smi).
-    if ! apt-get install -y --no-install-recommends amd-smi-lib rocm-smi-lib; then
-        warn "amd-smi-lib + rocm-smi-lib install failed; retrying with amd-smi-lib only."
-        apt-get install -y --no-install-recommends amd-smi-lib \
+    # to amd-smi-lib + libdrm-amdgpu1 (the modern tool that supersedes rocm-smi).
+    if ! apt-get install -y --no-install-recommends amd-smi-lib rocm-smi-lib libdrm-amdgpu1; then
+        warn "amd-smi-lib + rocm-smi-lib install failed; retrying with amd-smi-lib + libdrm-amdgpu1 only."
+        apt-get install -y --no-install-recommends amd-smi-lib libdrm-amdgpu1 \
             || { warn "amd-smi-lib install failed; continuing without amd-smi."; return 0; }
     fi
     # The tools install under /opt/rocm*/bin, which is not on the default PATH.
