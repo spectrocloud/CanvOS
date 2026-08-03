@@ -31,7 +31,9 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG AURORABOOT_VERSION=v0.16.0
+# v0.18.0 is the minimum usable version. v0.16.0 and v0.17.0 do not work for the Hadron 
+
+ARG AURORABOOT_VERSION=v0.18.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.10.0
 ARG KUBEADM_PROVIDER_VERSION=v4.10.0
@@ -494,7 +496,29 @@ build-iso:
         rm -f /build/image/opt/spectrocloud/local-ui.tar; \
     fi
 
-    IF [ "$ARCH" = "arm64" ]
+    # Hadron uses AuroraBoot instead of osbuilder's enki: enki writes the grub
+    # stage as EFI/BOOT/grub.efi, but Hadron's shim chainloads grubx64.efi, so an
+    # enki-built Hadron ISO does not boot on any UEFI firmware. AuroraBoot names
+    # the file after its source, giving grubx64.efi. The UKI ISO
+    # boots systemd-boot directly and has no shim->grub chain.
+    IF [ "$OS_DISTRIBUTION" = "hadron" ]
+        WITH DOCKER --pull $AURORABOOT_IMAGE
+            RUN mkdir -p /iso && \
+                LOGLEVEL=info && \
+                if [ "$DEBUG" = "true" ]; then LOGLEVEL=debug; fi && \
+                docker run --rm --privileged \
+                    -v /build/image:/rootfs \
+                    -v /overlay:/overlay \
+                    -v /iso:/aurora \
+                    $AURORABOOT_IMAGE \
+                    build-iso \
+                        --loglevel "$LOGLEVEL" \
+                        --override-name "$ISO_NAME" \
+                        --overlay-iso /overlay \
+                        --output /aurora \
+                        dir:/rootfs
+        END
+    ELSE IF [ "$ARCH" = "arm64" ]
         RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
                 $CMD

@@ -1,0 +1,32 @@
+
+[Unit]
+Description=System Logging Service
+Documentation=man:rsyslogd(8)
+Documentation=https://www.rsyslog.com/doc/
+# syslog.socket owns /run/systemd/journal/syslog and hands the file descriptor
+# to rsyslog, which is how journald forwards messages to it.
+Requires=syslog.socket
+After=syslog.socket
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/sbin/rsyslogd -n -iNONE
+# SIGHUP makes rsyslog reopen its output files. logrotate's postrotate hook
+# runs `systemctl try-reload-or-restart rsyslog`, which uses this instead of a
+# full restart.
+#
+# Hadron ships NO kill binary (no /bin/kill, /usr/bin/kill or /sbin/kill).
+# kill exists only as a shell builtin, so this has to go through /bin/sh. # The usual `ExecReload=/bin/kill -HUP $MAINPID` fails with 203/EXEC, 
+# and because logrotate's postrotate ends in `|| true` the failure is silent. 
+# rsyslog keeps writing to the rotated-and-deleted inode and every message after the first rotation is lost.
+ExecReload=/bin/sh -c "kill -HUP $MAINPID"
+# Creates and owns /var/lib/rsyslog ($WorkDirectory) at start-up, so it works
+# regardless of the persistent /var bind mount.
+StateDirectory=rsyslog
+Restart=on-failure
+StandardOutput=null
+
+[Install]
+WantedBy=multi-user.target
+Alias=syslog.service

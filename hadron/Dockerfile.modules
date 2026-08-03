@@ -1,21 +1,329 @@
 ARG HADRON_VERSION=v0.5.1
 ARG JQ_VERSION=1.8.1
 ARG DRBD_VERSION=9.3.3
+ARG RSYSLOG_VERSION=8.2606.0
+ARG LIBESTR_VERSION=0.1.11
+ARG LIBFASTJSON_VERSION=1.2304.0
+ARG LIBUCONTEXT_VERSION=1.5.2
+ARG LOGROTATE_VERSION=3.22.0
+ARG POPT_VERSION=1.19
 
-FROM ghcr.io/kairos-io/hadron-layers/drbd:${DRBD_VERSION} as drbd-layer
-FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_VERSION} AS builder
+# Every source artifact is pinned by SHA-256 so a rebuild either reproduces byte
+# for byte or fails loudly. 
+#
+# To bump a version: change the _VERSION arg, run the build, and take the digest
+# from the sha256sum failure message.
+ARG JQ_SHA256_AMD64=020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d
+ARG JQ_SHA256_ARM64=6bc62f25981328edd3cfcfe6fe51b073f2d7e7710d7ef7fcdac28d4e384fc3d4
+ARG LIBESTR_SHA256=46632b2785ff4a231dcf241eeb0dcb5fc0c7d4da8ee49cf5687722cdbe8b2024
+ARG LIBFASTJSON_SHA256=ef30d1e57a18ec770f90056aaac77300270c6203bbe476f4181cc83a2d5dc80c
+ARG LIBUCONTEXT_SHA256=b7deadd8d3b9fdb66603e420a99fb12ca170654ee319c37a5fa8b100bf0420a5
+ARG RSYSLOG_SHA256=2574b3f3068e6955eb94ef5643e2b6a5b8585cc8eaa77209ff5cbc1e2e5f71e5
+ARG LOGROTATE_SHA256=93154424e73094d923a54de0d358007457282df7e14ee999a7c10d153e2c347e
+ARG POPT_SHA256=c25a4838fc8e4c1c8aacb8bd620edb3084a3d63bf8987fdad3ca2758c63240f9
 
-# Install jq
+FROM ghcr.io/kairos-io/hadron-layers/drbd:${DRBD_VERSION} AS drbd-layer
+FROM ghcr.io/kairos-io/hadron-cloud:${HADRON_VERSION} AS hadron-cloud
+
+########################################################
+#
+# Downloads
+#
+# Every fetch gets its own stage, following the layout of the upstream Hadron
+# Dockerfile.
+#
+########################################################
+
+FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_VERSION} AS sources-base
+RUN mkdir -p /downloads
+WORKDIR /downloads
+
+# jq ships per-architecture release binaries rather than a tarball, so the digest
+# is per-architecture too.
+FROM sources-base AS jq-download
 ARG JQ_VERSION
+ARG JQ_SHA256_AMD64
+ARG JQ_SHA256_ARM64
 ARG TARGETARCH
-WORKDIR /output
-RUN mkdir -p /output/usr/bin && \
-    curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-${TARGETARCH}" -o /output/usr/bin/jq && \
-    chmod +x /output/usr/bin/jq
+RUN case "${TARGETARCH}" in \
+      amd64) JQ_SHA256="${JQ_SHA256_AMD64}" ;; \
+      arm64) JQ_SHA256="${JQ_SHA256_ARM64}" ;; \
+      *)     echo "no pinned jq digest for TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-${TARGETARCH}" -o jq && \
+    echo "${JQ_SHA256}  jq" | sha256sum -c - && \
+    chmod +x jq
 
-# Install rsyslog
+FROM sources-base AS libestr-download
+ARG LIBESTR_VERSION
+ARG LIBESTR_SHA256
+RUN curl -fsSL "https://libestr.adiscon.com/files/download/libestr-${LIBESTR_VERSION}.tar.gz" -o libestr.tar.gz && \
+    echo "${LIBESTR_SHA256}  libestr.tar.gz" | sha256sum -c -
 
+FROM sources-base AS libfastjson-download
+ARG LIBFASTJSON_VERSION
+ARG LIBFASTJSON_SHA256
+RUN curl -fsSL "https://download.rsyslog.com/libfastjson/libfastjson-${LIBFASTJSON_VERSION}.tar.gz" -o libfastjson.tar.gz && \
+    echo "${LIBFASTJSON_SHA256}  libfastjson.tar.gz" | sha256sum -c -
+
+# The tarball comes from the author's own distfiles server rather than GitHub's
+# archive/refs/tags endpoint: that endpoint generates the tarball on demand, so
+# its bytes are not guaranteed stable over time and a pinned digest there can
+# start failing without anything upstream having changed. This is the same
+# release tarball Alpine consumes.
+FROM sources-base AS libucontext-download
+ARG LIBUCONTEXT_VERSION
+ARG LIBUCONTEXT_SHA256
+RUN curl -fsSL "https://distfiles.ariadne.space/libucontext/libucontext-${LIBUCONTEXT_VERSION}.tar.xz" -o libucontext.tar.xz && \
+    echo "${LIBUCONTEXT_SHA256}  libucontext.tar.xz" | sha256sum -c -
+
+FROM sources-base AS rsyslog-download
+ARG RSYSLOG_VERSION
+ARG RSYSLOG_SHA256
+RUN curl -fsSL "https://www.rsyslog.com/files/download/rsyslog/rsyslog-${RSYSLOG_VERSION}.tar.gz" -o rsyslog.tar.gz && \
+    echo "${RSYSLOG_SHA256}  rsyslog.tar.gz" | sha256sum -c -
+
+# The upstream git repo (github.com/rpm-software-management/popt) is deliberately
+# not used: it publishes no release assets, and its tag archive ships no configure
+# script -- regenerating it needs gettext's AM_GNU_GETTEXT / AM_ICONV_LINK m4
+# macros, which this toolchain does not have, so autoreconf fails outright. The
+# release tarball's 17 hand-written source files are byte-identical to the tag.
+FROM sources-base AS popt-download
+ARG POPT_VERSION
+ARG POPT_SHA256
+RUN curl -fsSL "http://ftp.rpm.org/popt/releases/popt-1.x/popt-${POPT_VERSION}.tar.gz" -o popt.tar.gz && \
+    echo "${POPT_SHA256}  popt.tar.gz" | sha256sum -c -
+
+FROM sources-base AS logrotate-download
+ARG LOGROTATE_VERSION
+ARG LOGROTATE_SHA256
+RUN curl -fsSL "https://github.com/logrotate/logrotate/releases/download/${LOGROTATE_VERSION}/logrotate-${LOGROTATE_VERSION}.tar.gz" -o logrotate.tar.gz && \
+    echo "${LOGROTATE_SHA256}  logrotate.tar.gz" | sha256sum -c -
+
+########################################################
+#
+# Modules
+#
+# One stage per module, each staging a complete, self-contained tree under
+# /output: binaries, libraries, config and unit symlinks. 
+#
+########################################################
+
+# jq is a prebuilt binary; it only needs to land in the right place.
+FROM scratch AS jq
+COPY --from=jq-download /downloads/jq /output/usr/bin/jq
+
+# Install rsyslog.
+FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_VERSION} AS rsyslog
+WORKDIR /sources/libestr
+COPY --from=libestr-download /downloads/libestr.tar.gz .
+RUN tar -xz --strip-components=1 -f libestr.tar.gz && \
+    rm libestr.tar.gz && \
+    ./configure ${COMMON_CONFIGURE_ARGS} && \
+    make -s -j"$(nproc)" && \
+    make -s install && \
+    make -s install DESTDIR=/output
+
+WORKDIR /sources/libfastjson
+COPY --from=libfastjson-download /downloads/libfastjson.tar.gz .
+RUN tar -xz --strip-components=1 -f libfastjson.tar.gz && \
+    rm libfastjson.tar.gz && \
+    ./configure ${COMMON_CONFIGURE_ARGS} && \
+    make -s -j"$(nproc)" && \
+    make -s install && \
+    make -s install DESTDIR=/output
+
+# libucontext provides the POSIX ucontext functions that musl libc omits. The
+# toolchain's libsystemd.so was linked against it but does not ship it, so
+# without this rsyslogd fails to link with undefined references to
+# getcontext/makecontext/swapcontext.
+ARG TARGETARCH
+WORKDIR /sources/libucontext
+COPY --from=libucontext-download /downloads/libucontext.tar.xz .
+RUN tar -xJ --strip-components=1 -f libucontext.tar.xz && \
+    rm libucontext.tar.xz && \
+    case "${TARGETARCH}" in \
+      amd64) ARCH=x86_64  ;; \
+      arm64) ARCH=aarch64 ;; \
+      *)     ARCH="${TARGETARCH}" ;; \
+    esac && \
+    make ARCH="${ARCH}" -j"$(nproc)" && \
+    make ARCH="${ARCH}" prefix=/usr install
+
+WORKDIR /sources/rsyslog
+COPY patches/rsyslog-compat-queue-stailq-foreach.patch /patches/
+COPY --from=rsyslog-download /downloads/rsyslog.tar.gz .
+# --enable-libsystemd is auto-detected, but is passed explicitly so the build
+# fails loudly if libsystemd ever disappears from the toolchain: imuxsock only
+# accepts the socket handed over by syslog.socket when compiled with it
+# (HAVE_LIBSYSTEMD), and rsyslogd's sd_notify(READY=1) is what makes the
+# Type=notify unit work.
+#
+# libyaml, libgcrypt and impstats-push are features rsyslog enables by default
+# whose dependencies are absent from the toolchain. Disabling is preferred over
+# building those dependencies because none of them is needed here:
+#   libyaml        - backs only the alternative YAML config format; the classic
+#                    format is what /etc/rsyslog.conf uses.
+#   libgcrypt      - log file encryption (rscryutil).
+#   impstats-push  - pushing rsyslog statistics to a remote endpoint, which
+#                    additionally wants protobuf-c and snappy.
+# klog is disabled because systemd-journald owns /dev/kmsg on Hadron.
+RUN tar -xz --strip-components=1 -f rsyslog.tar.gz && \
+    rm rsyslog.tar.gz && \
+    patch -p1 < /patches/rsyslog-compat-queue-stailq-foreach.patch && \
+    ./configure ${COMMON_CONFIGURE_ARGS} \
+      --enable-libsystemd \
+      --disable-klog \
+      --disable-libyaml \
+      --disable-libgcrypt \
+      --disable-impstats-push && \
+    make -s -j"$(nproc)" && \
+    make -s install DESTDIR=/output
+
+# rsyslog upstream installs no config file and no unit, so both come from
+# overlay/rsyslog/. The unit and the journald drop-in live under /usr/lib/systemd
+# rather than /etc/systemd, which is a persistent bind mount on Kairos.
+COPY overlay/rsyslog/ /output/
+# Enable rsyslog and make it the syslog implementation that syslog.socket
+# activates. The .wants symlink goes under /usr/lib for the same reason as the
+# unit itself; systemd reads target .wants directories from there too.
+RUN mkdir -p /output/usr/lib/systemd/system/multi-user.target.wants && \
+    ln -sf ../rsyslog.service \
+      /output/usr/lib/systemd/system/multi-user.target.wants/rsyslog.service && \
+    ln -sf rsyslog.service /output/usr/lib/systemd/system/syslog.service && \
+    mkdir -p /output/etc/rsyslog.d
+# Strip development artifacts so the exported layer only carries runtime files.
+RUN find /output -name "*.h"  -delete && \
+    find /output -name "*.a"  -delete && \
+    find /output -name "*.la" -delete && \
+    find /output -name "*.pc" -delete && \
+    rm -rf /output/usr/include \
+           /output/usr/share/man \
+           /output/usr/share/doc \
+           /output/usr/share/info \
+           /output/usr/share/aclocal
+
+# Install logrotate.
+# popt is a hard requirement (configure.ac: AC_CHECK_LIB([popt],...)) and is
+# present neither in the toolchain nor in the Hadron base image, so it is built
+# and shipped, installed twice like libestr/libfastjson above.
+
+# https://github.com/rpm-software-management/popt
+FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_VERSION} AS logrotate
+WORKDIR /sources/popt
+COPY --from=popt-download /downloads/popt.tar.gz .
+RUN tar -xz --strip-components=1 -f popt.tar.gz && \
+    rm popt.tar.gz && \
+    ./configure ${COMMON_CONFIGURE_ARGS} --disable-nls && \
+    make -s -j"$(nproc)" && \
+    make -s install && \
+    make -s install DESTDIR=/output
+
+WORKDIR /sources/logrotate
+COPY --from=logrotate-download /downloads/logrotate.tar.gz .
+# --without-selinux because the toolchain has no libselinux; ACL support is kept
+# because libacl is in both the toolchain and the Hadron base image. The default
+# compress command is /bin/gzip, which on Hadron is a busybox applet and works.
+# The uncompress default (/bin/gunzip) does not exist on Hadron, but it is only
+# reachable via the "mail" directive, which needs a mail command the base image
+# also lacks and which no CanvOS drop-in uses.
+RUN tar -xz --strip-components=1 -f logrotate.tar.gz && \
+    rm logrotate.tar.gz && \
+    ./configure ${COMMON_CONFIGURE_ARGS} \
+      --without-selinux \
+      --with-acl && \
+    make -s -j"$(nproc)" && \
+    make -s install DESTDIR=/output
+
+# logrotate upstream installs no config file and no units either, so both come
+# from overlay/logrotate/, under /usr/lib/systemd for the same reason as above.
+COPY overlay/logrotate/ /output/
+# It is the *timer* that gets enabled: logrotate.service is a Type=oneshot job
+# with no [Install] section, and wiring it into multi-user.target.wants would run
+# it once at boot and never again.
+RUN mkdir -p /output/usr/lib/systemd/system/timers.target.wants && \
+    ln -sf ../logrotate.timer \
+      /output/usr/lib/systemd/system/timers.target.wants/logrotate.timer && \
+    mkdir -p /output/etc/logrotate.d
+# Strip development artifacts so the exported layer only carries runtime files.
+RUN find /output -name "*.h"  -delete && \
+    find /output -name "*.a"  -delete && \
+    find /output -name "*.la" -delete && \
+    find /output -name "*.pc" -delete && \
+    rm -rf /output/usr/include \
+           /output/usr/share/man \
+           /output/usr/share/doc \
+           /output/usr/share/info \
+           /output/usr/share/aclocal
+
+# Pinned to the same HADRON_VERSION as the base image, so glib and the agent
+# stay in step with the libtirpc and musl the base ships.
+FROM hadron-cloud AS open-vm-tools
+# glib is a hard dependency (open-vm-tools needs glib2/gmodule/gobject/gthread)
+# and is absent from the non-cloud base, as are the pcre2 and libffi that glib
+# itself links. gio, girepository, the glib tools and the schemas are left
+# behind: nothing open-vm-tools installs links them.
+#
+# libtirpc is *not* copied. Every open-vm-tools library needs it, but the
+# non-cloud base already ships libtirpc.so.3 and this layer lands on top of
+# that base, so copying ours would replace the base image's copy.
+#
+# The deployPkg plugin is dropped: it implements vSphere guest-customization
+# specs, which is not how these nodes are provisioned, and hadron-cloud builds
+# it against a libmspack.so.0 that no Hadron image actually ships -- vmtoolsd
+# would only log a failure to load it.
+RUN mkdir -p /output/usr/bin /output/usr/lib/udev/rules.d /output/etc && \
+    cp -a /usr/bin/vm-support /usr/bin/vmtoolsd /usr/bin/vmware-* /output/usr/bin/ && \
+    cp -a /usr/lib/libvmtools.so* \
+          /usr/lib/libguestlib.so* \
+          /usr/lib/libguestStoreClient.so* \
+          /usr/lib/libhgfs.so* \
+          /usr/lib/libglib-2.0.so.0* \
+          /usr/lib/libgobject-2.0.so.0* \
+          /usr/lib/libgmodule-2.0.so.0* \
+          /usr/lib/libgthread-2.0.so.0* \
+          /usr/lib/libpcre2-8.so.0* \
+          /usr/lib/libffi.so.8* \
+          /output/usr/lib/ && \
+    cp -a /usr/lib/open-vm-tools /output/usr/lib/ && \
+    rm -f /output/usr/lib/open-vm-tools/plugins/vmsvc/libdeployPkgPlugin.so && \
+    cp -a /usr/lib/udev/rules.d/99-vmware-scsi-udev.rules /output/usr/lib/udev/rules.d/ && \
+    cp -a /etc/vmware-tools /output/etc/
+
+# open-vm-tools ships no unit of its own either, so it comes from
+# overlay/open-vm-tools/. The unit is gated on ConditionVirtualization=vmware, so
+# enabling it is harmless everywhere that is not VMware.
+COPY overlay/open-vm-tools/ /output/
+RUN mkdir -p /output/usr/lib/systemd/system/multi-user.target.wants && \
+    ln -sf ../open-vm-tools.service \
+      /output/usr/lib/systemd/system/multi-user.target.wants/open-vm-tools.service
+
+
+ # ========================================================     
+# qemu-guest-agent, the QEMU/KVM guest agent -- lets the hypervisor query the
+# guest and request filesystem freeze/thaw, shutdown and reboot. Needed on
+# KubeVirt/VMO, where without it the VM reports no guest info and graceful
+# shutdown falls back to ACPI.
+FROM hadron-cloud AS qemu-guest-agent
+RUN mkdir -p /output/usr/bin /output/usr/lib /output/usr/lib/systemd/system && \
+    cp -a /usr/bin/qemu-ga /output/usr/bin/ && \
+    cp -a /usr/lib/libglib-2.0.so.0* \
+          /usr/lib/libpcre2-8.so.0* \
+          /output/usr/lib/ && \
+    cp -a /usr/lib/systemd/system/qemu-guest-agent.service \
+          /output/usr/lib/systemd/system/
+          
+COPY overlay/qemu-guest-agent/ /output/
+
+
+########################################################
+# Export
+########################################################
 
 FROM scratch AS export
-COPY --from=builder /output /
-COPY --from=drbd-layer / /
+COPY --from=jq            /output /
+COPY --from=rsyslog       /output /
+COPY --from=logrotate     /output /
+COPY --from=drbd-layer    /       /
+COPY --from=open-vm-tools /output /
+COPY --from=qemu-guest-agent /output /

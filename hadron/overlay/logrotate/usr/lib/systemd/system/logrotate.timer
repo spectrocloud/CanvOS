@@ -1,0 +1,18 @@
+# Copied from upstream logrotate 3.22.0 examples/logrotate.timer with no
+# functional change. This is the unit that gets enabled; logrotate.service is a
+# Type=oneshot job with no [Install] section that this timer triggers.
+#
+# Persistent=true makes a missed run (node powered off at the scheduled time)
+# fire on the next boot, which matters for edge hosts that are not always on.
+
+[Unit]
+Description=Daily rotation of log files
+Documentation=man:logrotate(8) man:logrotate.conf(5)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

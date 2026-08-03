@@ -7,9 +7,10 @@ TARGET=hadron
 FIPS=false
 IS_UKI=false
 OUTPUT=load
+NO_CACHE=false
 HADRON_VERSION="${HADRON_VERSION:-v0.5.1}"
 KAIROS_VERSION="${KAIROS_VERSION:-v4.1.2}"
-KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION:-v0.16.1}"
+KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION:-v0.16.2}"
 SPECTRO_REPO="${SPECTRO_REPO:-us-east1-docker.pkg.dev/spectro-images/dev/arun}"
 MODULES_IMAGE=""
 
@@ -43,6 +44,7 @@ build_modules_image() {
 	docker buildx build \
 		--progress=plain \
 		--platform "$(platforms)" \
+		"${CACHE_ARGS[@]}" \
 		-f "${SCRIPT_DIR}/Dockerfile.modules" \
 		-t "${MODULES_IMAGE}" \
 		--build-arg HADRON_VERSION="${HADRON_VERSION}" \
@@ -54,6 +56,7 @@ build_hadron_image() {
 	docker buildx build \
 		--progress=plain \
 		--platform "$(platforms)" \
+		"${CACHE_ARGS[@]}" \
 		--build-arg KAIROS_VERSION="${KAIROS_VERSION}" \
 		--build-arg KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION}" \
 		--build-arg HADRON_VERSION="${HADRON_VERSION}" \
@@ -97,6 +100,7 @@ Options:
   --uki                       Trusted boot. Not compatible with --fips.
   --push                      Push the resulting image (multi-arch:
                               linux/amd64,linux/arm64). Default(--load).
+  --no-cache                  Pass --no-cache to docker buildx build
   --modules-image TAG         Override the modules image tag. Defaults to
                               ${SPECTRO_REPO}/base/hadron-modules:${HADRON_VERSION}.
   -h, --help                  Show this help
@@ -105,8 +109,9 @@ Environment (override defaults; CLI flags always win):
   HADRON_VERSION          Upstream Hadron version tag (default: v0.5.1)
   KAIROS_VERSION          Kairos version passed to kairos-init --version
                           (default: v4.1.2). Not used in the image tag.
-  KAIROS_INIT_VERSION     kairos-init image tag (default: v0.16.1). This is
+  KAIROS_INIT_VERSION     kairos-init image tag. This is
                           also the tag of the built Hadron image.
+						  
   SPECTRO_REPO            Registry + org prefix for all built images
                           (default: us-east1-docker.pkg.dev/spectro-images/dev/arun)
 
@@ -130,6 +135,7 @@ while [[ $# -gt 0 ]]; do
     --fips)          FIPS=true;   shift ;;
     --uki)           IS_UKI=true; shift ;;
     --push)          OUTPUT=push; shift ;;
+    --no-cache)      NO_CACHE=true; shift ;;
     --modules-image)
       [[ $# -gt 1 ]] || { echo "--modules-image requires an argument" >&2; usage 1; }
       MODULES_IMAGE="$2"; shift 2 ;;
@@ -141,6 +147,11 @@ done
 
 validate
 
+CACHE_ARGS=()
+if [ "${NO_CACHE}" = "true" ]; then
+	CACHE_ARGS=(--no-cache)
+fi
+
 echo "Build configuration:"
 echo "  Target: ${TARGET}"
 echo "  FIPS: ${FIPS}"
@@ -149,6 +160,7 @@ echo "  Hadron version: ${HADRON_VERSION}"
 echo "  Kairos version: ${KAIROS_VERSION}"
 echo "  kairos-init version: ${KAIROS_INIT_VERSION}"
 echo "  Output mode: ${OUTPUT}"
+echo "  No cache: ${NO_CACHE}"
 
 MODULES_IMAGE="${MODULES_IMAGE:-$(default_modules_image)}"
 echo "  Modules image: ${MODULES_IMAGE}"
