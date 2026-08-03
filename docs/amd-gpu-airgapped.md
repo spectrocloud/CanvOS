@@ -38,7 +38,7 @@ does not build a driver either way. A marker at
 | Component | Where it lives | Who installs it |
 | --- | --- | --- |
 | amdgpu kernel module (`amdgpu`) + firmware | **In the OS image** | **This script (build time)** |
-| `amd-smi` / `rocm-smi` host diagnostic CLI (`AMDGPU_INSTALL_SMI=true`) | **In the OS image** (`/usr/bin`) | **This script (build time)** |
+| `amd-smi` host diagnostic CLI (`AMDGPU_INSTALL_SMI=true`) | **In the OS image** (`/usr/bin`) | **This script (build time)** |
 | Full ROCm user-space, device-plugin, node-labeller, metrics-exporter | Container images | AMD GPU Operator (from your content bundle) |
 
 The OS carries only the kernel driver (plus the small `amd-smi` CLI for
@@ -121,7 +121,7 @@ autoloads.
    INSTALL_AMD_GPU_DRIVERS=true
    AMDGPU_DRIVER_SOURCE=dkms      # or "inbox" — see modes above
    AMDGPU_DRIVER_RELEASE=31.40    # ROCm 7.14 GA; pairs with GPU Operator v1.5.1 (dkms mode only)
-   AMDGPU_INSTALL_SMI=true        # install amd-smi/rocm-smi host CLI (parity with nvidia-smi)
+   AMDGPU_INSTALL_SMI=true        # install amd-smi host CLI (parity with nvidia-smi; rocm-smi not installed)
    ```
 
 2. Build as usual, e.g.:
@@ -154,7 +154,7 @@ autoloads.
 | `INSTALL_AMD_GPU_DRIVERS` | `false` | Master switch. Enables the AMD pre-install pipeline. |
 | `AMDGPU_DRIVER_SOURCE` | `dkms` | `dkms` (build AMD's out-of-tree driver against the image kernel) or `inbox` (skip the AMD repo and use the in-tree amdgpu). See modes above. |
 | `AMDGPU_DRIVER_RELEASE` | `31.40` | **`dkms` mode only.** `amdgpu-install` URL segment under `repo.radeon.com/amdgpu-install/<x>/`. AMD publishes both ROCm-alias paths (e.g. `7.2.1`, `7.2.4`) and driver-release-marker paths (e.g. `30.30.x`, `31.40`) — either form works. Default `31.40` = **ROCm 7.14 GA** → **amdgpu-dkms 6.19.14**, the production driver for **GPU Operator v1.5.1** and the baseline for MI350P + Radeon AI PRO (RDNA4). For an older fleet on **v1.5.0**, use `7.2.1` (amdgpu-dkms 6.16.13). |
-| `AMDGPU_INSTALL_SMI` | `true` | Install the `amd-smi` (and `rocm-smi`) host CLI and symlink into `/usr/bin`, for parity with `nvidia-smi`. Pulls a small slice of ROCm user-space from `repo.radeon.com/rocm`. Best-effort — a failure warns but does not fail the build. |
+| `AMDGPU_INSTALL_SMI` | `true` | Install the `amd-smi` host CLI and symlink into `/usr/bin`, for parity with `nvidia-smi`. Prefers `amdrocm-amdsmi` from `repo.amd.com` (user-space matched to recent drivers, e.g. 7.14 for the `31.40` driver), falling back to `amd-smi-lib` from the legacy `repo.radeon.com/rocm/apt` (7.2.x). `rocm-smi` is deprecated and **not** installed. Best-effort — a failure warns but does not fail the build. |
 | `AMDGPU_REBUILD_INITRD` | `false` | Rebuild the initrd for the image kernel. Default `false`: amdgpu is intentionally kept out of the initrd (multi-GPU init can time out dracut-initqueue); it loads after switch-root via `modules-load.d`. |
 
 ### Version alignment across the stack
@@ -247,10 +247,10 @@ cat /etc/canvos/amdgpu-driver-source     # which mode ran + release + AMDGPU_SMI
 # In dkms mode, expect a module under /lib/modules/<kver>/updates/dkms/
 find /lib/modules/$(uname -r)/updates -name 'amdgpu.ko*' 2>/dev/null
 # amd-smi is baked into the OS image when AMDGPU_INSTALL_SMI=true (default):
+amd-smi version     # user-space version (should match the driver, e.g. 7.14 for 31.40)
 amd-smi list        # like `nvidia-smi -L` — enumerates GPUs from the host
 amd-smi monitor     # live utilization
-# rocm-smi is also symlinked if it was installed:
-rocm-smi
+# (rocm-smi is deprecated and intentionally not installed — amd-smi supersedes it)
 ```
 
 ---

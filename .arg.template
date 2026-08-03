@@ -65,9 +65,11 @@ FORCE_INTERACTIVE_INSTALL=false
 #                                            #   publishes both ROCm-alias (7.2.1, 7.2.4) and
 #                                            #   marker (30.30.x, 31.40) paths; either works.
 #                                            #   See the compatibility table in docs/.
-# AMDGPU_INSTALL_SMI=true                    # Default true. Install amd-smi/rocm-smi host
-#                                            #   CLI on PATH (parity with nvidia-smi). Pulls
-#                                            #   a small slice of ROCm user-space; best-effort.
+# AMDGPU_INSTALL_SMI=true                    # Default true. Install the amd-smi host CLI on
+#                                            #   PATH (parity with nvidia-smi), version-matched
+#                                            #   to the driver (amdrocm-amdsmi from repo.amd.com).
+#                                            #   rocm-smi is deprecated and NOT installed.
+#                                            #   Best-effort; a small slice of ROCm user-space.
 # AMDGPU_REBUILD_INITRD=false                # Default false. amdgpu is intentionally
 #                                            #   kept out of the initrd (multi-GPU init
 #                                            #   emits enough udev events to time out
