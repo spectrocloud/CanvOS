@@ -27,7 +27,7 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG AURORABOOT_VERSION=v0.16.0
+ARG AURORABOOT_VERSION=v0.26.1
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.9.1
 ARG KUBEADM_PROVIDER_VERSION=v4.9.3
@@ -328,7 +328,11 @@ install-k8s:
     SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    # Switched from quay.io/kairos/osbuilder-tools (archived kairos-io/osbuilder
+    # + kairos-io/enki) to AuroraBoot, which is the maintained successor. The
+    # build-iso and build-uki subcommands accept a "dir:" source, so the rootfs
+    # preparation path above is unchanged; only the final CLI invocation differs.
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
@@ -359,18 +363,46 @@ build-uki-iso:
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    RUN mkdir /iso
     IF [ "$ARCH" = "arm64" ]
-       RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-              $CMD
+       # arm64 UKI ISO is not supported by upstream today; fall through to a
+       # plain live/installer ISO, matching the previous osbuilder behavior.
+       RUN CMD="auroraboot" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+           $CMD build-iso dir:/build/image \
+               --override-name "$ISO_NAME" \
+               --overlay-iso /overlay \
+               --output /iso/ \
+               --arch arm64
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
-       RUN mkdir /iso
+       # AuroraBoot's build-uki takes explicit key paths instead of osbuilder's
+       # bundled -k /keys. All key files live at /keys/* because the three
+       # secure-boot/* dirs above are flattened into the same target.
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           RUN CMD="auroraboot" && \
+               if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+               $CMD build-uki dir:/build/image -t iso -d /iso \
+                   --extend-cmdline "$CMDLINE" \
+                   --overlay-iso /overlay \
+                   --boot-branding "$BRANDING" \
+                   --public-keys /keys \
+                   --sb-key /keys/db.key \
+                   --sb-cert /keys/db.pem \
+                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+                   --secure-boot-enroll force
        ELSE
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           RUN CMD="auroraboot" && \
+               if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+               $CMD build-uki dir:/build/image -t iso -d /iso \
+                   --extend-cmdline "$CMDLINE" \
+                   --overlay-iso /overlay \
+                   --boot-branding "$BRANDING" \
+                   --public-keys /keys \
+                   --sb-key /keys/db.key \
+                   --sb-cert /keys/db.pem \
+                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem
        END
     END
     WORKDIR /iso
@@ -400,7 +432,12 @@ validate-user-data:
 
 
 build-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    # Switched from quay.io/kairos/osbuilder-tools (archived kairos-io/osbuilder
+    # + kairos-io/enki) to AuroraBoot, which is the maintained successor. The
+    # build-iso subcommand accepts a "dir:" source with the same semantics as
+    # osbuilder's /entrypoint.sh build-iso, so the rootfs preparation path
+    # above is unchanged; only the final CLI invocation differs.
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
@@ -444,14 +481,24 @@ build-iso:
         rm -f /build/image/opt/spectrocloud/local-ui.tar; \
     fi
 
+    # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
+    # "x86_64" for amd64). --override-name replaces osbuilder's --name.
     IF [ "$ARCH" = "arm64" ]
-        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD
+        RUN CMD="auroraboot" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+            $CMD build-iso dir:/build/image \
+                --override-name "$ISO_NAME" \
+                --overlay-iso /overlay \
+                --output /iso/ \
+                --arch arm64
     ELSE IF [ "$ARCH" = "amd64" ]
-        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch x86_64" && \
-            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD
+        RUN CMD="auroraboot" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+            $CMD build-iso dir:/build/image \
+                --override-name "$ISO_NAME" \
+                --overlay-iso /overlay \
+                --output /iso/ \
+                --arch amd64
     END
     WORKDIR /iso
     RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
