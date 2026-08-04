@@ -35,7 +35,7 @@
 #
 # INPUTS (env vars; defaults mirror the Earthfile / .arg.template)
 #   BASE_IMAGE                 kairos base image ref (REQUIRED)
-#   AMDGPU_DRIVER_RELEASE      default: 7.2.1  (pairs with GPU Operator v1.5.0)
+#   AMDGPU_DRIVER_RELEASE      default: 31.40 (ROCm 7.14 GA; pairs with GPU Operator v1.5.1)
 #   AMDGPU_ARTIFACT_DIR        default: ./build
 #   AMDGPU_FORCE_REBUILD       set to 1 to bypass cache
 #
@@ -51,7 +51,7 @@ die()  { echo "[prebuild-amdgpu] ERROR: $*" >&2; exit 1; }
 
 # --- inputs ---------------------------------------------------------------
 : "${BASE_IMAGE:?BASE_IMAGE must be set (kairos base image ref, e.g. us-docker.pkg.dev/palette-images/edge/kairos-ubuntu:24.04-core-amd64-generic-v4.0.4)}"
-AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE:-7.2.1}"
+AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE:-31.40}"
 AMDGPU_ARTIFACT_DIR="${AMDGPU_ARTIFACT_DIR:-./build}"
 AMDGPU_FORCE_REBUILD="${AMDGPU_FORCE_REBUILD:-0}"
 
@@ -104,6 +104,7 @@ docker run --rm --privileged \
     -e AMDGPU_DRIVER_SOURCE=dkms \
     -e AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE}" \
     -e AMDGPU_REBUILD_INITRD=false \
+    -e AMDGPU_INSTALL_SMI=false \
     -e KVER_EXPECTED="${KVER}" \
     -v "${INSTALL_SCRIPT}:/tmp/install-amdgpu-drivers.sh:ro" \
     -v "${HEADERS_SCRIPT}:/tmp/install-kernel-headers.sh:ro" \
