@@ -21,7 +21,7 @@ The codename is derived from the image at build time.
 | Mode | What ships in the image | When to use |
 | --- | --- | --- |
 | `dkms` (default) | AMD's `amdgpu-dkms` source is DKMS-built against the image kernel and lands under `/lib/modules/<kver>/updates/dkms/`. | Recommended for Instinct/MI silicon. The AMD out-of-tree driver typically carries newer SMU firmware interfaces and per-SKU support ahead of what the in-tree amdgpu has. |
-| `inbox` | No AMD apt repo is added; the script only ensures the in-tree `amdgpu` module (shipped in `linux-modules-<kver>`) autoloads. | Fallback when the DKMS build fails against your image kernel — e.g. AMD hasn't yet published a driver release whose source builds against a very new kernel. Requires accepting the in-tree driver's feature set. |
+| `inbox` | No AMD **driver** repo is added; the script only ensures the in-tree `amdgpu` module (shipped in `linux-modules-<kver>`) autoloads. (The ROCm repo is still added *only* for `amd-smi` if `AMDGPU_INSTALL_SMI=true`.) | Fallback when the DKMS build fails against your image kernel — e.g. AMD hasn't yet published a driver release whose source builds against a very new kernel. Requires accepting the in-tree driver's feature set. |
 
 Both modes still require `driver.enable=false` at the Helm layer — the operator
 does not build a driver either way. A marker at
@@ -38,9 +38,11 @@ does not build a driver either way. A marker at
 | Component | Where it lives | Who installs it |
 | --- | --- | --- |
 | amdgpu kernel module (`amdgpu`) + firmware | **In the OS image** | **This script (build time)** |
-| ROCm user-space, device-plugin, node-labeller, metrics-exporter | Container images | AMD GPU Operator (from your content bundle) |
+| `amd-smi` host diagnostic CLI (`AMDGPU_INSTALL_SMI=true`) | **In the OS image** (`/usr/bin`) | **This script (build time)** |
+| Full ROCm user-space, device-plugin, node-labeller, metrics-exporter | Container images | AMD GPU Operator (from your content bundle) |
 
-The OS carries only the kernel driver; everything else is a container image you
+The OS carries only the kernel driver (plus the small `amd-smi` CLI for
+troubleshooting); everything else is a container image you
 mirror into your Palette content bundle. With `driver.enable=false` the operator
 "directly uses inbox or pre-installed AMD GPU drivers" and only deploys the
 device-plugin / node-labeller / metrics-exporter.
@@ -118,7 +120,8 @@ autoloads.
 
    INSTALL_AMD_GPU_DRIVERS=true
    AMDGPU_DRIVER_SOURCE=dkms      # or "inbox" — see modes above
-   AMDGPU_DRIVER_RELEASE=7.2.1    # pairs with GPU Operator v1.5.0 (dkms mode only)
+   AMDGPU_DRIVER_RELEASE=31.40    # ROCm 7.14 GA; pairs with GPU Operator v1.5.1 (dkms mode only)
+   AMDGPU_INSTALL_SMI=true        # install amd-smi host CLI (parity with nvidia-smi; rocm-smi not installed)
    ```
 
 2. Build as usual, e.g.:
@@ -132,7 +135,7 @@ autoloads.
    ```sh
    ./earthly.sh +base-image --ARCH=amd64 \
        --INSTALL_AMD_GPU_DRIVERS=true \
-       --AMDGPU_DRIVER_RELEASE=7.2.1
+       --AMDGPU_DRIVER_RELEASE=31.40
    ```
 
    If the `dkms` build fails on your image kernel (see the mapping table
@@ -150,13 +153,14 @@ autoloads.
 | --- | --- | --- |
 | `INSTALL_AMD_GPU_DRIVERS` | `false` | Master switch. Enables the AMD pre-install pipeline. |
 | `AMDGPU_DRIVER_SOURCE` | `dkms` | `dkms` (build AMD's out-of-tree driver against the image kernel) or `inbox` (skip the AMD repo and use the in-tree amdgpu). See modes above. |
-| `AMDGPU_DRIVER_RELEASE` | `7.2.1` | **`dkms` mode only.** `amdgpu-install` URL segment under `repo.radeon.com/amdgpu-install/<x>/`. AMD publishes both ROCm-alias paths (e.g. `7.2.1`, `7.2.4`) and driver-release-marker paths (e.g. `30.30.1`, `30.30.4`, `31.30`) — either form works. Default `7.2.1` pairs with **GPU Operator v1.5.0** (per AMD's release notes) → **ROCm 7.2.1** → **amdgpu-dkms 6.16.13** (30.30.1 build). |
-| `AMDGPU_REBUILD_INITRD` | `true` | Rebuild the initrd for the image kernel. |
+| `AMDGPU_DRIVER_RELEASE` | `31.40` | **`dkms` mode only.** `amdgpu-install` URL segment under `repo.radeon.com/amdgpu-install/<x>/`. AMD publishes both ROCm-alias paths (e.g. `7.2.1`, `7.2.4`) and driver-release-marker paths (e.g. `30.30.x`, `31.40`) — either form works. Default `31.40` = **ROCm 7.14 GA** → **amdgpu-dkms 6.19.14**, the production driver for **GPU Operator v1.5.1** and the baseline for MI350P + Radeon AI PRO (RDNA4). For an older fleet on **v1.5.0**, use `7.2.1` (amdgpu-dkms 6.16.13). |
+| `AMDGPU_INSTALL_SMI` | `true` | Install the `amd-smi` host CLI and symlink into `/usr/bin`, for parity with `nvidia-smi`. Prefers `amdrocm-amdsmi` from `repo.amd.com` (user-space matched to recent drivers, e.g. 7.14 for the `31.40` driver), falling back to `amd-smi-lib` from the legacy `repo.radeon.com/rocm/apt` (7.2.x). `rocm-smi` is deprecated and **not** installed. Best-effort — a failure warns but does not fail the build. |
+| `AMDGPU_REBUILD_INITRD` | `false` | Rebuild the initrd for the image kernel. Default `false`: amdgpu is intentionally kept out of the initrd (multi-GPU init can time out dracut-initqueue); it loads after switch-root via `modules-load.d`. |
 
-### Version alignment across the stack (snapshot, 2026-07-11)
+### Version alignment across the stack
 
-Five things have to line up to have a supportable node. Start from the operator
-version you bundle and follow AMD's release notes / compat matrix from there:
+Several things have to line up to have a supportable node. Start from the
+operator version you bundle and follow AMD's release notes / compat matrix:
 
 ```
         GPU Operator  ─┐   AMD release notes pair the operator with a specific
@@ -170,48 +174,50 @@ version you bundle and follow AMD's release notes / compat matrix from there:
         Kubernetes version — validated per operator release
 ```
 
-**Two parallel driver tracks** — do not mix them:
+#### Operator ↔ driver compatibility
 
-| Track | `AMDGPU_DRIVER_RELEASE` values | ROCm user-space | Paired GPU Operator |
-| --- | --- | --- | --- |
-| **Production** | `7.2.1` (= `30.30.1`), `7.2.4` (= `30.30.4`), etc. | ROCm 7.2.x | **v1.5.0 (what CanvOS bundles)** |
-| Tech preview | `31.10` / `31.20` / `31.30` | ROCm 7.13.0 tech-preview | not yet paired with a released operator |
+| GPU Operator | `AMDGPU_DRIVER_RELEASE` | amdgpu-dkms | ROCm | Notes |
+| --- | --- | --- | --- | --- |
+| **v1.5.1** (latest) | **`31.40`** (default) | `6.19.14` | **7.14 GA** | Production. Baseline for **MI350P** + **Radeon AI PRO (RDNA4)**. DRA driver needs `31.40`+. |
+| v1.5.0 | `7.2.1` (= `30.30.1`) | `6.16.13` | 7.2.1 | Production. MI300X/MI325X, MI350X/MI355X. |
+| v1.5.0 | `7.2.4` (= `30.30.4`) | `6.16.13` | 7.2.4 | Production patch of the 7.2.x line. |
+
+> **The old "31.x = tech preview" note is obsolete.** `31.x` referred to the
+> **ROCm 7.13.0 preview**. **ROCm 7.14.0 went GA on 2026-07-15**, and marker
+> `31.40` (amdgpu 6.19.14) is a **production** driver. MI350X/MI355X/MI350P
+> (gfx950) and Radeon AI PRO R9700 (RDNA4/gfx1201) are all in the ROCm 7.14
+> production hardware matrix. The **only** remaining preview caveat in Operator
+> v1.5.1 is **Auto Node Remediation (ANR)** — "not fully validated on MI350P
+> and Radeon AI platforms in this beta release" — which is an optional operator
+> *feature*, not the driver.
+
+**How to pick:** match the driver to the operator you bundle.
+- Standardizing on **Operator v1.5.1** (incl. MI350P / RDNA4) → keep the default **`31.40`**.
+- Staying on **Operator v1.5.0** with MI300X/MI325X → set **`AMDGPU_DRIVER_RELEASE=7.2.1`**.
+
+Driver and operator move together — don't bump one without the other.
 
 Authoritative references:
-- [AMD GPU Operator v1.5.0 release notes](https://instinct.docs.amd.com/projects/gpu-operator/en/main/releasenotes.html#gpu-operator-v1-5-0-release-notes)
+- [AMD GPU Operator release notes](https://instinct.docs.amd.com/projects/gpu-operator/en/latest/release-notes.html)
+- [ROCm compatibility matrix](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html)
 - [ROCm user↔kernel compat matrix](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/user-kernel-space-compat-matrix.html)
-- [ROCm on Linux system requirements](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html)
 - Repo index: <https://repo.radeon.com/amdgpu-install/>
 
-Snapshot of what `repo.radeon.com/amdgpu/<release>/ubuntu/dists/noble/…/Packages`
-publishes for `amdgpu-dkms`:
-
-| `AMDGPU_DRIVER_RELEASE` | `amdgpu-dkms` build | Track | Paired with |
-| --- | --- | --- | --- |
-| **`7.2.1` (= `30.30.1`, default)** | `6.16.13-2303411` | Production | ROCm 7.2.1 → GPU Operator v1.5.0 |
-| `7.2.4` (= `30.30.4`) | `6.16.13-2341068` | Production | ROCm 7.2.4 |
-| `31.10` | `6.18.4` | Tech preview | ROCm 7.13.0 tech-preview |
-| `31.30` | `6.19.4` | Tech preview | ROCm 7.13.0 tech-preview |
-
-The whole 30.30.x line uses the same driver *source* (`6.16.13`); only the build
-number and paired user-space differ. Empirically, this source **builds cleanly
-against Ubuntu 24.04's edge kernel 6.17** — the "EFI variables are not supported
-on this system" line printed during postinst is a cosmetic mokutil warning
-(sign_tool step); DKMS proceeds and lands the module under `updates/dkms/`.
-
-**How to pick:** default to the release marker paired with the operator you're
-bundling. Bump only when you're also moving the operator to a paired version.
-Do not switch to `31.x` for kernel-newness alone — that crosses into tech
-preview and won't be validated with a production operator.
+The 30.30.x line shares one driver *source* (`6.16.13`) and builds cleanly
+against Ubuntu 24.04's 6.17 kernel; the `31.40` source (`6.19.14`) is the ROCm
+7.14 driver. The "EFI variables are not supported on this system" line during
+postinst is a cosmetic mokutil warning (sign_tool step); DKMS proceeds and lands
+the module under `updates/dkms/`.
 
 ### When the DKMS build fails
 
 Common causes:
 
 1. **Kernel outside the driver's supported window** — `make.log` shows
-   `configure: cannot detect CFLAGS` or unresolved kernel symbols. Prefer
-   moving the image kernel into range (or the operator/ROCm/driver combo up
-   as a set) over jumping to a tech-preview driver.
+   `configure: cannot detect CFLAGS` or unresolved kernel symbols. Move the
+   image kernel into range, or move the operator/ROCm/driver combo up as a
+   paired set — don't change `AMDGPU_DRIVER_RELEASE` in isolation just to chase
+   a newer kernel.
 2. **`linux-headers-<kver>` not installed for the image kernel** — check the
    earlier log lines from `install-kernel-headers.sh`. Fix the headers.
 3. **DKMS module signing (mokutil) failure in the container** — surfaces as
@@ -237,11 +243,14 @@ newer silicon).
 lsmod | grep amdgpu
 dmesg | grep -i amdgpu
 ls /sys/class/kfd 2>/dev/null && echo "KFD present"
-cat /etc/canvos/amdgpu-driver-source     # which mode ran + release info
+cat /etc/canvos/amdgpu-driver-source     # which mode ran + release + AMDGPU_SMI=yes/no
 # In dkms mode, expect a module under /lib/modules/<kver>/updates/dkms/
 find /lib/modules/$(uname -r)/updates -name 'amdgpu.ko*' 2>/dev/null
-# If you also bundle ROCm user-space tooling:
-# rocminfo ; amd-smi list
+# amd-smi is baked into the OS image when AMDGPU_INSTALL_SMI=true (default):
+amd-smi version     # user-space version (should match the driver, e.g. 7.14 for 31.40)
+amd-smi list        # like `nvidia-smi -L` — enumerates GPUs from the host
+amd-smi monitor     # live utilization
+# (rocm-smi is deprecated and intentionally not installed — amd-smi supersedes it)
 ```
 
 ---
