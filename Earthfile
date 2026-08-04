@@ -501,7 +501,12 @@ build-iso:
                 --arch amd64
     END
     WORKDIR /iso
-    RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
+    # AuroraBoot's --override-name is honored only for some source types in
+    # v0.26.1 and does not apply to "dir:" sources: the ISO comes out as
+    # kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso. Normalize
+    # to the expected $ISO_NAME.iso the same way +build-uki-iso already does.
+    RUN mv /iso/*.iso "$ISO_NAME.iso" && \
+        sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
