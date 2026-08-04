@@ -406,7 +406,17 @@ build-uki-iso:
        END
     END
     WORKDIR /iso
-    RUN mv /iso/*.iso $ISO_NAME.iso
+    # See the equivalent block in +build-iso: AuroraBoot v0.26.1 may drop the
+    # ISO under /tmp/auroraboot instead of the requested -d, so search wherever
+    # it landed and normalize to $ISO_NAME.iso.
+    RUN ISO_SRC=$(find /iso /tmp/auroraboot -maxdepth 2 -name '*.iso' 2>/dev/null | head -n1) && \
+        if [ -z "$ISO_SRC" ]; then \
+            ISO_SRC=$(find / -xdev -name '*.iso' 2>/dev/null | head -n1); \
+        fi && \
+        if [ -z "$ISO_SRC" ]; then \
+            echo "ERROR: AuroraBoot produced no .iso file"; exit 1; \
+        fi && \
+        mv "$ISO_SRC" "/iso/$ISO_NAME.iso"
     SAVE ARTIFACT /iso/*
 
 iso:
@@ -501,11 +511,19 @@ build-iso:
                 --arch amd64
     END
     WORKDIR /iso
-    # AuroraBoot's --override-name is honored only for some source types in
-    # v0.26.1 and does not apply to "dir:" sources: the ISO comes out as
-    # kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso. Normalize
-    # to the expected $ISO_NAME.iso the same way +build-uki-iso already does.
-    RUN mv /iso/*.iso "$ISO_NAME.iso" && \
+    # AuroraBoot v0.26.1's build-iso ignores both --output and --override-name
+    # for "dir:" sources: the ISO always lands at
+    # /tmp/auroraboot/kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso
+    # (see the "Generating iso ... to '/tmp/auroraboot'" log line). Locate the
+    # ISO wherever it landed and normalize to $ISO_NAME.iso.
+    RUN ISO_SRC=$(find /iso /tmp/auroraboot -maxdepth 2 -name '*.iso' 2>/dev/null | head -n1) && \
+        if [ -z "$ISO_SRC" ]; then \
+            ISO_SRC=$(find / -xdev -name '*.iso' 2>/dev/null | head -n1); \
+        fi && \
+        if [ -z "$ISO_SRC" ]; then \
+            echo "ERROR: AuroraBoot produced no .iso file"; exit 1; \
+        fi && \
+        mv "$ISO_SRC" "/iso/$ISO_NAME.iso" && \
         sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
 
