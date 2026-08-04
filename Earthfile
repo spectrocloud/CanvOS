@@ -494,8 +494,48 @@ build-iso:
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
             $CMD build-iso dir:/build/image --overlay-iso /overlay --arch amd64
     END
+
+    # AuroraBoot v0.26.1's build-iso has two ISO-side defects that we
+    # post-process around with xorriso:
+    #
+    # (1) The ISO uses a plain MBR partition table with El Torito + a 0xEF
+    #     ESP partition entry. That works on lenient UEFI firmwares, but
+    #     strict ones (VMware ESXi/Workstation, OVMF/QEMU, some SuperMicro
+    #     BMC virtual CD implementations) require the ESP to be exposed
+    #     via a GPT partition entry and reject the ISO as "No compatible
+    #     bootloader found" otherwise. Ubuntu 24.04.3's live ISO uses a
+    #     hybrid GPT + protective MBR layout for exactly this reason.
+    #     Fix: -boot_image any appended_part_as=gpt turns the appended ESP
+    #     into a GPT-declared partition and adds a protective MBR.
+    #
+    # (2) --overlay-iso is silently a no-op in this release: none of the
+    #     files we place under /overlay make it onto the ISO tree. That
+    #     drops our /boot/grub/grub.cfg CD-variant stub, our Palette-
+    #     branded /boot/grub2/grub.cfg, user-data, content bundles,
+    #     cluster config, and edge_custom_config. Fix: enumerate everything
+    #     under /overlay and -add it explicitly during the xorriso repack.
+    #
+    # We also need to force xorriso to actually write the output: without a
+    # pending tree change it refuses to commit ("No image modifications
+    # pending"). Enumerating the overlay files with -add is itself a
+    # modification, so no separate marker file is needed.
     RUN mkdir -p /iso && \
-        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
+        mv /tmp/auroraboot/*.iso /tmp/auroraboot-raw.iso && \
+        OVERLAY_SPECS=$(cd /overlay && find . -type f -printf '/%P=/overlay/%P\n') && \
+        if [ -z "$OVERLAY_SPECS" ]; then \
+            echo "ERROR: /overlay is empty; xorriso needs at least one file to commit" >&2; exit 1; \
+        fi && \
+        echo "Injecting $(echo "$OVERLAY_SPECS" | wc -l) files from /overlay into the ISO" && \
+        xorriso \
+            -indev /tmp/auroraboot-raw.iso \
+            -outdev "/iso/$ISO_NAME.iso" \
+            -boot_image any replay \
+            -boot_image any appended_part_as=gpt \
+            -pathspecs on \
+            -overwrite on \
+            -add $OVERLAY_SPECS -- \
+            -commit && \
+        rm -f /tmp/auroraboot-raw.iso
     WORKDIR /iso
     RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
