@@ -363,17 +363,15 @@ build-uki-iso:
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
-    RUN mkdir /iso
+    # AuroraBoot v0.26.1 silently ignores --output/-d for "dir:" sources on
+    # both build-iso and build-uki, dropping the ISO at /tmp/auroraboot/*.iso
+    # regardless. We hoist it into /iso/ ourselves after the run.
     IF [ "$ARCH" = "arm64" ]
        # arm64 UKI ISO is not supported by upstream today; fall through to a
        # plain live/installer ISO, matching the previous osbuilder behavior.
        RUN CMD="auroraboot" && \
            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-           $CMD build-iso dir:/build/image \
-               --override-name "$ISO_NAME" \
-               --overlay-iso /overlay \
-               --output /iso/ \
-               --arch arm64
+           $CMD build-iso dir:/build/image --overlay-iso /overlay --arch arm64
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
@@ -383,7 +381,7 @@ build-uki-iso:
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
            RUN CMD="auroraboot" && \
                if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-               $CMD build-uki dir:/build/image -t iso -d /iso \
+               $CMD build-uki dir:/build/image -t iso \
                    --extend-cmdline "$CMDLINE" \
                    --overlay-iso /overlay \
                    --boot-branding "$BRANDING" \
@@ -395,7 +393,7 @@ build-uki-iso:
        ELSE
            RUN CMD="auroraboot" && \
                if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-               $CMD build-uki dir:/build/image -t iso -d /iso \
+               $CMD build-uki dir:/build/image -t iso \
                    --extend-cmdline "$CMDLINE" \
                    --overlay-iso /overlay \
                    --boot-branding "$BRANDING" \
@@ -405,18 +403,8 @@ build-uki-iso:
                    --tpm-pcr-private-key /keys/tpm2-pcr-private.pem
        END
     END
-    WORKDIR /iso
-    # See the equivalent block in +build-iso: AuroraBoot v0.26.1 may drop the
-    # ISO under /tmp/auroraboot instead of the requested -d, so search wherever
-    # it landed and normalize to $ISO_NAME.iso.
-    RUN ISO_SRC=$(find /iso /tmp/auroraboot -maxdepth 2 -name '*.iso' 2>/dev/null | head -n1) && \
-        if [ -z "$ISO_SRC" ]; then \
-            ISO_SRC=$(find / -xdev -name '*.iso' 2>/dev/null | head -n1); \
-        fi && \
-        if [ -z "$ISO_SRC" ]; then \
-            echo "ERROR: AuroraBoot produced no .iso file"; exit 1; \
-        fi && \
-        mv "$ISO_SRC" "/iso/$ISO_NAME.iso"
+    RUN mkdir -p /iso && \
+        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     SAVE ARTIFACT /iso/*
 
 iso:
@@ -492,39 +480,24 @@ build-iso:
     fi
 
     # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
-    # "x86_64" for amd64). --override-name replaces osbuilder's --name.
+    # "x86_64" for amd64). Both --output and --override-name are silently
+    # ignored for "dir:" sources in v0.26.1 -- the ISO always lands at
+    # /tmp/auroraboot/kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso
+    # -- so pointing --output at /iso/ would be misleading. Leave it default
+    # and hoist the produced ISO into /iso/ ourselves.
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso dir:/build/image \
-                --override-name "$ISO_NAME" \
-                --overlay-iso /overlay \
-                --output /iso/ \
-                --arch arm64
+            $CMD build-iso dir:/build/image --overlay-iso /overlay --arch arm64
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso dir:/build/image \
-                --override-name "$ISO_NAME" \
-                --overlay-iso /overlay \
-                --output /iso/ \
-                --arch amd64
+            $CMD build-iso dir:/build/image --overlay-iso /overlay --arch amd64
     END
+    RUN mkdir -p /iso && \
+        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     WORKDIR /iso
-    # AuroraBoot v0.26.1's build-iso ignores both --output and --override-name
-    # for "dir:" sources: the ISO always lands at
-    # /tmp/auroraboot/kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso
-    # (see the "Generating iso ... to '/tmp/auroraboot'" log line). Locate the
-    # ISO wherever it landed and normalize to $ISO_NAME.iso.
-    RUN ISO_SRC=$(find /iso /tmp/auroraboot -maxdepth 2 -name '*.iso' 2>/dev/null | head -n1) && \
-        if [ -z "$ISO_SRC" ]; then \
-            ISO_SRC=$(find / -xdev -name '*.iso' 2>/dev/null | head -n1); \
-        fi && \
-        if [ -z "$ISO_SRC" ]; then \
-            echo "ERROR: AuroraBoot produced no .iso file"; exit 1; \
-        fi && \
-        mv "$ISO_SRC" "/iso/$ISO_NAME.iso" && \
-        sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
+    RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
