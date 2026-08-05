@@ -19,6 +19,11 @@ ARG KAIROS_VERSION=v4.1.2
 ARG FIPS=false
 ARG IS_UKI=false
 
+# The base image ships /usr/sbin/ip and /sbin/ip as symlinks into /bin/busybox. 
+# Drop them so the modules COPY lands the real iproute2 `ip` as a regular file rather than being resolved by buildkit into
+# /bin/busybox and overwriting the multi-call binary itself.
+RUN rm -f /usr/sbin/ip /sbin/ip
+
 COPY --from=modules / /
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \

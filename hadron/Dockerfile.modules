@@ -7,9 +7,11 @@ ARG LIBFASTJSON_VERSION=1.2304.0
 ARG LIBUCONTEXT_VERSION=1.5.2
 ARG LOGROTATE_VERSION=3.22.0
 ARG POPT_VERSION=1.19
+ARG LIBMNL_VERSION=1.0.5
+ARG IPROUTE2_VERSION=7.1.0
 
 # Every source artifact is pinned by SHA-256 so a rebuild either reproduces byte
-# for byte or fails loudly. 
+# for byte or fails loudly.
 #
 # To bump a version: change the _VERSION arg, run the build, and take the digest
 # from the sha256sum failure message.
@@ -21,6 +23,8 @@ ARG LIBUCONTEXT_SHA256=b7deadd8d3b9fdb66603e420a99fb12ca170654ee319c37a5fa8b100b
 ARG RSYSLOG_SHA256=2574b3f3068e6955eb94ef5643e2b6a5b8585cc8eaa77209ff5cbc1e2e5f71e5
 ARG LOGROTATE_SHA256=93154424e73094d923a54de0d358007457282df7e14ee999a7c10d153e2c347e
 ARG POPT_SHA256=c25a4838fc8e4c1c8aacb8bd620edb3084a3d63bf8987fdad3ca2758c63240f9
+ARG LIBMNL_SHA256=274b9b919ef3152bfb3da3a13c950dd60d6e2bcd54230ffeca298d03b40d0525
+ARG IPROUTE2_SHA256=fd9fa1b95809417157ca83dd72957e3261bdbce896353cb936f80af0b33a4b5c
 
 FROM ghcr.io/kairos-io/hadron-layers/drbd:${DRBD_VERSION} AS drbd-layer
 FROM ghcr.io/kairos-io/hadron-cloud:${HADRON_VERSION} AS hadron-cloud
@@ -99,6 +103,19 @@ ARG LOGROTATE_VERSION
 ARG LOGROTATE_SHA256
 RUN curl -fsSL "https://github.com/logrotate/logrotate/releases/download/${LOGROTATE_VERSION}/logrotate-${LOGROTATE_VERSION}.tar.gz" -o logrotate.tar.gz && \
     echo "${LOGROTATE_SHA256}  logrotate.tar.gz" | sha256sum -c -
+
+# Download libmnl and iproute2        
+FROM sources-base AS libmnl-download
+ARG LIBMNL_VERSION
+ARG LIBMNL_SHA256
+RUN curl -fsSL "https://www.netfilter.org/pub/libmnl/libmnl-${LIBMNL_VERSION}.tar.bz2" -o libmnl.tar.bz2 && \
+    echo "${LIBMNL_SHA256}  libmnl.tar.bz2" | sha256sum -c -
+
+FROM sources-base AS iproute2-download
+ARG IPROUTE2_VERSION
+ARG IPROUTE2_SHA256
+RUN curl -fsSL "https://www.kernel.org/pub/linux/utils/net/iproute2/iproute2-${IPROUTE2_VERSION}.tar.xz" -o iproute2.tar.xz && \
+    echo "${IPROUTE2_SHA256}  iproute2.tar.xz" | sha256sum -c -
 
 ########################################################
 #
@@ -256,6 +273,48 @@ RUN find /output -name "*.h"  -delete && \
            /output/usr/share/info \
            /output/usr/share/aclocal
 
+# Install iproute2 (`ip` and `bridge`). The Hadron base ships only BusyBox's
+# `ip` applet -- which lacks `ip neigh add|del|replace` -- and no `bridge`
+# binary at all. stylus-agent needs both to program VXLAN overlay networking
+FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_VERSION} AS iproute2
+WORKDIR /sources/libmnl
+COPY --from=libmnl-download /downloads/libmnl.tar.bz2 .
+RUN tar -xj --strip-components=1 -f libmnl.tar.bz2 && \
+    rm libmnl.tar.bz2 && \
+    ./configure ${COMMON_CONFIGURE_ARGS} && \
+    make -s -j"$(nproc)" && \
+    make -s install && \
+    make -s install DESTDIR=/output
+
+WORKDIR /sources/iproute2
+COPY --from=iproute2-download /downloads/iproute2.tar.xz .
+# iproute2's `configure` is a hand-rolled feature detector, not an autotools
+# script, so it takes no --prefix / --host flags -- install paths are set via
+# Makefile variables at `make install` time. SBINDIR is forced to /usr/sbin so
+# the binaries overlay the BusyBox `ip` symlink at /usr/sbin/ip (the /sbin
+# BusyBox symlink is dropped in hadron/Dockerfile before the modules COPY, so
+# nothing is left pointing at /bin/busybox for that applet).
+RUN tar -xJ --strip-components=1 -f iproute2.tar.xz && \
+    rm iproute2.tar.xz && \
+    ./configure && \
+    make -s -j"$(nproc)" SUBDIRS="lib ip bridge" && \
+    make -s install SUBDIRS="lib ip bridge" \
+        DESTDIR=/output \
+        PREFIX=/usr \
+        SBINDIR=/usr/sbin \
+        LIBDIR=/usr/lib \
+        CONFDIR=/etc/iproute2
+# Drop development artifacts, man pages, and the bpf_elf.h header the top-level
+# install target unconditionally lays down.
+RUN find /output -name "*.h"  -delete && \
+    find /output -name "*.a"  -delete && \
+    find /output -name "*.la" -delete && \
+    find /output -name "*.pc" -delete && \
+    rm -rf /output/usr/include \
+           /output/usr/share/man \
+           /output/usr/share/doc \
+           /output/usr/share/bash-completion
+
 # Pinned to the same HADRON_VERSION as the base image, so glib and the agent
 # stay in step with the libtirpc and musl the base ships.
 FROM hadron-cloud AS open-vm-tools
@@ -324,6 +383,7 @@ FROM scratch AS export
 COPY --from=jq            /output /
 COPY --from=rsyslog       /output /
 COPY --from=logrotate     /output /
+COPY --from=iproute2      /output /
 COPY --from=drbd-layer    /       /
 COPY --from=open-vm-tools /output /
 COPY --from=qemu-guest-agent /output /
