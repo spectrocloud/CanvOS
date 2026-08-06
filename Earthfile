@@ -84,12 +84,14 @@ ARG INSTALL_AMD_GPU_DRIVERS=false
 # fails against your image kernel and you accept the in-tree driver's feature set.
 ARG AMDGPU_DRIVER_SOURCE=dkms
 # amdgpu-install release marker (URL segment under repo.radeon.com/amdgpu-install/<x>/).
-# Default 7.2.1 pairs with AMD GPU Operator v1.5.0 (per its release notes) and installs
-# amdgpu-dkms 6.16.13 (30.30.1 line). Empirically builds cleanly against Linux kernels
-# through 6.17 on Ubuntu 24.04. AMD publishes both ROCm-alias (7.2.1) and driver-release-
-# marker (30.30.1, 31.30) URL segments; either form is accepted here. The 31.x line is
-# tech-preview -- do not mix with a production operator. See docs/amd-gpu-airgapped.md.
-ARG AMDGPU_DRIVER_RELEASE=7.2.1
+# Default 31.40 = ROCm 7.14 GA (amdgpu 6.19.14), the PRODUCTION driver for AMD GPU
+# Operator v1.5.1 and the baseline for MI350P + Radeon AI PRO (RDNA4). (7.14 went GA
+# on 2026-07-15; the earlier "31.x = tech-preview" note referred to the ROCm 7.13.0
+# preview and is obsolete.) For an older fleet staying on Operator v1.5.0, use 7.2.1
+# (amdgpu 6.16.13, 30.30.1 line). AMD publishes both ROCm-alias (7.2.1, 7.2.4) and
+# driver-release-marker (30.30.x, 31.40) URL segments; either form is accepted here.
+# See docs/amd-gpu-airgapped.md for the operator<->driver compatibility matrix.
+ARG AMDGPU_DRIVER_RELEASE=31.40
 # Path to a driver artifact produced by scripts/prebuild-amdgpu-artifact.sh
 # on the build host. Threaded in by earthly.sh when INSTALL_AMD_GPU_DRIVERS=true
 # and AMDGPU_DRIVER_SOURCE=dkms. When set, the base-image AMD block skips the
@@ -102,6 +104,9 @@ ARG AMDGPU_ARTIFACT_PATH=""
 # the node into emergency mode). amdgpu loads after switch-root via
 # /etc/modules-load.d/amdgpu.conf where there is no timeout pressure.
 ARG AMDGPU_REBUILD_INITRD=false
+# Install the amd-smi / rocm-smi host CLI on PATH (parity with nvidia-smi). Default
+# true. Pulls a small slice of ROCm user-space from repo.radeon.com/rocm; best-effort.
+ARG AMDGPU_INSTALL_SMI=true
 
 # NVIDIA and AMD driver pre-install are mutually exclusive within a single image.
 IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ] && [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
@@ -944,6 +949,7 @@ base-image:
                     AMDGPU_DRIVER_SOURCE=dkms \
                     AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
                     AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                    AMDGPU_INSTALL_SMI="$AMDGPU_INSTALL_SMI" \
                     AMDGPU_ARTIFACT_PATH=/tmp/amdgpu-artifact.tar.gz \
                     /tmp/install-amdgpu-drivers.sh && \
                     rm -f /tmp/install-amdgpu-drivers.sh /tmp/amdgpu-artifact.tar.gz
@@ -960,6 +966,7 @@ base-image:
                     AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
                     AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
                     AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                    AMDGPU_INSTALL_SMI="$AMDGPU_INSTALL_SMI" \
                     /tmp/install-amdgpu-drivers.sh && \
                     rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
             END
@@ -1043,12 +1050,8 @@ base-image:
         # qat_4xxx: on Xeon Scalable 4th/5th gen hosts with QAT devices,
         # udev auto-loads qat_4xxx in initramfs and its probe/firmware-load
         # stalls boot for minutes. CanvOS does not consume QAT acceleration.
-        #
-        # pci=realloc=off: firmware-assigned PCI resource layout is
-        # authoritative; kernel-side reallocation has caused BAR conflicts
-        # on some server platforms. Mirrors the installer ISO cmdline.
         RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
-                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0 pci=realloc=off"|' /etc/cos/bootargs.cfg; \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0"|' /etc/cos/bootargs.cfg; \
             fi
     END
 
