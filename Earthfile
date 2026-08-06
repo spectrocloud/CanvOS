@@ -27,7 +27,7 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG AURORABOOT_VERSION=v0.16.0
+ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.9.1
 ARG KUBEADM_PROVIDER_VERSION=v4.9.3
@@ -333,7 +333,11 @@ install-k8s:
     SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    # Switched from quay.io/kairos/osbuilder-tools (archived kairos-io/osbuilder
+    # + kairos-io/enki) to AuroraBoot, which is the maintained successor. The
+    # build-iso and build-uki subcommands accept a "dir:" source, so the rootfs
+    # preparation path above is unchanged; only the final CLI invocation differs.
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
@@ -364,22 +368,48 @@ build-uki-iso:
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    # AuroraBoot v0.26.1 silently ignores --output/-d for "dir:" sources on
+    # both build-iso and build-uki, dropping the ISO at /tmp/auroraboot/*.iso
+    # regardless. We hoist it into /iso/ ourselves after the run.
     IF [ "$ARCH" = "arm64" ]
-       RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-              $CMD
+       # arm64 UKI ISO is not supported by upstream today; fall through to a
+       # plain live/installer ISO, matching the previous osbuilder behavior.
+       RUN CMD="auroraboot" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+           $CMD build-iso dir:/build/image --overlay-iso /overlay --arch arm64
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
-       RUN mkdir /iso
+       # AuroraBoot's build-uki takes explicit key paths instead of osbuilder's
+       # bundled -k /keys. All key files live at /keys/* because the three
+       # secure-boot/* dirs above are flattened into the same target.
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           RUN CMD="auroraboot" && \
+               if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+               $CMD build-uki dir:/build/image -t iso \
+                   --extend-cmdline "$CMDLINE" \
+                   --overlay-iso /overlay \
+                   --boot-branding "$BRANDING" \
+                   --public-keys /keys \
+                   --sb-key /keys/db.key \
+                   --sb-cert /keys/db.pem \
+                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+                   --secure-boot-enroll force
        ELSE
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           RUN CMD="auroraboot" && \
+               if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+               $CMD build-uki dir:/build/image -t iso \
+                   --extend-cmdline "$CMDLINE" \
+                   --overlay-iso /overlay \
+                   --boot-branding "$BRANDING" \
+                   --public-keys /keys \
+                   --sb-key /keys/db.key \
+                   --sb-cert /keys/db.pem \
+                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem
        END
     END
-    WORKDIR /iso
-    RUN mv /iso/*.iso $ISO_NAME.iso
+    RUN mkdir -p /iso && \
+        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     SAVE ARTIFACT /iso/*
 
 iso:
@@ -405,7 +435,12 @@ validate-user-data:
 
 
 build-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    # Switched from quay.io/kairos/osbuilder-tools (archived kairos-io/osbuilder
+    # + kairos-io/enki) to AuroraBoot, which is the maintained successor. The
+    # build-iso subcommand accepts a "dir:" source with the same semantics as
+    # osbuilder's /entrypoint.sh build-iso, so the rootfs preparation path
+    # above is unchanged; only the final CLI invocation differs.
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
@@ -449,17 +484,42 @@ build-iso:
         rm -f /build/image/opt/spectrocloud/local-ui.tar; \
     fi
 
+    # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
+    # "x86_64" for amd64). --output/--override-name are inert for "dir:"
+    # sources in v0.26.2 -- the ISO always lands at /tmp/auroraboot/
+    # kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso -- so we
+    # leave --output default and hoist the produced ISO into /iso/ ourselves.
     IF [ "$ARCH" = "arm64" ]
-        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD
+        RUN CMD="auroraboot" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+            $CMD build-iso dir:/build/image --overlay-iso /overlay --arch arm64
     ELSE IF [ "$ARCH" = "amd64" ]
-        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch x86_64" && \
-            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD
+        RUN CMD="auroraboot" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+            $CMD build-iso dir:/build/image --overlay-iso /overlay --arch amd64
     END
+    RUN mkdir -p /iso && \
+        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
+
+    # AuroraBoot v0.26.2's `build-iso` subcommand runs only:
+    #   PrepDirs -> StepCopyCloudConfig -> StepDumpSource -> StepGenISO
+    # and NEVER calls StepInjectCC. That step is the one that actually copies
+    # --overlay-iso content onto the finalised ISO tree; its absence means our
+    # /overlay/... files (Palette-branded /boot/grub2/grub.cfg, user-data,
+    # cluster config, content bundles, edge_custom_config) silently disappear.
+    # Empirically verified: the built ISO's /boot/grub2/grub.cfg is
+    # AuroraBoot's default "Kairos"-branded template, not our overlay's
+    # "Palette eXtended Kubernetes Edge Installer" version.
+    #
+    # Pipeline mode (docker run auroraboot --set ...) invokes StepInjectCC,
+    # but that adds DinD, container_image loading, and ~100 lines of Earthfile.
+    # StepInjectCC's actual work is one xorriso command; do it here directly.
+    # See kairos-io/AuroraBoot pkg/ops/iso.go InjectISO() for the upstream
+    # equivalent -- same xorriso invocation.
+    RUN xorriso -indev "/iso/$ISO_NAME.iso" -outdev "/iso/$ISO_NAME.iso" \
+                -map /overlay / -boot_image any replay
     WORKDIR /iso
-    RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
+    RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
@@ -1049,6 +1109,7 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+
     IF [ "$IS_CLOUD_IMAGE" = "true" ]
         COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
         COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
