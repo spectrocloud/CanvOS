@@ -27,7 +27,7 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG AURORABOOT_VERSION=v0.26.1
+ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.9.1
 ARG KUBEADM_PROVIDER_VERSION=v4.9.3
@@ -480,11 +480,10 @@ build-iso:
     fi
 
     # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
-    # "x86_64" for amd64). Both --output and --override-name are silently
-    # ignored for "dir:" sources in v0.26.1 -- the ISO always lands at
-    # /tmp/auroraboot/kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso
-    # -- so pointing --output at /iso/ would be misleading. Leave it default
-    # and hoist the produced ISO into /iso/ ourselves.
+    # "x86_64" for amd64). --output/--override-name are inert for "dir:"
+    # sources in v0.26.2 -- the ISO always lands at /tmp/auroraboot/
+    # kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso -- so we
+    # leave --output default and hoist the produced ISO into /iso/ ourselves.
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
@@ -494,48 +493,8 @@ build-iso:
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
             $CMD build-iso dir:/build/image --overlay-iso /overlay --arch amd64
     END
-
-    # AuroraBoot v0.26.1's build-iso has two ISO-side defects that we
-    # post-process around with xorriso:
-    #
-    # (1) The ISO uses a plain MBR partition table with El Torito + a 0xEF
-    #     ESP partition entry. That works on lenient UEFI firmwares, but
-    #     strict ones (VMware ESXi/Workstation, OVMF/QEMU, some SuperMicro
-    #     BMC virtual CD implementations) require the ESP to be exposed
-    #     via a GPT partition entry and reject the ISO as "No compatible
-    #     bootloader found" otherwise. Ubuntu 24.04.3's live ISO uses a
-    #     hybrid GPT + protective MBR layout for exactly this reason.
-    #     Fix: -boot_image any appended_part_as=gpt turns the appended ESP
-    #     into a GPT-declared partition and adds a protective MBR.
-    #
-    # (2) --overlay-iso is silently a no-op in this release: none of the
-    #     files we place under /overlay make it onto the ISO tree. That
-    #     drops our /boot/grub/grub.cfg CD-variant stub, our Palette-
-    #     branded /boot/grub2/grub.cfg, user-data, content bundles,
-    #     cluster config, and edge_custom_config. Fix: enumerate everything
-    #     under /overlay and -add it explicitly during the xorriso repack.
-    #
-    # We also need to force xorriso to actually write the output: without a
-    # pending tree change it refuses to commit ("No image modifications
-    # pending"). Enumerating the overlay files with -add is itself a
-    # modification, so no separate marker file is needed.
     RUN mkdir -p /iso && \
-        mv /tmp/auroraboot/*.iso /tmp/auroraboot-raw.iso && \
-        OVERLAY_SPECS=$(cd /overlay && find . -type f -printf '/%P=/overlay/%P\n') && \
-        if [ -z "$OVERLAY_SPECS" ]; then \
-            echo "ERROR: /overlay is empty; xorriso needs at least one file to commit" >&2; exit 1; \
-        fi && \
-        echo "Injecting $(echo "$OVERLAY_SPECS" | wc -l) files from /overlay into the ISO" && \
-        xorriso \
-            -indev /tmp/auroraboot-raw.iso \
-            -outdev "/iso/$ISO_NAME.iso" \
-            -boot_image any replay \
-            -boot_image any appended_part_as=gpt \
-            -pathspecs on \
-            -overwrite on \
-            -add $OVERLAY_SPECS -- \
-            -commit && \
-        rm -f /tmp/auroraboot-raw.iso
+        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     WORKDIR /iso
     RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
@@ -1129,40 +1088,6 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
-
-    # Bootable ISOs need the CD/removable GRUB, not the installed-system one.
-    #
-    # Ubuntu's grub-efi-*-signed package ships two signed builds:
-    #   grubx64.efi.signed  - prefix /EFI/ubuntu, for systems installed to disk
-    #   gcdx64.efi.signed   - prefix /boot/grub,  for CD / removable media
-    #
-    # osbuilder's copyGrub walks a hardcoded candidate list (kairos-sdk
-    # utils.GetEfiGrubFiles), takes the first path that exists, and names the
-    # destination after the source. On Ubuntu that always resolves to
-    # grubx64.efi.signed - there is no gcd candidate in the list at all.
-    #
-    # The installed-system binary hangs immediately when launched from removable
-    # media on UEFI firmware (reproduced on Supermicro + ATEN BMC: no output, the
-    # firmware reads ~23MB and executes nothing). Booting only ever worked in
-    # Dual/CSM mode, which uses the BIOS El Torito image and never touches this
-    # binary. Verified by substitution: the same GRUB package version taken from
-    # an Ubuntu ISO (the gcd build) boots correctly on the same hardware.
-    #
-    # Stage the CD variant over the path osbuilder looks for. ISO rootfs only -
-    # cloud/raw disk images (including MAAS, which invokes +iso-image via
-    # +kairos-raw-image without --IS_CLOUD_IMAGE=true) are installed systems and
-    # want the original binary.
-    IF [ "$IS_CLOUD_IMAGE" = "false" ] && [ "$IS_MAAS" = "false" ]
-        RUN for pair in "x86_64-efi-signed:gcdx64:grubx64" "arm64-efi-signed:gcdaa64:grubaa64"; do \
-                dir="/usr/lib/grub/$(echo "$pair" | cut -d: -f1)"; \
-                gcd="$dir/$(echo "$pair" | cut -d: -f2).efi.signed"; \
-                grb="$dir/$(echo "$pair" | cut -d: -f3).efi.signed"; \
-                if [ -f "$gcd" ]; then \
-                    cp -f "$gcd" "$grb" && \
-                    echo "iso-image: staged $(basename "$gcd") over $(basename "$grb")"; \
-                fi; \
-            done
-    END
 
     IF [ "$IS_CLOUD_IMAGE" = "true" ]
         COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
