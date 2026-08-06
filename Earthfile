@@ -495,6 +495,24 @@ build-iso:
     END
     RUN mkdir -p /iso && \
         mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
+
+    # AuroraBoot v0.26.2's `build-iso` subcommand runs only:
+    #   PrepDirs -> StepCopyCloudConfig -> StepDumpSource -> StepGenISO
+    # and NEVER calls StepInjectCC. That step is the one that actually copies
+    # --overlay-iso content onto the finalised ISO tree; its absence means our
+    # /overlay/... files (Palette-branded /boot/grub2/grub.cfg, user-data,
+    # cluster config, content bundles, edge_custom_config) silently disappear.
+    # Empirically verified: the built ISO's /boot/grub2/grub.cfg is
+    # AuroraBoot's default "Kairos"-branded template, not our overlay's
+    # "Palette eXtended Kubernetes Edge Installer" version.
+    #
+    # Pipeline mode (docker run auroraboot --set ...) invokes StepInjectCC,
+    # but that adds DinD, container_image loading, and ~100 lines of Earthfile.
+    # StepInjectCC's actual work is one xorriso command; do it here directly.
+    # See kairos-io/AuroraBoot pkg/ops/iso.go InjectISO() for the upstream
+    # equivalent -- same xorriso invocation.
+    RUN xorriso -indev "/iso/$ISO_NAME.iso" -outdev "/iso/$ISO_NAME.iso" \
+                -map /overlay / -boot_image any replay
     WORKDIR /iso
     RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
