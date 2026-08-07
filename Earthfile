@@ -173,12 +173,16 @@ ARG EFI_IMG_SIZE=2200
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
 
+IF [ "$IS_UKI" = "true" ]
+    LET KAIROS_VERSION=v3.5.9
+END
+
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
         ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_INIT_VERSION
     ELSE
         IF [ "$IS_UKI" = "true" ]
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION-uki
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki
         ELSE
             ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
         END
