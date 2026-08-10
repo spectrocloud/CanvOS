@@ -173,16 +173,13 @@ ARG EFI_IMG_SIZE=2200
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
 
-IF [ "$IS_UKI" = "true" ]
-    LET KAIROS_VERSION=v3.5.9
-END
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
         ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_INIT_VERSION
     ELSE
         IF [ "$IS_UKI" = "true" ]
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION-uki
         ELSE
             ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
         END
@@ -427,25 +424,22 @@ build-uki-iso:
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
-    # AuroraBoot v0.26.1 silently ignores --output/-d for "dir:" sources on
-    # both build-iso and build-uki, dropping the ISO at /tmp/auroraboot/*.iso
-    # regardless. We hoist it into /iso/ ourselves after the run.
+
+    RUN mkdir -p /iso
     IF [ "$ARCH" = "arm64" ]
        # arm64 UKI ISO is not supported by upstream today; fall through to a
        # plain live/installer ISO, matching the previous osbuilder behavior.
        RUN CMD="auroraboot" && \
            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-           $CMD build-iso dir:/build/image --overlay-iso /overlay --arch arm64
+           $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
-       # AuroraBoot's build-uki takes explicit key paths instead of osbuilder's
-       # bundled -k /keys. All key files live at /keys/* because the three
-       # secure-boot/* dirs above are flattened into the same target.
+       
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
            RUN CMD="auroraboot" && \
                if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-               $CMD build-uki dir:/build/image -t iso \
+               $CMD build-uki -t iso -d /iso \
                    --extend-cmdline "$CMDLINE" \
                    --overlay-iso /overlay \
                    --boot-branding "$BRANDING" \
@@ -453,23 +447,25 @@ build-uki-iso:
                    --sb-key /keys/db.key \
                    --sb-cert /keys/db.pem \
                    --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
-                   --secure-boot-enroll force
+                   --secure-boot-enroll force \
+                   --name $ISO_NAME \
+                   dir:/build/image
        ELSE
            RUN CMD="auroraboot" && \
                if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-               $CMD build-uki dir:/build/image -t iso \
+               $CMD build-uki -t iso -d /iso \
                    --extend-cmdline "$CMDLINE" \
                    --overlay-iso /overlay \
                    --boot-branding "$BRANDING" \
                    --public-keys /keys \
                    --sb-key /keys/db.key \
                    --sb-cert /keys/db.pem \
-                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem
+                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+                   --name $ISO_NAME \
+                   dir:/build/image
        END
     END
-    RUN mkdir -p /iso && \
-        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
-    SAVE ARTIFACT /iso/*
+    SAVE ARTIFACT --keep-ts /iso/*
 
 iso:
     WORKDIR /build
