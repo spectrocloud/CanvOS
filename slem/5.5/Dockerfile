@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.16.2
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.16.3
 FROM ${KAIROS_INIT_IMAGE} AS kairos-init
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 ARG BASE_IMAGE=registry.access.redhat.com/ubi9-init:9.4-6
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.16.2
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.16.3
 
 FROM $KAIROS_INIT_IMAGE AS kairos-init
 
