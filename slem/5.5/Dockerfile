@@ -50,6 +50,15 @@ RUN rpm --import /tmp/suse-build-key.asc && rm -f /tmp/suse-build-key.asc && \
 # SLE Micro for Rancher ships Rancher Elemental, a competing immutable-OS stack.
 # Its dracut modules, systemd services and /system/oem layout files race with
 # Kairos immucore and prevent sysroot.mount from landing. Remove before kairos-init.
+#
+# PE-9246: /system/oem/08_boot_assessment.yaml is an Elemental artifact too --
+# it defines the same GRUB boot-assessment hook that kairos-init later
+# re-implements in /system/oem/08_grub.yaml, and both files' after-install
+# steps append the same source block to /run/initramfs/cos-state/grubcustom,
+# so on the first post-upgrade boot GRUB runs the assessment twice in one
+# session and immediately picks fallback with upgrade_failure. The file has
+# no "elemental" in its name, so the *_elemental-* glob below misses it;
+# list it explicitly.
 RUN zypper --non-interactive rm -y --clean-deps \
         elemental elemental-register1.5 elemental-support1.5 \
         elemental-system-agent elemental-toolkit elemental-updater \
@@ -63,13 +72,23 @@ RUN zypper --non-interactive rm -y --clean-deps \
       systemctl mask "${svc}.service" 2>/dev/null || true; \
     done; \
     rm -f /system/oem/*_elemental-* \
+          /system/oem/08_boot_assessment.yaml \
           /etc/dracut.conf.d/99-elemental-systemd.conf \
           /etc/dracut.conf.d/02-elemental-immutable-rootfs.conf \
           /etc/dracut.conf.d/02-elemental-setup-initramfs.conf \
           /etc/dracut.conf.d/50-elemental-initrd.conf
 
-COPY --from=kairos-init /kairos-init /kairos-init
-RUN /kairos-init -l debug -m "generic" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -m "generic" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}"
+
+# Workaround for a kairos-agent v2.30.2 install-time mount-lifecycle bug:
+# 08_grub.yaml's after-install "Grub branding" cp writes /grubmenu to
+# /tmp/mnt/STATE, which is a tmpfs directory on SUSE because COS_STATE is
+# already mounted at /run/cos/state and kairos's own Mount step therefore
+# fails. The file is lost on reboot and GRUB cannot find the Palette
+# Registration menuentry. This overlay re-does the copy in
+# after-install-chroot against /oem (COS_OEM, which GRUB also searches).
+COPY oem/09_grub_branding_fixup.yaml /system/oem/09_grub_branding_fixup.yaml
 
 # Scrub subscription data so credentials do not ship in the final image.
 RUN rm -rf /etc/zypp/credentials.d/* /etc/zypp/services.d/* /etc/SUSEConnect 2>/dev/null || true
