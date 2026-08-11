@@ -27,7 +27,7 @@ ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG AURORABOOT_VERSION=v0.16.0
+ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.9.4
 ARG KUBEADM_PROVIDER_VERSION=v4.9.8
@@ -75,6 +75,57 @@ ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 
 ARG UPDATE_KERNEL=false
+
+# NVIDIA GPU driver pre-install (for air-gapped GPU Operator with driver.enabled=false).
+# When true, the NVIDIA data-center driver + DKMS kernel modules are baked into the
+# Ubuntu base image so GPU nodes need no host-side network at boot.
+ARG INSTALL_NVIDIA_GPU_DRIVERS=false
+ARG NVIDIA_DRIVER_BRANCH=580
+ARG NVIDIA_DRIVER_TYPE=open
+ARG NVIDIA_USE_CUDA_REPO=true
+ARG NVIDIA_INSTALL_FABRICMANAGER=true
+ARG NVIDIA_INSTALL_IMEX=true
+ARG NVIDIA_INSTALL_CONTAINER_TOOLKIT=false
+ARG NVIDIA_REBUILD_INITRD=true
+
+# AMD Instinct GPU driver pre-install (for air-gapped AMD GPU Operator with
+# driver.enable=false). See scripts/install-amdgpu-drivers.sh + docs/amd-gpu-airgapped.md.
+ARG INSTALL_AMD_GPU_DRIVERS=false
+# dkms | inbox. "dkms" builds AMD's amdgpu-dkms against the image kernel (default,
+# recommended for Instinct silicon). "inbox" uses the in-tree amdgpu module shipped
+# with linux-modules-* and skips the AMD apt repo — use only when the DKMS build
+# fails against your image kernel and you accept the in-tree driver's feature set.
+ARG AMDGPU_DRIVER_SOURCE=dkms
+# amdgpu-install release marker (URL segment under repo.radeon.com/amdgpu-install/<x>/).
+# Default 31.40 = ROCm 7.14 GA (amdgpu 6.19.14), the PRODUCTION driver for AMD GPU
+# Operator v1.5.1 and the baseline for MI350P + Radeon AI PRO (RDNA4). (7.14 went GA
+# on 2026-07-15; the earlier "31.x = tech-preview" note referred to the ROCm 7.13.0
+# preview and is obsolete.) For an older fleet staying on Operator v1.5.0, use 7.2.1
+# (amdgpu 6.16.13, 30.30.1 line). AMD publishes both ROCm-alias (7.2.1, 7.2.4) and
+# driver-release-marker (30.30.x, 31.40) URL segments; either form is accepted here.
+# See docs/amd-gpu-airgapped.md for the operator<->driver compatibility matrix.
+ARG AMDGPU_DRIVER_RELEASE=31.40
+# Path to a driver artifact produced by scripts/prebuild-amdgpu-artifact.sh
+# on the build host. Threaded in by earthly.sh when INSTALL_AMD_GPU_DRIVERS=true
+# and AMDGPU_DRIVER_SOURCE=dkms. When set, the base-image AMD block skips the
+# in-buildkit DKMS install (which fails in buildkit's RUN sandbox -- see docs)
+# and simply extracts the pre-built modules + firmware + config drop-ins.
+ARG AMDGPU_ARTIFACT_PATH=""
+# Default false: amdgpu is intentionally omitted from the initrd (see
+# scripts/install-amdgpu-drivers.sh -- multi-GPU amdgpu init emits enough
+# udev events to blow past dracut-initqueue's udev-settle timeout, dropping
+# the node into emergency mode). amdgpu loads after switch-root via
+# /etc/modules-load.d/amdgpu.conf where there is no timeout pressure.
+ARG AMDGPU_REBUILD_INITRD=false
+# Install the amd-smi / rocm-smi host CLI on PATH (parity with nvidia-smi). Default
+# true. Pulls a small slice of ROCm user-space from repo.radeon.com/rocm; best-effort.
+ARG AMDGPU_INSTALL_SMI=true
+
+# NVIDIA and AMD driver pre-install are mutually exclusive within a single image.
+IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ] && [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
+    RUN echo "ERROR: INSTALL_NVIDIA_GPU_DRIVERS and INSTALL_AMD_GPU_DRIVERS are mutually exclusive. Enable only one." >&2 && \
+        exit 1
+END
 
 IF [ "$FIPS_ENABLED" = "true" ] && [ "$UPDATE_KERNEL" = "true" ]
     RUN echo "ERROR: UPDATE_KERNEL and FIPS_ENABLED are mutually exclusive. Cannot set both to true." >&2 && \
@@ -295,7 +346,11 @@ install-k8s:
     SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    # Switched from quay.io/kairos/osbuilder-tools (archived kairos-io/osbuilder
+    # + kairos-io/enki) to AuroraBoot, which is the maintained successor. The
+    # build-iso and build-uki subcommands accept a "dir:" source, so the rootfs
+    # preparation path above is unchanged; only the final CLI invocation differs.
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
@@ -326,22 +381,56 @@ build-uki-iso:
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    # AuroraBoot v0.26.1 silently ignores --output/-d for "dir:" sources on
+    # both build-iso and build-uki, dropping the ISO at /tmp/auroraboot/*.iso
+    # regardless. We hoist it into /iso/ ourselves after the run.
+    # AuroraBoot uses urfave/cli v2 which follows Go stdlib flag semantics:
+    # flag parsing stops at the first positional argument. If `dir:/build/image`
+    # comes before the flags, --overlay-iso / --arch / --sb-key etc. are
+    # silently discarded as extra positional args (build-iso continues without
+    # them; build-uki errors "Required flags ... not set"). Always place the
+    # positional source LAST. Empirically verified against v0.26.2.
     IF [ "$ARCH" = "arm64" ]
-       RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-              $CMD
+       # arm64 UKI ISO is not supported by upstream today; fall through to a
+       # plain live/installer ISO, matching the previous osbuilder behavior.
+       RUN CMD="auroraboot" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+           $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
-       RUN mkdir /iso
+       # AuroraBoot's build-uki takes explicit key paths instead of osbuilder's
+       # bundled -k /keys. All key files live at /keys/* because the three
+       # secure-boot/* dirs above are flattened into the same target.
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           RUN CMD="auroraboot" && \
+               if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+               $CMD build-uki -t iso \
+                   --extend-cmdline "$CMDLINE" \
+                   --overlay-iso /overlay \
+                   --boot-branding "$BRANDING" \
+                   --public-keys /keys \
+                   --sb-key /keys/db.key \
+                   --sb-cert /keys/db.pem \
+                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+                   --secure-boot-enroll force \
+                   dir:/build/image
        ELSE
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           RUN CMD="auroraboot" && \
+               if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+               $CMD build-uki -t iso \
+                   --extend-cmdline "$CMDLINE" \
+                   --overlay-iso /overlay \
+                   --boot-branding "$BRANDING" \
+                   --public-keys /keys \
+                   --sb-key /keys/db.key \
+                   --sb-cert /keys/db.pem \
+                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+                   dir:/build/image
        END
     END
-    WORKDIR /iso
-    RUN mv /iso/*.iso $ISO_NAME.iso
+    RUN mkdir -p /iso && \
+        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     SAVE ARTIFACT /iso/*
 
 iso:
@@ -367,7 +456,12 @@ validate-user-data:
 
 
 build-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    # Switched from quay.io/kairos/osbuilder-tools (archived kairos-io/osbuilder
+    # + kairos-io/enki) to AuroraBoot, which is the maintained successor. The
+    # build-iso subcommand accepts a "dir:" source with the same semantics as
+    # osbuilder's /entrypoint.sh build-iso, so the rootfs preparation path
+    # above is unchanged; only the final CLI invocation differs.
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
@@ -411,17 +505,32 @@ build-iso:
         rm -f /build/image/opt/spectrocloud/local-ui.tar; \
     fi
 
+    # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
+    # "x86_64" for amd64).
+    #
+    # Positional source MUST come last. AuroraBoot uses urfave/cli v2 which
+    # follows Go stdlib flag semantics: flag parsing stops at the first
+    # positional argument. If dir:/build/image comes first, --overlay-iso
+    # and --arch are silently discarded as extra positional args. That is
+    # what caused the Palette-branded /boot/grub2/grub.cfg (and user-data,
+    # content bundles, cluster config) to silently disappear from produced
+    # ISOs before this fix. Empirically verified against v0.26.2.
+    #
+    # --output/--override-name are still inert on the subcommand path so we
+    # leave --output default and mv the produced ISO into /iso/ ourselves.
     IF [ "$ARCH" = "arm64" ]
-        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD
+        RUN CMD="auroraboot" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+            $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
-        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch x86_64" && \
-            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD
+        RUN CMD="auroraboot" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+            $CMD build-iso --overlay-iso /overlay --arch amd64 dir:/build/image
     END
+    RUN mkdir -p /iso && \
+        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     WORKDIR /iso
-    RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
+    RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
@@ -738,6 +847,12 @@ base-image:
         COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
     END
 
+    # Ensure the Renesas xHCI (USB 3.0) host controller driver is bundled into the
+    # initramfs so installation from USB media works on hardware using that chipset.
+    # Must run before the distro dracut regeneration below so the driver is included.
+    RUN mkdir -p /etc/dracut.conf.d && \
+        printf '%s\n' 'hostonly="no"' 'add_drivers+=" xhci_pci_renesas "' 'force_drivers+=" xhci_pci_renesas "' > /etc/dracut.conf.d/99-usb-media.conf
+
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
@@ -760,7 +875,7 @@ base-image:
         END
 
         RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -821,6 +936,64 @@ base-image:
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
+        END
+
+        # NVIDIA GPU driver + DKMS kernel modules, built against the now-finalized
+        # image kernel. Runs here (not in the Dockerfile) so the kernel is settled
+        # first. Reuses install-kernel-headers.sh for ABI-exact headers.
+        IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ]
+            COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+            COPY scripts/install-nvidia-drivers.sh /tmp/install-nvidia-drivers.sh
+            RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-nvidia-drivers.sh && \
+                NVIDIA_DRIVER_BRANCH="$NVIDIA_DRIVER_BRANCH" \
+                NVIDIA_DRIVER_TYPE="$NVIDIA_DRIVER_TYPE" \
+                NVIDIA_USE_CUDA_REPO="$NVIDIA_USE_CUDA_REPO" \
+                NVIDIA_INSTALL_FABRICMANAGER="$NVIDIA_INSTALL_FABRICMANAGER" \
+                NVIDIA_INSTALL_IMEX="$NVIDIA_INSTALL_IMEX" \
+                NVIDIA_INSTALL_CONTAINER_TOOLKIT="$NVIDIA_INSTALL_CONTAINER_TOOLKIT" \
+                NVIDIA_REBUILD_INITRD="$NVIDIA_REBUILD_INITRD" \
+                /tmp/install-nvidia-drivers.sh && \
+                rm -f /tmp/install-nvidia-drivers.sh /tmp/install-kernel-headers.sh
+        END
+
+        # AMD Instinct GPU driver (amdgpu-dkms) + kernel module, built against the
+        # now-finalized image kernel. Mutually exclusive with the NVIDIA block above.
+        IF [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
+            # dkms mode with a pre-built artifact (default path when earthly.sh
+            # produced one via scripts/prebuild-amdgpu-artifact.sh). Buildkit's
+            # RUN sandbox breaks AMD's amdgpu-dkms ./configure heredoc probe --
+            # see docs/amd-gpu-airgapped.md. The prebuild runs on the host in a
+            # plain `docker run --privileged` against the same base image, and
+            # this stage just extracts the resulting modules + firmware + drop-ins.
+            IF [ "$AMDGPU_DRIVER_SOURCE" = "dkms" ] && [ "$AMDGPU_ARTIFACT_PATH" != "" ]
+                COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+                COPY "$AMDGPU_ARTIFACT_PATH" /tmp/amdgpu-artifact.tar.gz
+                RUN --privileged \
+                    chmod 755 /tmp/install-amdgpu-drivers.sh && \
+                    AMDGPU_DRIVER_SOURCE=dkms \
+                    AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
+                    AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                    AMDGPU_INSTALL_SMI="$AMDGPU_INSTALL_SMI" \
+                    AMDGPU_ARTIFACT_PATH=/tmp/amdgpu-artifact.tar.gz \
+                    /tmp/install-amdgpu-drivers.sh && \
+                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/amdgpu-artifact.tar.gz
+            ELSE
+                # inbox mode, OR dkms mode without a pre-built artifact (which
+                # will fail in buildkit's sandbox, but we let install-amdgpu-
+                # drivers.sh emit its own clear error rather than short-circuit
+                # here). install-kernel-headers.sh is only needed for the
+                # in-buildkit DKMS path; inbox mode doesn't use it.
+                COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+                COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+                RUN --privileged \
+                    chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
+                    AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
+                    AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
+                    AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                    AMDGPU_INSTALL_SMI="$AMDGPU_INSTALL_SMI" \
+                    /tmp/install-amdgpu-drivers.sh && \
+                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
+            END
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
@@ -892,6 +1065,25 @@ base-image:
         RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
             fi
+
+        # Block nouveau and qat_4xxx at the kernel command line on every
+        # build, and pin PCI BAR layout to firmware assignments.
+        #
+        # nouveau: modern NVIDIA data-center GPUs (Ada/Hopper/Blackwell)
+        # hang in GSP init when initramfs udev auto-loads nouveau before
+        # switchroot, stalling systemd-udev-settle indefinitely. Applied
+        # unconditionally — the image may be installed onto NVIDIA hardware
+        # even when INSTALL_NVIDIA_GPU_DRIVERS=false. rd.driver.blacklist=
+        # is the load-bearing flag (dracut honors it before udev fires);
+        # modprobe.blacklist= is belt-and-braces for post-switchroot.
+        # Harmless when no NVIDIA GPU is present.
+        #
+        # qat_4xxx: on Xeon Scalable 4th/5th gen hosts with QAT devices,
+        # udev auto-loads qat_4xxx in initramfs and its probe/firmware-load
+        # stalls boot for minutes. CanvOS does not consume QAT acceleration.
+        RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau,qat_4xxx modprobe.blacklist=nouveau,qat_4xxx nouveau.modeset=0"|' /etc/cos/bootargs.cfg; \
+            fi
     END
 
 KAIROS_RELEASE:
@@ -948,6 +1140,7 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+
     IF [ "$IS_CLOUD_IMAGE" = "true" ]
         COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
         COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
