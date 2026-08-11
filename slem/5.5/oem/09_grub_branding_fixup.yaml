@@ -16,8 +16,8 @@ name: "SLE Micro 5.5 grubmenu fixup"
 # after-install-chroot bind-mounts COS_OEM at /oem inside the target chroot
 # and is confirmed to fire cleanly on SUSE.
 #
-# This file is COPY-ed only into SLE Micro 5.5 builds by the Earthfile
-# iso-image target -- do not add a runtime OS guard here.
+# This file is COPY-ed only into SLE Micro 5.5 builds by slem/5.5/Dockerfile
+# (the SLE Micro 5.5 base image) -- do not add a runtime OS guard here.
 stages:
   after-install-chroot:
     - name: "Copy branding grubmenu to OEM"
