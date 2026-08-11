@@ -7,7 +7,7 @@ UBUNTU_FIPS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BASE_IMAGE="${1:-ubuntu-noble-fips}"
 VERSION=24.04
 ENABLE_STIG="${ENABLE_STIG:-1}"
-SKIP_STIG_BANNER="${SKIP_STIG_BANNER:-0}"
+SKIP_STIG_BANNER="${SKIP_STIG_BANNER:-1}"
 
 DOCKER_BUILDKIT=1 docker build \
   --secret id=pro-attach-config,src="${SCRIPT_DIR}/pro-attach-config.yaml" \
