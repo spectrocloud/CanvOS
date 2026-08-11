@@ -1,11 +1,12 @@
 ARG HADRON_VERSION=v0.5.1
 ARG KAIROS_INIT_VERSION=v0.16.3
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}
 ARG FIPS=false
 ARG IS_UKI=false
 
 ARG MODULES_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/hadron/modules:${HADRON_VERSION}
 
-FROM quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION} AS kairos-init
+FROM ${KAIROS_INIT_IMAGE} AS kairos-init
 
 FROM ${MODULES_IMAGE} AS modules
 

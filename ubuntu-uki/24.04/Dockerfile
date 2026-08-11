@@ -9,8 +9,9 @@
 #   - ship those blobs as a signed sysext (Kairos Trusted Boot pattern).
 #
 ARG KAIROS_INIT_VERSION=v0.16.2
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}
 
-FROM quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION} AS kairos-init
+FROM ${KAIROS_INIT_IMAGE} AS kairos-init
 
 FROM ubuntu:24.04
 ARG VERSION=v4.1.2

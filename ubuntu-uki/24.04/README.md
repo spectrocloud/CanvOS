@@ -18,7 +18,7 @@ Earthfile `+base-image`, not in this Dockerfile.
 | ---------------------- | ----------------------------------------------- |
 | `Dockerfile`           | Two-stage kairos-init flow + guest agent + trim |
 | `trim-gpu-firmware.sh` | Default AMD/NVIDIA firmware/module removal      |
-| `build.sh`             | Local / multi-arch `docker buildx` wrapper      |
+| `build.sh`             | Architecture-specific `docker buildx` wrapper   |
 
 
 
@@ -61,26 +61,30 @@ Policy marker: `/etc/canvos/uki-gpu-firmware-policy`
 ```bash
 cd ubuntu-uki/24.04
 ./build.sh                          # load into local docker (amd64)
-./build.sh --push                   # push multi-arch to SPECTRO_REPO
+./build.sh --push                   # push amd64 to SPECTRO_REPO
+./build.sh --arch arm64 --push      # push arm64 to SPECTRO_REPO
 ./build.sh --tag myreg/ubuntu-uki:24.04 --push
 ./build.sh --keep-gpu-firmware --tag myreg/ubuntu-uki:24.04-fullgpu
 ```
 
 
-| Flag / env                                  | Default                                           | Meaning                                                 |
-| ------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------- |
-| `--keep-gpu-firmware` / `KEEP_GPU_FIRMWARE` | `false`                                           | Keep full GPU firmware (larger UKI)                     |
-| `--push`                                    | off (`--load`)                                    | Multi-arch `amd64+arm64` push; local load is amd64 only |
-| `--no-cache`                                | off                                               | Pass `--no-cache` to buildx                             |
-| `KAIROS_VERSION`                            | `v4.1.2`                                          | Dockerfile `VERSION` → `kairos-init --version`          |
-| `KAIROS_INIT_VERSION`                       | `v0.16.2`                                         | `kairos-init` image + default output tag                |
-| `SPECTRO_REPO`                              | `us-east1-docker.pkg.dev/spectro-images/dev/arun` | Default tag prefix                                      |
+| Flag / env                                  | Default                                           | Meaning                                        |
+| ------------------------------------------- | ------------------------------------------------- | ---------------------------------------------- |
+| `--arch` / `ARCH`                           | `amd64`                                           | Target architecture (`amd64` or `arm64`)       |
+| `--keep-gpu-firmware` / `KEEP_GPU_FIRMWARE` | `false`                                           | Keep full GPU firmware (larger UKI)            |
+| `--push`                                    | off (`--load`)                                    | Push the architecture-specific image           |
+| `--no-cache`                                | off                                               | Pass `--no-cache` to buildx                    |
+| `KAIROS_VERSION`                            | `v4.1.2`                                          | Dockerfile `VERSION` → `kairos-init --version` |
+| `KAIROS_INIT_VERSION`                       | `v0.16.2`                                         | Default output tag component                   |
+| `KAIROS_INIT_IMAGE`                         | `quay.io/kairos/kairos-init:<version>`            | Complete kairos-init image reference           |
+| `SPECTRO_REPO`                              | `us-east1-docker.pkg.dev/spectro-images/dev/arun` | Default tag prefix                             |
 
 
-Default tag: `${SPECTRO_REPO}/base/ubuntu-uki-24.04:${KAIROS_INIT_VERSION}`
+Default tag:
+`${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_INIT_VERSION}-uki`
 
-Dockerfile build-args: `KAIROS_INIT_VERSION` (before first `FROM`), then
-`VERSION`, `MODEL` (default `generic`), `KEEP_GPU_FIRMWARE`.
+Dockerfile build-args: `KAIROS_INIT_IMAGE` (before first `FROM`), then
+`VERSION` and `KEEP_GPU_FIRMWARE`. The Kairos model is always `generic`.
 
 ## Use with CanvOS
 
@@ -90,7 +94,7 @@ In `.arg`:
 OS_DISTRIBUTION=ubuntu
 OS_VERSION=24.04
 IS_UKI=true
-BASE_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/base/ubuntu-uki-24.04:v0.16.2
+BASE_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/kairos-ubuntu:24.04-core-amd64-generic-v0.16.2-uki
 ```
 
 Then build the installer as usual (`./earthly.sh +uki-iso`, etc.).
@@ -98,10 +102,10 @@ Then build the installer as usual (`./earthly.sh +uki-iso`, etc.).
 ## Need GPU firmware on a node?
 
 1. Rebuild the base with firmware kept:
-  ```bash
+   ```bash
    ./build.sh --keep-gpu-firmware --tag myreg/ubuntu-uki:24.04-fullgpu
-  ```
-2. Or enable Earthfile air-gapped GPU driver install on a trimmed base
+   ```
+2. Or enable Earthfile air-gapped GPU driver install on the trimmed base
   (`INSTALL_NVIDIA_GPU_DRIVERS=true` *or* `INSTALL_AMD_GPU_DRIVERS=true`) —
    mutually exclusive; see `docs/nvidia-gpu-airgapped.md` /
    `docs/amd-gpu-airgapped.md`.

@@ -52,6 +52,15 @@ FORCE_INTERACTIVE_INSTALL=false
 # INCLUDE_MS_SECUREBOOT_KEYS=true       # Adds Microsoft Secure Boot certificates; if you export existing keys from a device, you typically won't need this
 # AUTO_ENROLL_SECUREBOOT_KEYS=false     # Set to true to automatically enroll certificates on devices in Setup Mode, useful for flashing devices without user interaction
 
+# UKI only: when UKI_BRING_YOUR_OWN_KEYS=true, controls whether the Palette
+# systemd-extension certificate (SPECTRO_EXTENSION_CERT_IMAGE) is merged into
+# the UEFI db during +uki-genkey. Leave true unless you don't want any external certificate int the db trust store. In that case, you have to 
+# ENROLL_SPECTRO_EXTENSION_CERT=true
+
+# Default (false). Set to true when the target OS supports sysext but you still want a
+# self-contained provider image (e.g. stylus still pinned to older version).
+# INCLUDE_K8S_ALWAYS=false
+
 # DRBD_VERSION=9.2.13  # This variable is required for Piraeus pack for drbd module installtion.
 
 # NVIDIA GPU driver pre-install (for running the NVIDIA GPU Operator in air-gapped
