@@ -371,12 +371,18 @@ build-uki-iso:
     # AuroraBoot v0.26.1 silently ignores --output/-d for "dir:" sources on
     # both build-iso and build-uki, dropping the ISO at /tmp/auroraboot/*.iso
     # regardless. We hoist it into /iso/ ourselves after the run.
+    # AuroraBoot uses urfave/cli v2 which follows Go stdlib flag semantics:
+    # flag parsing stops at the first positional argument. If `dir:/build/image`
+    # comes before the flags, --overlay-iso / --arch / --sb-key etc. are
+    # silently discarded as extra positional args (build-iso continues without
+    # them; build-uki errors "Required flags ... not set"). Always place the
+    # positional source LAST. Empirically verified against v0.26.2.
     IF [ "$ARCH" = "arm64" ]
        # arm64 UKI ISO is not supported by upstream today; fall through to a
        # plain live/installer ISO, matching the previous osbuilder behavior.
        RUN CMD="auroraboot" && \
            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-           $CMD build-iso dir:/build/image --overlay-iso /overlay --arch arm64
+           $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
@@ -386,7 +392,7 @@ build-uki-iso:
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
            RUN CMD="auroraboot" && \
                if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-               $CMD build-uki dir:/build/image -t iso \
+               $CMD build-uki -t iso \
                    --extend-cmdline "$CMDLINE" \
                    --overlay-iso /overlay \
                    --boot-branding "$BRANDING" \
@@ -394,18 +400,20 @@ build-uki-iso:
                    --sb-key /keys/db.key \
                    --sb-cert /keys/db.pem \
                    --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
-                   --secure-boot-enroll force
+                   --secure-boot-enroll force \
+                   dir:/build/image
        ELSE
            RUN CMD="auroraboot" && \
                if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-               $CMD build-uki dir:/build/image -t iso \
+               $CMD build-uki -t iso \
                    --extend-cmdline "$CMDLINE" \
                    --overlay-iso /overlay \
                    --boot-branding "$BRANDING" \
                    --public-keys /keys \
                    --sb-key /keys/db.key \
                    --sb-cert /keys/db.pem \
-                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem
+                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+                   dir:/build/image
        END
     END
     RUN mkdir -p /iso && \
@@ -485,39 +493,29 @@ build-iso:
     fi
 
     # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
-    # "x86_64" for amd64). --output/--override-name are inert for "dir:"
-    # sources in v0.26.2 -- the ISO always lands at /tmp/auroraboot/
-    # kairos-<distro>-<ver>-core-<arch>-generic-v<kairos-ver>.iso -- so we
-    # leave --output default and hoist the produced ISO into /iso/ ourselves.
+    # "x86_64" for amd64).
+    #
+    # Positional source MUST come last. AuroraBoot uses urfave/cli v2 which
+    # follows Go stdlib flag semantics: flag parsing stops at the first
+    # positional argument. If dir:/build/image comes first, --overlay-iso
+    # and --arch are silently discarded as extra positional args. That is
+    # what caused the Palette-branded /boot/grub2/grub.cfg (and user-data,
+    # content bundles, cluster config) to silently disappear from produced
+    # ISOs before this fix. Empirically verified against v0.26.2.
+    #
+    # --output/--override-name are still inert on the subcommand path so we
+    # leave --output default and mv the produced ISO into /iso/ ourselves.
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso dir:/build/image --overlay-iso /overlay --arch arm64
+            $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso dir:/build/image --overlay-iso /overlay --arch amd64
+            $CMD build-iso --overlay-iso /overlay --arch amd64 dir:/build/image
     END
     RUN mkdir -p /iso && \
         mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
-
-    # AuroraBoot v0.26.2's `build-iso` subcommand runs only:
-    #   PrepDirs -> StepCopyCloudConfig -> StepDumpSource -> StepGenISO
-    # and NEVER calls StepInjectCC. That step is the one that actually copies
-    # --overlay-iso content onto the finalised ISO tree; its absence means our
-    # /overlay/... files (Palette-branded /boot/grub2/grub.cfg, user-data,
-    # cluster config, content bundles, edge_custom_config) silently disappear.
-    # Empirically verified: the built ISO's /boot/grub2/grub.cfg is
-    # AuroraBoot's default "Kairos"-branded template, not our overlay's
-    # "Palette eXtended Kubernetes Edge Installer" version.
-    #
-    # Pipeline mode (docker run auroraboot --set ...) invokes StepInjectCC,
-    # but that adds DinD, container_image loading, and ~100 lines of Earthfile.
-    # StepInjectCC's actual work is one xorriso command; do it here directly.
-    # See kairos-io/AuroraBoot pkg/ops/iso.go InjectISO() for the upstream
-    # equivalent -- same xorriso invocation.
-    RUN xorriso -indev "/iso/$ISO_NAME.iso" -outdev "/iso/$ISO_NAME.iso" \
-                -map /overlay / -boot_image any replay
     WORKDIR /iso
     RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
