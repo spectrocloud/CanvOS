@@ -574,35 +574,25 @@ build-iso:
     # grubx64.efi (was: EFI/BOOT/grub.efi under enki), and AuroraBoot v0.26.2
     # fixes the UEFI-only boot path via GPT-hybrid + gcdx64.efi.signed for all
     # distros, not just Hadron.
+    # Positional source MUST come last. AuroraBoot uses urfave/cli v2 which
+    # follows Go stdlib flag semantics: flag parsing stops at the first
+    # positional argument. If dir:/build/image comes first, --overlay-iso
+    # and --arch are silently discarded as extra positional args. That is
+    # what caused the Palette-branded /boot/grub2/grub.cfg (and user-data,
+    # content bundles, cluster config) to silently disappear from produced
+    # ISOs before this fix. Empirically verified against v0.26.2.
+    # +build-uki-iso above already uses this ordering.
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso dir:/build/image --overlay-iso /overlay --arch arm64
+            $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso dir:/build/image --overlay-iso /overlay --arch amd64
+            $CMD build-iso --overlay-iso /overlay --arch amd64 dir:/build/image
     END
     RUN mkdir -p /iso && \
         mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
-
-    # AuroraBoot v0.26.2's `build-iso` subcommand runs only:
-    #   PrepDirs -> StepCopyCloudConfig -> StepDumpSource -> StepGenISO
-    # and NEVER calls StepInjectCC. That step is the one that actually copies
-    # --overlay-iso content onto the finalised ISO tree; its absence means our
-    # /overlay/... files (Palette-branded /boot/grub2/grub.cfg, user-data,
-    # cluster config, content bundles, edge_custom_config) silently disappear.
-    # Empirically verified: the built ISO's /boot/grub2/grub.cfg is
-    # AuroraBoot's default "Kairos"-branded template, not our overlay's
-    # "Palette eXtended Kubernetes Edge Installer" version.
-    #
-    # Pipeline mode (docker run auroraboot --set ...) invokes StepInjectCC,
-    # but that adds DinD, container_image loading, and ~100 lines of Earthfile.
-    # StepInjectCC's actual work is one xorriso command; do it here directly.
-    # See kairos-io/AuroraBoot pkg/ops/iso.go InjectISO() for the upstream
-    # equivalent -- same xorriso invocation.
-    RUN xorriso -indev "/iso/$ISO_NAME.iso" -outdev "/iso/$ISO_NAME.iso" \
-                -map /overlay / -boot_image any replay
     WORKDIR /iso
     RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
