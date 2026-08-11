@@ -8,7 +8,7 @@
 | Variable | Default | Meaning |
 | -------- | ------- | ------- |
 | `ENABLE_STIG` | `1` | When `1`, run OpenSCAP-generated DISA STIG remediation (`fix.sh`). Set to `0` for FIPS-only image without STIG hardening. |
-| `SKIP_STIG_BANNER` | `0` | When `1` (and STIG is enabled), restore stock Ubuntu `/etc/issue`, `/etc/issue.net`, SSH banner, profile.d confirm script, and GDM banner text instead of the USG DoD banner. |
+| `SKIP_STIG_BANNER` | `1` | When `1` (and STIG is enabled), restore stock Ubuntu `/etc/issue`, `/etc/issue.net`, SSH banner, profile.d confirm script, and GDM banner text instead of the USG DoD banner. |
 
 Examples:
 

@@ -3,7 +3,7 @@ FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 FROM ubuntu:24.04
 ARG VERSION=v4.0.4
 ARG ENABLE_STIG=1
-ARG SKIP_STIG_BANNER=0
+ARG SKIP_STIG_BANNER=1
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
