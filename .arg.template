@@ -57,9 +57,11 @@ FORCE_INTERACTIVE_INSTALL=false
 # the UEFI db during +uki-genkey. Leave true unless you don't want any external certificate int the db trust store. In that case, you have to 
 # ENROLL_SPECTRO_EXTENSION_CERT=true
 
-# Default (false). Set to true when the target OS supports sysext but you still want a
-# self-contained provider image (e.g. stylus still pinned to older version).
-# INCLUDE_K8S_ALWAYS=false
+# Bundle Kubernetes binaries and the agent-provider binaries into the provider
+# image (UKI and non-UKI). 
+# false (default): on systemd >= 255. On older systemd, they ARE baked in.
+# true: bundle them regardless of the base image's systemd version. Use when you need a self-contained provider image.
+# BUNDLE_K8S_AND_AGENT_PROVIDER=false
 
 # DRBD_VERSION=9.2.13  # This variable is required for Piraeus pack for drbd module installtion.
 
