@@ -8,7 +8,7 @@
 #     Earthfile (air-gapped GPU Operator path), or
 #   - ship those blobs as a signed sysext (Kairos Trusted Boot pattern).
 #
-ARG KAIROS_INIT_VERSION=v0.16.2
+ARG KAIROS_INIT_VERSION=v0.16.3
 ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}
 
 FROM ${KAIROS_INIT_IMAGE} AS kairos-init

@@ -174,7 +174,7 @@ docker build -t <local-registry>/<image>:<image-tag> \
 `Dockerfile.rhel10.sat` differs from the RHEL 8/9 Satellite files in two ways, both forced by RHEL 10:
 
 * **No `subscription-manager attach --auto`** — the `attach` module was removed in RHEL 10.
-* **No `KAIROS_FRAMEWORK_IMAGE`** — the RHEL 10 files use `kairos-init` (`KAIROS_INIT_IMAGE`), not the older framework image. Mirror `quay.io/kairos/kairos-init:v0.16.2` instead and pass it via `--build-arg KAIROS_INIT_IMAGE=`.
+* **No `KAIROS_FRAMEWORK_IMAGE`** — the RHEL 10 files use `kairos-init` (`KAIROS_INIT_IMAGE`), not the older framework image. Mirror `quay.io/kairos/kairos-init:v0.16.3` instead and pass it via `--build-arg KAIROS_INIT_IMAGE=`.
 
 It also mirrors `Dockerfile.rhel10` rather than `Dockerfile.rhel9.sat`, so `kairos-init` runs *before* the extra package install — that is the ordering verified end to end on RHEL 10. The resulting package set is identical either way.
 
