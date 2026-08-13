@@ -929,10 +929,19 @@ provider-image-rootfs:
     SAVE ARTIFACT --keep-own /. rootfs
 
 build-provider-trustedboot-image:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
     COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
-    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
+    RUN mkdir -p /output
+    RUN CMD="auroraboot" && \
+        if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+        $CMD build-uki -t container -d /output \
+            --boot-branding "$BRANDING" \
+            --public-keys /keys \
+            --sb-key /keys/db.key \
+            --sb-cert /keys/db.pem \
+            --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+            dir:/build/image
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
