@@ -1,0 +1,29 @@
+# open-vm-tools ships no unit file of its own -- every distribution writes its
+# own in packaging -- so it is maintained here. Named open-vm-tools.service to
+# match the unit the other CanvOS base images enable.
+#
+# Lives under /usr/lib/systemd/system rather than /etc/systemd/system because
+# /etc/systemd is a persistent bind mount on Kairos: a unit written to /etc at
+# build time is shadowed once the node has state.
+
+[Unit]
+Description=Open VM Tools guest agent
+Documentation=https://github.com/vmware/open-vm-tools
+# These images boot on bare metal and KVM as well as vSphere. vmtoolsd has
+# nothing to talk to elsewhere -- it exits immediately with "must be run inside
+# a virtual machine" -- so gate the unit instead of letting it fail everywhere
+# that is not VMware.
+ConditionVirtualization=vmware
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vmtoolsd
+# The power-operation scripts under /etc/vmware-tools run guest shutdown and
+# reboot on request from the host; give them room to finish.
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

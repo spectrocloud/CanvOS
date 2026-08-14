@@ -1,11 +1,11 @@
 
 # Kairos init image
-FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.16.3 AS kairos-init
 
 # Base ubuntu image (focal)
 FROM ubuntu:focal AS base
 
-ARG KAIROS_VERSION=v4.0.4
+ARG KAIROS_VERSION=v4.1.2
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
@@ -111,6 +111,11 @@ COPY dracut-broken-iscsi-ubuntu-20.patch /
 RUN cd /usr/lib/dracut/modules.d/95iscsi && patch < /dracut-broken-iscsi-ubuntu-20.patch && rm -rf /dracut-broken-iscsi-ubuntu-20.patch
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+# Bundle the Renesas xHCI (USB 3.0) host controller driver into the initramfs so
+# installation from USB media works on hardware using that chipset. Consumed by the
+# `kairos-init -s init` dracut run below (the Earthfile skips dracut for FIPS builds).
+COPY 99-usb-media.conf /etc/dracut.conf.d/99-usb-media.conf
 
 # Copy the custom dracut modules.fips that includes 2 missing modules
 COPY modules.fips /tmp/modules.fips

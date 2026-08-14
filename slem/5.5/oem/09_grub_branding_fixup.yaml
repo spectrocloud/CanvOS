@@ -1,0 +1,27 @@
+name: "SLE Micro 5.5 grubmenu fixup"
+# Workaround for a kairos-agent v2.30.2 install-time mount-lifecycle bug on
+# SLE Micro Rancher 5.5: /system/oem/08_grub.yaml's after-install block tries
+# to mount COS_STATE at /tmp/mnt/STATE, but on SUSE the STATE partition is
+# already mounted at /run/cos/state, so the mount fails (exit 32). The stage
+# "Grub branding" then cp's /etc/kairos/branding/grubmenu.cfg to
+# /tmp/mnt/STATE/grubmenu -- a tmpfs directory -- and the file is lost on
+# reboot. GRUB never finds a `--id registration` menuentry and boots the
+# plain active entry instead, leaving stylus-agent in a crash loop for lack
+# of /oem/80_stylus.yaml.
+#
+# GRUB searches /grubmenu on any partition (see /etc/cos/grub.cfg:
+# `search --no-floppy --file --set=menu_blk "/grubmenu"`), and COS_OEM is
+# already where it finds /grubenv, so writing to /oem/grubmenu is
+# functionally equivalent to writing to cos-state/grubmenu.
+# after-install-chroot bind-mounts COS_OEM at /oem inside the target chroot
+# and is confirmed to fire cleanly on SUSE.
+#
+# This file is COPY-ed only into SLE Micro 5.5 builds by slem/5.5/Dockerfile
+# (the SLE Micro 5.5 base image) -- do not add a runtime OS guard here.
+stages:
+  after-install-chroot:
+    - name: "Copy branding grubmenu to OEM"
+      if: '[ -e /etc/kairos/branding/grubmenu.cfg ] && [ -d /oem ]'
+      commands:
+        - cp -f /etc/kairos/branding/grubmenu.cfg /oem/grubmenu
+        - sync

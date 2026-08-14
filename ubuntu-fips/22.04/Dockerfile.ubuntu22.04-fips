@@ -1,7 +1,7 @@
-FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.16.3 AS kairos-init
 
 FROM ubuntu:22.04
-ARG VERSION=v4.0.4
+ARG VERSION=v4.1.2
 ARG ENABLE_STIG=1
 ARG SKIP_STIG_BANNER=1
 ENV DEBIAN_FRONTEND=noninteractive
@@ -31,6 +31,11 @@ RUN --mount=type=secret,id=pro-attach-config \
     && pro detach --assume-yes
 
 COPY 22.04/dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+# Bundle the Renesas xHCI (USB 3.0) host controller driver into the initramfs so
+# installation from USB media works on hardware using that chipset. Consumed by the
+# `kairos-init -s init` dracut run below (the Earthfile skips dracut for FIPS builds).
+COPY 22.04/99-usb-media.conf /etc/dracut.conf.d/99-usb-media.conf
 
 # Copy the custom dracut modules.fips that includes 2 missing modules
 COPY 22.04/modules.fips /tmp/modules.fips

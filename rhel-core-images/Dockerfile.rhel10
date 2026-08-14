@@ -1,0 +1,105 @@
+# syntax=docker/dockerfile:1
+FROM quay.io/kairos/kairos-init:v0.16.3 AS kairos-init
+FROM registry.access.redhat.com/ubi10-init:10.2
+
+ARG KAIROS_VERSION=v4.1.2
+
+# EPEL: prefer mirror redirector; dl.fedoraproject.org often returns 503 under load.
+# EPEL 10 is required here, not optional: systemd-networkd, systemd-timesyncd,
+# livecd-tools and haveged are not shipped in RHEL 10 BaseOS/AppStream.
+RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm' || \
+    dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm'
+
+# Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
+#
+# No `subscription-manager attach --auto` here, unlike the RHEL 8/9 Dockerfiles: the `attach`
+# module was removed in RHEL 10 (it is obsolete under Simple Content Access) and invoking it
+# just prints the usage text and exits non-zero. Registration alone is enough — it leaves
+# rhel-10-for-x86_64-baseos-rpms and -appstream-rpms already enabled.
+RUN --mount=type=secret,id=RHSM_USERNAME,env=RHSM_USERNAME \
+    --mount=type=secret,id=RHSM_PASSWORD,env=RHSM_PASSWORD \
+  : "${RHSM_USERNAME:?missing --secret id=RHSM_USERNAME,env=RHSM_USERNAME}" \
+  && : "${RHSM_PASSWORD:?missing --secret id=RHSM_PASSWORD,env=RHSM_PASSWORD}" \
+  && rm /etc/rhsm-host \
+  && subscription-manager register --username "${RHSM_USERNAME}" --password "${RHSM_PASSWORD}" \
+  && yum repolist \
+  && subscription-manager repos --enable rhel-10-for-x86_64-appstream-rpms \
+  && yum repolist \
+  && dnf clean all
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init /kairos-init -l debug --version "${KAIROS_VERSION}" -m "generic" -t "false"
+
+RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
+# Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+#
+# Notable RHEL 10 differences:
+#   - dhclient: dropped, ISC dhcp is gone from RHEL 10. DHCP is handled by systemd-networkd.
+#   - grub2, iptables and conntrack no longer exist as package names; kairos-init requests
+#     grub2 and iptables and they resolve via virtual provides (grub2-pc, iptables-nft).
+#   - systemd-networkd, systemd-timesyncd, livecd-tools and haveged are the EPEL-sourced
+#     packages RHEL 10 itself does not ship.
+RUN uuidgen > /etc/machine-id && dnf install -y \
+  livecd-tools \
+  efibootmgr \
+  systemd-networkd \
+  systemd-timesyncd \
+  haveged \
+  ncurses \
+  open-vm-tools \
+  iscsi-initiator-utils \
+  iproute-tc conntrack-tools ethtool socat \
+  parted \
+  kbd \
+  coreutils-single && dnf clean all
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
+
+# Configure the box. The ubi image masks services for containers, we unmask them
+RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
+RUN systemctl enable getty@tty1.service
+RUN systemctl enable getty@tty2.service
+RUN systemctl enable getty@tty3.service
+RUN systemctl enable systemd-networkd
+RUN systemctl enable systemd-resolved
+RUN systemctl enable sshd
+RUN systemctl disable selinux-autorelabel-mark.service || true
+
+# Avoid clashes with systemd-networkd (Kairos/RHEL guidance).
+#
+# RHEL 9 uninstalls NetworkManager for this. That is not possible on RHEL 10: dracut-network
+# requires "NetworkManager >= 1.20" unconditionally, whereas RHEL 9 requires
+# "(NetworkManager >= 1.20 or dhclient)" and is satisfied by dhclient. Since dhclient is gone
+# from RHEL 10, `dnf remove NetworkManager` would also drag out dracut-network and leave the
+# final initramfs with no network module at all. RHEL 10 also dropped dracut's dhclient-based
+# network-legacy module, so the only initramfs network paths left are 35network-manager and
+# 01systemd-networkd. Mask NetworkManager instead of removing it: the package stays to satisfy
+# dracut-network and to give dracut a usable initramfs network module, while systemd-networkd
+# owns the network on the real root. Masking NetworkManager.service does not affect the
+# initramfs, which runs its own nm-initrd.service.
+#
+# This must run *after* the unmask-everything step above, otherwise that step unmasks it again.
+RUN if rpm -q NetworkManager >/dev/null 2>&1; then \
+      systemctl disable NetworkManager.service NetworkManager-wait-online.service NetworkManager-dispatcher.service 2>/dev/null || true; \
+      systemctl mask NetworkManager.service NetworkManager-wait-online.service NetworkManager-dispatcher.service; \
+    fi
+
+COPY overlay/rhel10/ /
+
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && \
+  ln -sf "${kernel#/boot/}" /boot/vmlinuz
+RUN kernel=$(ls /lib/modules | head -n1) && \
+  dracut -v -N -f "/boot/initrd-${kernel}" "${kernel}" && \
+  ln -sf "initrd-${kernel}" /boot/initrd && depmod -a "${kernel}"
+RUN rm -rf /boot/initramfs-*
+
+RUN mkdir -p /etc/luet/repos.conf.d
+## Clear cache
+RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id
+
+RUN subscription-manager unregister
