@@ -1,0 +1,45 @@
+# logrotate upstream ships this only as examples/logrotate.service (EXTRA_DIST,
+# never installed), so it is maintained here. Copied from upstream 3.22.0 with
+# no functional change.
+#
+# Lives under /usr/lib/systemd/system rather than /etc/systemd/system because
+# /etc/systemd is a persistent bind mount on Kairos: a unit written to /etc at
+# build time is shadowed once the node has state.
+#
+# There is deliberately no [Install] section -- this is a Type=oneshot job
+# triggered by logrotate.timer, which is the unit that gets enabled.
+
+[Unit]
+Description=Rotate log files
+Documentation=man:logrotate(8) man:logrotate.conf(5)
+RequiresMountsFor=/var/log
+ConditionACPower=true
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/logrotate /etc/logrotate.conf
+
+# performance options
+Nice=19
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# hardening options
+#  details: https://www.freedesktop.org/software/systemd/man/systemd.exec.html
+#  no ProtectHome for userdir logs
+#  no PrivateNetwork for mail deliviery
+#  no NoNewPrivileges for third party rotate scripts
+#  no RestrictSUIDSGID for creating setgid directories
+LockPersonality=true
+MemoryDenyWriteExecute=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=full
+RestrictNamespaces=true
+RestrictRealtime=true
