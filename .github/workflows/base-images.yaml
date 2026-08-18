@@ -35,7 +35,7 @@ on:
         description: "Kairos Init image (its version tags all built images)"
         required: false
         type: string
-        default: "quay.io/kairos/kairos-init:v0.16.3"
+        default: "quay.io/kairos/kairos-init:v0.17.1"
       arch:
         description: "Architecture for kairosify and Ubuntu UKI (Hadron builds amd64+arm64)"
         required: false
@@ -233,7 +233,7 @@ jobs:
         if: matrix.builder != 'hadron'
         run: |
           mkdir -p /tmp/results
-          echo "${{ matrix.tag }}" >> /tmp/results/built_tags.txt
+          echo "${{ matrix.tag }}" >> "/tmp/results/${{ matrix.name }}.txt"
 
       - name: Save Hadron build results
         if: matrix.builder == 'hadron'
@@ -248,13 +248,13 @@ jobs:
             echo "${SPECTRO_REPO}/kairos-hadron:${HADRON_VERSION}-core-generic-${KAIROS_INIT_VERSION}"
             echo "${SPECTRO_REPO}/kairos-hadron:${HADRON_VERSION}-core-generic-${KAIROS_INIT_VERSION}-fips"
             echo "${SPECTRO_REPO}/kairos-hadron:${HADRON_VERSION}-core-generic-${KAIROS_INIT_VERSION}-uki"
-          } >> /tmp/results/built_tags.txt
+          } >> "/tmp/results/${{ matrix.name }}.txt"
 
       - name: Upload build results
         uses: actions/upload-artifact@v4
         with:
           name: build-result-${{ matrix.name }}
-          path: /tmp/results/built_tags.txt
+          path: /tmp/results/${{ matrix.name }}.txt
 
   collect-outputs:
     needs:
@@ -275,7 +275,11 @@ jobs:
       - name: Combine all tags
         id: combine-tags
         run: |
-          ALL_TAGS=$(find /tmp/results -name "*.txt" -type f -exec cat {} \; 2>/dev/null | grep -v '^$' | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          TAGS_FILE=/tmp/all_tags.txt
+          find /tmp/results -name "*.txt" -type f -exec cat {} + 2>/dev/null \
+            | grep -v '^$' \
+            | sort -u > "$TAGS_FILE" || true
+          ALL_TAGS=$(jq -R -s -c 'split("\n") | map(select(length > 0))' "$TAGS_FILE")
           echo "tags=$ALL_TAGS" >> "$GITHUB_OUTPUT"
           echo "All built tags: $ALL_TAGS"
 
@@ -295,5 +299,9 @@ jobs:
             echo "- Registry Prefix: ${{ github.event.inputs.registry_prefix }}"
             echo ""
             echo "**Built Images:**"
-            echo '${{ steps.combine-tags.outputs.tags }}' | jq -r '.[] | "- `" + . + "`"'
+            if [[ -s /tmp/all_tags.txt ]]; then
+              sed 's/.*/- `&`/' /tmp/all_tags.txt
+            else
+              echo "_No image tags were collected._"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
