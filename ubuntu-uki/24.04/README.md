@@ -75,7 +75,7 @@ cd ubuntu-uki/24.04
 | `--push`                                    | off (`--load`)                                    | Push the architecture-specific image           |
 | `--no-cache`                                | off                                               | Pass `--no-cache` to buildx                    |
 | `KAIROS_VERSION`                            | `v4.1.2`                                          | Dockerfile `VERSION` → `kairos-init --version` |
-| `KAIROS_INIT_VERSION`                       | `v0.16.3`                                         | Default output tag component                   |
+| `KAIROS_INIT_VERSION`                       | `v0.17.1`                                         | Default output tag component                   |
 | `KAIROS_INIT_IMAGE`                         | `quay.io/kairos/kairos-init:<version>`            | Complete kairos-init image reference           |
 | `SPECTRO_REPO`                              | `us-east1-docker.pkg.dev/spectro-images/dev/arun` | Default tag prefix                             |
 
@@ -94,7 +94,7 @@ In `.arg`:
 OS_DISTRIBUTION=ubuntu
 OS_VERSION=24.04
 IS_UKI=true
-BASE_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/kairos-ubuntu:24.04-core-amd64-generic-v0.16.3-uki
+BASE_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/kairos-ubuntu:24.04-core-amd64-generic-v0.17.1-uki
 ```
 
 Then build the installer as usual (`./earthly.sh +uki-iso`, etc.).
