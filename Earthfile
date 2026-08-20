@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.10.0-rc.8
+ARG PE_VERSION=v4.10.0-rc.9
 ARG KAIROS_VERSION=v4.1.2
 # Version component of the base image tags produced by .github/workflows/base-images.yaml.
 # Those images are tagged with the kairos-init version, so this must track the
