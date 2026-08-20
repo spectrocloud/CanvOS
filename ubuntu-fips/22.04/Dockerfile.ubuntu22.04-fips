@@ -24,7 +24,11 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed cracklib-runtime \
+    ## open-vm-tools: kairos-init installs the VMware guest agent for the SUSE family but not
+    ## for Debian/Ubuntu. Without vmtoolsd running, vSphere reports blank IP Addresses / DNS
+    ## Name for the guest (PE-9173). Not a crypto module, so no FIPS impact. The 20.04 and
+    ## 24.04 FIPS images already install it here; this brings 22.04 to parity.
+    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools cracklib-runtime \
     ## && pro enable usg \
     ## && apt install -y usg \
     ## && usg fix disa_stig \
