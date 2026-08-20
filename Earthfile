@@ -410,11 +410,7 @@ install-k8s:
     SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
-    # Switched from quay.io/kairos/osbuilder-tools (archived kairos-io/osbuilder
-    # + kairos-io/enki) to AuroraBoot, which is the maintained successor. The
-    # build-iso and build-uki subcommands accept a "dir:" source, so the rootfs
-    # preparation path above is unchanged; only the final CLI invocation differs.
-    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
@@ -445,48 +441,23 @@ build-uki-iso:
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
-
-    RUN mkdir -p /iso
     IF [ "$ARCH" = "arm64" ]
-       # arm64 UKI ISO is not supported by upstream today; fall through to a
-       # plain live/installer ISO, matching the previous osbuilder behavior.
-       RUN CMD="auroraboot" && \
-           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-           $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
+       RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
+              $CMD
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
-       
+       RUN mkdir /iso
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
-           RUN CMD="auroraboot" && \
-               if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-               $CMD build-uki -t iso -d /iso \
-                   --extend-cmdline "$CMDLINE" \
-                   --overlay-iso /overlay \
-                   --boot-branding "$BRANDING" \
-                   --public-keys /keys \
-                   --sb-key /keys/db.key \
-                   --sb-cert /keys/db.pem \
-                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
-                   --secure-boot-enroll force \
-                   --name $ISO_NAME \
-                   dir:/build/image
+           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
        ELSE
-           RUN CMD="auroraboot" && \
-               if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-               $CMD build-uki -t iso -d /iso \
-                   --extend-cmdline "$CMDLINE" \
-                   --overlay-iso /overlay \
-                   --boot-branding "$BRANDING" \
-                   --public-keys /keys \
-                   --sb-key /keys/db.key \
-                   --sb-cert /keys/db.pem \
-                   --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
-                   --name $ISO_NAME \
-                   dir:/build/image
+           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys --boot-branding "$BRANDING"
        END
     END
-    SAVE ARTIFACT --keep-ts /iso/*
+    WORKDIR /iso
+    RUN mv /iso/*.iso $ISO_NAME.iso
+    SAVE ARTIFACT /iso/*
 
 iso:
     WORKDIR /build
@@ -578,7 +549,6 @@ build-iso:
     # what caused the Palette-branded /boot/grub2/grub.cfg (and user-data,
     # content bundles, cluster config) to silently disappear from produced
     # ISOs before this fix. Empirically verified against v0.26.2.
-    # +build-uki-iso above already uses this ordering.
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
@@ -929,19 +899,10 @@ provider-image-rootfs:
     SAVE ARTIFACT --keep-own /. rootfs
 
 build-provider-trustedboot-image:
-    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
+    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
     COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
-    RUN mkdir -p /output
-    RUN CMD="auroraboot" && \
-        if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-        $CMD build-uki -t container -d /output \
-            --boot-branding "$BRANDING" \
-            --public-keys /keys \
-            --sb-key /keys/db.key \
-            --sb-cert /keys/db.pem \
-            --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
-            dir:/build/image
+    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
