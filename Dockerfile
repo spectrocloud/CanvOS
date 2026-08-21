@@ -71,9 +71,12 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 
 ### To install the DRBD module package for Piraeus pack on Ubuntu  ###
 
+# Keep the first line as "RUN apt-get update && \" so teams enableDrbdInDockerfile sed still matches.
+# Scope DEBIAN_FRONTEND onto upgrade/install; preseed console-setup to avoid interactive postinst in CI.
 # RUN apt-get update && \
-#     apt-get upgrade -y && \
-#     apt-get install --no-install-recommends -y \
+#     echo "console-setup console-setup/charmap47 select UTF-8" | debconf-set-selections && \
+#     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+#     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
 #       ca-certificates \
 #       kmod \
 #       gpg \

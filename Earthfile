@@ -990,7 +990,11 @@ base-image:
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            # export so DEBIAN_FRONTEND applies to every apt command in this RUN
+            # (VAR=value only scopes the immediate command before &&).
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                echo "console-setup console-setup/charmap47 select UTF-8" | debconf-set-selections && \
+                apt-get update && \
                 apt-get install -y linux-image-generic-hwe-$OS_VERSION
         END
 
@@ -998,7 +1002,11 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            # export DEBIAN_FRONTEND for the whole chain; otherwise apt-get upgrade
+            # runs interactively and console-setup postinst fails in CI (no TTY).
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                echo "console-setup console-setup/charmap47 select UTF-8" | debconf-set-selections && \
+                apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
