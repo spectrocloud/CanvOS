@@ -990,7 +990,8 @@ base-image:
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
                 apt-get install -y linux-image-generic-hwe-$OS_VERSION
         END
 
@@ -998,7 +999,8 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
