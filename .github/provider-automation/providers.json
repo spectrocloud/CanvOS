@@ -1,0 +1,25 @@
+{
+  "_comment": "Single source of truth for the provider Go-bump / notify / release automation. 'branches' maps a release line to the base branch used for that provider on that line. Add a provider or line here and all three workflows pick it up.",
+  "providers": [
+    {
+      "repo": "kairos-io/provider-kubeadm",
+      "branches": { "4.8": "rc-4.8", "4.7": "release/v4.7.4" }
+    },
+    {
+      "repo": "kairos-io/provider-k3s",
+      "branches": { "4.8": "rc-4.8", "4.7": "release/v4.7.2" }
+    },
+    {
+      "repo": "kairos-io/provider-rke2",
+      "branches": { "4.8": "rc-4.8", "4.7": "release/v4.7.2" }
+    },
+    {
+      "repo": "kairos-io/provider-canonical",
+      "branches": { "4.8": "rc-4.8", "4.7": "rc-4.7" }
+    },
+    {
+      "repo": "kairos-io/provider-nodeadm",
+      "branches": { "4.8": "rc-4.8", "4.7": "rc-4.7" }
+    }
+  ]
+}
