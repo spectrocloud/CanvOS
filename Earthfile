@@ -865,7 +865,12 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
+            # Hold console-setup before the upgrade. Its 1.226ubuntu1.1 postinst prompts
+            # via debconf (uninitialized DB -> sed "unterminated s command" -> exit 128),
+            # which breaks this non-interactive image build. Freeze it at the base-image
+            # version so apt-get upgrade keeps it back.
             RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+                apt-mark hold console-setup console-setup-linux && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
