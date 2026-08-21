@@ -72,8 +72,8 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 ### To install the DRBD module package for Piraeus pack on Ubuntu  ###
 
 # RUN apt-get update && \
-#     apt-get upgrade -y && \
-#     apt-get install --no-install-recommends -y \
+#     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+#     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
 #       ca-certificates \
 #       kmod \
 #       gpg \
