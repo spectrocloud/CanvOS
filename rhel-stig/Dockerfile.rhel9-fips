@@ -1,20 +1,23 @@
-FROM quay.io/kairos/kairos-init:v0.5.28 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 FROM registry.access.redhat.com/ubi9-init:9.4-6
 
 ARG USERNAME
 ARG PASSWORD
-ARG KAIROS_VERSION=v3.5.9
+ARG KAIROS_VERSION=v4.0.4
 
 # Don't get asked while running apt commands
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
-# Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
-RUN rm /etc/rhsm-host && subscription-manager register --username ${USERNAME} --password ${PASSWORD} \
+# subscription-manager runs inside the UBI container (host OS does not need to be RHEL). Remove rhsm-host so it does not try to use host entitlements.
+# Uses BuildKit secrets (--secret id=rhsm_username,src=... --secret id=rhsm_password,src=...) - credentials never stored in image
+RUN --mount=type=secret,id=rhsm_username \
+    --mount=type=secret,id=rhsm_password \
+    sh -c 'rm /etc/rhsm-host && subscription-manager register --username "$(cat /run/secrets/rhsm_username)" --password "$(cat /run/secrets/rhsm_password)" \
   && yum repolist \
   && subscription-manager attach --auto \
   && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
-  && yum repolist
+  && yum repolist'
 RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 COPY overlay/rhel9/ /
@@ -50,6 +53,10 @@ RUN uuidgen > /etc/machine-id && dnf install -y \
   iscsi-initiator-utils \
   ethtool \
   tcpdump \
+  gnutls-utils \
+  nss-tools \
+  rng-tools \
+  rsyslog-gnutls \
   && dnf clean all
 
 RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
@@ -77,7 +84,7 @@ RUN systemctl enable systemd-logind.service
 RUN /kairos-init -l debug -s init --fips --version "${KAIROS_VERSION}" --skip-step cleanup
 
 RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
-    && dnf clean all
+  && dnf clean all
 
 COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
 
@@ -95,8 +102,8 @@ COPY overlay/rhel9/ /
 COPY static/ /tmp/stig-static/
 COPY stig-remediate.sh /tmp/stig-remediate.sh
 RUN chmod +x /tmp/stig-remediate.sh && \
-    /tmp/stig-remediate.sh 2>&1 && \
-    rm -f /tmp/stig-remediate.sh
+  /tmp/stig-remediate.sh 2>&1 && \
+  rm -f /tmp/stig-remediate.sh
 
 RUN mkdir -p /etc/luet/repos.conf.d
 ## Clear cache

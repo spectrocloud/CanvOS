@@ -358,6 +358,33 @@ current=$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo "MISSING")
 current_all=$(cat /proc/sys/net/ipv4/conf/all/forwarding 2>/dev/null || echo "MISSING")
 print_debug "Runtime after apply: net.ipv4.ip_forward=$current net.ipv4.conf.all.forwarding=$current_all"
 
+# STIG sets rp_filter=1 (strict); overlay clusters/CNI require rp_filter=0 for pod networking
+echo "Applying Kubernetes exception: net.ipv4.conf.all.rp_filter=0 and net.ipv4.conf.default.rp_filter=0 (required for overlay clusters)..."
+
+shopt -s nullglob
+for f in /etc/sysctl.conf /etc/sysctl.d/*.conf /run/sysctl.d/*.conf /usr/local/lib/sysctl.d/*.conf /usr/lib/sysctl.d/*.conf; do
+    [ -f "$f" ] || continue
+    sed -i \
+        -e 's/^[[:space:]]*net\.ipv4\.conf\.all\.rp_filter[[:space:]]*=.*$/# STIG exception (Kubernetes overlay clusters require rp_filter=0): &/' \
+        -e 's/^[[:space:]]*net\.ipv4\.conf\.default\.rp_filter[[:space:]]*=.*$/# STIG exception (Kubernetes overlay clusters require rp_filter=0): &/' \
+        "$f" 2>/dev/null || true
+done
+shopt -u nullglob 2>/dev/null || true
+
+cat > /etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf <<'EOF'
+# Kubernetes exception: STIG/Red Hat set rp_filter=1; overlay clusters (Calico, etc.) require rp_filter=0
+# 50-redhat.conf uses net.ipv4.conf.*.rp_filter=1 per-interface; override with same wildcard (loads later)
+net.ipv4.conf.*.rp_filter = 0
+net.ipv4.conf.all.rp_filter = 0
+net.ipv4.conf.default.rp_filter = 0
+EOF
+chown root:root /etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf
+chmod 0644 /etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf
+
+/sbin/sysctl -w net.ipv4.conf.all.rp_filter=0 2>/dev/null || true
+/sbin/sysctl -w net.ipv4.conf.default.rp_filter=0 2>/dev/null || true
+/sbin/sysctl --system 2>/dev/null || true
+
 # Ensure required drivers and modules are in dracut config (backup in case STIG removed them)
 for conf_file in /etc/dracut.conf.d/*.conf; do
     if [ -f "$conf_file" ]; then
@@ -407,6 +434,55 @@ if [ -f "$REMEDIATION_SCRIPT" ]; then
     rm -f "$REMEDIATION_SCRIPT"
 else
     print_debug "WARNING: Remediation script not found for saving (may have been deleted earlier)"
+fi
+
+# STIG High-priority: Sudo configuration
+echo "Applying STIG sudo configuration..."
+for f in /etc/sudoers /etc/sudoers.d/*; do
+    [ -f "$f" ] || continue
+    # Remove NOPASSWD (CCE-83536-3)
+    sed -i 's/^[^#]*NOPASSWD:[^$]*$/# STIG: NOPASSWD removed - &/' "$f" 2>/dev/null || true
+    # Remove !authenticate (CCE-83544-7)
+    sed -i 's/^[^#]*!authenticate[^$]*$/# STIG: !authenticate removed - &/' "$f" 2>/dev/null || true
+done
+# Ensure timestamp_timeout=0 for reauth (CCE-90029-0)
+mkdir -p /etc/sudoers.d
+if ! grep -rq "timestamp_timeout" /etc/sudoers /etc/sudoers.d/ 2>/dev/null; then
+    echo "Defaults timestamp_timeout=0" > /etc/sudoers.d/stig-reauth.conf
+    chmod 0440 /etc/sudoers.d/stig-reauth.conf
+fi
+# Ensure validate for sudoers (CCE-83529-8)
+if ! grep -rq "validate" /etc/sudoers /etc/sudoers.d/ 2>/dev/null; then
+    echo "Defaults use_pty" >> /etc/sudoers.d/stig-reauth.conf 2>/dev/null || true
+fi
+print_debug "Sudo STIG configuration applied"
+
+# STIG High-priority: Login banner (CCE-83557-9)
+echo "Applying STIG login banner..."
+cat > /etc/issue <<'BANNER'
+You are accessing a U.S. Government (USG) Information System (IS) that is provided for USG-authorized use only.
+By using this IS (which includes any device attached to this IS), you consent to the following conditions:
+- The USG routinely intercepts and monitors communications on this IS for purposes including, but not limited to, penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE), and counterintelligence (CI) investigations.
+- At any time, the USG may inspect and seize data stored on this IS.
+- Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search, and may be disclosed or used for any USG-authorized purpose.
+- This IS includes security measures (e.g., authentication and access controls) to protect USG interests--not for your personal benefit or privacy.
+- Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of the content of privileged communications, or work product, related to personal representation or services by attorneys, psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential. See User Agreement for details.
+BANNER
+chmod 644 /etc/issue
+print_debug "Login banner applied"
+
+# STIG High-priority: authselect (CCE-89732-2)
+if command -v authselect &>/dev/null; then
+    echo "Applying authselect configuration..."
+    if authselect select minimal with-faillock without-nullok --force 2>/dev/null; then
+        print_debug "authselect minimal with-faillock applied"
+    elif authselect select minimal --force 2>/dev/null; then
+        print_debug "authselect minimal applied"
+    elif authselect select sssd with-faillock without-nullok --force 2>/dev/null; then
+        print_debug "authselect sssd with-faillock applied"
+    else
+        print_debug "authselect: no suitable profile, skipping"
+    fi
 fi
 
 # Firewall: no default ports/zones - customers configure via user-data or cluster profile

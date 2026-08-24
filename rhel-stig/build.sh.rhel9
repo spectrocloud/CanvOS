@@ -1,14 +1,28 @@
 #!/bin/bash
 
+# Run from rhel-stig/ so static/ and stig-remediate.sh are in build context
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 USERNAME=$1
 PASSWORD=$2
 BASE_IMAGE="${3:-rhel9-byoi-stig}"
 FIPS_ENABLED="${4:-false}"
 
+# BuildKit required for --secret (credentials never stored in image layers)
+export DOCKER_BUILDKIT=1
+
+# Use BuildKit secrets - credentials passed via temp files, never in image layers or build args
+tmpdir=$(mktemp -d)
+trap "rm -rf $tmpdir" EXIT
+echo -n "$USERNAME" > "$tmpdir/rhsm_username"
+echo -n "$PASSWORD" > "$tmpdir/rhsm_password"
+chmod 600 "$tmpdir"/*
+
 if [ "$FIPS_ENABLED" = "true" ]; then
     echo "Building RHEL 9 STIG FIPS image..."
-    docker build --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" -f Dockerfile.rhel9-fips .
+    docker build --secret id=rhsm_username,src="$tmpdir/rhsm_username" --secret id=rhsm_password,src="$tmpdir/rhsm_password" -t "$BASE_IMAGE" -f Dockerfile.rhel9-fips .
 else
     echo "Building RHEL 9 STIG image..."
-    docker build --no-cache --build-arg USERNAME="$USERNAME" --build-arg PASSWORD="$PASSWORD" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
+    docker build --secret id=rhsm_username,src="$tmpdir/rhsm_username" --secret id=rhsm_password,src="$tmpdir/rhsm_password" -t "$BASE_IMAGE" -f Dockerfile.rhel9 .
 fi

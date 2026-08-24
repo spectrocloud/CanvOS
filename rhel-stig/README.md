@@ -11,8 +11,10 @@ RHEL 9 STIG (Security Technical Implementation Guide) compliance is required for
 ### Prerequisites
 
 - Red Hat subscription credentials (username and password)
-- Docker installed and running
+- Docker installed and running (BuildKit enabled; the build script sets `DOCKER_BUILDKIT=1`)
 - Access to Red Hat repositories (RHEL 9 packages required)
+
+**Building on non-RHEL hosts (Ubuntu, etc.):** subscription-manager runs inside the UBI container, so the host OS does not need to be RHEL. The build works on any Docker host.
 
 ### Building Non-FIPS STIG Image
 
@@ -36,7 +38,7 @@ Example:
 bash build.sh.rhel9 myuser@example.com mypassword rhel9-byoi-stig-fips true
 ```
 
-**Note**: Red Hat subscription credentials are required to build these images as RHEL 9 STIG packages are only available through Red Hat repositories.
+**Note**: Red Hat subscription credentials are required to build these images as RHEL 9 STIG packages are only available through Red Hat repositories. Credentials are passed via Docker BuildKit secrets (not build args) and are never stored in image layers. Requires Docker BuildKit (default in Docker 23+; set `DOCKER_BUILDKIT=1` for older versions).
 
 ## Using the Base Image
 
@@ -143,6 +145,8 @@ The build process automatically applies STIG remediation rules including:
 
 STIG disables `net.ipv4.ip_forward` and `net.ipv4.conf.all.forwarding` for general servers. Kubernetes nodes require both `=1` for CNI pod networking (Calico, Flannel, etc.). The build overrides STIG via `/etc/sysctl.d/99-zzz-kubernetes-ip-forward.conf` and applies it during build.
 
+STIG sets `rp_filter=1` (strict); overlay clusters (Calico, etc.) require `rp_filter=0`. The build overrides via `/etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf`.
+
 ### Firewall Configuration
 
 No firewall ports or zones are opened by default. Configure firewall rules via **user-data** or **cluster profile** as needed for your environment.
@@ -237,7 +241,7 @@ For a minimal Kairos/edge image, many STIG rules will **fail** or be **notapplic
 | **AIDE** | File integrity monitoring not typically used on edge nodes |
 | **FIPS** | Only for FIPS-enabled build; non-FIPS image will fail FIPS checks |
 | **Mount options** | `/tmp`, `/var/log`, `/dev/shm`, etc. – Kairos layout differs from traditional partitioning |
-| **GRUB** | `init_on_free`, PTI, vsyscall, password – require kernel/GRUB changes |
+| **GRUB** | `init_on_free`, PTI, vsyscall in base image (`/etc/kernel/cmdline`); GRUB password – environment-specific |
 | **Packages** | chrony, cron, fapolicyd, postfix, s-nail, nfs-utils, usbguard, libreswan |
 | **Partitions** | `/var/log/audit`, `/var/tmp` – edge layout may not match STIG expectations |
 | **User namespaces** | `sysctl_user_max_user_namespaces` – may conflict with containers |
