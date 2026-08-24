@@ -247,6 +247,7 @@ cp .arg.template .arg
 | AUTO_ENROLL_SECUREBOOT_KEYS | Auto enroll SecureBoot keys when device boots up and is in setup mode of secure boot                                                                                                                                                                                                                                                           | boolean | `true`                     |
 | ENROLL_SPECTRO_EXTENSION_CERT | Merge the Palette systemd extension certificate into the generated UEFI db, allowing signed Palette extensions to be trusted and activated under Secure Boot. Disable this option when only customer certificates are permitted; in that case, customers must sign the extensions with their own certificates.                                                                                                                     | boolean | `true`                     |
 | SPECTRO_EXTENSION_CERT_IMAGE | OCI image containing `palette-sysext-cert.pem`, used when enrolling the Palette systemd-extension certificate.                                                                                                                                                                                                                               | String  | See `.arg.template`        |
+| PALETTE_SYSEXT_IMAGE        | OCI image providing the `palette-sysext` CLI and built-in `extensions/` tree, consumed by `+build-signed-extensions`.                                                                                                                                                                                                                           | String  | See `.arg.template`        |
 | EDGE_CUSTOM_CONFIG          | Path to edge custom configuration file                                                                                                                                                                                                                                                                                                         | string  | `.edge-custom-config.yaml` |
 | MAAS_IMAGE_NAME             | Custom name for the final MAAS image (without .raw.gz extension). Only used when building MAAS images.                                                                                                                                                                         | string  | `kairos-ubuntu-maas`       |
 | IS_MAAS                     | Build MAAS-compatible disk images. Set to `true` when building for MAAS deployment.                                                                                                                                                                                                                                                           | boolean | `false`                    |
@@ -272,6 +273,99 @@ To build just the installer image
 ```shell
 ./earthly.sh +iso --ARCH=amd64
 ```
+
+### Signing k8s Systemd Extensions with Custom Keys
+
+CanvOS integrates the `spectrocloud/k8s-extensions` `palette-sysext` tool so
+you can build and sign the k8s systemd extensions (`kubeadm`, `k3s`, `rke2`,
+`canonical`) with your own certificate — the same one CanvOS enrols into UEFI
+db for UKI Secure Boot.
+
+At boot, Kairos' immucore extracts PK/KEK/DB certs from the UEFI firmware to
+`/run/verity.d/`, and `systemd-sysext` validates every extension against
+those certs. Signing extensions with the same key CanvOS puts in db closes
+the trust chain.
+
+**Prerequisites**
+
+1. Custom UKI keys under `secure-boot/private-keys/db.key` +
+   `secure-boot/public-keys/db.pem` (produced by `./earthly.sh +uki-genkey`
+   or provided per `sb-private-ca/howto.md`). Because your db cert is
+   already enrolled into UEFI db as part of the OS db, set
+   `ENROLL_SPECTRO_EXTENSION_CERT=false` in `.arg` — no need to also merge
+   Spectro's default extension cert.
+2. `K8S_DISTRIBUTION` and `K8S_VERSION` in `.arg` match a version listed in
+   the extension's `extension.yaml`. `kubeadm-fips` selects the `kubeadm`
+   extension with `--fips`; `nodeadm` has no sysext form and is rejected.
+3. `IMAGE_REGISTRY` in `.arg` — used as the OCI tag prefix
+   (`$IMAGE_REGISTRY/palette-sysext-extensions`) so the produced tar can be
+   `docker load`ed and pushed directly to your registry.
+4. `FIPS_ENABLED=true` in `.arg` — forwards as `--fips` to palette-sysext
+   (redundant with `K8S_DISTRIBUTION=kubeadm-fips`; either is sufficient).
+
+**Build (local tar under `./build/signed-extensions/`):**
+
+```shell
+./earthly.sh +build-signed-extensions
+```
+
+**Build and push to `$IMAGE_REGISTRY`:**
+
+```shell
+./earthly.sh --push +build-signed-extensions
+```
+
+When Earthly's `--push` flag is passed, the target forwards `--push` to
+palette-sysext and skips the local `docker save` step. `earthly.sh` also
+auto-forwards `~/.docker/config.json` as the `DOCKER_AUTH_CONFIG` secret so
+palette-sysext's nested `docker push` inside `WITH DOCKER` can authenticate
+— run `docker login` on the host before invoking, once, for whichever
+registry `IMAGE_REGISTRY` points at.
+
+The target COPIes `secure-boot/private-keys/db.key` +
+`secure-boot/public-keys/db.pem` into the build container — the same
+mechanism `+uki-byok` uses for the same files. The COPY runs as root
+inside BuildKit, so 0600 root-owned files (as produced by
+`+uki-genkey`) are readable regardless of your host user.
+
+**Security note.** This target only writes a local artifact
+(`SAVE ARTIFACT … AS LOCAL`); it never pushes an image, so the key stays
+in your local Earthly cache. If you later add `SAVE IMAGE --push` to this
+target, the key **will** be visible in the pushed image via
+`docker history` — split into a separate publish stage that does not COPY
+the key first.
+
+Output: the signed OCI image is loaded into the docker-in-docker daemon,
+saved as a tar via `docker save`, and copied out to
+`./build/signed-extensions/`. `docker load` + `docker push` the tar into
+whatever registry the fleet consumes.
+
+Target flags:
+
+| Flag                  | Purpose                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `--DRY_RUN=true`      | Print the exact docker / auroraboot commands; do not execute.                      |
+| `--FORCE=true`        | (Default) Force rebuild even if the target registry already has a matching-fingerprint image. Required for BYOK signing because the registry image is signed by Spectro's key, not yours. Set `--FORCE=false` if you deliberately want palette-sysext's fingerprint-skip behavior. |
+| `--SOURCE_IMAGE=…`    | Override the package source image (useful for private mirrors).                    |
+| `--ARCH=amd64,arm64`  | Multi-arch build (comma-separated); produces one image per arch plus a stitched manifest on `--PUSH`. |
+
+**k8s version format.** CanvOS's `K8S_VERSION` in `.arg` uses the bare
+semver form (`1.34.5`). The target automatically appends the flavor suffix
+palette-sysext expects for k3s (`-<K3S_FLAVOR_TAG>`, default `k3s1`) and
+rke2 (`-<RKE2_FLAVOR_TAG>`, default `rke2r1`); kubeadm and canonical use
+the bare form. If you set the full form in `.arg` (e.g. `1.34.5-k3s1`) it
+passes through unchanged.
+
+The runtime pipeline inside the target is
+`docker buildx → auroraboot → systemd-repart --make-ddi=sysext`, all inside
+Earthly's `WITH DOCKER --allow-privileged` block.
+
+**Note on runtime consumption.** This target signs and packages the
+extension; it does not change how nodes discover them. Routing nodes to a
+different registry (or replacing the on-node `extensions-index.yaml`) is a
+stylus / kairos-agent concern outside CanvOS. `--SOURCE_IMAGE` lets you
+build against a mirrored *source* image, but the *output* image tag and how
+nodes locate it are separate concerns not addressed by this target.
 
 ### Building AWS Cloud Images
 

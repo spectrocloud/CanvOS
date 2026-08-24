@@ -161,6 +161,10 @@ ARG ENROLL_SPECTRO_EXTENSION_CERT=true
 # OCI image (scratch) with palette-sysext-cert.pem; merged into UEFI db during +uki-genkey
 ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/sysext/palette-sysext-cert:latest
 
+# palette-sysext OCI image containing the CLI binary + built-in extensions/ tree.
+# Consumed by +palette-sysext-bin and +build-signed-extensions.
+ARG PALETTE_SYSEXT_IMAGE=us-docker.pkg.dev/palette-images/edge/kubernetes/extensions/palette-sysext:v1.0.1
+
 # Bundle the Kubernetes binaries and the agent-provider binaries into the
 # provider image (both UKI and non-UKI).
 #
@@ -633,6 +637,193 @@ spectro-extension-cert-esl:
     RUN cert-to-efi-sig-list -g 8be4df61-93ca-11d2-aa0d-00e098032b8c \
         /cert/spectro-cert.pem /cert/spectro-db.esl
     SAVE ARTIFACT /cert/spectro-db.esl spectro-db.esl
+
+# Extract the palette-sysext CLI + built-in extensions/ tree from the OCI
+# distribution image so downstream targets can consume them directly.
+palette-sysext-bin:
+    ARG ARCH=amd64
+    FROM --platform=linux/${ARCH} $PALETTE_SYSEXT_IMAGE
+    SAVE ARTIFACT /bin/palette-sysext palette-sysext
+    SAVE ARTIFACT /share/palette-sysext/extensions extensions
+
+# Build and sign a Palette systemd extension using the CanvOS UKI BYOK
+# db key/cert pair, so the same certificate that signs the boot chain also
+# signs the k8s sysext extensions. Runs docker-in-docker via WITH DOCKER
+# because palette-sysext delegates to `docker buildx` (repack) and
+# `docker run` (auroraboot) internally.
+#
+# Inputs from .arg:
+#   K8S_DISTRIBUTION  distro to sign (kubeadm[-fips], k3s, rke2, canonical)
+#   K8S_VERSION       bare semver; k3s/rke2 get their flavor suffix appended
+#   ARCH              target arch(es); comma-separated for multi-arch
+#   IMAGE_REGISTRY    when set, tags the OCI image as
+#                     $IMAGE_REGISTRY/palette-sysext-extensions:<tag>
+#   FIPS_ENABLED      when true, adds --fips (in addition to whatever
+#                     kubeadm-fips already implies)
+#
+# Signing material is COPIed from secure-boot/private-keys/db.key +
+# secure-boot/public-keys/db.pem — same files, same mechanism +uki-byok
+# uses to sign the UKI itself. The key sits in this target's build-cache
+# layer but is never pushed anywhere (the target only SAVE ARTIFACT AS
+# LOCAL). See the SECURITY note in the target body before adding push.
+# Just run:
+#
+#   ./earthly.sh +build-signed-extensions
+#
+# The signed OCI image is loaded into the WITH DOCKER daemon, saved as a tar
+# via `docker save`, and exposed as a local artifact under
+# ./build/signed-extensions/. Push is intentionally out of scope for this
+# target — `docker load` + `docker push` the tar into whatever registry the
+# fleet consumes, using whichever credentials that registry needs.
+build-signed-extensions:
+    FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    RUN apk add --no-cache bash jq
+
+    ARG --required K8S_DISTRIBUTION
+    ARG --required K8S_VERSION
+    ARG ARCH=amd64
+    # IMAGE_REGISTRY and FIPS_ENABLED are Earthfile-scope globals (lines 13
+    # and 51) — no need to re-declare. IMAGE_REGISTRY drives palette-sysext
+    # --repo (OCI tag host/path); FIPS_ENABLED forwards --fips on top of
+    # whatever kubeadm-fips already implies.
+    #
+    #
+    # Optional override for the package source image used by palette-sysext.
+    # Useful when the default source (e.g. us-docker.pkg.dev/palette-images/…)
+    # has been mirrored to a private registry.
+    ARG SOURCE_IMAGE
+    # DRY_RUN=true prints the exact docker + auroraboot commands without
+    # executing them — matches palette-sysext's own --dry-run flag.
+    ARG DRY_RUN=false
+    # FORCE=true rebuilds even when palette-sysext detects a matching
+    # fingerprint in the target registry. Defaults to true because the
+    # whole point of this target is to sign with the caller's own key —
+    # the registry image was signed by someone else and must be rebuilt.
+    ARG FORCE=true
+
+    # palette-sysext ships as a statically-linked linux/amd64 binary and
+    # runs on the Earthly host (DinD image is amd64); the target output arch
+    # is passed through via --arch (may be a comma-separated multi-arch list).
+    COPY (+palette-sysext-bin/palette-sysext --ARCH=amd64) /usr/local/bin/palette-sysext
+    COPY (+palette-sysext-bin/extensions --ARCH=amd64) /extensions
+    RUN chmod +x /usr/local/bin/palette-sysext
+
+    # Distro → extension mapping. Also normalizes K8S_VERSION to match how
+    # palette-sysext's extension.yaml lists it per distro:
+    #   kubeadm / canonical: bare semver (e.g. 1.34.5)
+    #   k3s:                 1.34.5-<K3S_FLAVOR_TAG>   (e.g. 1.34.5-k3s1)
+    #   rke2:                1.34.5-<RKE2_FLAVOR_TAG>  (e.g. 1.34.5-rke2r1)
+    # If K8S_VERSION already carries the suffix (users may set the full
+    # form), leave it alone.
+    # kubeadm-fips selects the kubeadm extension with --fips;
+    # nodeadm has no palette-sysext extension and is rejected explicitly.
+    RUN set -eu; \
+        VER="$K8S_VERSION"; \
+        case "$K8S_DISTRIBUTION" in \
+            kubeadm)      echo "k8s/kubeadm"   > /extid; :         > /fips ;; \
+            kubeadm-fips) echo "k8s/kubeadm"   > /extid; echo --fips > /fips ;; \
+            k3s) \
+                echo "k8s/k3s" > /extid; : > /fips; \
+                case "$VER" in *-k3s*) ;; *) VER="${VER}-${K3S_FLAVOR_TAG}" ;; esac ;; \
+            rke2) \
+                echo "k8s/rke2" > /extid; : > /fips; \
+                case "$VER" in *-rke2*) ;; *) VER="${VER}-${RKE2_FLAVOR_TAG}" ;; esac ;; \
+            canonical)    echo "k8s/canonical" > /extid; :         > /fips ;; \
+            nodeadm) \
+                echo "ERROR: K8S_DISTRIBUTION=nodeadm has no palette-sysext extension." >&2; \
+                exit 1 ;; \
+            *) \
+                echo "ERROR: unsupported K8S_DISTRIBUTION=$K8S_DISTRIBUTION" >&2; \
+                exit 1 ;; \
+        esac; \
+        echo "$VER" > /extver; \
+        echo "resolved: extension=$(cat /extid) version=$(cat /extver) fips=$(cat /fips)"
+
+    RUN mkdir -p /output
+
+    # Same COPY pattern +uki-byok uses to consume the BYOK db key/cert.
+    # The COPY runs as root inside BuildKit, so 0600 root-owned files
+    # (as produced by +uki-genkey) are readable regardless of the host
+    # user's perms. The key lands in this target's build-cache layer;
+    # this target only does SAVE ARTIFACT AS LOCAL, so nothing is pushed.
+    # SECURITY: if you add SAVE IMAGE --push to this target later, the
+    # key WILL end up in a layer of the pushed image (visible via
+    # `docker history`). Split into a separate stage that doesn't COPY
+    # the key before enabling push.
+    COPY secure-boot/private-keys/db.key /keys/db.key
+    COPY secure-boot/public-keys/db.pem  /keys/db.pem
+    RUN chmod 0600 /keys/db.key /keys/db.pem
+
+    WITH DOCKER --pull $AURORABOOT_IMAGE
+        RUN --secret DOCKER_AUTH_CONFIG \
+            set -eu; \
+            EXT_ID="$(cat /extid)"; \
+            EXT_VER="$(cat /extver)"; \
+            FIPS_ARG="$(cat /fips)"; \
+            # FIPS_ENABLED=true also selects --fips even if K8S_DISTRIBUTION
+            # is the non-FIPS form (matches how the rest of CanvOS flips
+            # between FIPS and non-FIPS off this single knob).
+            if [ "$FIPS_ENABLED" = "true" ] && [ -z "$FIPS_ARG" ]; then \
+                FIPS_ARG="--fips"; \
+            fi; \
+            REPO_ARG=""; \
+            if [ -n "${IMAGE_REGISTRY:-}" ]; then \
+                REPO_ARG="--repo=$IMAGE_REGISTRY/palette-sysext-extensions"; \
+            fi; \
+            SRC_ARG=""; [ -n "${SOURCE_IMAGE:-}" ] && SRC_ARG="--source-image=$SOURCE_IMAGE"; \
+            DRY_RUN_ARG=""; [ "$DRY_RUN" = "true" ] && DRY_RUN_ARG="--dry-run"; \
+            FORCE_ARG=""; [ "$FORCE" = "true" ] && FORCE_ARG="--force"; \
+            PUSH_ARG=""; \
+            if [ "${EARTHLY_PUSH:-false}" = "true" ]; then \
+                PUSH_ARG="--push"; \
+                # palette-sysext calls `docker push` inside WITH DOCKER's
+                # fresh dockerd — it has no auth by default. earthly.sh
+                # forwards ~/.docker/config.json as the DOCKER_AUTH_CONFIG
+                # secret when +build-signed-extensions is invoked; we
+                # materialize it as /root/.docker/config.json so the CLI
+                # picks it up.
+                if [ -z "${DOCKER_AUTH_CONFIG:-}" ]; then \
+                    echo "ERROR: --push requires DOCKER_AUTH_CONFIG secret." >&2; \
+                    echo "       Run './earthly.sh --push +build-signed-extensions' which" >&2; \
+                    echo "       auto-forwards ~/.docker/config.json, or make sure that" >&2; \
+                    echo "       file exists and is readable by the invoking user." >&2; \
+                    exit 1; \
+                fi; \
+                mkdir -p /root/.docker; \
+                printf '%s' "$DOCKER_AUTH_CONFIG" > /root/.docker/config.json; \
+                chmod 0600 /root/.docker/config.json; \
+            fi; \
+            echo "==> palette-sysext build --extension=$EXT_ID --version=$EXT_VER --arch=$ARCH $FIPS_ARG $REPO_ARG $FORCE_ARG $PUSH_ARG $DRY_RUN_ARG"; \
+            palette-sysext doctor || true; \
+            palette-sysext build \
+                --extension="$EXT_ID" \
+                --version="$EXT_VER" \
+                --arch="$ARCH" \
+                --extensions-dir=/extensions \
+                --private-key=/keys/db.key \
+                --certificate=/keys/db.pem \
+                --report-file=/output \
+                $FIPS_ARG $REPO_ARG $SRC_ARG $FORCE_ARG $PUSH_ARG $DRY_RUN_ARG; \
+            # Clear registry auth from the target FS before any subsequent
+            # SAVE ARTIFACT. Belt-and-braces — /root/.docker/config.json is
+            # inside a WITH DOCKER container that gets torn down anyway.
+            rm -f /root/.docker/config.json 2>/dev/null || true; \
+            # When pushing, palette-sysext has already put the images in
+            # the registry; skip the local docker-save tar step.
+            if [ "$DRY_RUN" != "true" ] && [ "${EARTHLY_PUSH:-false}" != "true" ]; then \
+                for report in /output/*.json; do \
+                    [ -f "$report" ] || continue; \
+                    for tag in $(jq -r '.archs[]? | select(.built == true) | .image // empty' "$report"); do \
+                        [ -n "$tag" ] || continue; \
+                        safe="$(echo "$tag" | tr '/:' '__')"; \
+                        echo "==> docker save $tag -> /output/${safe}.tar"; \
+                        docker save "$tag" -o "/output/${safe}.tar"; \
+                    done; \
+                done; \
+            fi
+    END
+
+    SAVE ARTIFACT /output AS LOCAL ./build/signed-extensions/
 
 # Self-contained merge of the Spectro extension cert into the UEFI db enrollment
 # material. Gated on ENROLL_SPECTRO_EXTENSION_CERT: when true, it fetches the ESL,
