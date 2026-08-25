@@ -3,7 +3,6 @@ FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
 FROM ubuntu:22.04
 ARG VERSION=v4.0.4
 ARG ENABLE_STIG=1
-ARG SKIP_STIG_BANNER=0
 ENV DEBIAN_FRONTEND=noninteractive
 
 # NOTE: --fips is NOT passed here. Unlike RHEL (where subscription-manager enables FIPS repos
@@ -38,11 +37,11 @@ RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${
 
 COPY 22.04/fix.sh /tmp/fix.sh
 COPY stig-remediate.sh /tmp/stig-remediate.sh
-COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
-RUN chmod +x /tmp/fix.sh /tmp/stig-remediate.sh /tmp/restore-ubuntu-default-banners.sh \
+# Install outside /tmp: kairos-init -s init clears /tmp, and this script must run after init.
+COPY restore-ubuntu-default-banners.sh /usr/local/sbin/restore-ubuntu-default-banners.sh
+RUN chmod +x /tmp/fix.sh /tmp/stig-remediate.sh /usr/local/sbin/restore-ubuntu-default-banners.sh \
     && if [ "$ENABLE_STIG" = "1" ]; then /tmp/stig-remediate.sh; fi \
-    && rm -f /tmp/stig-remediate.sh \
-    && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
+    && rm -f /tmp/stig-remediate.sh
 
 # --fips is passed here (not at install stage) because Ubuntu PRO has been attached and all
 # FIPS packages (linux-image-fips, strongswan-hmac, etc.) are already installed above.
@@ -51,11 +50,21 @@ RUN chmod +x /tmp/fix.sh /tmp/stig-remediate.sh /tmp/restore-ubuntu-default-bann
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init --fips --version "${VERSION}"
 
+# Restore stock Ubuntu banners after kairos-init so OEM/init merges cannot reintroduce
+# the USG/DoD text from STIG remediation (or from fix.sh's final issue → issue.net sync).
+# Default 1: keep STIG remediations but drop the USG banner. Pass SKIP_STIG_BANNER=0 to retain it.
+ARG ENABLE_STIG
+ARG SKIP_STIG_BANNER=1
+RUN if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then \
+      bash /usr/local/sbin/restore-ubuntu-default-banners.sh; \
+    fi
+
 # Symlink kernel HMAC
 RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
 
 # Clear cache
 RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} + && \
+    rm -f /usr/local/sbin/restore-ubuntu-default-banners.sh && \
     rm -rf /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
