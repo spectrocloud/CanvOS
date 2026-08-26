@@ -366,6 +366,24 @@ trust-boot-unpack:
     COPY --platform=linux/${ARCH} +build-provider-trustedboot-image/ /image
     RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
         luet util unpack $FILE /trusted-boot
+
+    # kairos-agent < v2.26.0 shim (kairos-io/kairos#4345, kairos-agent#1106):
+    # rewrite type-2 "uki <path>" to type-1 "efi <path>" and add loader.conf
+    # default. Drop when source-image agent >= v2.26.0. Skip on Hadron (no
+    # existing clusters to support upgrade from).
+    IF [ "$OS_DISTRIBUTION" != "hadron" ]
+        RUN set -e; \
+            entries=/trusted-boot/loader/entries; \
+            loader=/trusted-boot/loader/loader.conf; \
+            test -d "$entries" && test -f "$loader"; \
+            find "$entries" -maxdepth 1 -name '*.conf' -exec sed -i 's|^uki |efi |' {} +; \
+            if ! grep -q '^default ' "$loader"; then \
+                { printf 'default norole.conf\n'; cat "$loader"; } > "$loader.new" && mv "$loader.new" "$loader"; \
+            fi; \
+            grep -q '^efi /EFI/kairos/norole.efi$' "$entries/norole.conf"; \
+            grep -q '^default norole.conf$' "$loader"
+    END
+
     SAVE ARTIFACT /trusted-boot/*
 
 stylus-image-pack:
@@ -414,7 +432,7 @@ install-k8s:
     SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
@@ -445,22 +463,39 @@ build-uki-iso:
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    RUN mkdir -p /iso
     IF [ "$ARCH" = "arm64" ]
-       RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-              $CMD
+       # No UKI ISO on arm64 upstream; fall through to a plain installer ISO.
+       RUN CMD="auroraboot" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+           $CMD build-iso --overlay-iso /overlay --arch arm64 \
+               --output /iso --override-name "$ISO_NAME" \
+               dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
-       RUN mkdir /iso
+       # enki -k /keys unbundled: --public-keys (PK/KEK/db .auth),
+       # --sb-key/--sb-cert (UKI signing), --tpm-pcr-private-key (PCR policy).
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           LET SECURE_BOOT_ENROLL=force
        ELSE
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           LET SECURE_BOOT_ENROLL=if-safe
        END
+       RUN CMD="auroraboot" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+           $CMD build-uki -t iso -d /iso \
+               --extend-cmdline "$CMDLINE" \
+               --overlay-iso /overlay \
+               --boot-branding "$BRANDING" \
+               --public-keys /keys \
+               --sb-key /keys/db.key \
+               --sb-cert /keys/db.pem \
+               --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+               --secure-boot-enroll "$SECURE_BOOT_ENROLL" \
+               --name "$ISO_NAME" \
+               dir:/build/image
     END
     WORKDIR /iso
-    RUN mv /iso/*.iso $ISO_NAME.iso
     SAVE ARTIFACT /iso/*
 
 iso:
@@ -536,34 +571,20 @@ build-iso:
     fi
 
     # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
-    # "x86_64" for amd64). --output/--override-name are inert for "dir:"
-    # sources: the ISO always lands at /tmp/auroraboot/kairos-<distro>-<ver>-
-    # core-<arch>-generic-v<kairos-ver>.iso, so we leave --output default and
-    # hoist the produced ISO into /iso/ ourselves.
-    #
-    # The Hadron-specific WITH DOCKER path is unnecessary now that all builds
-    # are FROM $AURORABOOT_IMAGE -- AuroraBoot names the grub stage
-    # grubx64.efi (was: EFI/BOOT/grub.efi under enki), and AuroraBoot v0.26.2
-    # fixes the UEFI-only boot path via GPT-hybrid + gcdx64.efi.signed for all
-    # distros, not just Hadron.
-    # Positional source MUST come last. AuroraBoot uses urfave/cli v2 which
-    # follows Go stdlib flag semantics: flag parsing stops at the first
-    # positional argument. If dir:/build/image comes first, --overlay-iso
-    # and --arch are silently discarded as extra positional args. That is
-    # what caused the Palette-branded /boot/grub2/grub.cfg (and user-data,
-    # content bundles, cluster config) to silently disappear from produced
-    # ISOs before this fix. Empirically verified against v0.26.2.
+   
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
+            $CMD build-iso --overlay-iso /overlay --arch arm64 \
+                --output /iso --override-name "$ISO_NAME" \
+                dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso --overlay-iso /overlay --arch amd64 dir:/build/image
+            $CMD build-iso --overlay-iso /overlay --arch amd64 \
+                --output /iso --override-name "$ISO_NAME" \
+                dir:/build/image
     END
-    RUN mkdir -p /iso && \
-        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     WORKDIR /iso
     RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
@@ -1090,10 +1111,19 @@ provider-image-rootfs:
     SAVE ARTIFACT --keep-own /. rootfs
 
 build-provider-trustedboot-image:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
     COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
-    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
+    RUN mkdir -p /output
+    RUN CMD="auroraboot" && \
+        if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+        $CMD build-uki -t container -d /output \
+            --boot-branding "$BRANDING" \
+            --public-keys /keys \
+            --sb-key /keys/db.key \
+            --sb-cert /keys/db.pem \
+            --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+            dir:/build/image
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
