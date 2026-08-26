@@ -176,6 +176,17 @@ if [ -n "$PROXY_CERT_PATH" ]; then
     cp $PROXY_CERT_PATH certs/
 fi
 
+# Custom Docker build arguments: rewrite the user Dockerfile's `ARG` defaults
+# from CUSTOM_ARG_* entries in .arg before Earthly runs. The Earthfile only
+# forwards a fixed --build-arg list and `FROM DOCKERFILE` cannot forward args
+# dynamically, so this wrapper bridges the gap (fail-closed; upstream Earthfile
+# untouched; original Dockerfile restored on exit). See scripts/custom-build-args.sh
+# for the full mechanism, guards, and the "Passing custom Docker build
+# arguments" section of the README.
+# shellcheck source=scripts/custom-build-args.sh
+source "$(dirname "$0")/scripts/custom-build-args.sh"
+inject_custom_build_args "${1:-}"
+
 ALPINE_IMG=$SPECTRO_PUB_REPO/edge/canvos/alpine:3.20
 ### Verify Dependencies
 # Check if Docker is installed
