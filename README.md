@@ -59,15 +59,6 @@ If a Dockerfile customization needs a build-time value that varies per build —
      injected:        BRAND=acme DHCP_VENDOR_CLASS=retail
    ```
 
-**Fail-closed behavior.** The original defect was that a missing custom value failed *silently*. The wrapper now aborts the build with a clear message if:
-
-- a `CUSTOM_ARG_<NAME>` has no matching `ARG <NAME>` in the Dockerfile (a typo or a missing declaration);
-- `<NAME>` is an Earthfile-managed arg (`BASE`, `OS_DISTRIBUTION`, proxies, …) — set those via their normal `.arg` key;
-- a `CUSTOM_ARG_<NAME>` value is empty;
-- a custom `ARG` in the Dockerfile has no default **and** no value on an image/ISO build.
-
-To intentionally allow an empty/optional value, give the `ARG` an inline default in the Dockerfile (`ARG NAME=`).
-
 > **Secrets:** do **not** pass secrets as custom build args — build args are recorded in `docker history` and the build cache. Use the Ubuntu Pro / `--secret` flow instead (see `.arg` comments).
 
 ### Custom Hardware Specs Lookup
