@@ -4,7 +4,7 @@ CanvOS is designed to leverage the Spectro Cloud Edge Forge architecture to buil
 
 With CanvOS, we leverage Earthly to build all of the artifacts required for edge deployments. From the installer iso to the Kubernetes Provider images, CanvOS makes it simple for you to build the images customized to your needs.
 
-The base image definitions reside in the Earthfile located in this repo. This defines all of the elements that are required for building the artifacts that can be used by Palette for edge deployments. If customized packages need to be added, simply add the reference to the Dockerfile as you would for any Docker image. When the build command is run, the Earthfile will merge those custom packages into the final image. For a quickstart tutorial see the Knowledgebase section of the Spectro Cloud Docs. There you will find a quickstart tutorial for building your first CanvOS artifacts.
+The base image definitions reside in the Earthfile located in this repo. This defines all of the elements that are required for building the artifacts that can be used by Palette for edge deployments. If customized packages need to be added, simply add the `RUN`/`COPY`/`ADD` instructions to the Dockerfile as you would for any Docker image, and they will be included in the build process and output artifacts. If your customization needs a custom Docker build argument (`ARG`), see [Custom Docker Build Arguments](#custom-docker-build-arguments) — plain `ARG`s do not receive values from `.arg` automatically. For a quickstart tutorial see the Knowledgebase section of the Spectro Cloud Docs. There you will find a quickstart tutorial for building your first CanvOS artifacts.
 
 <h1 align="center">
   <br>
@@ -29,6 +29,37 @@ From the base image, this image is used to provide the initial flashing of a dev
 ### Custom Configuration
 
 For advanced use cases, there may be a need to add additional packages not included in the [Base Images](https://github.com/kairos-io/kairos/tree/master/images). If those packages or configuration elements need to be added, they can be included in the empty `Dockerfile` located in this repo and they will be included in the build process and output artifacts.
+
+### Custom Docker Build Arguments
+
+If a Dockerfile customization needs a build-time value that varies per build — for example a brand identifier or a DHCP vendor class used to produce different images from one Dockerfile — declare a custom `ARG` in `./Dockerfile` and supply its value from `.arg` using the `CUSTOM_ARG_` prefix.
+
+> **Why the prefix is required.** The Earthfile's `base-image` target forwards only a fixed `--build-arg` list into your Dockerfile (`BASE`, `OS_*`, proxies, `DRBD_VERSION`), and Earthly's `FROM DOCKERFILE` cannot forward build arguments dynamically. A plain `NAME=value` in `.arg` therefore never reaches your Dockerfile — the `ARG` silently keeps its default. The `earthly.sh` wrapper bridges this gap for `CUSTOM_ARG_*` entries by injecting the value into the matching `ARG` line before the build runs. The upstream Earthfile is never modified.
+
+**Usage**
+
+1. Declare the `ARG` in `./Dockerfile` (a default is optional):
+
+   ```dockerfile
+   ARG BRAND
+   ARG DHCP_VENDOR_CLASS=default-class
+   ```
+
+2. Set the value in `.arg` with the `CUSTOM_ARG_` prefix:
+
+   ```bash
+   CUSTOM_ARG_BRAND=acme
+   CUSTOM_ARG_DHCP_VENDOR_CLASS=retail
+   ```
+
+3. Build as usual (`./earthly.sh +build-all-images`, `+iso`, etc.). Before the build, the wrapper prints exactly what it did:
+
+   ```
+   Custom Docker build args:
+     injected:        BRAND=acme DHCP_VENDOR_CLASS=retail
+   ```
+
+> **Secrets:** do **not** pass secrets as custom build args — build args are recorded in `docker history` and the build cache. Use the Ubuntu Pro / `--secret` flow instead (see `.arg` comments).
 
 ### Custom Hardware Specs Lookup
 
