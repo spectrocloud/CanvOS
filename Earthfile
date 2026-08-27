@@ -204,16 +204,17 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
-ARG STYLUS_BASE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-amd64:v0.0.0-d087b048"
-ARG STYLUS_PACKAGE_BASE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-linux-amd64:v0.0.0-d087b048"
+# Absorbers only — the actual images are hardcoded at the FROM/RUN sites below
+# so the workflow's .arg overrides cannot redirect us off dev/rutu.
+ARG STYLUS_BASE=unused
+ARG STYLUS_PACKAGE_BASE=unused
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG CLI_IMAGE="us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-amd64:v0.0.0-d087b048"
 END
+ARG CLI_IMAGE=unused
 
 IF [ "$CUSTOM_TAG" != "" ]
     ARG IMAGE_TAG=$PE_VERSION-$CUSTOM_TAG
@@ -368,7 +369,7 @@ stylus-image-pack:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY --keep-ts --platform=linux/${ARCH} +stylus-package-image/ /stylus
     RUN cd stylus && tar -czf ../stylus.tar *
-    RUN luet util pack $STYLUS_BASE stylus.tar stylus-image.tar
+    RUN luet util pack us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-amd64:${PE_VERSION} stylus.tar stylus-image.tar
     SAVE ARTIFACT --keep-ts stylus-image.tar AS LOCAL ./build/
 
 kairos-agent:
@@ -469,7 +470,7 @@ iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 validate-user-data:
-    FROM --platform=linux/${TARGETARCH} $CLI_IMAGE
+    FROM --platform=linux/${TARGETARCH} us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-cli-amd64:${PE_VERSION}
     COPY --if-exists user-data /user-data
 
     RUN chmod +x /usr/local/bin/palette-edge-cli;
@@ -907,14 +908,14 @@ build-provider-trustedboot-image:
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
-    FROM --platform=linux/${ARCH} $STYLUS_BASE
+    FROM --platform=linux/${ARCH} us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-framework-linux-amd64:${PE_VERSION}
     SAVE ARTIFACT --keep-ts --keep-own  ./*
     # SAVE ARTIFACT /etc/kairos/branding
     # SAVE ARTIFACT /etc/elemental/config.yaml
     # SAVE ARTIFACT /oem/stylus_config.yaml
 
 stylus-package-image:
-    FROM --platform=linux/${ARCH} $STYLUS_PACKAGE_BASE
+    FROM --platform=linux/${ARCH} us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/stylus-linux-amd64:${PE_VERSION}
     SAVE ARTIFACT --keep-ts --keep-own  ./*
 
 kairos-provider-image:
