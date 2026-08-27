@@ -73,6 +73,16 @@ run_case "reserved -> error" "+iso" "ARG BRAND" "CUSTOM_ARG_OS_DISTRIBUTION=rhel
 expect_rc 1; out_has "managed by CanvOS/Earthfile"
 [ "$FAIL" -eq "$FAIL_AT" ] && ok "$LAST_CASE"; FAIL_AT=$FAIL
 
+# 4b. Reserved template knob (IS_UKI) -> ERROR even if declared in Dockerfile.
+run_case "reserved IS_UKI -> error" "+iso" "ARG IS_UKI" "CUSTOM_ARG_IS_UKI=true"
+expect_rc 1; out_has "managed by CanvOS/Earthfile"
+[ "$FAIL" -eq "$FAIL_AT" ] && ok "$LAST_CASE"; FAIL_AT=$FAIL
+
+# 4c. Reserved template knob (CUSTOM_TAG) -> ERROR.
+run_case "reserved CUSTOM_TAG -> error" "+iso" "ARG CUSTOM_TAG" "CUSTOM_ARG_CUSTOM_TAG=foo"
+expect_rc 1; out_has "managed by CanvOS/Earthfile"
+[ "$FAIL" -eq "$FAIL_AT" ] && ok "$LAST_CASE"; FAIL_AT=$FAIL
+
 # 5. Empty value -> ERROR.
 run_case "empty value -> error" "+iso" "ARG BRAND" "CUSTOM_ARG_BRAND="
 expect_rc 1; out_has "set but empty"
