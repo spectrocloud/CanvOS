@@ -20,20 +20,29 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.9.21
-ARG KAIROS_VERSION=v4.0.4
+ARG PE_VERSION=v4.10.0
+ARG KAIROS_VERSION=v4.1.2
+# Version component of the base image tags produced by .github/workflows/base-images.yaml.
+# Those images are tagged with the kairos-init version, so this must track the
+# kairos_init_image input of that workflow — NOT KAIROS_VERSION.
+ARG KAIROS_INIT_VERSION=v0.17.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
 ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-ARG AURORABOOT_VERSION=v0.16.0
+# v0.18.0 is the minimum usable version. v0.16.0 and v0.17.0 do not work for the Hadron.
+# v0.26.2 also fixes the UEFI-only ISO boot path: xorriso appended_part_as=gpt for a
+# hybrid MBR+GPT layout (needed by VMware ESXi, OVMF/QEMU, some SuperMicro BMCs),
+# and the CD-variant signed GRUB binary (gcdx64.efi.signed) via kairos-sdk v0.25.2.
+# Kairos upstream: kairos-io/AuroraBoot#713, kairos-io/kairos-sdk#0.25.2.
+ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.9.4
-ARG KUBEADM_PROVIDER_VERSION=v4.9.8
-ARG RKE2_PROVIDER_VERSION=v4.9.3
+ARG K3S_PROVIDER_VERSION=v4.10.3
+ARG KUBEADM_PROVIDER_VERSION=v4.10.2
+ARG RKE2_PROVIDER_VERSION=v4.10.3
 ARG NODEADM_PROVIDER_VERSION=v4.9.3
-ARG CANONICAL_PROVIDER_VERSION=v4.9.3
+ARG CANONICAL_PROVIDER_VERSION=v4.10.2
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -76,6 +85,57 @@ ARG no_proxy=${NO_PROXY}
 
 ARG UPDATE_KERNEL=false
 
+# NVIDIA GPU driver pre-install (for air-gapped GPU Operator with driver.enabled=false).
+# When true, the NVIDIA data-center driver + DKMS kernel modules are baked into the
+# Ubuntu base image so GPU nodes need no host-side network at boot.
+ARG INSTALL_NVIDIA_GPU_DRIVERS=false
+ARG NVIDIA_DRIVER_BRANCH=580
+ARG NVIDIA_DRIVER_TYPE=open
+ARG NVIDIA_USE_CUDA_REPO=true
+ARG NVIDIA_INSTALL_FABRICMANAGER=true
+ARG NVIDIA_INSTALL_IMEX=true
+ARG NVIDIA_INSTALL_CONTAINER_TOOLKIT=false
+ARG NVIDIA_REBUILD_INITRD=true
+
+# AMD Instinct GPU driver pre-install (for air-gapped AMD GPU Operator with
+# driver.enable=false). See scripts/install-amdgpu-drivers.sh + docs/amd-gpu-airgapped.md.
+ARG INSTALL_AMD_GPU_DRIVERS=false
+# dkms | inbox. "dkms" builds AMD's amdgpu-dkms against the image kernel (default,
+# recommended for Instinct silicon). "inbox" uses the in-tree amdgpu module shipped
+# with linux-modules-* and skips the AMD apt repo — use only when the DKMS build
+# fails against your image kernel and you accept the in-tree driver's feature set.
+ARG AMDGPU_DRIVER_SOURCE=dkms
+# amdgpu-install release marker (URL segment under repo.radeon.com/amdgpu-install/<x>/).
+# Default 31.40 = ROCm 7.14 GA (amdgpu 6.19.14), the PRODUCTION driver for AMD GPU
+# Operator v1.5.1 and the baseline for MI350P + Radeon AI PRO (RDNA4). (7.14 went GA
+# on 2026-07-15; the earlier "31.x = tech-preview" note referred to the ROCm 7.13.0
+# preview and is obsolete.) For an older fleet staying on Operator v1.5.0, use 7.2.1
+# (amdgpu 6.16.13, 30.30.1 line). AMD publishes both ROCm-alias (7.2.1, 7.2.4) and
+# driver-release-marker (30.30.x, 31.40) URL segments; either form is accepted here.
+# See docs/amd-gpu-airgapped.md for the operator<->driver compatibility matrix.
+ARG AMDGPU_DRIVER_RELEASE=31.40
+# Path to a driver artifact produced by scripts/prebuild-amdgpu-artifact.sh
+# on the build host. Threaded in by earthly.sh when INSTALL_AMD_GPU_DRIVERS=true
+# and AMDGPU_DRIVER_SOURCE=dkms. When set, the base-image AMD block skips the
+# in-buildkit DKMS install (which fails in buildkit's RUN sandbox -- see docs)
+# and simply extracts the pre-built modules + firmware + config drop-ins.
+ARG AMDGPU_ARTIFACT_PATH=""
+# Default false: amdgpu is intentionally omitted from the initrd (see
+# scripts/install-amdgpu-drivers.sh -- multi-GPU amdgpu init emits enough
+# udev events to blow past dracut-initqueue's udev-settle timeout, dropping
+# the node into emergency mode). amdgpu loads after switch-root via
+# /etc/modules-load.d/amdgpu.conf where there is no timeout pressure.
+ARG AMDGPU_REBUILD_INITRD=false
+# Install the amd-smi / rocm-smi host CLI on PATH (parity with nvidia-smi). Default
+# true. Pulls a small slice of ROCm user-space from repo.radeon.com/rocm; best-effort.
+ARG AMDGPU_INSTALL_SMI=true
+
+# NVIDIA and AMD driver pre-install are mutually exclusive within a single image.
+IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ] && [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
+    RUN echo "ERROR: INSTALL_NVIDIA_GPU_DRIVERS and INSTALL_AMD_GPU_DRIVERS are mutually exclusive. Enable only one." >&2 && \
+        exit 1
+END
+
 IF [ "$FIPS_ENABLED" = "true" ] && [ "$UPDATE_KERNEL" = "true" ]
     RUN echo "ERROR: UPDATE_KERNEL and FIPS_ENABLED are mutually exclusive. Cannot set both to true." >&2 && \
         exit 1
@@ -96,6 +156,18 @@ ARG IS_UKI=false
 ARG INCLUDE_MS_SECUREBOOT_KEYS=true
 ARG AUTO_ENROLL_SECUREBOOT_KEYS=false
 ARG UKI_BRING_YOUR_OWN_KEYS=false
+# When UKI_BRING_YOUR_OWN_KEYS=true, set false to skip merging Spectro extension cert into db
+ARG ENROLL_SPECTRO_EXTENSION_CERT=true
+# OCI image (scratch) with palette-sysext-cert.pem; merged into UEFI db during +uki-genkey
+ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/sysext/palette-sysext-cert:latest
+
+# Bundle the Kubernetes binaries and the agent-provider binaries into the
+# provider image (both UKI and non-UKI).
+#
+# false (default): on systemd >= 255. On older systemd, they ARE baked in.
+# true: bundle them regardless of the base image's systemd version. Use when
+#   you need a self-contained provider image.
+ARG BUNDLE_K8S_AND_AGENT_PROVIDER=false
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
@@ -109,30 +181,22 @@ ARG EFI_IMG_SIZE=2200
 ARG GOLANG_VERSION=1.23
 ARG DEBUG=false
 
-# Pin UKI to Kairos v3.5.9: systemd 257.x dropped the boot-assessment
-# suffix from sd-boot entry IDs, breaking `bootentry` selection and
-# assessment fallback on newer builds (refs: kairos-io/kairos#3831,
-# kairos-io/kairos#4046). v3.5.9 ships systemd 256.x where it still works.
-IF [ "$IS_UKI" = "true" ]
-    LET KAIROS_VERSION=v3.5.9
-END
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
-        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
+        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_INIT_VERSION
     ELSE
         IF [ "$IS_UKI" = "true" ]
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION-uki
         ELSE
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
         END
     END
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
-    ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+    ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
-ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
-    # Check for default value for rhel
+ELSE
     ARG BASE_IMAGE
 END
 
@@ -216,6 +280,51 @@ BASE_ALPINE:
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
 
+
+# Probe $BASE_IMAGE for systemd >= 255; used only by +CHECK_SYSTEMD_VERSION.
+systemd-extensions-support:
+    ARG ARCH
+    ARG BASE_IMAGE
+    FROM --platform=linux/${ARCH} $BASE_IMAGE
+    # Missing/failed systemctl detection must not fail the RUN under set -e;
+    # always emit supports-systemd-extensions as "true" or "false".
+    RUN SYSTEMCTL="" ; \
+        for c in systemctl /usr/bin/systemctl /bin/systemctl /usr/local/bin/systemctl /usr/sbin/systemctl /sbin/systemctl /usr/local/sbin/systemctl; do \
+            if command -v "$c" >/dev/null 2>&1; then SYSTEMCTL="$c"; break; fi; \
+        done ; \
+        SYSTEMD_VER=0 ; \
+        if [ -n "$SYSTEMCTL" ]; then \
+            SYSTEMD_VER=$("$SYSTEMCTL" --version 2>/dev/null | awk 'NR==1{print $2}') || SYSTEMD_VER=0 ; \
+        fi ; \
+        case "$SYSTEMD_VER" in ''|*[!0-9]*) SYSTEMD_VER=0 ;; esac ; \
+        echo "CHECK_SYSTEMD_VERSION: detected systemd version $SYSTEMD_VER (systemctl: ${SYSTEMCTL:-not found})" ; \
+        if [ "$SYSTEMD_VER" -ge 255 ]; then \
+            echo true > /supports-systemd-extensions ; \
+            echo "CHECK_SYSTEMD_VERSION: systemd >= 255 — supports-systemd-extensions=true"; \
+        else \
+            echo false > /supports-systemd-extensions ; \
+            echo "CHECK_SYSTEMD_VERSION: systemd < 255 — supports-systemd-extensions=false"; \
+        fi
+    SAVE ARTIFACT /supports-systemd-extensions
+
+# Loads true/false into the caller's build env at /tmp/supports-systemd-extensions.
+# BUNDLE_K8S_AND_AGENT_PROVIDER=true short-circuits the probe to "false" so the
+# caller bundles k8s + agent-provider regardless of the base's systemd version.
+# Only the provider-image callers pass this through; +iso-image intentionally
+# omits it so the ISO always sees the real probe result.
+CHECK_SYSTEMD_VERSION:
+    COMMAND
+    ARG ARCH
+    ARG BASE_IMAGE
+    ARG BUNDLE_K8S_AND_AGENT_PROVIDER=false
+    IF [ "$BUNDLE_K8S_AND_AGENT_PROVIDER" = "true" ]
+        RUN mkdir -p /tmp && echo false > /tmp/supports-systemd-extensions && \
+            echo "SUPPORTS_SYSTEMD_EXTENSIONS=false (forced via BUNDLE_K8S_AND_AGENT_PROVIDER)"
+    ELSE
+        COPY (+systemd-extensions-support/supports-systemd-extensions --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE) /tmp/supports-systemd-extensions
+        RUN echo "SUPPORTS_SYSTEMD_EXTENSIONS=$(cat /tmp/supports-systemd-extensions)"
+    END
+
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-ts --keep-own /. rootfs
@@ -237,7 +346,13 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE --BUNDLE_K8S_AND_AGENT_PROVIDER=$BUNDLE_K8S_AND_AGENT_PROVIDER
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
+        COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
+        # Sentinel: presence indicates this provider image was built by CanvOS
+        # with k8s bundled
+        RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
+    END
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
@@ -367,7 +482,12 @@ validate-user-data:
 
 
 build-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    # Switched from quay.io/kairos/osbuilder-tools (archived kairos-io/osbuilder
+    # + kairos-io/enki) to AuroraBoot, which is the maintained successor. The
+    # build-iso subcommand accepts a "dir:" source with the same semantics as
+    # osbuilder's /entrypoint.sh build-iso, so the rootfs preparation path
+    # above is unchanged; only the final CLI invocation differs.
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
@@ -411,17 +531,37 @@ build-iso:
         rm -f /build/image/opt/spectrocloud/local-ui.tar; \
     fi
 
+    # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
+    # "x86_64" for amd64). --output/--override-name are inert for "dir:"
+    # sources: the ISO always lands at /tmp/auroraboot/kairos-<distro>-<ver>-
+    # core-<arch>-generic-v<kairos-ver>.iso, so we leave --output default and
+    # hoist the produced ISO into /iso/ ourselves.
+    #
+    # The Hadron-specific WITH DOCKER path is unnecessary now that all builds
+    # are FROM $AURORABOOT_IMAGE -- AuroraBoot names the grub stage
+    # grubx64.efi (was: EFI/BOOT/grub.efi under enki), and AuroraBoot v0.26.2
+    # fixes the UEFI-only boot path via GPT-hybrid + gcdx64.efi.signed for all
+    # distros, not just Hadron.
+    # Positional source MUST come last. AuroraBoot uses urfave/cli v2 which
+    # follows Go stdlib flag semantics: flag parsing stops at the first
+    # positional argument. If dir:/build/image comes first, --overlay-iso
+    # and --arch are silently discarded as extra positional args. That is
+    # what caused the Palette-branded /boot/grub2/grub.cfg (and user-data,
+    # content bundles, cluster config) to silently disappear from produced
+    # ISOs before this fix. Empirically verified against v0.26.2.
     IF [ "$ARCH" = "arm64" ]
-        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD
+        RUN CMD="auroraboot" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+            $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
-        RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch x86_64" && \
-            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-                $CMD
+        RUN CMD="auroraboot" && \
+            if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+            $CMD build-iso --overlay-iso /overlay --arch amd64 dir:/build/image
     END
+    RUN mkdir -p /iso && \
+        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     WORKDIR /iso
-    RUN sha256sum $ISO_NAME.iso > $ISO_NAME.iso.sha256
+    RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
 
 ### UKI targets
@@ -453,6 +593,16 @@ uki-genkey:
         RUN --no-cache mkdir -p /public-keys
         RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
         RUN --no-cache cd /keys; mv *.pem /public-keys
+        # The osbuilder image (openSUSE Leap) does not ship efitools; install it so the
+        # ENROLL_SPECTRO_EXTENSION_CERT command can re-sign the db when enabled.
+        IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
+            RUN zypper --non-interactive install efitools
+            DO +ENROLL_SPECTRO_EXTENSION_CERT \
+                --ARCH=$ARCH \
+                --ENROLLMENT_DIR=/keys \
+                --KEK_CERT=/public-keys/KEK.pem \
+                --KEK_KEY=/private-keys/KEK.key
+        END
     ELSE
         COPY +uki-byok/ /keys
     END
@@ -468,6 +618,46 @@ download-sbctl:
     DO +BASE_ALPINE
     RUN curl -Ls https://github.com/Foxboron/sbctl/releases/download/0.13/sbctl-0.13-linux-amd64.tar.gz | tar -xvzf - && mv sbctl/sbctl /usr/bin/sbctl
     SAVE ARTIFACT /usr/bin/sbctl
+
+spectro-extension-cert:
+    ARG ARCH
+    FROM --platform=linux/${ARCH} $SPECTRO_EXTENSION_CERT_IMAGE
+    SAVE ARTIFACT /palette-sysext-cert.pem cert.pem
+
+spectro-extension-cert-esl:
+    ARG ARCH
+    FROM --platform=linux/${ARCH} $ALPINE_IMG
+    DO +BASE_ALPINE
+    RUN apk add --no-cache efitools
+    COPY (+spectro-extension-cert/cert.pem --ARCH=$ARCH) /cert/spectro-cert.pem
+    RUN cert-to-efi-sig-list -g 8be4df61-93ca-11d2-aa0d-00e098032b8c \
+        /cert/spectro-cert.pem /cert/spectro-db.esl
+    SAVE ARTIFACT /cert/spectro-db.esl spectro-db.esl
+
+# Self-contained merge of the Spectro extension cert into the UEFI db enrollment
+# material. Gated on ENROLL_SPECTRO_EXTENSION_CERT: when true, it fetches the ESL,
+# appends it to db.esl and (re)generates db.auth/db.der so the db is fully ready;
+# when false it is a no-op.
+ENROLL_SPECTRO_EXTENSION_CERT:
+    COMMAND
+    ARG ARCH
+    ARG ENROLLMENT_DIR
+    ARG KEK_CERT
+    ARG KEK_KEY
+    # Append the Spectro extension cert to the db signature list and re-sign db.auth
+    # with the KEK so the resulting db enrolls both the OS db cert and the Spectro
+    # cert into UEFI firmware. db.der is kept as the OS cert (db-0.der) since the UKI
+    # itself is signed with the OS db key, not the Spectro cert.
+    # efitools (sign-efi-sig-list / sig-list-to-certs) must already be present in the
+    # caller's image: uki-genkey installs it via zypper, uki-byok via apt-get.
+    # With --arg-scope-and-set, CLI build-arg overrides (e.g. --MY_ORG / --EXPIRATION_IN_DAYS)
+    # cause COPY +target inside a COMMAND to see only the COMMAND's args — not .arg
+    # globals like ARCH. Forward ARCH explicitly.
+    COPY (+spectro-extension-cert-esl/spectro-db.esl --ARCH=$ARCH) /spectro/spectro-db.esl
+    RUN cat /spectro/spectro-db.esl >> "$ENROLLMENT_DIR/db.esl" && \
+        sign-efi-sig-list -c "$KEK_CERT" -k "$KEK_KEY" db "$ENROLLMENT_DIR/db.esl" "$ENROLLMENT_DIR/db.auth" && \
+        cd "$ENROLLMENT_DIR" && sig-list-to-certs 'db.esl' 'db' && \
+        (cp db-0.der db.der 2>/dev/null || true)
 
 uki-byok:
     FROM +ubuntu
@@ -498,6 +688,14 @@ uki-byok:
     RUN [ -f /exported-keys/KEK ] && cat /exported-keys/KEK >> /output/KEK.esl || true
     RUN [ -f /exported-keys/db ]  && cat /exported-keys/db  >> /output/db.esl  || true
     RUN [ -f /exported-keys/dbx ] && cat /exported-keys/dbx >> /output/dbx.esl || true
+
+    IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
+        DO +ENROLL_SPECTRO_EXTENSION_CERT \
+            --ARCH=$ARCH \
+            --ENROLLMENT_DIR=/output \
+            --KEK_CERT=/keys/KEK.pem \
+            --KEK_KEY=/keys/KEK.key
+    END
 
     WORKDIR /output
     RUN sign-efi-sig-list -c /keys/PK.pem  -k /keys/PK.key  PK  PK.esl  PK.auth
@@ -599,22 +797,40 @@ provider-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE --BUNDLE_K8S_AND_AGENT_PROVIDER=$BUNDLE_K8S_AND_AGENT_PROVIDER
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
+        COPY --platform=linux/${ARCH} +kairos-provider-image/ /
+        # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
+        # instead of /system/providers/. Move to /system/providers/ and remove the new
+        # path so consumers always find the binary at the legacy location.
+        RUN if ls /usr/local/system/providers/agent-provider-* >/dev/null 2>&1; then \
+                mkdir -p /system/providers && \
+                mv /usr/local/system/providers/agent-provider-* /system/providers/ && \
+                rm -rf /usr/local/system/providers; \
+            fi
+        # Sentinel: presence indicates this provider image was built by CanvOS
+        # with k8s bundled
+        RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
+    END
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
 
-    IF [ "$IS_UKI" = "true" ]
-        COPY +internal-slink/slink /usr/bin/slink
-        COPY --keep-ts +install-k8s/output/ /k8s
-        RUN slink --source /k8s/ --target /opt/k8s
-        RUN rm -f /usr/bin/slink
-        RUN rm -rf /k8s
-        RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
-    ELSE
-        COPY --keep-ts +install-k8s/output/ /
+    # As part of PE-8315, kairos-provider binaries are in /usr/local/system/providers instead of earlier /system/providers.
+    # To avoid breaking existing functionality for non systemd extensions supported paths we move the binary back to original path.
+    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
+        IF [ "$IS_UKI" = "true" ]
+            COPY +internal-slink/slink /usr/bin/slink
+            COPY --keep-ts +install-k8s/output/ /k8s
+            RUN slink --source /k8s/ --target /opt/k8s
+            RUN rm -f /usr/bin/slink
+            RUN rm -rf /k8s
+            RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+        ELSE
+            COPY --keep-ts +install-k8s/output/ /
+        END
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
@@ -649,8 +865,10 @@ provider-image:
                 DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl && \
                 install -d /usr/share/postgresql-common/pgdg && \
                 curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+                DEBIAN_FRONTEND=noninteractive apt-get install -y lsb-release && \
                 echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
                 apt-get update && \
+                usermod -aG sudo root && \
                 DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-16 postgresql-contrib-16 iputils-ping
         ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$ARCH" = "amd64" ]
             RUN zypper --non-interactive --quiet addrepo --refresh -p 90 http://download.opensuse.org/repositories/server:database:postgresql/openSUSE_Tumbleweed/ PostgreSQL && \
@@ -738,8 +956,17 @@ base-image:
         COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
     END
 
+    # Ensure the Renesas xHCI (USB 3.0) host controller driver is bundled into the
+    # initramfs so installation from USB media works on hardware using that chipset.
+    # Must run before the distro dracut regeneration below so the driver is included.
+    RUN mkdir -p /etc/dracut.conf.d && \
+        printf '%s\n' 'hostonly="no"' 'add_drivers+=" xhci_pci_renesas "' 'force_drivers+=" xhci_pci_renesas "' > /etc/dracut.conf.d/99-usb-media.conf
+
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
+        RUN apt-get update && \
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
+            
         IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
             # The token is mounted via Earthly's secret store as an env var
             # that lives only for the duration of this RUN. It is materialized
@@ -751,7 +978,6 @@ base-image:
             # is not supplied, Earthly aborts before this RUN is invoked.
             RUN --secret UBUNTU_PRO_KEY \
                 sed -i '/^[[:space:]]*$/d' /etc/os-release && \
-                apt-get update && apt-get install -y snapd && \
                 umask 077 && \
                 printf 'token: %s\n' "$UBUNTU_PRO_KEY" > /tmp/.pro-attach.yaml && \
                 unset UBUNTU_PRO_KEY && \
@@ -759,16 +985,14 @@ base-image:
                 rm -f /tmp/.pro-attach.yaml
         END
 
-        RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
-
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION" ; fi && \
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
                 apt-get install -y linux-image-generic-hwe-$OS_VERSION
         END
 
@@ -776,7 +1000,8 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
@@ -821,6 +1046,64 @@ base-image:
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
+        END
+
+        # NVIDIA GPU driver + DKMS kernel modules, built against the now-finalized
+        # image kernel. Runs here (not in the Dockerfile) so the kernel is settled
+        # first. Reuses install-kernel-headers.sh for ABI-exact headers.
+        IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ]
+            COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+            COPY scripts/install-nvidia-drivers.sh /tmp/install-nvidia-drivers.sh
+            RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-nvidia-drivers.sh && \
+                NVIDIA_DRIVER_BRANCH="$NVIDIA_DRIVER_BRANCH" \
+                NVIDIA_DRIVER_TYPE="$NVIDIA_DRIVER_TYPE" \
+                NVIDIA_USE_CUDA_REPO="$NVIDIA_USE_CUDA_REPO" \
+                NVIDIA_INSTALL_FABRICMANAGER="$NVIDIA_INSTALL_FABRICMANAGER" \
+                NVIDIA_INSTALL_IMEX="$NVIDIA_INSTALL_IMEX" \
+                NVIDIA_INSTALL_CONTAINER_TOOLKIT="$NVIDIA_INSTALL_CONTAINER_TOOLKIT" \
+                NVIDIA_REBUILD_INITRD="$NVIDIA_REBUILD_INITRD" \
+                /tmp/install-nvidia-drivers.sh && \
+                rm -f /tmp/install-nvidia-drivers.sh /tmp/install-kernel-headers.sh
+        END
+
+        # AMD Instinct GPU driver (amdgpu-dkms) + kernel module, built against the
+        # now-finalized image kernel. Mutually exclusive with the NVIDIA block above.
+        IF [ "$INSTALL_AMD_GPU_DRIVERS" = "true" ]
+            # dkms mode with a pre-built artifact (default path when earthly.sh
+            # produced one via scripts/prebuild-amdgpu-artifact.sh). Buildkit's
+            # RUN sandbox breaks AMD's amdgpu-dkms ./configure heredoc probe --
+            # see docs/amd-gpu-airgapped.md. The prebuild runs on the host in a
+            # plain `docker run --privileged` against the same base image, and
+            # this stage just extracts the resulting modules + firmware + drop-ins.
+            IF [ "$AMDGPU_DRIVER_SOURCE" = "dkms" ] && [ "$AMDGPU_ARTIFACT_PATH" != "" ]
+                COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+                COPY "$AMDGPU_ARTIFACT_PATH" /tmp/amdgpu-artifact.tar.gz
+                RUN --privileged \
+                    chmod 755 /tmp/install-amdgpu-drivers.sh && \
+                    AMDGPU_DRIVER_SOURCE=dkms \
+                    AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
+                    AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                    AMDGPU_INSTALL_SMI="$AMDGPU_INSTALL_SMI" \
+                    AMDGPU_ARTIFACT_PATH=/tmp/amdgpu-artifact.tar.gz \
+                    /tmp/install-amdgpu-drivers.sh && \
+                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/amdgpu-artifact.tar.gz
+            ELSE
+                # inbox mode, OR dkms mode without a pre-built artifact (which
+                # will fail in buildkit's sandbox, but we let install-amdgpu-
+                # drivers.sh emit its own clear error rather than short-circuit
+                # here). install-kernel-headers.sh is only needed for the
+                # in-buildkit DKMS path; inbox mode doesn't use it.
+                COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+                COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+                RUN --privileged \
+                    chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
+                    AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
+                    AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
+                    AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
+                    AMDGPU_INSTALL_SMI="$AMDGPU_INSTALL_SMI" \
+                    /tmp/install-amdgpu-drivers.sh && \
+                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
+            END
         END
 
         IF [ "$CIS_HARDENING" = "true" ]
@@ -892,6 +1175,21 @@ base-image:
         RUN if ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 systemd.unified_cgroup_hierarchy=1"|' /etc/cos/bootargs.cfg; \
             fi
+
+        # Block nouveau at the kernel command line on every build.
+        #
+        # nouveau: modern NVIDIA data-center GPUs (Ada/Hopper/Blackwell)
+        # hang in GSP init when initramfs udev auto-loads nouveau before
+        # switchroot, stalling systemd-udev-settle indefinitely. Applied
+        # unconditionally — the image may be installed onto NVIDIA hardware
+        # even when INSTALL_NVIDIA_GPU_DRIVERS=false. rd.driver.blacklist=
+        # is the load-bearing flag (dracut honors it before udev fires);
+        # modprobe.blacklist= is belt-and-braces for post-switchroot.
+        # Harmless when no NVIDIA GPU is present.
+        #
+        RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nouveau.modeset=0"|' /etc/cos/bootargs.cfg; \
+            fi
     END
 
 KAIROS_RELEASE:
@@ -938,7 +1236,10 @@ iso-image:
     FROM --platform=linux/${ARCH} +base-image
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
-    
+
+    # NOTE: intentionally do NOT pass --BUNDLE_K8S_AND_AGENT_PROVIDER here — the
+    # ISO always uses the real systemd probe (provider-image concern only).
+    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE
 
     IF [ "$IS_UKI" = "false" ]
         COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
@@ -948,6 +1249,7 @@ iso-image:
         RUN rm -f /usr/bin/luet
     END
     COPY overlay/files/ /
+
     IF [ "$IS_CLOUD_IMAGE" = "true" ]
         COPY cloud-images/workaround/grubmenu.cfg /etc/kairos/branding/grubmenu.cfg
         COPY cloud-images/workaround/custom-post-reset.yaml /system/oem/custom-post-reset.yaml
@@ -982,6 +1284,16 @@ iso-image:
             tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
             rm -f /opt/spectrocloud/local-ui.tar; \
         fi
+    END
+
+
+    IF [ "$(cat /tmp/supports-systemd-extensions)" = "true" ] && \
+       [ "$OS_DISTRIBUTION" = "ubuntu" ] && \
+       [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "true" ]
+        COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
+        RUN chmod 755 /tmp/install-kernel-headers.sh
+        RUN /tmp/install-kernel-headers.sh
+        RUN rm -rf /tmp/install-kernel-headers.sh /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
     END
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli

@@ -14,6 +14,20 @@ CIS_HARDENING=false
 EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 FORCE_INTERACTIVE_INSTALL=false
 
+# Custom Docker build arguments
+# ------------------------------
+# To pass a value into a custom `ARG` you added to ./Dockerfile, declare it here
+# with the CUSTOM_ARG_ prefix. The build wrapper injects the value into the
+# matching `ARG NAME` line before Earthly runs (the upstream Earthfile forwards
+# only a fixed --build-arg list, so a plain NAME=value here would NOT reach your
+# Dockerfile). Every entry must have a matching `ARG NAME` in ./Dockerfile or
+# the build fails with a clear error (no more silent drops). Do NOT put secrets
+# here - build args leak into `docker history` and the build cache.
+#
+# Example (with `ARG BRAND` and `ARG DHCP_VENDOR_CLASS` declared in Dockerfile):
+# CUSTOM_ARG_BRAND=acme
+# CUSTOM_ARG_DHCP_VENDOR_CLASS=retail
+
 # MAAS Image Configuration
 # MAAS_IMAGE_NAME=kairos-ubuntu-maas    # Custom name for the final MAAS image (without .raw.gz extension)
 
@@ -52,4 +66,59 @@ FORCE_INTERACTIVE_INSTALL=false
 # INCLUDE_MS_SECUREBOOT_KEYS=true       # Adds Microsoft Secure Boot certificates; if you export existing keys from a device, you typically won't need this
 # AUTO_ENROLL_SECUREBOOT_KEYS=false     # Set to true to automatically enroll certificates on devices in Setup Mode, useful for flashing devices without user interaction
 
+# UKI only: when UKI_BRING_YOUR_OWN_KEYS=true, controls whether the Palette
+# systemd-extension certificate (SPECTRO_EXTENSION_CERT_IMAGE) is merged into
+# the UEFI db during +uki-genkey. Leave true unless you don't want any external certificate int the db trust store. In that case, you have to 
+# ENROLL_SPECTRO_EXTENSION_CERT=true
+
+# Bundle Kubernetes binaries and the agent-provider binaries into the provider
+# image (UKI and non-UKI). 
+# false (default): on systemd >= 255. On older systemd, they ARE baked in.
+# true: bundle them regardless of the base image's systemd version. Use when you need a self-contained provider image.
+# BUNDLE_K8S_AND_AGENT_PROVIDER=false
+
 # DRBD_VERSION=9.2.13  # This variable is required for Piraeus pack for drbd module installtion.
+
+# NVIDIA GPU driver pre-install (for running the NVIDIA GPU Operator in air-gapped
+# environments with driver.enabled=false). Bakes the datacenter driver + DKMS
+# kernel modules into the Ubuntu base image so GPU nodes need no host-side network.
+# See scripts/install-nvidia-drivers.sh for details.
+# INSTALL_NVIDIA_GPU_DRIVERS=true
+# NVIDIA_DRIVER_BRANCH=580                  # Driver branch (check: apt-cache search 'nvidia-headless-.*-server')
+# NVIDIA_DRIVER_TYPE=open                   # open | proprietary. Default "open" (REQUIRED on Hopper/Blackwell,
+#                                            safe on Turing/Ampere/Ada). Set "proprietary" only for pre-Turing GPUs.
+# NVIDIA_USE_CUDA_REPO=true                 # Add NVIDIA CUDA network repo at build time (has every -server branch)
+# NVIDIA_INSTALL_FABRICMANAGER=false        # true for NVSwitch / HGX systems
+# NVIDIA_INSTALL_CONTAINER_TOOLKIT=false    # true to also pre-install nvidia-container-toolkit on host (then toolkit.enabled=false)
+# NVIDIA_REBUILD_INITRD=true                # Rebuild initrd so the nouveau blacklist applies at early boot
+
+# AMD Instinct GPU driver pre-install (for running the AMD GPU Operator in air-gapped
+# environments with driver.enable=false). Mutually exclusive with the NVIDIA options
+# above. See scripts/install-amdgpu-drivers.sh and docs/amd-gpu-airgapped.md for details.
+# INSTALL_AMD_GPU_DRIVERS=true
+# AMDGPU_DRIVER_SOURCE=dkms                  # dkms | inbox. "dkms" bakes AMD's amdgpu-dkms
+#                                            #   built against the image kernel (recommended
+#                                            #   for Instinct/MI silicon). "inbox" uses the
+#                                            #   in-tree amdgpu module from linux-modules-*
+#                                            #   and skips the AMD apt repo entirely — use
+#                                            #   when the DKMS build fails against your image
+#                                            #   kernel (see docs).
+# AMDGPU_DRIVER_RELEASE=31.40                # Only used with dkms mode. amdgpu-install
+#                                            #   release marker. Default 31.40 = ROCm 7.14
+#                                            #   GA (amdgpu 6.19.14), production driver for
+#                                            #   GPU Operator v1.5.1 and MI350P / Radeon AI
+#                                            #   PRO (RDNA4). For an older fleet on Operator
+#                                            #   v1.5.0 use 7.2.1 (amdgpu 6.16.13). AMD
+#                                            #   publishes both ROCm-alias (7.2.1, 7.2.4) and
+#                                            #   marker (30.30.x, 31.40) paths; either works.
+#                                            #   See the compatibility table in docs/.
+# AMDGPU_INSTALL_SMI=true                    # Default true. Install the amd-smi host CLI on
+#                                            #   PATH (parity with nvidia-smi), version-matched
+#                                            #   to the driver (amdrocm-amdsmi from repo.amd.com).
+#                                            #   rocm-smi is deprecated and NOT installed.
+#                                            #   Best-effort; a small slice of ROCm user-space.
+# AMDGPU_REBUILD_INITRD=false                # Default false. amdgpu is intentionally
+#                                            #   kept out of the initrd (multi-GPU init
+#                                            #   emits enough udev events to time out
+#                                            #   dracut-initqueue). It loads after
+#                                            #   switch-root via modules-load.d.
