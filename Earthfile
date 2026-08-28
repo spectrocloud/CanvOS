@@ -29,13 +29,8 @@ ARG KAIROS_INIT_VERSION=v0.17.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.400.3
-ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-# v0.18.0 is the minimum usable version. v0.16.0 and v0.17.0 do not work for the Hadron.
-# v0.26.2 also fixes the UEFI-only ISO boot path: xorriso appended_part_as=gpt for a
-# hybrid MBR+GPT layout (needed by VMware ESXi, OVMF/QEMU, some SuperMicro BMCs),
-# and the CD-variant signed GRUB binary (gcdx64.efi.signed) via kairos-sdk v0.25.2.
-# Kairos upstream: kairos-io/AuroraBoot#713, kairos-io/kairos-sdk#0.25.2.
+# v0.26.2: hybrid MBR+GPT ISO (ESXi/OVMF/SuperMicro BMC) + gcdx64.efi.signed
+# (kairos-sdk v0.25.2). Kairos upstream: AuroraBoot#713, kairos-sdk#0.25.2.
 ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.10.3
@@ -596,44 +591,43 @@ build-iso:
 uki-genkey:
     ARG MY_ORG="ACME Corp"
     ARG EXPIRATION_IN_DAYS=5475
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    ARG ARCH
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
 
-    IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "false" ]
-        RUN --no-cache mkdir -p /custom-keys
-        COPY --if-exists secure-boot/exported-keys/ /custom-keys
-        IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
-            RUN --no-cache if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
-                  echo "Generating Secure Boot keys, including exported UEFI keys..." && \
-                  /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; else \
-                  echo "Generating Secure Boot keys..." && \
-                  /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; fi
-        ELSE
-            RUN --no-cache if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
-                  echo "Generating Secure Boot keys, including exported UEFI keys and Microsoft keys..." && \
-                  /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; else \
-                  echo "Generating Secure Boot keys, including Microsoft keys..." && \
-                  /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; fi
-        END
-        RUN --no-cache mkdir -p /private-keys
-        RUN --no-cache mkdir -p /public-keys
-        RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
-        RUN --no-cache cd /keys; mv *.pem /public-keys
-        # The osbuilder image (openSUSE Leap) does not ship efitools; install it so the
-        # ENROLL_SPECTRO_EXTENSION_CERT command can re-sign the db when enabled.
+    IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "true" ]
+        COPY +uki-byok/ /keys
+        SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
+    ELSE
         IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
-            RUN zypper --non-interactive install efitools
+            RUN dnf install -y efitools
+        END
+
+        COPY --if-exists secure-boot/exported-keys/ /custom-keys
+        LET GENKEY_EXTRA=""
+        IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
+            LET GENKEY_EXTRA="$GENKEY_EXTRA --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING"
+        END
+        IF [ -f /custom-keys/KEK ] && [ -f /custom-keys/db ]
+            LET GENKEY_EXTRA="$GENKEY_EXTRA --custom-cert-dir /custom-keys"
+        END
+
+        RUN --no-cache echo "Generating Secure Boot keys (org=$MY_ORG, expiry=${EXPIRATION_IN_DAYS}d)..." && \
+            auroraboot genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys $GENKEY_EXTRA
+        RUN mkdir -p /private-keys /public-keys && \
+            cd /keys && \
+            mv *.key tpm2-pcr-private.pem /private-keys && \
+            mv *.pem /public-keys && \
+            chmod 0600 /private-keys/*
+
+        IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
             DO +ENROLL_SPECTRO_EXTENSION_CERT \
                 --ARCH=$ARCH \
                 --ENROLLMENT_DIR=/keys \
                 --KEK_CERT=/public-keys/KEK.pem \
                 --KEK_KEY=/private-keys/KEK.key
         END
-    ELSE
-        COPY +uki-byok/ /keys
-    END
 
-    SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
-    IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "false" ]
+        SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
         SAVE ARTIFACT --if-exists /private-keys AS LOCAL ./secure-boot/private-keys
         SAVE ARTIFACT --if-exists /public-keys AS LOCAL ./secure-boot/public-keys
     END
@@ -861,7 +855,7 @@ ENROLL_SPECTRO_EXTENSION_CERT:
     # cert into UEFI firmware. db.der is kept as the OS cert (db-0.der) since the UKI
     # itself is signed with the OS db key, not the Spectro cert.
     # efitools (sign-efi-sig-list / sig-list-to-certs) must already be present in the
-    # caller's image: uki-genkey installs it via zypper, uki-byok via apt-get.
+    # caller's image: uki-genkey installs it via dnf, uki-byok via apt-get.
     # With --arg-scope-and-set, CLI build-arg overrides (e.g. --MY_ORG / --EXPIRATION_IN_DAYS)
     # cause COPY +target inside a COMMAND to see only the COMMAND's args — not .arg
     # globals like ARCH. Forward ARCH explicitly.
