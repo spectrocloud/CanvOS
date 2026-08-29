@@ -205,6 +205,8 @@ FROM generic AS amd64-ubuntu-23.04-generic
 FROM generic AS amd64-ubuntu-22.04-generic
 FROM generic AS amd64-ubuntu-20.04-generic
 FROM generic AS arm64-ubuntu-23.04-generic
+FROM generic AS arm64-ubuntu-22.04-generic
+FROM generic AS arm64-ubuntu-20.04-generic
 FROM ubuntu-23.04-rpi AS arm64-ubuntu-23.04-rpi3
 FROM ubuntu-23.04-rpi AS arm64-ubuntu-23.04-rpi4
 FROM ubuntu-23.04-rpi AS arm64-ubuntu-22.04-rpi3
@@ -253,7 +255,7 @@ RUN chown root:root /usr/bin/sudo && chmod 4755 /usr/bin/sudo
 
 RUN journalctl --vacuum-size=1K && rm /etc/machine-id && rm /var/lib/dbus/machine-id && rm /etc/hostname
 
-FROM --platform="linux/${TARGETARCH}" quay.io/kairos/framework:${FRAMEWORK_VERSION}_${SECURITY_PROFILE} AS framework
+FROM --platform="linux/${TARGETARCH}" quay.io/kairos/framework:${FRAMEWORK_VERSION} AS framework
 
 FROM all AS base-kairos
 
