@@ -1,0 +1,14 @@
+name: "rosetta x86-64 binfmt"
+stages:
+  boot:
+    - name: register-rosetta-binfmt
+      commands:
+        - |
+          mountpoint -q /run/rosetta 2>/dev/null || { mkdir -p /run/rosetta && mount -t virtiofs rosetta /run/rosetta 2>/dev/null || true; }
+          [ -e /run/rosetta/rosetta ] || exit 0
+          mountpoint -q /proc/sys/fs/binfmt_misc 2>/dev/null || mount -t binfmt_misc none /proc/sys/fs/binfmt_misc
+          [ -e /proc/sys/fs/binfmt_misc/rosetta ] && echo -1 > /proc/sys/fs/binfmt_misc/rosetta 2>/dev/null || true
+          # mask must be 20 bytes = magic length (over-long -> kernel EIO); F resolves inside containers
+          MAGIC='\x7f\x45\x4c\x46\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00'
+          MASK='\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff'
+          printf ":rosetta:M::${MAGIC}:${MASK}:/run/rosetta/rosetta:F" > /proc/sys/fs/binfmt_misc/register

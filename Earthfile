@@ -58,6 +58,7 @@ ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
+ARG DEV=false
 # Ubuntu Pro toggle. The token itself is NEVER passed as a build arg.
 # Recommended flow: use the earthly.sh wrapper. Set UBUNTU_PRO_ATTACH=true in
 # .arg (or pass --UBUNTU_PRO_ATTACH=true on the CLI), then run e.g.
@@ -354,6 +355,11 @@ uki-provider-image:
         RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
     END
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
+    IF [ "$DEV" = "true" ]
+        IF [ "$ARCH" = "arm64" ]
+            COPY rosetta-arm64.yaml /oem/91_rosetta.yaml
+        END
+    END
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
 
@@ -817,6 +823,11 @@ provider-image:
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
+    IF [ "$DEV" = "true" ]
+        IF [ "$ARCH" = "arm64" ]
+            COPY rosetta-arm64.yaml /oem/91_rosetta.yaml
+        END
+    END
 
     # As part of PE-8315, kairos-provider binaries are in /usr/local/system/providers instead of earlier /system/providers.
     # To avoid breaking existing functionality for non systemd extensions supported paths we move the binary back to original path.
