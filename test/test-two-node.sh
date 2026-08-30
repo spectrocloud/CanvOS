@@ -24,9 +24,9 @@ set -e
 #
 # 5. Copy the test/env.example file to test/.env and edit test/.env
 #    as required.
-#
+# 6. Update line 79
 # 6. Source and execute this script:
-#
+# 
 #    source ./test/test-two-node.sh
 #    ./test/test-two-node.sh
 
@@ -76,7 +76,7 @@ stylus:
   debug: true
   users:
   - name: kairos
-    passwd: kairos
+    passwd: YOUR_PWD_HERE
   site:
     edgeHostToken: "$EDGE_REGISTRATION_TOKEN"
     paletteEndpoint: "$DOMAIN"
