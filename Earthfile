@@ -701,6 +701,11 @@ provider-image:
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
+    # stylus v4.10.x ships agent-provider-kubeadm alongside agent-provider-stylus in
+    # /system/providers/. Without this copy the runtime upgrade rsync tries to write
+    # agent-provider-kubeadm to /system/providers/ which is read-only at runtime,
+    # causing cluster creation to hang at "Upgrading provider image" on kubeadm nodes.
+    COPY --if-exists +stylus-image/system/providers/ /system/providers/
 
     IF [ "$IS_UKI" = "true" ]
         COPY +internal-slink/slink /usr/bin/slink
