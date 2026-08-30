@@ -66,7 +66,7 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 
 # Ubuntu / Debian
 #RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
-#      apt-get install -y qemu-guest-agent; \
+#      apt-get update && apt-get install -y qemu-guest-agent; \
 #    fi
 
 ### To install the DRBD module package for Piraeus pack on Ubuntu  ###
