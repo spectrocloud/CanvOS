@@ -1,0 +1,135 @@
+# syntax=docker/dockerfile:1
+FROM quay.io/kairos/kairos-init:v0.17.1 AS kairos-init
+
+FROM registry.access.redhat.com/ubi10-init:10.2
+
+ARG KAIROS_VERSION=v4.1.2
+
+# EPEL: prefer mirror redirector; dl.fedoraproject.org often returns 503 under load.
+# EPEL 10 is required, not optional: systemd-networkd, systemd-timesyncd, livecd-tools and
+# haveged are not shipped in RHEL 10 BaseOS/AppStream.
+RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm' || \
+    dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm'
+
+# Subscription manager in redhat does not run directly in containers unless you run on a redhat host, hence we remove the rhsm-host, login to the redhat subscription and add the repos
+
+RUN --mount=type=secret,id=RHSM_USERNAME,env=RHSM_USERNAME \
+    --mount=type=secret,id=RHSM_PASSWORD,env=RHSM_PASSWORD \
+    : "${RHSM_USERNAME:?missing --secret id=RHSM_USERNAME,env=RHSM_USERNAME}" \
+    && : "${RHSM_PASSWORD:?missing --secret id=RHSM_PASSWORD,env=RHSM_PASSWORD}" \
+    && rm /etc/rhsm-host \
+    && subscription-manager register --username "${RHSM_USERNAME}" --password "${RHSM_PASSWORD}" \
+    && yum repolist \
+    && subscription-manager repos --enable rhel-10-for-x86_64-appstream-rpms \
+    && yum repolist \
+    && dnf clean all
+RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
+# overlay/rhel10 deliberately does NOT ship copies of 60-persistent-storage.rules or
+# 13-dm-disk.rules, unlike overlay/rhel8 and overlay/rhel9. RHEL 10 already provides both
+# (from systemd-udev and device-mapper respectively), so the install_items entries in
+# dracut.conf pick up the distro's own copies rather than stale RHEL 9 versions.
+COPY overlay/rhel10/ /
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+# Bind-mounted rather than COPYed: the RHEL 8/9 FIPS Dockerfiles `COPY` the kairos-init
+# binary in and never delete it, leaving ~78 MB of build tooling in the shipped image.
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s install --fips --version "${KAIROS_VERSION}"
+
+# Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+#
+# Short list by design. kairos-init above already installs ~128 packages, so on RHEL 10 only
+# these add anything; the equivalent RHEL 9 list is mostly redundant names. The last three are
+# redundant today but kept explicit because parted and kbd arrive only as transitive
+# dependencies of kairos-init's set and coreutils-single comes from the base image.
+#
+# RHEL 10 package deltas vs RHEL 9: dhclient is gone (ISC dhcp removed), and grub2, iptables
+# and conntrack no longer exist as package names — kairos-init requests grub2 and iptables and
+# they resolve through virtual provides (grub2-pc, iptables-nft).
+RUN uuidgen > /etc/machine-id && dnf install -y \
+    livecd-tools \
+    efibootmgr \
+    systemd-networkd \
+    systemd-timesyncd \
+    haveged \
+    ncurses \
+    open-vm-tools \
+    iscsi-initiator-utils \
+    iproute-tc conntrack-tools ethtool socat \
+    parted \
+    kbd \
+    coreutils-single && dnf clean all
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
+
+# Configure the box. The ubi image masks services for containers, we unmask them
+RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
+RUN systemctl enable getty@tty1.service
+RUN systemctl enable getty@tty2.service
+RUN systemctl enable getty@tty3.service
+RUN systemctl enable systemd-networkd
+RUN systemctl enable systemd-resolved
+RUN systemctl enable sshd
+RUN systemctl disable selinux-autorelabel-mark.service || true
+RUN systemctl unmask systemd-udevd
+RUN systemctl enable systemd-udevd
+RUN systemctl unmask systemd-logind.service
+RUN systemctl enable systemd-logind.service
+
+COPY overlay/rhel10/ /
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s init --fips --version "${KAIROS_VERSION}"
+
+# Avoid clashes with systemd-networkd (Kairos/RHEL guidance).
+#
+# The RHEL 8/9 FIPS Dockerfiles run `dnf remove -y NetworkManager` for this. That is not
+# possible on RHEL 10: dracut-network requires "NetworkManager >= 1.20" unconditionally,
+# whereas RHEL 9 requires "(NetworkManager >= 1.20 or dhclient)" and is satisfied by dhclient.
+# Since dhclient is gone from RHEL 10, removing NetworkManager would also drag out
+# dracut-network and leave the initramfs with no network module. Mask it instead: the package
+# stays to satisfy dracut-network, while systemd-networkd owns the network on the real root.
+#
+# Placement is load-bearing and differs from Dockerfile.rhel10 in rhel-core-images. This must
+# run AFTER `kairos-init -s init`, because that stage contains a step "Enable NetworkManager
+# for RHEL if binary is available" which runs `systemctl enable NetworkManager` and fails hard
+# on a masked unit ("Unit ... is masked" -> kairos-init aborts). Masking afterwards is also
+# what we want for the initramfs: `-s init` runs dracut while NetworkManager is still enabled,
+# so the initrd gets the 35network-manager module, and only the real root has it masked.
+RUN if rpm -q NetworkManager >/dev/null 2>&1; then \
+      systemctl disable NetworkManager.service NetworkManager-wait-online.service NetworkManager-dispatcher.service 2>/dev/null || true; \
+      systemctl mask NetworkManager.service NetworkManager-wait-online.service NetworkManager-dispatcher.service; \
+    fi
+
+# dhcp-client is intentionally absent compared with the RHEL 8/9 FIPS Dockerfiles — it does
+# not exist on RHEL 10.
+RUN dnf install -y dracut dracut-network dracut-live dracut-squash \
+    && dnf clean all
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+# Disable SELinux
+RUN echo "SELINUX=disabled" > /etc/selinux/config
+
+RUN rm -rf /boot/initramfs-*
+
+COPY overlay/rhel10/ /
+
+# Guard is a no-op on RHEL 10 (ubi10-init already ships shim.efi alongside shimx64.efi) but is
+# kept for parity with the RHEL 8/9 files, where it fixes UEFI ISO boot.
+RUN if [ ! -f /boot/efi/EFI/redhat/shim.efi ]; then cp /boot/efi/EFI/redhat/shimx64.efi /boot/efi/EFI/redhat/shim.efi; fi
+
+# Release the subscription so the built image carries no entitlements and the build host does
+# not accumulate orphan registrations. The RHEL 8/9 FIPS Dockerfiles omit this.
+RUN subscription-manager unregister

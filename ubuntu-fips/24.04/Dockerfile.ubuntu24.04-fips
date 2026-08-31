@@ -1,7 +1,7 @@
-FROM quay.io/kairos/kairos-init:v0.8.12 AS kairos-init
+FROM quay.io/kairos/kairos-init:v0.17.1 AS kairos-init
 
 FROM ubuntu:24.04
-ARG VERSION=v4.0.4
+ARG VERSION=v4.1.2
 ARG ENABLE_STIG=1
 ARG SKIP_STIG_BANNER=1
 ENV DEBIAN_FRONTEND=noninteractive
@@ -40,6 +40,11 @@ RUN --mount=type=secret,id=pro-attach-config \
 # Copy the custom dracut modules.fips that includes 2 missing modules
 COPY 24.04/modules.fips /tmp/modules.fips
 RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
+
+# Bundle the Renesas xHCI (USB 3.0) host controller driver into the initramfs so
+# installation from USB media works on hardware using that chipset. Consumed by the
+# `kairos-init -s init` dracut run below (the Earthfile skips dracut for FIPS builds).
+COPY 24.04/99-usb-media.conf /etc/dracut.conf.d/99-usb-media.conf
 
 COPY 24.04/fix.sh /tmp/fix.sh
 COPY stig-remediate.sh /tmp/stig-remediate.sh
