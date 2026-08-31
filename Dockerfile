@@ -64,16 +64,20 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 #    apt-get install iputils-ping -y && \
 #    mkdir /var/lib/wpa
 
-# Ubuntu / Debian
-#RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
-#      apt-get install -y qemu-guest-agent; \
-#    fi
+# Install qemu-guest-agent for Ubuntu (needed for VM guest integration on
+# provider images and slim/installer ISOs built via +base-image).
+RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
+      apt-get update && \
+      apt-get install -y --no-install-recommends qemu-guest-agent && \
+      apt-get clean && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
 
 ### To install the DRBD module package for Piraeus pack on Ubuntu  ###
 
 # RUN apt-get update && \
-#     apt-get upgrade -y && \
-#     apt-get install --no-install-recommends -y \
+#     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+#     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
 #       ca-certificates \
 #       kmod \
 #       gpg \

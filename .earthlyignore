@@ -1,2 +1,6 @@
 local/
 build/*
+# Whitelist AMD driver artifacts (produced by scripts/prebuild-amdgpu-artifact.sh
+# and consumed by the base-image target via COPY). Without this exception,
+# `build/*` above would hide the tarball from Earthly's build context.
+!build/amdgpu-artifact-*.tar.gz

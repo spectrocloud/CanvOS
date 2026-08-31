@@ -1,0 +1,6 @@
+# Activate qemu-guest-agent when the host exposes the guest-agent channel.
+#
+# On bare metal and vSphere the port never appears, the
+# rule never matches, and the agent stays dormant.
+SUBSYSTEM=="virtio-ports", ATTR{name}=="org.qemu.guest_agent.0", \
+    TAG+="systemd", ENV{SYSTEMD_WANTS}+="qemu-guest-agent.service"
