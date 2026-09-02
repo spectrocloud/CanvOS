@@ -76,6 +76,9 @@ ARG UBUNTU_PRO_ATTACH=false
 # DRBD version for Piraeus pack
 ARG DRBD_VERSION="9.2.13"
 
+# Storage provider prereqs baked into the image: portworx | piraeus. Leave unset to skip.
+ARG STORAGE_PROVIDER
+
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -940,7 +943,8 @@ base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE \
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \
     --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
-    --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION .
+    --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION \
+    --build-arg STORAGE_PROVIDER=$STORAGE_PROVIDER .
 
     IF [ "$IS_JETSON" = "true" ]
         COPY cloudconfigs/mount.yaml /etc/kairos/mount.yaml

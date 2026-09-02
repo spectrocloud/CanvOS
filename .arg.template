@@ -79,6 +79,12 @@ FORCE_INTERACTIVE_INSTALL=false
 
 # DRBD_VERSION=9.2.13  # This variable is required for Piraeus pack for drbd module installtion.
 
+# STORAGE_PROVIDER selects which storage-provider prereqs get baked into the image.
+# portworx : installs dmsetup, mdadm, lvm2, thin-provisioning-tools, augeas-tools and removes unattended-upgrades.
+# piraeus  : installs linux-headers-$(running kernel) on FIPS kernels so DRBD can be compiled.
+# Leave unset to skip both.
+# STORAGE_PROVIDER=
+
 # NVIDIA GPU driver pre-install (for running the NVIDIA GPU Operator in air-gapped
 # environments with driver.enabled=false). Bakes the datacenter driver + DKMS
 # kernel modules into the Ubuntu base image so GPU nodes need no host-side network.
