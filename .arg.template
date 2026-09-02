@@ -68,8 +68,32 @@ FORCE_INTERACTIVE_INSTALL=false
 
 # UKI only: when UKI_BRING_YOUR_OWN_KEYS=true, controls whether the Palette
 # systemd-extension certificate (SPECTRO_EXTENSION_CERT_IMAGE) is merged into
-# the UEFI db during +uki-genkey. Leave true unless you don't want any external certificate int the db trust store. In that case, you have to 
+# the UEFI db during +uki-genkey. Leave true unless you don't want any external certificate int the db trust store. In that case, you have to
 # ENROLL_SPECTRO_EXTENSION_CERT=true
+
+# Signing k8s systemd extensions with your own key (BYOK Secure Boot users):
+#   1. Set ENROLL_SPECTRO_EXTENSION_CERT=false. Your custom db cert is
+#      already enrolled into UEFI db as part of the OS db, so systemd-sysext
+#      will validate against it directly — no need to also merge Spectro's
+#      extension cert into db.
+#   2. Sign the k8s sysext extensions with the paired secure-boot/private-keys/db.key
+#      by running +build-signed-extensions. The target COPIes db.key /
+#      db.pem the same way +uki-byok already does, then invokes
+#      palette-sysext + auroraboot inside WITH DOCKER — never place the
+#      private key in .arg:
+#        ./earthly.sh +build-signed-extensions
+#      Without --push: output is a docker-save tar per image under
+#      ./build/signed-extensions/; `docker load` + push it to whichever
+#      registry the fleet consumes.
+#      With --push (./earthly.sh --push +build-signed-extensions): the
+#      target passes --push to palette-sysext and skips the tar step;
+#      earthly.sh auto-forwards ~/.docker/config.json as the
+#      DOCKER_AUTH_CONFIG secret, so `docker login` beforehand on the
+#      host is sufficient.
+#      NOTE: this target intentionally only SAVE ARTIFACT AS LOCAL (no
+#      SAVE IMAGE --push). If you ever add one, restructure first —
+#      otherwise the COPIed db.key would end up in the pushed image layers.
+# PALETTE_SYSEXT_IMAGE=us-docker.pkg.dev/palette-images/edge/kubernetes/extensions/palette-sysext:v1.0.1
 
 # Bundle Kubernetes binaries and the agent-provider binaries into the provider
 # image (UKI and non-UKI). 

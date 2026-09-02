@@ -169,6 +169,18 @@ if [ "${UBUNTU_PRO_ATTACH:-false}" = "true" ]; then
     EARTHLY_SECRET_ARGS=(--secret UBUNTU_PRO_KEY)
 fi
 
+# When +build-signed-extensions is being built with --push, forward the
+# caller's docker registry credentials as a secret so palette-sysext's
+# nested `docker push` inside WITH DOCKER can authenticate. Same secret
+# forwarding pattern as UBUNTU_PRO_KEY: value flows via -e + --secret,
+# never onto any command line or into the build cache.
+if [[ "$*" == *"+build-signed-extensions"* ]] && [ -r "$HOME/.docker/config.json" ]; then
+    DOCKER_AUTH_CONFIG="$(cat "$HOME/.docker/config.json")"
+    export DOCKER_AUTH_CONFIG
+    DOCKER_SECRET_ENV+=(-e DOCKER_AUTH_CONFIG)
+    EARTHLY_SECRET_ARGS+=(--secret DOCKER_AUTH_CONFIG)
+fi
+
 # Workaround to support deprecated field PROXY_CERT_PATH
 if [ -n "$PROXY_CERT_PATH" ]; then
     echo "PROXY_CERT_PATH is deprecated. Please place your certificates in the certs directory."
