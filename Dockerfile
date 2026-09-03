@@ -96,30 +96,18 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 # ENV LB_HOW compile
 # ENTRYPOINT /entry.sh
 
-# Storage provider prereqs — pick one at build time via STORAGE_PROVIDER
-# (portworx | piraeus). Leave unset to skip.
-ARG STORAGE_PROVIDER
-
-RUN if [ "${STORAGE_PROVIDER}" = "portworx" ]; then \
-        echo "Installing Portworx prerequisites" && \
-        apt-get update && \
-        apt-get install -yq dmsetup mdadm lvm2 thin-provisioning-tools augeas-tools && \
-        apt-get remove -y unattended-upgrades && \
-        apt-get clean && rm -rf /var/lib/apt/lists/*; \
-    elif [ "${STORAGE_PROVIDER}" = "piraeus" ]; then \
-        echo "Installing Piraeus (DRBD) prerequisites" && \
-        apt-get update && \
-        kernel=$(ls /lib/modules | sort -V | tail -1) && \
-        if echo "$kernel" | grep -qiE 'fips' || dpkg -l 2>/dev/null | grep -qiE 'linux-(image|modules).*fips'; then \
-            echo "FIPS kernel detected ($kernel), installing headers for DRBD compilation" && \
-            apt-get install -y --no-install-recommends linux-headers-$kernel; \
-        else \
-            echo "Standard kernel detected ($kernel), skipping FIPS headers"; \
-        fi && \
-        apt-get clean && rm -rf /var/lib/apt/lists/*; \
+# Install storage tools; on FIPS kernels also install headers for DRBD compilation
+RUN apt-get update && \
+    kernel=$(ls /lib/modules | sort -V | tail -1) && \
+    if echo "$kernel" | grep -qiE 'fips' || dpkg -l 2>/dev/null | grep -qiE 'linux-(image|modules).*fips'; then \
+        echo "FIPS kernel detected ($kernel), installing headers for DRBD compilation" && \
+        apt-get install -y --no-install-recommends linux-headers-$kernel; \
     else \
-        echo "STORAGE_PROVIDER not set — skipping storage provider prereqs"; \
-    fi
+        echo "Standard kernel detected ($kernel), skipping headers"; \
+    fi && \
+    apt-get install -yq dmsetup mdadm lvm2 thin-provisioning-tools augeas-tools && \
+    apt-get remove -y unattended-upgrades && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
 # UKI images use systemd-boot (no bootargs.cfg), so skip when file is absent
