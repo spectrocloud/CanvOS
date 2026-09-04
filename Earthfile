@@ -165,9 +165,9 @@ ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun
 # provider image (both UKI and non-UKI).
 #
 # false (default): on systemd >= 255. On older systemd, they ARE baked in.
-# true: bundle them regardless of the base image's systemd version. Use when
+# true  (default): bundle them regardless of the base image's systemd version. Use when
 #   you need a self-contained provider image.
-ARG BUNDLE_K8S_AND_AGENT_PROVIDER=false
+ARG BUNDLE_K8S_AND_AGENT_PROVIDER=true
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
