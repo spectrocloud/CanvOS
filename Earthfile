@@ -84,6 +84,7 @@ ARG https_proxy=${HTTPS_PROXY}
 ARG no_proxy=${NO_PROXY}
 
 ARG UPDATE_KERNEL=false
+ARG KERNEL_VERSION
 
 # NVIDIA GPU driver pre-install (for air-gapped GPU Operator with driver.enabled=false).
 # When true, the NVIDIA data-center driver + DKMS kernel modules are baked into the
@@ -988,6 +989,15 @@ base-image:
         IF [ "$UPDATE_KERNEL" = "false" ]
             RUN if dpkg -l "linux-image-generic-hwe-$OS_VERSION" > /dev/null; then apt-mark hold "linux-image-generic-hwe-$OS_VERSION" "linux-headers-generic-hwe-$OS_VERSION" "linux-generic-hwe-$OS_VERSION" ; fi && \
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
+        ELSE IF [ -n "$KERNEL_VERSION" ]
+            SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
+                apt-get install -y \
+                    linux-image-${KERNEL_VERSION}-generic \
+                    linux-modules-${KERNEL_VERSION}-generic \
+                    linux-modules-extra-${KERNEL_VERSION}-generic \
+                    linux-headers-${KERNEL_VERSION}-generic
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
             RUN export DEBIAN_FRONTEND=noninteractive && \
