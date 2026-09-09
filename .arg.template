@@ -14,6 +14,20 @@ CIS_HARDENING=false
 EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 FORCE_INTERACTIVE_INSTALL=false
 
+# Custom Docker build arguments
+# ------------------------------
+# To pass a value into a custom `ARG` you added to ./Dockerfile, declare it here
+# with the CUSTOM_ARG_ prefix. The build wrapper injects the value into the
+# matching `ARG NAME` line before Earthly runs (the upstream Earthfile forwards
+# only a fixed --build-arg list, so a plain NAME=value here would NOT reach your
+# Dockerfile). Every entry must have a matching `ARG NAME` in ./Dockerfile or
+# the build fails with a clear error (no more silent drops). Do NOT put secrets
+# here - build args leak into `docker history` and the build cache.
+#
+# Example (with `ARG BRAND` and `ARG DHCP_VENDOR_CLASS` declared in Dockerfile):
+# CUSTOM_ARG_BRAND=acme
+# CUSTOM_ARG_DHCP_VENDOR_CLASS=retail
+
 # MAAS Image Configuration
 # MAAS_IMAGE_NAME=kairos-ubuntu-maas    # Custom name for the final MAAS image (without .raw.gz extension)
 

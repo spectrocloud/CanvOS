@@ -29,11 +29,11 @@ ARG OSBUILDER_VERSION=v0.400.3
 ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
 ARG AURORABOOT_VERSION=v0.16.0
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.9.1
-ARG KUBEADM_PROVIDER_VERSION=v4.9.3
-ARG RKE2_PROVIDER_VERSION=v4.9.1
-ARG NODEADM_PROVIDER_VERSION=v4.9.2
-ARG CANONICAL_PROVIDER_VERSION=v4.9.1
+ARG K3S_PROVIDER_VERSION=v4.9.8
+ARG KUBEADM_PROVIDER_VERSION=v4.9.10
+ARG RKE2_PROVIDER_VERSION=v4.9.6
+ARG NODEADM_PROVIDER_VERSION=v4.9.4
+ARG CANONICAL_PROVIDER_VERSION=v4.9.4
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -734,7 +734,8 @@ base-image:
         END
 
         RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+            export DEBIAN_FRONTEND=noninteractive && \
+            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -742,7 +743,8 @@ base-image:
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
                 apt-get install -y linux-image-generic-hwe-$OS_VERSION
         END
 
@@ -750,7 +752,8 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
