@@ -96,6 +96,19 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 # ENV LB_HOW compile
 # ENTRYPOINT /entry.sh
 
+# Install storage tools; on FIPS kernels also install headers for DRBD compilation
+RUN apt-get update && \
+    kernel=$(ls /lib/modules | sort -V | tail -1) && \
+    if echo "$kernel" | grep -qiE 'fips' || dpkg -l 2>/dev/null | grep -qiE 'linux-(image|modules).*fips'; then \
+        echo "FIPS kernel detected ($kernel), installing headers for DRBD compilation" && \
+        apt-get install -y --no-install-recommends linux-headers-$kernel; \
+    else \
+        echo "Standard kernel detected ($kernel), skipping headers"; \
+    fi && \
+    apt-get install -yq dmsetup mdadm lvm2 thin-provisioning-tools augeas-tools && \
+    apt-get remove -y unattended-upgrades && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
 # UKI images use systemd-boot (no bootargs.cfg), so skip when file is absent
 RUN if [ -f /etc/cos/bootargs.cfg ] && ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
