@@ -63,7 +63,7 @@ on:
         description: "Registry prefix for output images"
         required: false
         type: string
-        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8787/edge"
+        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-9532/edge"
 jobs:
   # Derives the kairos-init version tag and creates the complete build matrix.
   generate-matrix:
