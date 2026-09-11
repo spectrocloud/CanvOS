@@ -419,7 +419,7 @@ if [ "$INSTALL_AMD_GPU_DRIVERS_EFFECTIVE" = "true" ] && [ "$AMDGPU_DRIVER_SOURCE
         _os_dist="$(peek_arg OS_DISTRIBUTION "$@")"; _os_dist="${_os_dist:-${OS_DISTRIBUTION:-ubuntu}}"
         _os_ver="$(peek_arg OS_VERSION "$@")";       _os_ver="${_os_ver:-${OS_VERSION:-24.04}}"
         _arch="$(peek_arg ARCH "$@")";               _arch="${_arch:-${ARCH:-amd64}}"
-        _kairos_ver="$(peek_arg KAIROS_VERSION "$@")"; _kairos_ver="${_kairos_ver:-${KAIROS_VERSION:-v4.0.4}}"
+        _kairos_ver="$(peek_arg KAIROS_INIT_VERSION "$@")"; _kairos_ver="${_kairos_ver:-${KAIROS_INIT_VERSION:-v4.3.0}}"
         _kairos_url="$(peek_arg KAIROS_BASE_IMAGE_URL "$@")"; _kairos_url="${_kairos_url:-${KAIROS_BASE_IMAGE_URL:-$SPECTRO_PUB_REPO/edge}}"
         _is_uki="$(peek_arg IS_UKI "$@")";           _is_uki="${_is_uki:-${IS_UKI:-false}}"
 

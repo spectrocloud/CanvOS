@@ -1,5 +1,5 @@
 ARG HADRON_VERSION=v0.5.1
-ARG KAIROS_INIT_VERSION=v0.17.1
+ARG KAIROS_INIT_VERSION=v4.3.0
 ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}
 ARG FIPS=false
 ARG IS_UKI=false
@@ -16,7 +16,7 @@ FROM ghcr.io/kairos-io/hadron-trusted:${HADRON_VERSION} AS base-fips-false-uki-t
 # base-fips-true-uki-true intentionally omitted: FIPS and UKI cannot be combined.
 
 FROM base-fips-${FIPS}-uki-${IS_UKI} AS base-kairos
-ARG KAIROS_VERSION=v4.1.2
+ARG KAIROS_VERSION=v4.3.0
 ARG FIPS=false
 ARG IS_UKI=false
 
