@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 # Kairos init image
-FROM quay.io/kairos/kairos-init:v0.17.1 AS kairos-init
+FROM quay.io/kairos/kairos-init:v4.3.0 AS kairos-init
 FROM registry.access.redhat.com/ubi8/ubi-init:8.7-10 AS base
 
 # Generate os-release file
-ARG KAIROS_VERSION=v4.1.2
+ARG KAIROS_VERSION=v4.3.0
 
 RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm' || \
     dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm'

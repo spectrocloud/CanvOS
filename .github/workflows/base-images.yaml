@@ -35,7 +35,7 @@ on:
         description: "Kairos Init image (its version tags all built images)"
         required: false
         type: string
-        default: "quay.io/kairos/kairos-init:v0.17.1"
+        default: "quay.io/kairos/kairos-init:v4.3.0"
       arch:
         description: "Architecture for kairosify and Ubuntu UKI (Hadron builds amd64+arm64)"
         required: false
@@ -53,7 +53,7 @@ on:
         description: "Kairos Version (kairos-init --version). Not used in image tags."
         required: false
         type: string
-        default: "v4.1.2"
+        default: "v4.3.0"
       hadron_version:
         description: "Upstream Hadron version tag"
         required: false
@@ -63,7 +63,7 @@ on:
         description: "Registry prefix for output images"
         required: false
         type: string
-        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8787/edge"
+        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-9532/edge"
 jobs:
   # Derives the kairos-init version tag and creates the complete build matrix.
   generate-matrix:
