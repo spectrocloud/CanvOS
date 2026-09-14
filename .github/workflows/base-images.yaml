@@ -58,7 +58,7 @@ on:
         description: "Upstream Hadron version tag"
         required: false
         type: string
-        default: "v0.5.1"
+        default: "v0.5.2"
       registry_prefix:
         description: "Registry prefix for output images"
         required: false

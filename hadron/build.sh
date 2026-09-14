@@ -8,7 +8,7 @@ FIPS=false
 IS_UKI=false
 OUTPUT=load
 NO_CACHE=false
-HADRON_VERSION="${HADRON_VERSION:-v0.5.1}"
+HADRON_VERSION="${HADRON_VERSION:-v0.5.2}"
 KAIROS_VERSION="${KAIROS_VERSION:-v4.3.0}"
 KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION:-v4.3.0}"
 KAIROS_INIT_IMAGE="${KAIROS_INIT_IMAGE:-quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}}"
@@ -106,7 +106,7 @@ Options:
   -h, --help                  Show this help
 
 Environment (override defaults; CLI flags always win):
-  HADRON_VERSION          Upstream Hadron version tag (default: v0.5.1)
+  HADRON_VERSION          Upstream Hadron version tag (default: v0.5.2)
   KAIROS_VERSION          Kairos version passed to kairos-init --version
                           (default: v4.3.0). Not used in the image tag.
   KAIROS_INIT_VERSION     kairos-init image tag. This is
