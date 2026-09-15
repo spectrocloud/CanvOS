@@ -29,13 +29,8 @@ ARG KAIROS_INIT_VERSION=v0.17.1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
-ARG OSBUILDER_VERSION=v0.400.3
-ARG OSBUILDER_IMAGE=quay.io/kairos/osbuilder-tools:$OSBUILDER_VERSION
-# v0.18.0 is the minimum usable version. v0.16.0 and v0.17.0 do not work for the Hadron.
-# v0.26.2 also fixes the UEFI-only ISO boot path: xorriso appended_part_as=gpt for a
-# hybrid MBR+GPT layout (needed by VMware ESXi, OVMF/QEMU, some SuperMicro BMCs),
-# and the CD-variant signed GRUB binary (gcdx64.efi.signed) via kairos-sdk v0.25.2.
-# Kairos upstream: kairos-io/AuroraBoot#713, kairos-io/kairos-sdk#0.25.2.
+# v0.26.2: hybrid MBR+GPT ISO (ESXi/OVMF/SuperMicro BMC) + gcdx64.efi.signed
+# (kairos-sdk v0.25.2). Kairos upstream: AuroraBoot#713, kairos-sdk#0.25.2.
 ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.10.3
@@ -161,6 +156,10 @@ ARG ENROLL_SPECTRO_EXTENSION_CERT=true
 # OCI image (scratch) with palette-sysext-cert.pem; merged into UEFI db during +uki-genkey
 ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/sysext/palette-sysext-cert:latest
 
+# palette-sysext OCI image containing the CLI binary + built-in extensions/ tree.
+# Consumed by +palette-sysext-bin and +build-signed-extensions.
+ARG PALETTE_SYSEXT_IMAGE=us-docker.pkg.dev/palette-images/edge/kubernetes/extensions/palette-sysext:v1.0.1
+
 # Bundle the Kubernetes binaries and the agent-provider binaries into the
 # provider image (both UKI and non-UKI).
 #
@@ -195,6 +194,16 @@ IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
     ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
+    ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
+ELSE IF [ "$OS_DISTRIBUTION" = "hadron" ] && [ "$BASE_IMAGE" = "" ]
+    IF [ "$IS_UKI" = "true" ]
+        LET VARIANT="${KAIROS_INIT_VERSION}-uki"
+    ELSE IF [ "$FIPS_ENABLED" = "true" ]
+        LET VARIANT="${KAIROS_INIT_VERSION}-fips"
+    ELSE
+        LET VARIANT=$KAIROS_INIT_VERSION
+    END
+    ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-generic-$VARIANT
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE
     ARG BASE_IMAGE
@@ -362,6 +371,24 @@ trust-boot-unpack:
     COPY --platform=linux/${ARCH} +build-provider-trustedboot-image/ /image
     RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
         luet util unpack $FILE /trusted-boot
+
+    # kairos-agent < v2.26.0 shim (kairos-io/kairos#4345, kairos-agent#1106):
+    # rewrite type-2 "uki <path>" to type-1 "efi <path>" and add loader.conf
+    # default. Drop when source-image agent >= v2.26.0. Skip on Hadron (no
+    # existing clusters to support upgrade from).
+    IF [ "$OS_DISTRIBUTION" != "hadron" ]
+        RUN set -e; \
+            entries=/trusted-boot/loader/entries; \
+            loader=/trusted-boot/loader/loader.conf; \
+            test -d "$entries" && test -f "$loader"; \
+            find "$entries" -maxdepth 1 -name '*.conf' -exec sed -i 's|^uki |efi |' {} +; \
+            if ! grep -q '^default ' "$loader"; then \
+                { printf 'default norole.conf\n'; cat "$loader"; } > "$loader.new" && mv "$loader.new" "$loader"; \
+            fi; \
+            grep -q '^efi /EFI/kairos/norole.efi$' "$entries/norole.conf"; \
+            grep -q '^default norole.conf$' "$loader"
+    END
+
     SAVE ARTIFACT /trusted-boot/*
 
 stylus-image-pack:
@@ -410,7 +437,7 @@ install-k8s:
     SAVE ARTIFACT --keep-ts /output/ .
 
 build-uki-iso:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
     COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
@@ -441,22 +468,39 @@ build-uki-iso:
 
     WORKDIR /build
     COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    RUN mkdir -p /iso
     IF [ "$ARCH" = "arm64" ]
-       RUN CMD="/entrypoint.sh --name $ISO_NAME build-iso --date=false --overlay-iso /overlay dir:/build/image --output /iso/ --arch $ARCH" && \
-           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; else CMD="$CMD"; fi && \
-              $CMD
+       # No UKI ISO on arm64 upstream; fall through to a plain installer ISO.
+       RUN CMD="auroraboot" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+           $CMD build-iso --overlay-iso /overlay --arch arm64 \
+               --output /iso --override-name "$ISO_NAME" \
+               dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
        COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
        RUN ls -liah /keys
-       RUN mkdir /iso
+       # enki -k /keys unbundled: --public-keys (PK/KEK/db .auth),
+       # --sb-key/--sb-cert (UKI signing), --tpm-pcr-private-key (PCR policy).
        IF [ "$AUTO_ENROLL_SECUREBOOT_KEYS" = "true" ]
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay --secure-boot-enroll force -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           LET SECURE_BOOT_ENROLL=force
        ELSE
-           RUN enki --config-dir /config build-uki dir:/build/image --extend-cmdline "$CMDLINE" --overlay-iso /overlay -t iso -d /iso -k /keys --boot-branding "$BRANDING"
+           LET SECURE_BOOT_ENROLL=if-safe
        END
+       RUN CMD="auroraboot" && \
+           if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+           $CMD build-uki -t iso -d /iso \
+               --extend-cmdline "$CMDLINE" \
+               --overlay-iso /overlay \
+               --boot-branding "$BRANDING" \
+               --public-keys /keys \
+               --sb-key /keys/db.key \
+               --sb-cert /keys/db.pem \
+               --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+               --secure-boot-enroll "$SECURE_BOOT_ENROLL" \
+               --name "$ISO_NAME" \
+               dir:/build/image
     END
     WORKDIR /iso
-    RUN mv /iso/*.iso $ISO_NAME.iso
     SAVE ARTIFACT /iso/*
 
 iso:
@@ -532,34 +576,20 @@ build-iso:
     fi
 
     # AuroraBoot uses Go arch names for both amd64 and arm64 (osbuilder used
-    # "x86_64" for amd64). --output/--override-name are inert for "dir:"
-    # sources: the ISO always lands at /tmp/auroraboot/kairos-<distro>-<ver>-
-    # core-<arch>-generic-v<kairos-ver>.iso, so we leave --output default and
-    # hoist the produced ISO into /iso/ ourselves.
-    #
-    # The Hadron-specific WITH DOCKER path is unnecessary now that all builds
-    # are FROM $AURORABOOT_IMAGE -- AuroraBoot names the grub stage
-    # grubx64.efi (was: EFI/BOOT/grub.efi under enki), and AuroraBoot v0.26.2
-    # fixes the UEFI-only boot path via GPT-hybrid + gcdx64.efi.signed for all
-    # distros, not just Hadron.
-    # Positional source MUST come last. AuroraBoot uses urfave/cli v2 which
-    # follows Go stdlib flag semantics: flag parsing stops at the first
-    # positional argument. If dir:/build/image comes first, --overlay-iso
-    # and --arch are silently discarded as extra positional args. That is
-    # what caused the Palette-branded /boot/grub2/grub.cfg (and user-data,
-    # content bundles, cluster config) to silently disappear from produced
-    # ISOs before this fix. Empirically verified against v0.26.2.
+   
     IF [ "$ARCH" = "arm64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso --overlay-iso /overlay --arch arm64 dir:/build/image
+            $CMD build-iso --overlay-iso /overlay --arch arm64 \
+                --output /iso --override-name "$ISO_NAME" \
+                dir:/build/image
     ELSE IF [ "$ARCH" = "amd64" ]
         RUN CMD="auroraboot" && \
             if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
-            $CMD build-iso --overlay-iso /overlay --arch amd64 dir:/build/image
+            $CMD build-iso --overlay-iso /overlay --arch amd64 \
+                --output /iso --override-name "$ISO_NAME" \
+                dir:/build/image
     END
-    RUN mkdir -p /iso && \
-        mv /tmp/auroraboot/*.iso "/iso/$ISO_NAME.iso"
     WORKDIR /iso
     RUN sha256sum "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256"
     SAVE ARTIFACT --keep-ts /iso/*
@@ -571,44 +601,43 @@ build-iso:
 uki-genkey:
     ARG MY_ORG="ACME Corp"
     ARG EXPIRATION_IN_DAYS=5475
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    ARG ARCH
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
 
-    IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "false" ]
-        RUN --no-cache mkdir -p /custom-keys
-        COPY --if-exists secure-boot/exported-keys/ /custom-keys
-        IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
-            RUN --no-cache if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
-                  echo "Generating Secure Boot keys, including exported UEFI keys..." && \
-                  /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; else \
-                  echo "Generating Secure Boot keys..." && \
-                  /entrypoint.sh genkey "$MY_ORG" --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; fi
-        ELSE
-            RUN --no-cache if [[ -f /custom-keys/KEK && -f /custom-keys/db ]]; then \
-                  echo "Generating Secure Boot keys, including exported UEFI keys and Microsoft keys..." && \
-                  /entrypoint.sh genkey "$MY_ORG" --custom-cert-dir /custom-keys --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; else \
-                  echo "Generating Secure Boot keys, including Microsoft keys..." && \
-                  /entrypoint.sh genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys; fi
-        END
-        RUN --no-cache mkdir -p /private-keys
-        RUN --no-cache mkdir -p /public-keys
-        RUN --no-cache cd /keys; mv *.key tpm2-pcr-private.pem /private-keys
-        RUN --no-cache cd /keys; mv *.pem /public-keys
-        # The osbuilder image (openSUSE Leap) does not ship efitools; install it so the
-        # ENROLL_SPECTRO_EXTENSION_CERT command can re-sign the db when enabled.
+    IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "true" ]
+        COPY +uki-byok/ /keys
+        SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
+    ELSE
         IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
-            RUN zypper --non-interactive install efitools
+            RUN dnf install -y efitools
+        END
+
+        COPY --if-exists secure-boot/exported-keys/ /custom-keys
+        LET GENKEY_EXTRA=""
+        IF [ "$INCLUDE_MS_SECUREBOOT_KEYS" = "false" ]
+            LET GENKEY_EXTRA="$GENKEY_EXTRA --skip-microsoft-certs-I-KNOW-WHAT-IM-DOING"
+        END
+        IF [ -f /custom-keys/KEK ] && [ -f /custom-keys/db ]
+            LET GENKEY_EXTRA="$GENKEY_EXTRA --custom-cert-dir /custom-keys"
+        END
+
+        RUN --no-cache echo "Generating Secure Boot keys (org=$MY_ORG, expiry=${EXPIRATION_IN_DAYS}d)..." && \
+            auroraboot genkey "$MY_ORG" --expiration-in-days $EXPIRATION_IN_DAYS -o /keys $GENKEY_EXTRA
+        RUN mkdir -p /private-keys /public-keys && \
+            cd /keys && \
+            mv *.key tpm2-pcr-private.pem /private-keys && \
+            mv *.pem /public-keys && \
+            chmod 0600 /private-keys/*
+
+        IF [ "$ENROLL_SPECTRO_EXTENSION_CERT" = "true" ]
             DO +ENROLL_SPECTRO_EXTENSION_CERT \
                 --ARCH=$ARCH \
                 --ENROLLMENT_DIR=/keys \
                 --KEK_CERT=/public-keys/KEK.pem \
                 --KEK_KEY=/private-keys/KEK.key
         END
-    ELSE
-        COPY +uki-byok/ /keys
-    END
 
-    SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
-    IF [ "$UKI_BRING_YOUR_OWN_KEYS" = "false" ]
+        SAVE ARTIFACT --if-exists /keys AS LOCAL ./secure-boot/enrollment
         SAVE ARTIFACT --if-exists /private-keys AS LOCAL ./secure-boot/private-keys
         SAVE ARTIFACT --if-exists /public-keys AS LOCAL ./secure-boot/public-keys
     END
@@ -634,6 +663,193 @@ spectro-extension-cert-esl:
         /cert/spectro-cert.pem /cert/spectro-db.esl
     SAVE ARTIFACT /cert/spectro-db.esl spectro-db.esl
 
+# Extract the palette-sysext CLI + built-in extensions/ tree from the OCI
+# distribution image so downstream targets can consume them directly.
+palette-sysext-bin:
+    ARG ARCH=amd64
+    FROM --platform=linux/${ARCH} $PALETTE_SYSEXT_IMAGE
+    SAVE ARTIFACT /bin/palette-sysext palette-sysext
+    SAVE ARTIFACT /share/palette-sysext/extensions extensions
+
+# Build and sign a Palette systemd extension using the CanvOS UKI BYOK
+# db key/cert pair, so the same certificate that signs the boot chain also
+# signs the k8s sysext extensions. Runs docker-in-docker via WITH DOCKER
+# because palette-sysext delegates to `docker buildx` (repack) and
+# `docker run` (auroraboot) internally.
+#
+# Inputs from .arg:
+#   K8S_DISTRIBUTION  distro to sign (kubeadm[-fips], k3s, rke2, canonical)
+#   K8S_VERSION       bare semver; k3s/rke2 get their flavor suffix appended
+#   ARCH              target arch(es); comma-separated for multi-arch
+#   IMAGE_REGISTRY    when set, tags the OCI image as
+#                     $IMAGE_REGISTRY/palette-sysext-extensions:<tag>
+#   FIPS_ENABLED      when true, adds --fips (in addition to whatever
+#                     kubeadm-fips already implies)
+#
+# Signing material is COPIed from secure-boot/private-keys/db.key +
+# secure-boot/public-keys/db.pem — same files, same mechanism +uki-byok
+# uses to sign the UKI itself. The key sits in this target's build-cache
+# layer but is never pushed anywhere (the target only SAVE ARTIFACT AS
+# LOCAL). See the SECURITY note in the target body before adding push.
+# Just run:
+#
+#   ./earthly.sh +build-signed-extensions
+#
+# The signed OCI image is loaded into the WITH DOCKER daemon, saved as a tar
+# via `docker save`, and exposed as a local artifact under
+# ./build/signed-extensions/. Push is intentionally out of scope for this
+# target — `docker load` + `docker push` the tar into whatever registry the
+# fleet consumes, using whichever credentials that registry needs.
+build-signed-extensions:
+    FROM --allow-privileged earthly/dind:alpine-3.19-docker-25.0.5-r0
+    RUN apk add --no-cache bash jq
+
+    ARG --required K8S_DISTRIBUTION
+    ARG --required K8S_VERSION
+    ARG ARCH=amd64
+    # IMAGE_REGISTRY and FIPS_ENABLED are Earthfile-scope globals (lines 13
+    # and 51) — no need to re-declare. IMAGE_REGISTRY drives palette-sysext
+    # --repo (OCI tag host/path); FIPS_ENABLED forwards --fips on top of
+    # whatever kubeadm-fips already implies.
+    #
+    #
+    # Optional override for the package source image used by palette-sysext.
+    # Useful when the default source (e.g. us-docker.pkg.dev/palette-images/…)
+    # has been mirrored to a private registry.
+    ARG SOURCE_IMAGE
+    # DRY_RUN=true prints the exact docker + auroraboot commands without
+    # executing them — matches palette-sysext's own --dry-run flag.
+    ARG DRY_RUN=false
+    # FORCE=true rebuilds even when palette-sysext detects a matching
+    # fingerprint in the target registry. Defaults to true because the
+    # whole point of this target is to sign with the caller's own key —
+    # the registry image was signed by someone else and must be rebuilt.
+    ARG FORCE=true
+
+    # palette-sysext ships as a statically-linked linux/amd64 binary and
+    # runs on the Earthly host (DinD image is amd64); the target output arch
+    # is passed through via --arch (may be a comma-separated multi-arch list).
+    COPY (+palette-sysext-bin/palette-sysext --ARCH=amd64) /usr/local/bin/palette-sysext
+    COPY (+palette-sysext-bin/extensions --ARCH=amd64) /extensions
+    RUN chmod +x /usr/local/bin/palette-sysext
+
+    # Distro → extension mapping. Also normalizes K8S_VERSION to match how
+    # palette-sysext's extension.yaml lists it per distro:
+    #   kubeadm / canonical: bare semver (e.g. 1.34.5)
+    #   k3s:                 1.34.5-<K3S_FLAVOR_TAG>   (e.g. 1.34.5-k3s1)
+    #   rke2:                1.34.5-<RKE2_FLAVOR_TAG>  (e.g. 1.34.5-rke2r1)
+    # If K8S_VERSION already carries the suffix (users may set the full
+    # form), leave it alone.
+    # kubeadm-fips selects the kubeadm extension with --fips;
+    # nodeadm has no palette-sysext extension and is rejected explicitly.
+    RUN set -eu; \
+        VER="$K8S_VERSION"; \
+        case "$K8S_DISTRIBUTION" in \
+            kubeadm)      echo "k8s/kubeadm"   > /extid; :         > /fips ;; \
+            kubeadm-fips) echo "k8s/kubeadm"   > /extid; echo --fips > /fips ;; \
+            k3s) \
+                echo "k8s/k3s" > /extid; : > /fips; \
+                case "$VER" in *-k3s*) ;; *) VER="${VER}-${K3S_FLAVOR_TAG}" ;; esac ;; \
+            rke2) \
+                echo "k8s/rke2" > /extid; : > /fips; \
+                case "$VER" in *-rke2*) ;; *) VER="${VER}-${RKE2_FLAVOR_TAG}" ;; esac ;; \
+            canonical)    echo "k8s/canonical" > /extid; :         > /fips ;; \
+            nodeadm) \
+                echo "ERROR: K8S_DISTRIBUTION=nodeadm has no palette-sysext extension." >&2; \
+                exit 1 ;; \
+            *) \
+                echo "ERROR: unsupported K8S_DISTRIBUTION=$K8S_DISTRIBUTION" >&2; \
+                exit 1 ;; \
+        esac; \
+        echo "$VER" > /extver; \
+        echo "resolved: extension=$(cat /extid) version=$(cat /extver) fips=$(cat /fips)"
+
+    RUN mkdir -p /output
+
+    # Same COPY pattern +uki-byok uses to consume the BYOK db key/cert.
+    # The COPY runs as root inside BuildKit, so 0600 root-owned files
+    # (as produced by +uki-genkey) are readable regardless of the host
+    # user's perms. The key lands in this target's build-cache layer;
+    # this target only does SAVE ARTIFACT AS LOCAL, so nothing is pushed.
+    # SECURITY: if you add SAVE IMAGE --push to this target later, the
+    # key WILL end up in a layer of the pushed image (visible via
+    # `docker history`). Split into a separate stage that doesn't COPY
+    # the key before enabling push.
+    COPY secure-boot/private-keys/db.key /keys/db.key
+    COPY secure-boot/public-keys/db.pem  /keys/db.pem
+    RUN chmod 0600 /keys/db.key /keys/db.pem
+
+    WITH DOCKER --pull $AURORABOOT_IMAGE
+        RUN --secret DOCKER_AUTH_CONFIG \
+            set -eu; \
+            EXT_ID="$(cat /extid)"; \
+            EXT_VER="$(cat /extver)"; \
+            FIPS_ARG="$(cat /fips)"; \
+            # FIPS_ENABLED=true also selects --fips even if K8S_DISTRIBUTION
+            # is the non-FIPS form (matches how the rest of CanvOS flips
+            # between FIPS and non-FIPS off this single knob).
+            if [ "$FIPS_ENABLED" = "true" ] && [ -z "$FIPS_ARG" ]; then \
+                FIPS_ARG="--fips"; \
+            fi; \
+            REPO_ARG=""; \
+            if [ -n "${IMAGE_REGISTRY:-}" ]; then \
+                REPO_ARG="--repo=$IMAGE_REGISTRY/palette-sysext-extensions"; \
+            fi; \
+            SRC_ARG=""; [ -n "${SOURCE_IMAGE:-}" ] && SRC_ARG="--source-image=$SOURCE_IMAGE"; \
+            DRY_RUN_ARG=""; [ "$DRY_RUN" = "true" ] && DRY_RUN_ARG="--dry-run"; \
+            FORCE_ARG=""; [ "$FORCE" = "true" ] && FORCE_ARG="--force"; \
+            PUSH_ARG=""; \
+            if [ "${EARTHLY_PUSH:-false}" = "true" ]; then \
+                PUSH_ARG="--push"; \
+                # palette-sysext calls `docker push` inside WITH DOCKER's
+                # fresh dockerd — it has no auth by default. earthly.sh
+                # forwards ~/.docker/config.json as the DOCKER_AUTH_CONFIG
+                # secret when +build-signed-extensions is invoked; we
+                # materialize it as /root/.docker/config.json so the CLI
+                # picks it up.
+                if [ -z "${DOCKER_AUTH_CONFIG:-}" ]; then \
+                    echo "ERROR: --push requires DOCKER_AUTH_CONFIG secret." >&2; \
+                    echo "       Run './earthly.sh --push +build-signed-extensions' which" >&2; \
+                    echo "       auto-forwards ~/.docker/config.json, or make sure that" >&2; \
+                    echo "       file exists and is readable by the invoking user." >&2; \
+                    exit 1; \
+                fi; \
+                mkdir -p /root/.docker; \
+                printf '%s' "$DOCKER_AUTH_CONFIG" > /root/.docker/config.json; \
+                chmod 0600 /root/.docker/config.json; \
+            fi; \
+            echo "==> palette-sysext build --extension=$EXT_ID --version=$EXT_VER --arch=$ARCH $FIPS_ARG $REPO_ARG $FORCE_ARG $PUSH_ARG $DRY_RUN_ARG"; \
+            palette-sysext doctor || true; \
+            palette-sysext build \
+                --extension="$EXT_ID" \
+                --version="$EXT_VER" \
+                --arch="$ARCH" \
+                --extensions-dir=/extensions \
+                --private-key=/keys/db.key \
+                --certificate=/keys/db.pem \
+                --report-file=/output \
+                $FIPS_ARG $REPO_ARG $SRC_ARG $FORCE_ARG $PUSH_ARG $DRY_RUN_ARG; \
+            # Clear registry auth from the target FS before any subsequent
+            # SAVE ARTIFACT. Belt-and-braces — /root/.docker/config.json is
+            # inside a WITH DOCKER container that gets torn down anyway.
+            rm -f /root/.docker/config.json 2>/dev/null || true; \
+            # When pushing, palette-sysext has already put the images in
+            # the registry; skip the local docker-save tar step.
+            if [ "$DRY_RUN" != "true" ] && [ "${EARTHLY_PUSH:-false}" != "true" ]; then \
+                for report in /output/*.json; do \
+                    [ -f "$report" ] || continue; \
+                    for tag in $(jq -r '.archs[]? | select(.built == true) | .image // empty' "$report"); do \
+                        [ -n "$tag" ] || continue; \
+                        safe="$(echo "$tag" | tr '/:' '__')"; \
+                        echo "==> docker save $tag -> /output/${safe}.tar"; \
+                        docker save "$tag" -o "/output/${safe}.tar"; \
+                    done; \
+                done; \
+            fi
+    END
+
+    SAVE ARTIFACT /output AS LOCAL ./build/signed-extensions/
+
 # Self-contained merge of the Spectro extension cert into the UEFI db enrollment
 # material. Gated on ENROLL_SPECTRO_EXTENSION_CERT: when true, it fetches the ESL,
 # appends it to db.esl and (re)generates db.auth/db.der so the db is fully ready;
@@ -649,7 +865,7 @@ ENROLL_SPECTRO_EXTENSION_CERT:
     # cert into UEFI firmware. db.der is kept as the OS cert (db-0.der) since the UKI
     # itself is signed with the OS db key, not the Spectro cert.
     # efitools (sign-efi-sig-list / sig-list-to-certs) must already be present in the
-    # caller's image: uki-genkey installs it via zypper, uki-byok via apt-get.
+    # caller's image: uki-genkey installs it via dnf, uki-byok via apt-get.
     # With --arg-scope-and-set, CLI build-arg overrides (e.g. --MY_ORG / --EXPIRATION_IN_DAYS)
     # cause COPY +target inside a COMMAND to see only the COMMAND's args — not .arg
     # globals like ARCH. Forward ARCH explicitly.
@@ -899,10 +1115,19 @@ provider-image-rootfs:
     SAVE ARTIFACT --keep-own /. rootfs
 
 build-provider-trustedboot-image:
-    FROM --platform=linux/${ARCH} $OSBUILDER_IMAGE
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     COPY --platform=linux/${ARCH} --keep-own +provider-image-rootfs/rootfs /build/image
     COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
-    RUN /entrypoint.sh build-uki dir:/build/image -t container -d /output -k /keys --boot-branding "Palette eXtended Kubernetes Edge"
+    RUN mkdir -p /output
+    RUN CMD="auroraboot" && \
+        if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+        $CMD build-uki -t container -d /output \
+            --boot-branding "$BRANDING" \
+            --public-keys /keys \
+            --sb-key /keys/db.key \
+            --sb-cert /keys/db.pem \
+            --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+            dir:/build/image
     SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
 
 stylus-image:
