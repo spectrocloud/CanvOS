@@ -160,6 +160,11 @@ ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun
 # Consumed by +palette-sysext-bin and +build-signed-extensions.
 ARG PALETTE_SYSEXT_IMAGE=us-docker.pkg.dev/palette-images/edge/kubernetes/extensions/palette-sysext:v1.0.1
 
+# TODO: Remove this once the flag is removed from documentation. 
+# Keep it for a 4.10.x release cycle to avoid breaking existing builds. This flag is pesent in documentation.
+# This is a no-op
+ARG BUNDLE_K8S_AND_AGENT_PROVIDER=true
+
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
 ARG FORCE_INTERACTIVE_INSTALL=false
