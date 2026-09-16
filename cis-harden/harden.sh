@@ -692,7 +692,7 @@ remove_services() {
 
 		# CIS Level 2 - Additional packages to remove
 		echo "Removing additional CIS Level 2 packages"
-		apt-get remove -y avahi-daemon cups rpcbind nfs-kernel-server vsftpd apache2 nginx samba squid snmpd 2>/dev/null || true
+		apt-get remove -y avahi-daemon cups nfs-kernel-server vsftpd apache2 nginx samba squid snmpd 2>/dev/null || true
 
 		# CIS Level 2 - Disable additional services
 		echo "Disabling additional CIS Level 2 services"
