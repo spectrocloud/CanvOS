@@ -431,7 +431,22 @@ if [ "$INSTALL_AMD_GPU_DRIVERS_EFFECTIVE" = "true" ] && [ "$AMDGPU_DRIVER_SOURCE
         _os_dist="$(peek_arg OS_DISTRIBUTION "$@")"; _os_dist="${_os_dist:-${OS_DISTRIBUTION:-ubuntu}}"
         _os_ver="$(peek_arg OS_VERSION "$@")";       _os_ver="${_os_ver:-${OS_VERSION:-24.04}}"
         _arch="$(peek_arg ARCH "$@")";               _arch="${_arch:-${ARCH:-amd64}}"
-        _kairos_ver="$(peek_arg KAIROS_VERSION "$@")"; _kairos_ver="${_kairos_ver:-${KAIROS_VERSION:-v4.0.4}}"
+        # Base tags key off KAIROS_INIT_VERSION (kairos-init), NOT KAIROS_VERSION
+        # (see the Earthfile BASE_IMAGE_TAG branches and base-images.yaml). Older
+        # branches only carry KAIROS_VERSION, so fall back to it. When neither is
+        # set, read the Earthfile ARG defaults so the prebuild cannot drift from
+        # the image Earthly actually pulls.
+        _kairos_ver="$(peek_arg KAIROS_INIT_VERSION "$@")"; _kairos_ver="${_kairos_ver:-${KAIROS_INIT_VERSION:-}}"
+        if [ -z "$_kairos_ver" ]; then
+            _kairos_ver="$(peek_arg KAIROS_VERSION "$@")"; _kairos_ver="${_kairos_ver:-${KAIROS_VERSION:-}}"
+        fi
+        if [ -z "$_kairos_ver" ]; then
+            _kairos_ver="$(sed -n 's/^ARG KAIROS_INIT_VERSION=//p' Earthfile 2>/dev/null | head -1)"
+        fi
+        if [ -z "$_kairos_ver" ]; then
+            _kairos_ver="$(sed -n 's/^ARG KAIROS_VERSION=//p' Earthfile 2>/dev/null | head -1)"
+        fi
+        [ -n "$_kairos_ver" ] || { echo "could not determine kairos base tag: set KAIROS_INIT_VERSION in .arg or on the command line." >&2; exit 1; }
         _kairos_url="$(peek_arg KAIROS_BASE_IMAGE_URL "$@")"; _kairos_url="${_kairos_url:-${KAIROS_BASE_IMAGE_URL:-$SPECTRO_PUB_REPO/edge}}"
         _is_uki="$(peek_arg IS_UKI "$@")";           _is_uki="${_is_uki:-${IS_UKI:-false}}"
 
@@ -439,7 +454,7 @@ if [ "$INSTALL_AMD_GPU_DRIVERS_EFFECTIVE" = "true" ] && [ "$AMDGPU_DRIVER_SOURCE
             echo "AMD GPU driver pre-install requires OS_DISTRIBUTION=ubuntu (got: $_os_dist)." >&2
             exit 1
         fi
-        # Same tag formula as Earthfile lines ~141-151.
+        # Same tag formula as the Earthfile's BASE_IMAGE_TAG branches.
         if [ "$_os_ver" = "22" ] || [ "$_os_ver" = "20" ]; then
             _tag="kairos-${_os_dist}:${_os_ver}.04-core-${_arch}-generic-${_kairos_ver}"
         elif [ "$_is_uki" = "true" ]; then
