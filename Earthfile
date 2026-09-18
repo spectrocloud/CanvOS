@@ -160,9 +160,11 @@ ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun
 # Consumed by +palette-sysext-bin and +build-signed-extensions.
 ARG PALETTE_SYSEXT_IMAGE=us-docker.pkg.dev/palette-images/edge/kubernetes/extensions/palette-sysext:v1.0.1
 
-# TODO: Remove this once the flag is removed from documentation. 
-# Keep it for a 4.10.x release cycle to avoid breaking existing builds. This flag is pesent in documentation.
-# This is a no-op
+# TODO: Remove this once the flag is removed from documentation.
+# Keep it for a 4.10.x release cycle to avoid breaking existing builds; the
+# flag is present in documentation. It is a no-op: k8s + agent-provider are
+# now always bundled into provider images, marked for older Stylus (4.10.x)
+# by the /etc/spectro-sysext/k8s-and-agent-provider-bundled sentinel.
 ARG BUNDLE_K8S_AND_AGENT_PROVIDER=true
 
 ARG CMDLINE="stylus.registration"
@@ -309,6 +311,10 @@ uki-provider-image:
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
     COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    # Sentinel: presence tells older Stylus (4.10.x) that k8s + agent-provider
+    # are bundled in this provider image, so it skips applying those sysext
+    # extensions on top.
+    RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
@@ -985,6 +991,11 @@ provider-image:
     ELSE
         COPY --keep-ts +install-k8s/output/ /
     END
+
+    # Sentinel: presence tells older Stylus (4.10.x) that k8s + agent-provider
+    # are bundled in this provider image, so it skips applying those sysext
+    # extensions on top.
+    RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
