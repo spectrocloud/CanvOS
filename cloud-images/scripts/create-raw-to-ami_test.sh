@@ -1,6 +1,5 @@
 #!/bin/bash
-# Guards against CWE-532: the script runs under Earthly `RUN --secret`, so anything
-# it writes to stdout/stderr lands in build logs readable without secrets permission.
+# The script runs under Earthly `RUN --secret`; whatever it prints lands in build logs (CWE-532).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,6 +29,14 @@ output=$(
      bash "$SCRIPT_DIR/create-raw-to-ami.sh" "$WORK_DIR/absent.raw" 2>&1
 )
 set -e
+
+# Guards against a vacuous pass: if the script stops reaching the credential
+# block, it leaks nothing and every marker check below trivially succeeds.
+if ! printf '%s' "$output" | grep -qF 'Using AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY'; then
+  echo "FAIL: script never reached credential handling; this test no longer proves anything" >&2
+  printf '%s\n' "$output" >&2
+  exit 1
+fi
 
 status=0
 for marker in "$ACCESS_KEY_MARKER" "$SECRET_KEY_MARKER" "$SESSION_TOKEN_MARKER"; do
