@@ -1321,7 +1321,14 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
-        RUN yum install -y openssl rsyslog logrotate
+        # Ensure the packages are present; do not install-or-upgrade (PE-9573).
+        # FIPS/STIG ISO builds run without RHSM entitlements, so only anonymous
+        # UBI + EPEL repos are reachable here, and UBI carries no rsyslog-gnutls
+        # update. Upgrading rsyslog past the base image's strict
+        # rsyslog-gnutls Requires: rsyslog pin therefore cannot resolve; the
+        # errata cycle belongs in base image bumps, not this step. rpm -q
+        # short-circuits when the frozen base already ships the package.
+        RUN for pkg in openssl rsyslog logrotate; do rpm -q $pkg >/dev/null 2>&1 || yum install -y $pkg; done
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
