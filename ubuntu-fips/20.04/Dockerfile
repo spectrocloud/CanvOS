@@ -26,7 +26,12 @@ RUN --mount=type=secret,id=pro-attach-config \
     apt-get update \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
+    # --force-confdef/--force-confold: DEBIAN_FRONTEND=noninteractive does not
+    # suppress dpkg conffile prompts (e.g. base-files shipping a new /etc/issue);
+    # with no tty in docker build the prompt hits EOF and kills the build.
     && apt-get upgrade -y \
+        -o Dpkg::Options::="--force-confdef" \
+        -o Dpkg::Options::="--force-confold" \
     && apt-get install -y --no-install-recommends \
     openssl \
     libssl1.1 \

@@ -20,7 +20,12 @@ RUN --mount=type=secret,id=pro-attach-config \
     apt-get update \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
+    # --force-confdef/--force-confold: DEBIAN_FRONTEND=noninteractive does not
+    # suppress dpkg conffile prompts (e.g. base-files shipping a new /etc/issue);
+    # with no tty in docker build the prompt hits EOF and kills the build.
     && apt-get upgrade -y \
+        -o Dpkg::Options::="--force-confdef" \
+        -o Dpkg::Options::="--force-confold" \
     && apt-get install -y strongswan openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools qemu-guest-agent cracklib-runtime \
     # --- OpenSSL 3.x FIPS provider module ---
     # On 24.04 Noble, /etc/ssl/openssl.cnf is flipped to load the FIPS provider
