@@ -1172,9 +1172,16 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
+            # DEBIAN_FRONTEND=noninteractive does NOT suppress dpkg conffile prompts.
+            # STIG/CIS-hardened images ship a modified /etc/issue, so when base-files
+            # (which owns that conffile) gets upgraded, dpkg prompts and dies with
+            # "end of file on stdin at conffile prompt" in the non-tty build sandbox.
+            # --force-confdef/--force-confold keep the on-disk (hardened) version.
             RUN export DEBIAN_FRONTEND=noninteractive && \
                 apt-get update && \
-                apt-get upgrade $APT_UPGRADE_FLAGS && \
+                apt-get upgrade $APT_UPGRADE_FLAGS \
+                    -o Dpkg::Options::="--force-confdef" \
+                    -o Dpkg::Options::="--force-confold" && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
                     parted \ # Used for creating and managing disk partitions.
