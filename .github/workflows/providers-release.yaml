@@ -1,0 +1,95 @@
+name: Providers - Cut releases
+
+# For the chosen line, computes the next patch version from the latest tag
+# reachable on each provider's base branch (e.g. v4.8.3 -> v4.8.4), creates
+# that tag + a GitHub Release whose notes are the commit diff since the last
+# tag, then emails a summary to the maintainers.
+#
+# Run AFTER the bump PRs have been reviewed & merged into the line branches.
+# Defaults to dry_run=true: preview the tags/notes and email without creating
+# anything. Set dry_run=false to actually cut the releases.
+
+on:
+  workflow_dispatch:
+    inputs:
+      line:
+        description: "Release line to cut"
+        required: true
+        type: choice
+        options: ["4.8", "4.7"]
+      dry_run:
+        description: "Preview only (no tags/releases created)"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: _canvos
+
+      - name: Cut releases
+        id: cut
+        env:
+          GH_TOKEN: ${{ secrets.PROVIDER_AUTOMATION_TOKEN }}
+          LINE: ${{ inputs.line }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          prefix="v${LINE}."          # e.g. v4.8.
+          : > "$GITHUB_WORKSPACE/body.html"
+          echo "<h3>Provider releases &mdash; line ${LINE}$([ "$DRY_RUN" = "true" ] && echo ' (DRY RUN)')</h3><ul>" >> "$GITHUB_WORKSPACE/body.html"
+
+          jq -r --arg line "$LINE" \
+            '.providers[] | select(.branches[$line]!=null) | "\(.repo) \(.branches[$line])"' \
+            "$GITHUB_WORKSPACE/_canvos/.github/provider-automation/providers.json" |
+          while read -r repo branch; do
+            work=$(mktemp -d)
+            git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" "$work"
+            git -C "$work" fetch --tags --quiet
+
+            last=$(git -C "$work" tag --list "${prefix}*" --merged "origin/${branch}" --sort=-v:refname | head -1 || true)
+            if [[ -z "$last" ]]; then
+              echo "<li><b>${repo}</b> (<code>${branch}</code>): no <code>${prefix}*</code> tag found &mdash; skipped</li>" >> "$GITHUB_WORKSPACE/body.html"
+              continue
+            fi
+            # bump the patch component
+            next=$(echo "$last" | awk -F. 'BEGIN{OFS="."}{$NF=$NF+1; print}')
+            compare="https://github.com/${repo}/compare/${last}...${next}"
+
+            notes=$(git -C "$work" log --no-merges --pretty=format:'- %s (%h)' "${last}..origin/${branch}")
+            [[ -z "$notes" ]] && notes="_No new commits since ${last}._"
+
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "DRY RUN: would create ${next} on ${repo}@${branch} (prev ${last})"
+              echo "<li><b>${repo}</b> (<code>${branch}</code>): ${last} &rarr; <b>${next}</b> (preview) &mdash; <a href=\"${compare}\">diff</a></li>" >> "$GITHUB_WORKSPACE/body.html"
+            else
+              printf '## %s\n\nChanges since %s ([diff](%s)):\n\n%s\n' "$next" "$last" "$compare" "$notes" > "$work/RELEASE_NOTES.md"
+              gh release create "$next" \
+                --repo "$repo" \
+                --target "$branch" \
+                --title "$next" \
+                --notes-file "$work/RELEASE_NOTES.md"
+              echo "<li><b>${repo}</b> (<code>${branch}</code>): ${last} &rarr; <b><a href=\"https://github.com/${repo}/releases/tag/${next}\">${next}</a></b> &mdash; <a href=\"${compare}\">diff</a></li>" >> "$GITHUB_WORKSPACE/body.html"
+            fi
+            rm -rf "$work"
+          done
+          echo "</ul>" >> "$GITHUB_WORKSPACE/body.html"
+
+      - name: Email summary
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "[Providers ${{ inputs.line }}] Releases ${{ inputs.dry_run == true && 'preview' || 'cut' }}"
+          to: vipin@spectrocloud.com,santhosh@spectrocloud.com,abhinav@spectrocloud.com
+          from: Provider Automation <${{ secrets.MAIL_USERNAME }}>
+          html_body: file://body.html
