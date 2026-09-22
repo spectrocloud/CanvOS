@@ -1189,7 +1189,10 @@ base-image:
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends \
+                -o Dpkg::Options::="--force-confold" \
+                -o Dpkg::Options::="--force-confdef" \
+                snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
             
         IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
             # The token is mounted via Earthly's secret store as an env var
@@ -1217,17 +1220,30 @@ base-image:
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
             RUN export DEBIAN_FRONTEND=noninteractive && \
                 apt-get update && \
-                apt-get install -y linux-image-generic-hwe-$OS_VERSION
+                apt-get install -y \
+                    -o Dpkg::Options::="--force-confold" \
+                    -o Dpkg::Options::="--force-confdef" \
+                    linux-image-generic-hwe-$OS_VERSION
         END
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
+            # DEBIAN_FRONTEND=noninteractive does not suppress dpkg conffile prompts.
+            # The FIPS/STIG base images carry locally-modified conffiles (e.g. /etc/issue),
+            # and when an apt upgrade ships new content for one of them, dpkg prompts on
+            # stdin EOF in headless CI and fails with "end of file on stdin at conffile
+            # prompt" (PE-9572). confdef+confold resolves every configure-time conffile
+            # decision silently, keeping the on-disk (hardened) version when modified.
             RUN export DEBIAN_FRONTEND=noninteractive && \
                 apt-get update && \
-                apt-get upgrade $APT_UPGRADE_FLAGS && \
+                apt-get upgrade $APT_UPGRADE_FLAGS \
+                    -o Dpkg::Options::="--force-confold" \
+                    -o Dpkg::Options::="--force-confdef" && \
                 apt-get install --no-install-recommends -y \
+                    -o Dpkg::Options::="--force-confold" \
+                    -o Dpkg::Options::="--force-confdef" \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
                     parted \ # Used for creating and managing disk partitions.
                     cloud-guest-utils \ # Includes utilities for cloud environments, such as resizing root partitions.
