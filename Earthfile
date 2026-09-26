@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.10.0-rc.2
+ARG PE_VERSION=v4.10.5-rc.8
 ARG KAIROS_VERSION=v4.1.2
 # Version component of the base image tags produced by .github/workflows/base-images.yaml.
 # Those images are tagged with the kairos-init version, so this must track the
@@ -160,13 +160,12 @@ ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun
 # Consumed by +palette-sysext-bin and +build-signed-extensions.
 ARG PALETTE_SYSEXT_IMAGE=us-docker.pkg.dev/palette-images/edge/kubernetes/extensions/palette-sysext:v1.0.1
 
-# Bundle the Kubernetes binaries and the agent-provider binaries into the
-# provider image (both UKI and non-UKI).
-#
-# false (default): on systemd >= 255. On older systemd, they ARE baked in.
-# true: bundle them regardless of the base image's systemd version. Use when
-#   you need a self-contained provider image.
-ARG BUNDLE_K8S_AND_AGENT_PROVIDER=false
+# TODO: Remove this once the flag is removed from documentation.
+# Keep it for a 4.10.x release cycle to avoid breaking existing builds; the
+# flag is present in documentation. It is a no-op: k8s + agent-provider are
+# now always bundled into provider images, marked for older Stylus (4.10.x)
+# by the /etc/spectro-sysext/k8s-and-agent-provider-bundled sentinel.
+ARG BUNDLE_K8S_AND_AGENT_PROVIDER=true
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
@@ -290,50 +289,6 @@ BASE_ALPINE:
     RUN update-ca-certificates
 
 
-# Probe $BASE_IMAGE for systemd >= 255; used only by +CHECK_SYSTEMD_VERSION.
-systemd-extensions-support:
-    ARG ARCH
-    ARG BASE_IMAGE
-    FROM --platform=linux/${ARCH} $BASE_IMAGE
-    # Missing/failed systemctl detection must not fail the RUN under set -e;
-    # always emit supports-systemd-extensions as "true" or "false".
-    RUN SYSTEMCTL="" ; \
-        for c in systemctl /usr/bin/systemctl /bin/systemctl /usr/local/bin/systemctl /usr/sbin/systemctl /sbin/systemctl /usr/local/sbin/systemctl; do \
-            if command -v "$c" >/dev/null 2>&1; then SYSTEMCTL="$c"; break; fi; \
-        done ; \
-        SYSTEMD_VER=0 ; \
-        if [ -n "$SYSTEMCTL" ]; then \
-            SYSTEMD_VER=$("$SYSTEMCTL" --version 2>/dev/null | awk 'NR==1{print $2}') || SYSTEMD_VER=0 ; \
-        fi ; \
-        case "$SYSTEMD_VER" in ''|*[!0-9]*) SYSTEMD_VER=0 ;; esac ; \
-        echo "CHECK_SYSTEMD_VERSION: detected systemd version $SYSTEMD_VER (systemctl: ${SYSTEMCTL:-not found})" ; \
-        if [ "$SYSTEMD_VER" -ge 255 ]; then \
-            echo true > /supports-systemd-extensions ; \
-            echo "CHECK_SYSTEMD_VERSION: systemd >= 255 — supports-systemd-extensions=true"; \
-        else \
-            echo false > /supports-systemd-extensions ; \
-            echo "CHECK_SYSTEMD_VERSION: systemd < 255 — supports-systemd-extensions=false"; \
-        fi
-    SAVE ARTIFACT /supports-systemd-extensions
-
-# Loads true/false into the caller's build env at /tmp/supports-systemd-extensions.
-# BUNDLE_K8S_AND_AGENT_PROVIDER=true short-circuits the probe to "false" so the
-# caller bundles k8s + agent-provider regardless of the base's systemd version.
-# Only the provider-image callers pass this through; +iso-image intentionally
-# omits it so the ISO always sees the real probe result.
-CHECK_SYSTEMD_VERSION:
-    COMMAND
-    ARG ARCH
-    ARG BASE_IMAGE
-    ARG BUNDLE_K8S_AND_AGENT_PROVIDER=false
-    IF [ "$BUNDLE_K8S_AND_AGENT_PROVIDER" = "true" ]
-        RUN mkdir -p /tmp && echo false > /tmp/supports-systemd-extensions && \
-            echo "SUPPORTS_SYSTEMD_EXTENSIONS=false (forced via BUNDLE_K8S_AND_AGENT_PROVIDER)"
-    ELSE
-        COPY (+systemd-extensions-support/supports-systemd-extensions --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE) /tmp/supports-systemd-extensions
-        RUN echo "SUPPORTS_SYSTEMD_EXTENSIONS=$(cat /tmp/supports-systemd-extensions)"
-    END
-
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-ts --keep-own /. rootfs
@@ -355,13 +310,11 @@ uki-provider-image:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
     COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
     COPY --platform=linux/${ARCH} +trust-boot-unpack/ /trusted-boot
-    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE --BUNDLE_K8S_AND_AGENT_PROVIDER=$BUNDLE_K8S_AND_AGENT_PROVIDER
-    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
-        COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
-        # Sentinel: presence indicates this provider image was built by CanvOS
-        # with k8s bundled
-        RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
-    END
+    COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
+    # Sentinel: presence tells older Stylus (4.10.x) that k8s + agent-provider
+    # are bundled in this provider image, so it skips applying those sysext
+    # extensions on top.
+    RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     SAVE IMAGE --push $IMAGE_PATH
@@ -1013,41 +966,36 @@ provider-image:
         RUN chmod 644 /etc/logrotate.d/stylus.conf
     END
 
-    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE --BUNDLE_K8S_AND_AGENT_PROVIDER=$BUNDLE_K8S_AND_AGENT_PROVIDER
-    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
-        COPY --platform=linux/${ARCH} +kairos-provider-image/ /
-        # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
-        # instead of /system/providers/. Move to /system/providers/ and remove the new
-        # path so consumers always find the binary at the legacy location.
-        RUN if ls /usr/local/system/providers/agent-provider-* >/dev/null 2>&1; then \
-                mkdir -p /system/providers && \
-                mv /usr/local/system/providers/agent-provider-* /system/providers/ && \
-                rm -rf /usr/local/system/providers; \
-            fi
-        # Sentinel: presence indicates this provider image was built by CanvOS
-        # with k8s bundled
-        RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
-    END
+    COPY --platform=linux/${ARCH} +kairos-provider-image/ /
+    # Newer kairos providers place agent-provider-* at /usr/local/system/providers/
+    # instead of /system/providers/. Move to /system/providers/ and remove the new
+    # path so consumers always find the binary at the legacy location.
+    RUN if ls /usr/local/system/providers/agent-provider-* >/dev/null 2>&1; then \
+            mkdir -p /system/providers && \
+            mv /usr/local/system/providers/agent-provider-* /system/providers/ && \
+            rm -rf /usr/local/system/providers; \
+        fi
     COPY +stylus-image/etc/kairos/branding /etc/kairos/branding
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
     COPY +stylus-image/oem/stylus_config.yaml /etc/kairos/branding/stylus_config.yaml
     COPY +stylus-image/etc/elemental/config.yaml /etc/elemental/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
 
-    # As part of PE-8315, kairos-provider binaries are in /usr/local/system/providers instead of earlier /system/providers.
-    # To avoid breaking existing functionality for non systemd extensions supported paths we move the binary back to original path.
-    IF [ "$(cat /tmp/supports-systemd-extensions)" != "true" ]
-        IF [ "$IS_UKI" = "true" ]
-            COPY +internal-slink/slink /usr/bin/slink
-            COPY --keep-ts +install-k8s/output/ /k8s
-            RUN slink --source /k8s/ --target /opt/k8s
-            RUN rm -f /usr/bin/slink
-            RUN rm -rf /k8s
-            RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
-        ELSE
-            COPY --keep-ts +install-k8s/output/ /
-        END
+    IF [ "$IS_UKI" = "true" ]
+        COPY +internal-slink/slink /usr/bin/slink
+        COPY --keep-ts +install-k8s/output/ /k8s
+        RUN slink --source /k8s/ --target /opt/k8s
+        RUN rm -f /usr/bin/slink
+        RUN rm -rf /k8s
+        RUN ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
+    ELSE
+        COPY --keep-ts +install-k8s/output/ /
     END
+
+    # Sentinel: presence tells older Stylus (4.10.x) that k8s + agent-provider
+    # are bundled in this provider image, so it skips applying those sysext
+    # extensions on top.
+    RUN mkdir -p /etc/spectro-sysext && touch /etc/spectro-sysext/k8s-and-agent-provider-bundled
 
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
 
@@ -1189,7 +1137,10 @@ base-image:
     # OS == Ubuntu
     IF [ "$OS_DISTRIBUTION" = "ubuntu" ] &&  [ "$ARCH" = "amd64" ]
         RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends \
+                -o Dpkg::Options::="--force-confold" \
+                -o Dpkg::Options::="--force-confdef" \
+                snapd kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate libpam-pwquality -y
             
         IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
             # The token is mounted via Earthly's secret store as an env var
@@ -1217,17 +1168,30 @@ base-image:
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
             RUN export DEBIAN_FRONTEND=noninteractive && \
                 apt-get update && \
-                apt-get install -y linux-image-generic-hwe-$OS_VERSION
+                apt-get install -y \
+                    -o Dpkg::Options::="--force-confold" \
+                    -o Dpkg::Options::="--force-confdef" \
+                    linux-image-generic-hwe-$OS_VERSION
         END
 
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
+            # DEBIAN_FRONTEND=noninteractive does not suppress dpkg conffile prompts.
+            # The FIPS/STIG base images carry locally-modified conffiles (e.g. /etc/issue),
+            # and when an apt upgrade ships new content for one of them, dpkg prompts on
+            # stdin EOF in headless CI and fails with "end of file on stdin at conffile
+            # prompt" (PE-9572). confdef+confold resolves every configure-time conffile
+            # decision silently, keeping the on-disk (hardened) version when modified.
             RUN export DEBIAN_FRONTEND=noninteractive && \
                 apt-get update && \
-                apt-get upgrade $APT_UPGRADE_FLAGS && \
+                apt-get upgrade $APT_UPGRADE_FLAGS \
+                    -o Dpkg::Options::="--force-confold" \
+                    -o Dpkg::Options::="--force-confdef" && \
                 apt-get install --no-install-recommends -y \
+                    -o Dpkg::Options::="--force-confold" \
+                    -o Dpkg::Options::="--force-confdef" \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
                     parted \ # Used for creating and managing disk partitions.
                     cloud-guest-utils \ # Includes utilities for cloud environments, such as resizing root partitions.
@@ -1373,7 +1337,14 @@ base-image:
     END
 
     IF [ "$OS_DISTRIBUTION" = "rhel" ]
-        RUN yum install -y openssl rsyslog logrotate
+        # Ensure the packages are present; do not install-or-upgrade (PE-9573).
+        # FIPS/STIG ISO builds run without RHSM entitlements, so only anonymous
+        # UBI + EPEL repos are reachable here, and UBI carries no rsyslog-gnutls
+        # update. Upgrading rsyslog past the base image's strict
+        # rsyslog-gnutls Requires: rsyslog pin therefore cannot resolve; the
+        # errata cycle belongs in base image bumps, not this step. rpm -q
+        # short-circuits when the frozen base already ships the package.
+        RUN for pkg in openssl rsyslog logrotate; do rpm -q $pkg >/dev/null 2>&1 || yum install -y $pkg; done
     END
 
     DO +OS_RELEASE --OS_VERSION=$KAIROS_VERSION
@@ -1461,10 +1432,6 @@ iso-image:
     ARG IS_CLOUD_IMAGE=false
     ARG IMAGE_REGISTRY
 
-    # NOTE: intentionally do NOT pass --BUNDLE_K8S_AND_AGENT_PROVIDER here — the
-    # ISO always uses the real systemd probe (provider-image concern only).
-    DO +CHECK_SYSTEMD_VERSION --ARCH=$ARCH --BASE_IMAGE=$BASE_IMAGE
-
     IF [ "$IS_UKI" = "false" ]
         COPY --keep-ts --platform=linux/${ARCH} +stylus-image/ /
     ELSE
@@ -1511,9 +1478,7 @@ iso-image:
     END
 
 
-    IF [ "$(cat /tmp/supports-systemd-extensions)" = "true" ] && \
-       [ "$OS_DISTRIBUTION" = "ubuntu" ] && \
-       [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "true" ]
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "true" ]
         COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
         RUN chmod 755 /tmp/install-kernel-headers.sh
         RUN /tmp/install-kernel-headers.sh
