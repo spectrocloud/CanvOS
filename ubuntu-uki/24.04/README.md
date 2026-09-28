@@ -74,17 +74,20 @@ cd ubuntu-uki/24.04
 | `--keep-gpu-firmware` / `KEEP_GPU_FIRMWARE` | `false`                                           | Keep full GPU firmware (larger UKI)            |
 | `--push`                                    | off (`--load`)                                    | Push the architecture-specific image           |
 | `--no-cache`                                | off                                               | Pass `--no-cache` to buildx                    |
-| `KAIROS_VERSION`                            | `v4.1.2`                                          | Dockerfile `VERSION` → `kairos-init --version` |
-| `KAIROS_INIT_VERSION`                       | `v0.17.1`                                         | Default output tag component                   |
-| `KAIROS_INIT_IMAGE`                         | `quay.io/kairos/kairos-init:<version>`            | Complete kairos-init image reference           |
+| `KAIROS_VERSION`                            | `v4.3.0`                                          | Dockerfile `VERSION` → `kairos-init --version` |
+| `KAIROS_INIT_IMAGE`                         | `quay.io/kairos/kairos-init:<KAIROS_VERSION>`     | Complete kairos-init image reference           |
 | `SPECTRO_REPO`                              | `us-east1-docker.pkg.dev/spectro-images/dev/arun` | Default tag prefix                             |
 
+`kairos-init` is tagged with the kairos release version, so `KAIROS_VERSION`
+also supplies the default output tag component. There is no separate
+kairos-init version variable.
 
 Default tag:
-`${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_INIT_VERSION}-uki`
+`${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_VERSION}-uki`
 
-Dockerfile build-args: `KAIROS_INIT_IMAGE` (before first `FROM`), then
-`VERSION` and `KEEP_GPU_FIRMWARE`. The Kairos model is always `generic`.
+Dockerfile build-args: `KAIROS_VERSION` and `KAIROS_INIT_IMAGE` (before first
+`FROM`), then `VERSION` and `KEEP_GPU_FIRMWARE`. The Kairos model is always
+`generic`.
 
 ## Use with CanvOS
 
@@ -94,7 +97,7 @@ In `.arg`:
 OS_DISTRIBUTION=ubuntu
 OS_VERSION=24.04
 IS_UKI=true
-BASE_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/kairos-ubuntu:24.04-core-amd64-generic-v0.17.1-uki
+BASE_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun/kairos-ubuntu:24.04-core-amd64-generic-v4.3.0-uki
 ```
 
 Then build the installer as usual (`./earthly.sh +uki-iso`, etc.).

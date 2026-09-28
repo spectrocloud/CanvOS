@@ -8,10 +8,9 @@ FIPS=false
 IS_UKI=false
 OUTPUT=load
 NO_CACHE=false
-HADRON_VERSION="${HADRON_VERSION:-v0.5.1}"
-KAIROS_VERSION="${KAIROS_VERSION:-v4.1.2}"
-KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION:-v0.17.1}"
-KAIROS_INIT_IMAGE="${KAIROS_INIT_IMAGE:-quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}}"
+HADRON_VERSION="${HADRON_VERSION:-v0.5.2}"
+KAIROS_VERSION="${KAIROS_VERSION:-v4.3.0}"
+KAIROS_INIT_IMAGE="${KAIROS_INIT_IMAGE:-quay.io/kairos/kairos-init:${KAIROS_VERSION}}"
 SPECTRO_REPO="${SPECTRO_REPO:-us-east1-docker.pkg.dev/spectro-images/dev/arun}"
 MODULES_IMAGE=""
 
@@ -26,7 +25,7 @@ hadron_image_tag() {
 	elif [ "${IS_UKI}" = "true" ]; then
 		variant="-uki"
 	fi
-	echo "${SPECTRO_REPO}/kairos-hadron:${HADRON_VERSION}-core-generic-${KAIROS_INIT_VERSION}${variant}"
+	echo "${SPECTRO_REPO}/kairos-hadron:${HADRON_VERSION}-core-generic-${KAIROS_VERSION}${variant}"
 }
 
 platforms() {
@@ -57,7 +56,6 @@ build_hadron_image() {
 		--platform "$(platforms)" \
 		"${CACHE_ARGS[@]}" \
 		--build-arg KAIROS_VERSION="${KAIROS_VERSION}" \
-		--build-arg KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION}" \
 		--build-arg KAIROS_INIT_IMAGE="${KAIROS_INIT_IMAGE}" \
 		--build-arg HADRON_VERSION="${HADRON_VERSION}" \
 		--build-arg FIPS="${FIPS}" \
@@ -106,12 +104,13 @@ Options:
   -h, --help                  Show this help
 
 Environment (override defaults; CLI flags always win):
-  HADRON_VERSION          Upstream Hadron version tag (default: v0.5.1)
+  HADRON_VERSION          Upstream Hadron version tag (default: v0.5.2)
   KAIROS_VERSION          Kairos version passed to kairos-init --version
-                          (default: v4.1.2). Not used in the image tag.
-  KAIROS_INIT_VERSION     kairos-init image tag. This is
-                          also the tag of the built Hadron image.
-  KAIROS_INIT_IMAGE       Complete kairos-init image reference.
+                          (default: v4.3.0). kairos-init is tagged with the
+                          kairos version, so this is also the tag component of
+                          both the kairos-init image and the built Hadron image.
+  KAIROS_INIT_IMAGE       Complete kairos-init image reference
+                          (default: quay.io/kairos/kairos-init:${KAIROS_VERSION}).
 						  
   SPECTRO_REPO            Registry + org prefix for all built images
                           (default: us-east1-docker.pkg.dev/spectro-images/dev/arun)
@@ -159,7 +158,6 @@ echo "  FIPS: ${FIPS}"
 echo "  Trusted Boot (UKI): ${IS_UKI}"
 echo "  Hadron version: ${HADRON_VERSION}"
 echo "  Kairos version: ${KAIROS_VERSION}"
-echo "  kairos-init version: ${KAIROS_INIT_VERSION}"
 echo "  kairos-init image: ${KAIROS_INIT_IMAGE}"
 echo "  Output mode: ${OUTPUT}"
 echo "  No cache: ${NO_CACHE}"

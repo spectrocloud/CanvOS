@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 ARG BASE_IMAGE=registry.access.redhat.com/ubi10-init:10.2
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v0.17.1
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:v4.3.0
 
 FROM $KAIROS_INIT_IMAGE AS kairos-init
 FROM $BASE_IMAGE
 
 ARG ORGNAME
 ARG SATHOSTNAME
-ARG KAIROS_VERSION=v4.1.2
+ARG KAIROS_VERSION=v4.3.0
 
 # Unlike Dockerfile.rhel10 there is no EPEL install here — EPEL 10 must already be synced on
 # the Satellite and attached to the activation key. It is mandatory, not optional: RHEL 10

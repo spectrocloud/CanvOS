@@ -1,6 +1,9 @@
-ARG HADRON_VERSION=v0.5.1
-ARG KAIROS_INIT_VERSION=v0.17.1
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}
+ARG HADRON_VERSION=v0.5.2
+# Global scope so the kairos-init ref below can be derived from it (an ARG used
+# in FROM must be declared before the first FROM). Restated inside the stage
+# that runs kairos-init, which is what stamps it into os-release.
+ARG KAIROS_VERSION=v4.3.0
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_VERSION}
 ARG FIPS=false
 ARG IS_UKI=false
 
@@ -16,7 +19,7 @@ FROM ghcr.io/kairos-io/hadron-trusted:${HADRON_VERSION} AS base-fips-false-uki-t
 # base-fips-true-uki-true intentionally omitted: FIPS and UKI cannot be combined.
 
 FROM base-fips-${FIPS}-uki-${IS_UKI} AS base-kairos
-ARG KAIROS_VERSION=v4.1.2
+ARG KAIROS_VERSION=v4.3.0
 ARG FIPS=false
 ARG IS_UKI=false
 
