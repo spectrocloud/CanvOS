@@ -19,6 +19,7 @@ stages:
         - ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
         - ln -sf /opt/spectrocloud/bin/palette-tui /usr/local/bin/palette-tui
         - ln -sf /opt/spectrocloud/bin/helm /usr/local/bin/helm
+        - ln -sf /opt/spectrocloud/bin/scw /usr/local/bin/scw
         - journalctl > /usr/local/installer.log
         - umount /usr/local
       name: "Run after install commands"
@@ -40,6 +41,7 @@ stages:
         - ln -sf /opt/spectrocloud/bin/agent-provider-stylus /usr/local/bin/agent-provider-stylus
         - ln -sf /opt/spectrocloud/bin/palette-tui /usr/local/bin/palette-tui
         - ln -sf /opt/spectrocloud/bin/helm /usr/local/bin/helm
+        - ln -sf /opt/spectrocloud/bin/scw /usr/local/bin/scw
         - journalctl > /usr/local/installer.log
         - if mount | grep /usr/local >/dev/null; then umount /usr/local; fi
         - if [ -e /dev/mapper/persistent ]; then cryptsetup close /dev/mapper/persistent; fi
