@@ -75,16 +75,19 @@ cd ubuntu-uki/24.04
 | `--push`                                    | off (`--load`)                                    | Push the architecture-specific image           |
 | `--no-cache`                                | off                                               | Pass `--no-cache` to buildx                    |
 | `KAIROS_VERSION`                            | `v4.3.0`                                          | Dockerfile `VERSION` → `kairos-init --version` |
-| `KAIROS_INIT_VERSION`                       | `v4.3.0`                                         | Default output tag component                   |
-| `KAIROS_INIT_IMAGE`                         | `quay.io/kairos/kairos-init:<version>`            | Complete kairos-init image reference           |
+| `KAIROS_INIT_IMAGE`                         | `quay.io/kairos/kairos-init:<KAIROS_VERSION>`     | Complete kairos-init image reference           |
 | `SPECTRO_REPO`                              | `us-east1-docker.pkg.dev/spectro-images/dev/arun` | Default tag prefix                             |
 
+`kairos-init` is tagged with the kairos release version, so `KAIROS_VERSION`
+also supplies the default output tag component. There is no separate
+kairos-init version variable.
 
 Default tag:
-`${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_INIT_VERSION}-uki`
+`${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_VERSION}-uki`
 
-Dockerfile build-args: `KAIROS_INIT_IMAGE` (before first `FROM`), then
-`VERSION` and `KEEP_GPU_FIRMWARE`. The Kairos model is always `generic`.
+Dockerfile build-args: `KAIROS_VERSION` and `KAIROS_INIT_IMAGE` (before first
+`FROM`), then `VERSION` and `KEEP_GPU_FIRMWARE`. The Kairos model is always
+`generic`.
 
 ## Use with CanvOS
 
