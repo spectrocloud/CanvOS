@@ -8,8 +8,12 @@
 #     Earthfile (air-gapped GPU Operator path), or
 #   - ship those blobs as a signed sysext (Kairos Trusted Boot pattern).
 #
-ARG KAIROS_INIT_VERSION=v4.3.0
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}
+# Global scope so the kairos-init ref below can be derived from it (an ARG used
+# in FROM must be declared before the first FROM). VERSION, declared inside the
+# stage, is what kairos-init stamps into os-release, so it must track this value;
+# build.sh passes VERSION="$KAIROS_VERSION" to keep the two in step.
+ARG KAIROS_VERSION=v4.3.0
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_VERSION}
 
 FROM ${KAIROS_INIT_IMAGE} AS kairos-init
 

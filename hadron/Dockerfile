@@ -1,6 +1,9 @@
 ARG HADRON_VERSION=v0.5.2
-ARG KAIROS_INIT_VERSION=v4.3.0
-ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}
+# Global scope so the kairos-init ref below can be derived from it (an ARG used
+# in FROM must be declared before the first FROM). Restated inside the stage
+# that runs kairos-init, which is what stamps it into os-release.
+ARG KAIROS_VERSION=v4.3.0
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_VERSION}
 ARG FIPS=false
 ARG IS_UKI=false
 
