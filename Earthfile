@@ -162,12 +162,9 @@ ARG SPECTRO_EXTENSION_CERT_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/arun
 ARG PALETTE_SYSEXT_IMAGE=us-docker.pkg.dev/palette-images/edge/kubernetes/extensions/palette-sysext:v1.0.1
 
 # Bundle the Kubernetes binaries and the agent-provider binaries into the
-# provider image (both UKI and non-UKI).
-#
-# false (default): on systemd >= 255. On older systemd, they ARE baked in.
-# true: bundle them regardless of the base image's systemd version. Use when
-#   you need a self-contained provider image.
-ARG BUNDLE_K8S_AND_AGENT_PROVIDER=false
+# provider image (both UKI and non-UKI). Default: true
+# Set to false for OS with systemd extensions support
+ARG BUNDLE_K8S_AND_AGENT_PROVIDER=true
 
 ARG CMDLINE="stylus.registration"
 ARG BRANDING="Palette eXtended Kubernetes Edge"
