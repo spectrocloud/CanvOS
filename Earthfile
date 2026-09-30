@@ -1365,7 +1365,10 @@ base-image:
             zypper clean
     END
 
-    IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ]
+    # SLEM installs apparmor-parser under /sbin only; containerd's PATH does not
+    # include /sbin, so kubelet static pods fail with "apparmor_parser: not found".
+    # Copy to /usr/bin for opensuse-leap/sles/slem (same RPM layout).
+    IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ] || [ "$OS_DISTRIBUTION" = "slem" ]
         RUN zypper install -y apparmor-parser apparmor-profiles rsyslog logrotate
         RUN zypper cc && \
             zypper clean
