@@ -1224,6 +1224,14 @@ base-image:
                     linux-image-generic-hwe-$OS_VERSION
         END
 
+        IF [ "$FIPS_ENABLED" = "true" ]
+            # Without Pro attached, apt only sees the archive, and a newer non-FIPS build replaces the +Fips package.
+            RUN dpkg-query -W -f='${Package} ${Version}\n' | awk 'tolower($2) ~ /fips/ {print $1}' > /var/tmp/fips-packages && \
+                if [ "$UBUNTU_PRO_ATTACH" != "true" ] && [ -s /var/tmp/fips-packages ]; then \
+                    xargs apt-mark hold < /var/tmp/fips-packages; \
+                fi
+        END
+
         # https://www.reddit.com/r/Ubuntu/comments/1bd46t3/i_did_an_aptget_updateupgrade_but_the_kernel/
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
@@ -1347,6 +1355,17 @@ base-image:
         IF [ "$CIS_HARDENING" = "true" ]
             COPY cis-harden/harden.sh /tmp/harden.sh
             RUN /tmp/harden.sh && rm /tmp/harden.sh
+        END
+
+        IF [ "$FIPS_ENABLED" = "true" ]
+            RUN lost=$(while read -r pkg; do \
+                    dpkg-query -W -f='${Package} ${Version}\n' "$pkg" 2>/dev/null | awk 'tolower($2) !~ /fips/'; \
+                done < /var/tmp/fips-packages) && \
+                if [ -n "$lost" ]; then \
+                    echo "ERROR: FIPS packages were replaced by non-FIPS builds:" >&2; echo "$lost" >&2; exit 1; \
+                fi && \
+                if [ -s /var/tmp/fips-packages ]; then xargs apt-mark unhold < /var/tmp/fips-packages > /dev/null; fi && \
+                rm -f /var/tmp/fips-packages
         END
 
         IF [ "$UBUNTU_PRO_ATTACH" = "true" ]
