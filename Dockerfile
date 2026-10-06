@@ -97,13 +97,21 @@ COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spect
 # ENTRYPOINT /entry.sh
 
 # Portworx prerequisites: device-mapper/LVM tools, augeas, and the NFS server stack.
+# On FIPS kernels also installs headers for DRBD (Piraeus) compilation.
 # Packages are reinstalled and every required binary is verified so a silently
 # skipped install fails the build instead of shipping a broken image.
 RUN set -eu; \
-    echo "kernel in image: $(ls /lib/modules | sort -V | tail -1)"; \
+    kernel=$(ls /lib/modules | sort -V | tail -1); \
+    echo "kernel in image: ${kernel}"; \
     echo "nfs-kernel-server on arrival: $(dpkg -l nfs-kernel-server 2>/dev/null | tail -1)"; \
     apt-get update; \
     dpkg --configure -a || true; \
+    if echo "$kernel" | grep -qiE 'fips' || dpkg -l 2>/dev/null | grep -qiE 'linux-(image|modules).*fips'; then \
+        echo "FIPS kernel detected ($kernel), installing headers for DRBD compilation"; \
+        DEBIAN_FRONTEND=noninteractive apt-get install -yq --no-install-recommends linux-headers-$kernel; \
+    else \
+        echo "Standard kernel detected ($kernel), skipping headers"; \
+    fi; \
     DEBIAN_FRONTEND=noninteractive apt-get install -yq --reinstall --no-install-recommends \
         dmsetup mdadm lvm2 thin-provisioning-tools \
         augeas-tools augeas-lenses libaugeas0 \
