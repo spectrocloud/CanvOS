@@ -36,7 +36,7 @@ ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG K3S_PROVIDER_VERSION=v4.10.3
 ARG KUBEADM_PROVIDER_VERSION=v4.10.1
-ARG RKE2_PROVIDER_VERSION=v4.10.3
+ARG RKE2_PROVIDER_VERSION=vv4.10-spectro-4.10.1
 ARG NODEADM_PROVIDER_VERSION=v4.9.3
 ARG CANONICAL_PROVIDER_VERSION=v4.10.2
 
@@ -1235,6 +1235,43 @@ base-image:
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
+
+            IF [ "$FIPS_ENABLED" = "false" ]
+                # kdump-tools ships kdump-config plus the kdump-tools units;
+                # makedumpfile writes the vmcore. --no-install-recommends keeps
+                # linux-crashdump out, which would otherwise try to edit the
+                # host's bootloader configuration during the build.
+                RUN apt-get update && \
+                    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+                        -o Dpkg::Options::="--force-confold" \
+                        -o Dpkg::Options::="--force-confdef" \
+                        kdump-tools makedumpfile && \
+                    rm -rf /var/lib/apt/lists/*
+
+                # Build the kdump capture initrd.
+                #
+                # The crash kernel boots a SECOND initrd. kdump-tools generates it
+                # with mkinitramfs, which has none of the dracut-only machinery that
+                # assembles this root -- so the crash kernel cannot mount root and no
+                # vmcore is ever written. scripts/install-kdump-capture-initrd.sh
+                # builds that initrd with the same dracut invocation as the boot
+                # initrd above and fails the build if the two disagree.
+                #
+                # Runs after the dracut and depmod steps above, so the kernel and
+                # the boot initrd it mirrors are already final.
+                # The image's kdump configuration. Shipped from here rather than
+                # from overlay/files/ because that directory is copied wholesale
+                # into every variant -- including the UKI provider image, which
+                # builds from a different base and never gets these packages.
+                # Keeping config and package in one guarded block means a build
+                # can never end up with one without the other.
+                COPY kdump/etc/default/kdump-tools /etc/default/kdump-tools
+
+                COPY scripts/install-kdump-capture-initrd.sh /tmp/install-kdump-capture-initrd.sh
+                RUN chmod 755 /tmp/install-kdump-capture-initrd.sh && \
+                    /tmp/install-kdump-capture-initrd.sh && \
+                    rm -f /tmp/install-kdump-capture-initrd.sh
+            END
         END
 
         # NVIDIA GPU driver + DKMS kernel modules, built against the now-finalized
@@ -1385,6 +1422,20 @@ base-image:
         #
         RUN if ! grep -Fq "rd.driver.blacklist=nouveau" /etc/cos/bootargs.cfg; then \
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nouveau.modeset=0"|' /etc/cos/bootargs.cfg; \
+            fi
+
+        # Reserve memory for the kdump crash kernel (PE-9067).
+        #
+        # Without a reservation the crash kernel has nowhere to live, `kexec -p`
+        # fails to load it, and /sys/kernel/kexec_crash_loaded stays 0 -- a
+        # panic then reboots the node with no dump and no visible error.
+        #
+        # A single plain size is used rather than the "512M,high 72M,low" form
+        # some distros ship: the ,high/,low split is x86-only, and on a machine
+        # with no memory above 4G the high range silently reserves nothing
+        # while the kernel reports no error.
+        RUN if ! grep -Fq "crashkernel=" /etc/cos/bootargs.cfg; then \
+                sed -i 's|\(set baseCmd="[^"]*\)"|\1 crashkernel=512M"|' /etc/cos/bootargs.cfg; \
             fi
     END
 

@@ -1,0 +1,90 @@
+# kdump-tools configuration (PE-9067).
+#
+# This file replaces the package's own conffile. kdump-tools is useless without
+# USE_KDUMP=1 and a coredir that survives the reboot the dump triggers, so both
+# are set explicitly here rather than left to the package defaults.
+#
+# Shipped only on Ubuntu, non-FIPS, non-UKI images. It travels with the
+# kdump-tools package: both are installed from the same guarded block in
+# Earthfile:base-image. FIPS images are STIG-remediated with
+# service_kdump_disabled and mask kdump-tools.service; UKI images have no boot
+# initrd for the capture initrd to mirror. Neither gets this file.
+#
+# Reference: kdump-tools(5) / kdump-config(8).
+
+# Enable kdump. kdump-tools.init exits immediately when this is 0, which is the
+# package default -- so an image can look fully installed and still never load a
+# crash kernel.
+USE_KDUMP=1
+
+# Crash kernel image and its initrd.
+#
+# The package SHIPS these two lines (uncommented, pointing at /var/lib/kdump/), so
+# kdump-config uses whatever this file says and nothing else: kdump-config sources
+# /etc/default/kdump-tools at its line 39, and when KDUMP_KERNEL is non-empty
+# locate_kdump_kernel() takes the explicit path and exits 1 if either file is
+# missing. There is no fallback to /boot once they are set.
+#
+# Leaving them unset is not the safe option -- it is the broken one. The fallback
+# branch looks for /boot/initrd.img-<kver>; this image names its boot initrd
+# /boot/initrd-<kver> (Earthfile:1230), so the fallback matches nothing, sets
+# KDUMP_INITRD empty, and kexec is then invoked with NO --initrd at all. The crash
+# kernel boots with no initramfs, cannot mount a root, and no vmcore is written.
+#
+# Both paths point into /usr/lib/kdump rather than /var/lib/kdump because on this
+# image /var is a tmpfs-backed overlay (kairos-init 00_rootfs.yaml): anything the
+# image places under /var is not visible in the running root, so an explicit
+# include path into /var resolves to nothing and fails the load. /usr is part of
+# the immutable root and is visible on both the installed system and the live ISO.
+#
+# The filenames here carry no kernel version -- they are symlinks to the per-kernel
+# files, created at image-build time by scripts/install-kdump-capture-initrd.sh, so
+# this file does not have to name a version and does not go stale on a kernel bump.
+KDUMP_KERNEL="/usr/lib/kdump/vmlinuz"
+KDUMP_INITRD="/usr/lib/kdump/initrd.img"
+
+# Where the vmcore is written by the userspace save that runs AFTER switch_root.
+#
+# NOT under /var, for the same tmpfs reason as above: a dump written under /var
+# would be discarded by the reboot that follows the save -- the exact failure the
+# dump is supposed to survive. /usr/local is the persistent partition, mounted
+# from PARTLABEL=persistent, and it is not touched by an A/B slot swap.
+#
+# /var/crash (the upstream default) has the same tmpfs problem.
+KDUMP_COREDIR="/usr/local/kdump"
+
+# Number of dumps to keep in KDUMP_COREDIR before the oldest is removed.
+# The package default is 0, meaning "keep everything", which is a real risk on a
+# small persistent partition.
+KDUMP_NUM_DUMPS=3
+
+# Capture dmesg alongside the vmcore. The dmesg is what makes a dump readable
+# without a debugger, and it is what the acceptance check greps for the panic
+# string in.
+KDUMP_DUMP_DMESG=1
+
+# Module set for the capture initrd.
+#
+# Inert on noble's generator, and kept only to document intent. The image builds the
+# capture initrd with dracut at image-build time, so this value matters only if
+# kdump-tools regenerates the initrd on the device -- and noble's generator
+# (debian/kernel-postinst-generate-initrd, 1.10.3ubuntu2) does not source this file,
+# so it never sees KDUMP_MODULES at all. It is not exported to that script either,
+# which is why the packaged conffile does not ship the variable.
+KDUMP_MODULES="most"
+
+# Crash-kernel command line.
+#
+# Left unset on purpose. KDUMP_CMDLINE REPLACES the whole command line; the crash
+# kernel needs the same root= and cos-img/filename= as the running kernel, which
+# it inherits when this is empty. KDUMP_CMDLINE_APPEND appends instead, and is
+# the knob to reach for if a token must be added rather than replaced.
+#
+# Setting this to "" is safe and does NOT clear the packaged default: kdump-config
+# line 60 is KDUMP_CMDLINE_APPEND=${KDUMP_CMDLINE_APPEND:="<default>"}, and `:=`
+# restores the default for both unset and empty. On amd64 that default is
+#   reset_devices systemd.unit=kdump-tools-dump.service nr_cpus=1 irqpoll usbcore.nousb
+# (debian/rules). systemd.unit=kdump-tools-dump.service is load-bearing: it makes
+# the capture boot run the dump service directly instead of default.target, so the
+# crash kernel does not start the full production userspace just to write a file.
+KDUMP_CMDLINE_APPEND=""
