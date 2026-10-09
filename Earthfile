@@ -46,7 +46,10 @@ ARG CANONICAL_PROVIDER_VERSION=v4.10.2
 # These are not upstream defaults -- blank them out before proposing for main.
 ARG OS_DISTRIBUTION=ubuntu
 ARG OS_VERSION=24.04
-ARG K8S_VERSION=1.36.2
+# Left empty on purpose. The teams CI image-builder selects kubernetes versions
+# by filtering k8s_version.json, not by passing K8S_VERSION, so pinning it here
+# silently overrides the versions CI was asked to build.
+ARG K8S_VERSION
 ARG IMAGE_REGISTRY=us-east1-docker.pkg.dev/spectro-images/dev/rutu
 ARG IMAGE_REPO=edge
 ARG ISO_NAME=palette-edge-installer
