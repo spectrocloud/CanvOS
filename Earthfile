@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.10.0-rc.2
+ARG PE_VERSION=v0.0.0-558e008c
 # KAIROS_VERSION is the single Kairos version knob for this build path. kairos-init
 # moved into the kairos monorepo, so its image tag IS the kairos version. That makes
 # this arg double as the version component of the base image tags produced by
@@ -41,14 +41,17 @@ ARG NODEADM_PROVIDER_VERSION=v4.9.3
 ARG CANONICAL_PROVIDER_VERSION=v4.10.2
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
-ARG OS_DISTRIBUTION
-ARG OS_VERSION
-ARG K8S_VERSION
-ARG IMAGE_REGISTRY
-ARG IMAGE_REPO=$OS_DISTRIBUTION
-ARG ISO_NAME=installer
-ARG K8S_DISTRIBUTION
-ARG CUSTOM_TAG
+# Pinned to a local dev build: stylus images are consumed from, and the provider
+# image and installer ISO are published to, .../spectro-images/dev/rutu/edge.
+# These are not upstream defaults -- blank them out before proposing for main.
+ARG OS_DISTRIBUTION=ubuntu
+ARG OS_VERSION=24.04
+ARG K8S_VERSION=1.36.2
+ARG IMAGE_REGISTRY=us-east1-docker.pkg.dev/spectro-images/dev/rutu
+ARG IMAGE_REPO=edge
+ARG ISO_NAME=palette-edge-installer
+ARG K8S_DISTRIBUTION=k3s
+ARG CUSTOM_TAG=dev
 ARG CLUSTERCONFIG
 ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 ARG ARCH
@@ -217,7 +220,7 @@ END
 # yourself. Each derived image can still be overridden individually
 # (STYLUS_BASE / STYLUS_PACKAGE_BASE / CLI_IMAGE) for a non-standard layout.
 # Set in the .arg file or via CLI arguments.
-ARG STYLUS_REGISTRY=$SPECTRO_PUB_REPO/edge
+ARG STYLUS_REGISTRY=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge
 ARG STYLUS_BASE=$STYLUS_REGISTRY/stylus-framework-linux-$ARCH:$PE_VERSION
 ARG STYLUS_PACKAGE_BASE=$STYLUS_REGISTRY/stylus-linux-$ARCH:$PE_VERSION
 
@@ -242,7 +245,7 @@ ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE
 # only when Earthly is invoked with --push (or `docker push`ed afterwards).
 # Default false: a plain `./earthly.sh +build-all-images` keeps producing only the
 # local ./build/<ISO_NAME>.iso and does not add a multi-GB image to the local daemon.
-ARG ISO_DISK_IMAGE=false
+ARG ISO_DISK_IMAGE=true
 
 alpine-all:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +alpine
