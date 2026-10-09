@@ -243,7 +243,7 @@ ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE
 # Package the installer ISO as an OCI image (via +iso-disk-image) as part of
 # +build-all-images. It is pushed to $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
 # only when Earthly is invoked with --push (or `docker push`ed afterwards).
-# Default false: a plain `./earthly.sh +build-all-images` keeps producing only the
+# Enabled for this dev build. Upstream it defaults to false, which keeps the ISO a
 # local ./build/<ISO_NAME>.iso and does not add a multi-GB image to the local daemon.
 ARG ISO_DISK_IMAGE=true
 
