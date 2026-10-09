@@ -1268,6 +1268,7 @@ base-image:
                     gdisk \ # GPT partitioning tool, complementing fdisk for modern systems.
                     e2fsprogs \ # Provides tools for managing ext2/ext3/ext4 file systems.
                     dosfstools \ # Utilities for creating and checking FAT file systems.
+                    xfsprogs \ # Provides tools for creating and checking XFS file systems.
                     rsync \ # Used for efficient file synchronization and transfer.
                     cryptsetup-bin \ # Provides tools for setting up encrypted disks.
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
