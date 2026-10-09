@@ -83,11 +83,6 @@ run_case "reserved CUSTOM_TAG -> error" "+iso" "ARG CUSTOM_TAG" "CUSTOM_ARG_CUST
 expect_rc 1; out_has "managed by CanvOS/Earthfile"
 [ "$FAIL" -eq "$FAIL_AT" ] && ok "$LAST_CASE"; FAIL_AT=$FAIL
 
-# 4d. Reserved Earthfile-managed stylus knob (STYLUS_REGISTRY) -> ERROR.
-run_case "reserved STYLUS_REGISTRY -> error" "+iso" "ARG STYLUS_REGISTRY" "CUSTOM_ARG_STYLUS_REGISTRY=reg.example.com/edge"
-expect_rc 1; out_has "managed by CanvOS/Earthfile"
-[ "$FAIL" -eq "$FAIL_AT" ] && ok "$LAST_CASE"; FAIL_AT=$FAIL
-
 # 5. Empty value -> ERROR.
 run_case "empty value -> error" "+iso" "ARG BRAND" "CUSTOM_ARG_BRAND="
 expect_rc 1; out_has "set but empty"

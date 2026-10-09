@@ -6,18 +6,6 @@ OS_VERSION=22.04
 K8S_DISTRIBUTION=k3s
 ISO_NAME=palette-edge-installer
 ARCH=amd64
-
-# Registry + path prefix for the stylus artifacts pulled at build time (stylus
-# framework, stylus package, palette-edge-cli). Default: Spectro's public repo
-# ($SPECTRO_PUB_REPO/edge). Point this at your own registry to build against
-# stylus images you published yourself, e.g.:
-# STYLUS_REGISTRY=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge
-
-# Package the installer ISO as an OCI image (pushed with `--push`) in addition
-# to the local ./build/<ISO_NAME>.iso. Published to
-# $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG.
-# ISO_DISK_IMAGE=true
-
 HTTPS_PROXY=
 HTTP_PROXY=
 UPDATE_KERNEL=false
