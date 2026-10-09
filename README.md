@@ -259,10 +259,12 @@ cp .arg.template .arg
 | IMAGE_REGISTRY              | Image registry name that will store the image artifacts. The default value points to the _ttl.sh_ image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String  | `ttl.sh`                   |
 | OS_DISTRIBUTION             | OS distribution of your choice. For example, it can be `ubuntu`, `opensuse-leap`, `rhel`, `sles` or `hadron`                                                                                                                                                                                                     | String  | `ubuntu`                   |
 | IMAGE_REPO                  | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                 | String  | `$OS_DISTRIBUTION`         |
+| STYLUS_REGISTRY             | Registry and path prefix for the stylus artifacts pulled at build time (stylus framework, stylus package, and the `palette-edge-cli` validator). Defaults to Spectro's public repo. Point it at your own registry to build against stylus images you published yourself. Each derived image can still be overridden individually with `STYLUS_BASE`, `STYLUS_PACKAGE_BASE`, or `CLI_IMAGE`. | String  | `$SPECTRO_PUB_REPO/edge`   |
 | OS_VERSION                  | OS version. For Ubuntu, the possible values are `20`,`22`, and `24`. Whereas for openSUSE Leap, the possible value is `15.6`. For sles, possible values are `5.4`. For Hadron, the supported version is `v0.5.1`. This example uses `22` for Ubuntu.                                                                  | String  | `22`                       |
 | K8S_DISTRIBUTION            | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, `kubeadm-fips`, or `nodeadm`.                                                                                                                                                                                                                                  | String  | `k3s`                      |
 | BUNDLE_K8S_AND_AGENT_PROVIDER | Bundle Kubernetes binaries and the agent-provider binaries into UKI and non-UKI provider images even when the base OS supports systemd extensions. Provider images only; the installer ISO always uses the real systemd-extension probe.                                                                                                     | boolean | `true`                    |
 | ISO_NAME                    | Name of the Edge installer ISO image. In this example, the name is _palette-edge-installer_.                                                                                                                                                                                                                                                   | String  | `palette-edge-installer`   |
+| ISO_DISK_IMAGE             | Package the installer ISO as an OCI image (`+iso-disk-image`) as part of `+build-all-images`, published to `$IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG` when building with `--push`. Default `false` keeps the ISO as a local `./build/<ISO_NAME>.iso` only.                                                                             | boolean | `false`                    |
 | ARCH                        | Type of platform to use for the build. Used for Cross Platform Build (arm64 to amd64 as example).                                                                                                                                                                                                                                              | string  | `amd64`                    |
 | BASE_IMAGE                  | Base image to be used for building installer and provider images.                                                                                                                                                                                                                                                                              | String  |                            |
 | FIPS_ENABLED                | to generate FIPS compliant binaries. `true` or `false`                                                                                                                                                                                                                                                                                         | string  | `false`                    |
@@ -583,6 +585,43 @@ docker push ttl.sh/ubuntu:k3s-1.25.2-v4.2.3-demo
 14. Register the Edge host with Palette. Checkout the [Register Edge Host](https://docs.spectrocloud.com/clusters/edge/site-deployment/site-installation/edge-host-registration) guide.
 
 15. Build a cluster in [Palette](https://console.spectrocloud.com).
+
+### Building against your own stylus images and publishing to your own registry
+
+By default CanvOS pulls the stylus framework, the stylus package, and the `palette-edge-cli`
+validator from Spectro's public repo, and only pushes the provider image when you build with
+`--push`. To instead build against a stylus you published yourself and publish both artifacts
+back to that same registry, set the following in your `.arg` file
+(example registry: `us-east1-docker.pkg.dev/spectro-images/dev/rutu`):
+
+```shell
+IMAGE_REGISTRY=us-east1-docker.pkg.dev/spectro-images/dev/rutu
+IMAGE_REPO=edge
+CUSTOM_TAG=dev
+STYLUS_REGISTRY=us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge
+ISO_DISK_IMAGE=true
+```
+
+`STYLUS_REGISTRY` is the prefix the three stylus image references are derived from — for
+`amd64` that is `<STYLUS_REGISTRY>/stylus-framework-linux-amd64:<PE_VERSION>`,
+`<STYLUS_REGISTRY>/stylus-linux-amd64:<PE_VERSION>`, and
+`<STYLUS_REGISTRY>/palette-edge-cli-amd64:<PE_VERSION>`. `ISO_DISK_IMAGE=true` adds
+`+iso-disk-image` to `+build-all-images`, which packages the installer ISO as an OCI image.
+
+Then log in and build with `--push`:
+
+```shell
+docker login us-east1-docker.pkg.dev
+./earthly.sh --push +build-all-images --ARCH=amd64
+```
+
+This publishes:
+
+- provider image — `us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge:k3s-<k8s-version>-<PE_VERSION>-dev`
+- installer ISO as an OCI image — `us-east1-docker.pkg.dev/spectro-images/dev/rutu/edge/palette-edge-installer:<PE_VERSION>-dev`
+
+The `.iso` file is still written to `./build/` for local use. To publish the ISO only (without
+rebuilding the provider images), build the `+iso-disk-image` target directly.
 
 ### How-Tos
 

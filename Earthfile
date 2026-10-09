@@ -211,15 +211,22 @@ IF [[ "$BASE_IMAGE" =~ "nvidia-jetson-agx-orin" ]]
     ARG IS_JETSON=true
 END
 
-ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
-ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
+# Registry + path prefix for the stylus artifacts consumed at build time: the
+# stylus framework, the stylus package, and the palette-edge-cli validator.
+# Point this at your own registry to build against stylus images you published
+# yourself. Each derived image can still be overridden individually
+# (STYLUS_BASE / STYLUS_PACKAGE_BASE / CLI_IMAGE) for a non-standard layout.
+# Set in the .arg file or via CLI arguments.
+ARG STYLUS_REGISTRY=$SPECTRO_PUB_REPO/edge
+ARG STYLUS_BASE=$STYLUS_REGISTRY/stylus-framework-linux-$ARCH:$PE_VERSION
+ARG STYLUS_PACKAGE_BASE=$STYLUS_REGISTRY/stylus-linux-$ARCH:$PE_VERSION
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
+    ARG CLI_IMAGE=$STYLUS_REGISTRY/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
+    ARG CLI_IMAGE=$STYLUS_REGISTRY/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
@@ -229,6 +236,13 @@ ELSE
 END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE_TAG
+
+# Package the installer ISO as an OCI image (via +iso-disk-image) as part of
+# +build-all-images. It is pushed to $IMAGE_REGISTRY/$IMAGE_REPO/$ISO_NAME:$IMAGE_TAG
+# only when Earthly is invoked with --push (or `docker push`ed afterwards).
+# Default false: a plain `./earthly.sh +build-all-images` keeps producing only the
+# local ./build/<ISO_NAME>.iso and does not add a multi-GB image to the local daemon.
+ARG ISO_DISK_IMAGE=false
 
 alpine-all:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +alpine
@@ -252,6 +266,10 @@ build-all-images:
     ELSE IF [ "$ARCH" = "amd64" ]
         BUILD --platform=linux/amd64 +iso-image
         BUILD --platform=linux/amd64 +iso
+    END
+    # Optionally package the ISO as an OCI image too (pushed only on --push).
+    IF [ "$ISO_DISK_IMAGE" = "true" ]
+        BUILD +iso-disk-image
     END
 
 build-provider-images:
