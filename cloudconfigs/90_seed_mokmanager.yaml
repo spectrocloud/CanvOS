@@ -1,0 +1,86 @@
+#cloud-config
+# Seed shim's MokManager (mmx64.efi) onto the installed EFI System Partition.
+#
+# Ubuntu's shim-signed ships /usr/lib/shim/mmx64.efi in the rootfs, but the
+# Kairos installer only copies shim + GRUB to the ESP. Without mmx64.efi on the
+# ESP, shim cannot launch MokManager, so `mokutil --import` + reboot never
+# reaches the blue enrollment screen. This bakes in the manual workaround from
+# the "MokManager Guide" runbook (mount the ESP, install mmx64.efi, unmount).
+#
+# Runs on every boot of the installed system (boot.after), so it covers fresh
+# installs, in-place Kairos upgrades and resets alike; it is idempotent and
+# never fails boot.
+#
+# UKI images boot via systemd-boot and never load shim, so they are excluded at
+# build time (the +base-image COPY guard) and skipped at runtime below.
+name: "Seed MokManager (mmx64.efi) onto the EFI System Partition"
+stages:
+  boot.after:
+    - name: "Ensure mmx64.efi is present on the ESP"
+      if: '[ ! -e "/run/cos/live_mode" ] && [ ! -e "/run/cos/recovery_mode" ] && [ ! -e "/run/cos/uki_boot_mode" ]'
+      commands:
+        - |
+          # Best-effort throughout: a missing source, missing ESP or a failed
+          # mount must never block boot.
+          SRC=""
+          for c in /usr/lib/shim/mmx64.efi /usr/lib/shim/mmx64.efi.signed /usr/lib/shim/mmx64.efi.dualsigned; do
+            if [ -f "$c" ]; then SRC="$c"; break; fi
+          done
+          if [ -z "$SRC" ]; then
+            echo "seed-mokmanager: no mmx64.efi under /usr/lib/shim; skipping"
+            exit 0
+          fi
+
+          # Locate the installed ESP. Labelled COS_GRUB by Kairos/CanvOS; fall
+          # back to the GPT partition label (lowercase "efi"), then to the usual
+          # device nodes as a last resort.
+          ESP_DEV=""
+          for spec in "LABEL=COS_GRUB" "PARTLABEL=efi" "LABEL=EFI"; do
+            ESP_DEV=$(findfs "$spec" 2>/dev/null || true)
+            [ -n "$ESP_DEV" ] && break
+          done
+          if [ -z "$ESP_DEV" ]; then
+            for d in /dev/sda1 /dev/nvme0n1p1 /dev/vda1; do
+              [ -b "$d" ] && ESP_DEV="$d" && break
+            done
+          fi
+          if [ -z "$ESP_DEV" ]; then
+            echo "seed-mokmanager: no ESP found; skipping"
+            exit 0
+          fi
+
+          # Reuse an existing mount if the ESP is already mounted; otherwise
+          # mount it ourselves and remember to unmount.
+          ESP_MNT=$(findmnt -rn -o TARGET --source "$ESP_DEV" 2>/dev/null | head -n1 || true)
+          OUR_MNT=""
+          if [ -n "$ESP_MNT" ]; then
+            # An existing mount may be read-only; remount it writable if needed.
+            if ! touch "$ESP_MNT/.mok-rw" 2>/dev/null; then
+              mount -o remount,rw "$ESP_MNT" 2>/dev/null || true
+            fi
+            rm -f "$ESP_MNT/.mok-rw" 2>/dev/null || true
+          else
+            OUR_MNT=$(mktemp -d /run/cos-mok.XXXXXX)
+            if ! mount -o rw "$ESP_DEV" "$OUR_MNT" 2>/dev/null; then
+              echo "seed-mokmanager: failed to mount $ESP_DEV; skipping"
+              rmdir "$OUR_MNT" 2>/dev/null || true
+              exit 0
+            fi
+            ESP_MNT="$OUR_MNT"
+          fi
+
+          TARGET="$ESP_MNT/EFI/boot/mmx64.efi"
+          if [ -f "$TARGET" ] && \
+             [ "$(sha256sum "$SRC" | cut -d' ' -f1)" = "$(sha256sum "$TARGET" | cut -d' ' -f1)" ]; then
+            echo "seed-mokmanager: mmx64.efi already current on $ESP_DEV"
+          else
+            mkdir -p "$ESP_MNT/EFI/boot"
+            install -m 0755 "$SRC" "$TARGET" && sync && \
+              echo "seed-mokmanager: installed $SRC -> $ESP_DEV:/EFI/boot/mmx64.efi"
+          fi
+
+          if [ -n "$OUR_MNT" ]; then
+            umount "$OUR_MNT" 2>/dev/null || true
+            rmdir "$OUR_MNT" 2>/dev/null || true
+          fi
+          exit 0

@@ -1178,6 +1178,15 @@ base-image:
         COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
     END
 
+    # Ship shim's MokManager onto the installed ESP. The Kairos installer copies
+    # shim + GRUB to the EFI System Partition but not mmx64.efi, so MokManager
+    # cannot launch and `mokutil --import` never reaches the enrollment screen.
+    # The cloud-config seeds EFI/boot/mmx64.efi on the running system. UKI images
+    # boot via systemd-boot and never load shim, so they are excluded.
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$ARCH" = "amd64" ] && [ "$IS_UKI" = "false" ]
+        COPY cloudconfigs/90_seed_mokmanager.yaml /system/oem/90_seed_mokmanager.yaml
+    END
+
     # Ensure the Renesas xHCI (USB 3.0) host controller driver is bundled into the
     # initramfs so installation from USB media works on hardware using that chipset.
     # Must run before the distro dracut regeneration below so the driver is included.
@@ -1252,7 +1261,7 @@ base-image:
                     dosfstools \ # Utilities for creating and checking FAT file systems.
                     xfsprogs \ # Provides tools for creating and checking XFS file systems.
                     rsync \ # Used for efficient file synchronization and transfer.
-                    cryptsetup-bin \ # Provides tools for setting up encrypted disks.
+                    cryptsetup-bin mokutil \ # cryptsetup-bin sets up encrypted disks; mokutil manages MOK enrollment.
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
                 latest_kernel=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1 | awk -F '-' '{print $1"-"$2}') && \
                 if [ "$FIPS_ENABLED" = "true" ]; then \
@@ -1285,6 +1294,11 @@ base-image:
             RUN if [ ! -f /usr/bin/grub2-editenv ]; then \
                 ln -s /usr/sbin/grub-editenv /usr/bin/grub2-editenv; \
             fi
+
+            # Fail the build if shim-signed did not provide MokManager, otherwise
+            # the 90_seed_mokmanager.yaml stage would silently do nothing.
+            RUN ls /usr/lib/shim/mmx64.efi* >/dev/null 2>&1 || \
+                { echo "ERROR: shim-signed did not provide mmx64.efi under /usr/lib/shim/"; exit 1; }
         END
 
         # NVIDIA GPU driver + DKMS kernel modules, built against the now-finalized
