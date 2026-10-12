@@ -1345,6 +1345,19 @@ base-image:
             END
         END
 
+        # kdump and pstore, Ubuntu 24.04 amd64 only (this sits in the ubuntu + amd64 block).
+        # kdump is not in FIPS/CIS images (hardening disables kdump) or UKI images.
+        IF [ "$OS_VERSION" = "24" ] || [ "$OS_VERSION" = "24.04" ]
+            IF [ "$IS_UKI" = "false" ] && [ "$FIPS_ENABLED" = "false" ] && [ "$CIS_HARDENING" = "false" ]
+                DO +KDUMP_UBUNTU
+            END
+            # pstore records to the persistent journal on every non-UKI image, kdump or not
+            # (FIPS, STIG and CIS included).
+            IF [ "$IS_UKI" = "false" ]
+                COPY overlay/pstore/usr /usr
+            END
+        END
+
         IF [ "$CIS_HARDENING" = "true" ]
             COPY cis-harden/harden.sh /tmp/harden.sh
             RUN /tmp/harden.sh && rm /tmp/harden.sh
@@ -1892,3 +1905,54 @@ UPX:
     COMMAND
     ARG bin
     RUN upx -1 $bin
+
+# makedumpfile for Ubuntu 24.04 kdump images (PE-9067). The archive package supports kernels only
+# up to 6.8.4, so Ubuntu's newer source (1.7.9: up to 7.0) is rebuilt on the image's own base, which
+# keeps the .deb's dependencies matching. Saves the .deb and the newest kernel version it supports.
+makedumpfile-match:
+    FROM --platform=linux/${ARCH} $BASE_IMAGE
+    ARG MAKEDUMPFILE_SRC_VERSION=1:1.7.9-0ubuntu1
+    # Pins the .dsc; dpkg-source -x checks the size and checksums of every file it lists.
+    ARG MAKEDUMPFILE_DSC_SHA256=6fabf875bf583caf0a918653a6a0a0cbf562eb7a1e1e7966734f2f12a6603639
+    RUN apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+            ca-certificates curl build-essential dpkg-dev debhelper \
+            libbz2-dev libdw-dev libelf-dev liblzo2-dev zlib1g-dev libzstd-dev
+    WORKDIR /build
+    # Versioned as a backport (~<release>.1spectro1) so it is never mistaken for an archive
+    # package. LTO is off: GCC 13 hits an internal error in lto_main on this package.
+    RUN set -e; . /etc/os-release; \
+        url="https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/makedumpfile/${MAKEDUMPFILE_SRC_VERSION}"; \
+        dsc="makedumpfile_${MAKEDUMPFILE_SRC_VERSION#*:}.dsc"; \
+        curl -fsSL --retry 3 -o "$dsc" "${url}/${dsc}"; \
+        echo "${MAKEDUMPFILE_DSC_SHA256}  ${dsc}" | sha256sum -c -; \
+        for f in $(awk '/^Files:/ { on = 1; next } /^[^ ]/ { on = 0 } on { print $3 }' "$dsc"); do \
+            curl -fsSL --retry 3 -o "$f" "${url}/${f}"; \
+        done; \
+        dpkg-source -x "$dsc" src; cd src; \
+        sed -i '1s/(\([^)]*\))/(\1~'"${VERSION_ID}"'.1spectro1)/' debian/changelog; \
+        DEB_BUILD_MAINT_OPTIONS="optimize=-lto" dpkg-buildpackage -us -uc -b -j"$(nproc)"; \
+        mkdir -p /out; cp ../makedumpfile_*.deb /out/makedumpfile.deb; \
+        sed -n 's/^#define LATEST_VERSION.*KERNEL_VERSION(\([0-9]*\), *\([0-9]*\), *\([0-9]*\)).*/\1.\2.\3/p' \
+            makedumpfile.h > /out/makedumpfile-supported-kernel; \
+        test -s /out/makedumpfile-supported-kernel; cat /out/makedumpfile-supported-kernel
+    SAVE ARTIFACT /out/makedumpfile.deb /makedumpfile.deb
+    SAVE ARTIFACT /out/makedumpfile-supported-kernel /makedumpfile-supported-kernel
+
+# kdump on Ubuntu (PE-9067), run inside the calling image: kdump-tools with the makedumpfile from
+# +makedumpfile-match (the 24.04 archive package supports kernels only up to 6.8.4), the files under
+# overlay/kdump/ubuntu, then build-kdump.sh, which builds the capture initrd and fails the build when
+# the image kernel is newer than the makedumpfile limit. base-image decides which images get it.
+KDUMP_UBUNTU:
+    COMMAND
+    COPY +makedumpfile-match/makedumpfile.deb /tmp/makedumpfile.deb
+    COPY +makedumpfile-match/makedumpfile-supported-kernel /usr/lib/kdump/makedumpfile-supported-kernel
+    RUN apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+            kdump-tools /tmp/makedumpfile.deb && \
+        rm -rf /var/lib/apt/lists/* /tmp/makedumpfile.deb
+    COPY overlay/kdump/ubuntu/etc /etc
+    COPY overlay/kdump/ubuntu/usr /usr
+    COPY overlay/kdump/ubuntu/build-kdump.sh /tmp/build-kdump.sh
+    RUN chmod 755 /usr/lib/kdump/kdump-merge && \
+        bash /tmp/build-kdump.sh && rm -f /tmp/build-kdump.sh
