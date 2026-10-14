@@ -6,8 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT=load
 NO_CACHE=false
 KEEP_GPU_FIRMWARE="${KEEP_GPU_FIRMWARE:-false}"
-KAIROS_VERSION="${KAIROS_VERSION:-v4.3.0}"
-KAIROS_INIT_IMAGE="${KAIROS_INIT_IMAGE:-quay.io/kairos/kairos-init:${KAIROS_VERSION}}"
+KAIROS_VERSION="${KAIROS_VERSION:-v4.1.2}"
+KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION:-v0.17.1}"
+KAIROS_INIT_IMAGE="${KAIROS_INIT_IMAGE:-quay.io/kairos/kairos-init:${KAIROS_INIT_VERSION}}"
 SPECTRO_REPO="${SPECTRO_REPO:-us-east1-docker.pkg.dev/spectro-images/dev/arun}"
 ARCH="${ARCH:-amd64}"
 IMAGE_TAG=""
@@ -21,7 +22,7 @@ GPU firmware trimmed by default (LP#1958518 workaround).
 
 Options:
   --tag NAME              Image tag to build (default:
-                          ${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_VERSION}-uki)
+                          ${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_INIT_VERSION}-uki)
   --arch {amd64|arm64}    Target architecture (default: amd64)
   --keep-gpu-firmware     Keep full linux-firmware GPU blobs (larger UKI)
   --push                  Push the image. Default: --load
@@ -31,11 +32,9 @@ Options:
 Environment (CLI flags win):
   ARCH                    Target architecture (default amd64)
   KEEP_GPU_FIRMWARE       true|false (default false)
-  KAIROS_VERSION          Passed to kairos-init --version, and the default
-                          output tag component: kairos-init is tagged with
-                          the kairos version (default v4.3.0)
+  KAIROS_VERSION          Passed to kairos-init --version (default v4.1.2)
+  KAIROS_INIT_VERSION     Default output tag component (v0.17.1)
   KAIROS_INIT_IMAGE       Complete kairos-init image reference
-                          (default quay.io/kairos/kairos-init:${KAIROS_VERSION})
   SPECTRO_REPO            Registry/org prefix for the default tag
 
 Examples:
@@ -76,7 +75,7 @@ case "${ARCH}" in
   *) echo "Unsupported architecture: ${ARCH} (expected amd64 or arm64)" >&2; exit 1 ;;
 esac
 
-IMAGE_TAG="${IMAGE_TAG:-${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_VERSION}-uki}"
+IMAGE_TAG="${IMAGE_TAG:-${SPECTRO_REPO}/kairos-ubuntu:24.04-core-${ARCH}-generic-${KAIROS_INIT_VERSION}-uki}"
 PLATFORM="linux/${ARCH}"
 
 CACHE_ARGS=()
@@ -88,6 +87,7 @@ echo "Build configuration:"
 echo "  Image tag:           ${IMAGE_TAG}"
 echo "  Architecture:        ${ARCH}"
 echo "  Kairos version:      ${KAIROS_VERSION}"
+echo "  kairos-init version: ${KAIROS_INIT_VERSION}"
 echo "  kairos-init image:   ${KAIROS_INIT_IMAGE}"
 echo "  KEEP_GPU_FIRMWARE:   ${KEEP_GPU_FIRMWARE}"
 echo "  Platform:            ${PLATFORM}"
@@ -98,7 +98,7 @@ docker buildx build \
   --platform "${PLATFORM}" \
   "${CACHE_ARGS[@]}" \
   --build-arg VERSION="${KAIROS_VERSION}" \
-  --build-arg KAIROS_VERSION="${KAIROS_VERSION}" \
+  --build-arg KAIROS_INIT_VERSION="${KAIROS_INIT_VERSION}" \
   --build-arg KAIROS_INIT_IMAGE="${KAIROS_INIT_IMAGE}" \
   --build-arg KEEP_GPU_FIRMWARE="${KEEP_GPU_FIRMWARE}" \
   --build-arg MODEL=generic \
