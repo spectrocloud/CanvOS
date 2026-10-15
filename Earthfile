@@ -20,7 +20,7 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.10.8
+ARG PE_VERSION=v4.10.9-rc.2
 ARG KAIROS_VERSION=v4.1.2
 # Version component of the base image tags produced by .github/workflows/base-images.yaml.
 # Those images are tagged with the kairos-init version, so this must track the
@@ -33,11 +33,11 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 # (kairos-sdk v0.25.2). Kairos upstream: AuroraBoot#713, kairos-sdk#0.25.2.
 ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.10.4
-ARG KUBEADM_PROVIDER_VERSION=v4.10.1
-ARG RKE2_PROVIDER_VERSION=v4.10.4
-ARG NODEADM_PROVIDER_VERSION=v4.9.3
-ARG CANONICAL_PROVIDER_VERSION=v4.10.2
+ARG K3S_PROVIDER_VERSION=v4.10.6
+ARG KUBEADM_PROVIDER_VERSION=v4.10.3
+ARG RKE2_PROVIDER_VERSION=v4.10.5
+ARG NODEADM_PROVIDER_VERSION=v4.10.1
+ARG CANONICAL_PROVIDER_VERSION=v4.10.3
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -1249,6 +1249,7 @@ base-image:
                     gdisk \ # GPT partitioning tool, complementing fdisk for modern systems.
                     e2fsprogs \ # Provides tools for managing ext2/ext3/ext4 file systems.
                     dosfstools \ # Utilities for creating and checking FAT file systems.
+                    xfsprogs \ # Provides tools for creating and checking XFS file systems.
                     rsync \ # Used for efficient file synchronization and transfer.
                     cryptsetup-bin \ # Provides tools for setting up encrypted disks.
                     udev && \ # Device manager for the Linux kernel, required for managing device nodes.
