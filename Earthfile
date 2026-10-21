@@ -71,6 +71,9 @@ ARG UBUNTU_PRO_ATTACH=false
 # DRBD version for Piraeus pack
 ARG DRBD_VERSION="9.2.13"
 
+# CAs removed from the image trust store, by Mozilla label (bugzilla.mozilla.org/2083449).
+ARG DISTRUST_CA="emSign ECC Root CA - G3;emSign Root TLS CA - G3;Comodo AAA Services root"
+
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -1162,7 +1165,8 @@ base-image:
     FROM DOCKERFILE --build-arg BASE=$BASE_IMAGE \
     --build-arg OS_DISTRIBUTION=$OS_DISTRIBUTION --build-arg OS_VERSION=$OS_VERSION \
     --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY \
-    --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION .
+    --build-arg NO_PROXY=$NO_PROXY --build-arg DRBD_VERSION=$DRBD_VERSION \
+    --build-arg DISTRUST_CA="$DISTRUST_CA" .
 
     IF [ "$IS_JETSON" = "true" ]
         COPY cloudconfigs/mount.yaml /etc/kairos/mount.yaml

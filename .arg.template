@@ -107,6 +107,10 @@ FORCE_INTERACTIVE_INSTALL=false
 
 # DRBD_VERSION=9.2.13  # This variable is required for Piraeus pack for drbd module installtion.
 
+# CAs to remove from the image trust store, by Mozilla label, separated by ";". The label can differ
+# from the certificate CN: "AAA Certificate Services" is "Comodo AAA Services root". Set it empty to remove none.
+# DISTRUST_CA="emSign ECC Root CA - G3;emSign Root TLS CA - G3;Comodo AAA Services root"
+
 # NVIDIA GPU driver pre-install (for running the NVIDIA GPU Operator in air-gapped
 # environments with driver.enabled=false). Bakes the datacenter driver + DKMS
 # kernel modules into the Ubuntu base image so GPU nodes need no host-side network.

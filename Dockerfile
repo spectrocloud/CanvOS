@@ -24,25 +24,27 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     fi
 RUN rm -rf /certs
 
-# SHA-256 fingerprints of distrusted roots (bugzilla.mozilla.org/2083449): emSign ECC Root CA - G3,
-# emSign Root TLS CA - G3, AAA Certificate Services.
-ARG DISTRUSTED_ROOTS="86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b 7dd78d5f4f13459a83dff9abbba62edbaf6f2d102bf257fd712f4d9f2746ed8d d7a7a0fb5d7e2731d771e9484ebcdef71d5f0c3e0a2948782bc83ee0ea699ef4"
-RUN listed() { case " $DISTRUSTED_ROOTS " in *" $(sha256sum < "$1" | cut -d' ' -f1) "*) return 0;; esac; return 1; }; \
-    t=$(mktemp -d); \
+# Remove the CAs named in DISTRUST_CA (set in .arg) from the system TLS trust store.
+ARG DISTRUST_CA
+RUN IFS=';'; \
+    for n in $DISTRUST_CA; do \
+    f=$(printf '%s' "$n" | tr ' ' '_'); \
     if [ -f /etc/ca-certificates.conf ]; then \
-    for c in /usr/share/ca-certificates/mozilla/*.crt; do \
-    openssl x509 -in "$c" -outform der -out "$t/c" && listed "$t/c" && sed -i "s|^mozilla/${c##*/}\$|!&|" /etc/ca-certificates.conf; \
-    done; \
-    update-ca-certificates; \
-    mkdir "$t/trusted"; for c in /etc/ssl/certs/*.pem; do openssl x509 -in "$c" -outform der -out "$t/trusted/${c##*/}"; done; \
+    grep -qxF "mozilla/$f.crt" /etc/ca-certificates.conf && sed -i "s|^mozilla/$f\.crt\$|!&|" /etc/ca-certificates.conf || echo "DISTRUST_CA: $n is not in the trust store"; \
     elif d=$(ls -d /etc/pki/trust/blacklist /etc/pki/ca-trust/source/blocklist /etc/pki/ca-trust/source/blacklist 2>/dev/null | head -n1); [ -n "$d" ]; then \
-    trust extract --format=x509-directory --filter=ca-anchors --purpose=server-auth "$t/anchors"; \
-    for c in "$t"/anchors/*; do listed "$c" && cp "$c" "$d/"; done; \
-    if [ -d /etc/pki/trust ]; then update-ca-certificates; else update-ca-trust; fi; \
-    trust extract --format=x509-directory --filter=ca-anchors --purpose=server-auth "$t/trusted"; \
+    u=$(printf '%s' "$n" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g'); \
+    trust extract --format=pem-bundle --filter="pkcs11:object=$u;type=cert" "$d/$f.pem"; \
+    [ -s "$d/$f.pem" ] || { rm -f "$d/$f.pem"; echo "DISTRUST_CA: $n is not in the trust store"; }; \
     fi; \
-    for c in "$t"/trusted/*; do [ -f "$c" ] && listed "$c" && { echo "distrusted root is still trusted: ${c##*/}" >&2; exit 1; }; done; \
-    rm -rf "$t"
+    done; \
+    if [ -f /etc/ca-certificates.conf ] || [ -d /etc/pki/trust ]; then update-ca-certificates; \
+    elif [ -d /etc/pki/ca-trust/source ]; then update-ca-trust; fi; \
+    for n in $DISTRUST_CA; do \
+    f=$(printf '%s' "$n" | tr ' ' '_'); \
+    if [ -f /etc/ca-certificates.conf ]; then [ ! -e "/etc/ssl/certs/$f.pem" ]; \
+    elif command -v trust >/dev/null; then ! trust list --filter=ca-anchors --purpose=server-auth | grep -qFx "    label: $n"; \
+    fi || { echo "DISTRUST_CA: $n is still trusted" >&2; exit 1; }; \
+    done
 
 # This file provides the ability to extend or override GPU specifications in the default lookup table
 COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spectrocloud/custom-hardware-specs-lookup.json
