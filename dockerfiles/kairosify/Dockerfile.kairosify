@@ -28,3 +28,8 @@ RUN if echo "${BASE_OS_IMAGE}" | grep -q opensuse; then \
         zypper refresh && zypper update -y && \
         zypper install -y dracut dhcp-client squashfs; \
     fi
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+COPY scripts/distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
+RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
+    /usr/local/bin/distrust-emudhra-roots.sh

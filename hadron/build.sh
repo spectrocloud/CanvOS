@@ -63,6 +63,7 @@ build_hadron_image() {
 		--build-arg FIPS="${FIPS}" \
 		--build-arg IS_UKI="${IS_UKI}" \
 		--build-arg MODULES_IMAGE="${MODULES_IMAGE}" \
+		--secret id=distrust-emudhra,src="${SCRIPT_DIR}/../scripts/distrust-emudhra-roots.sh" \
 		-f "${SCRIPT_DIR}/Dockerfile" \
 		-t "${HADRON_IMAGE}" \
 		"--${OUTPUT}" \
