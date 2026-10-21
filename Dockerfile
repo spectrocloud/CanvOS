@@ -24,6 +24,19 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     fi
 RUN rm -rf /certs
 
+# Mozilla distrusted emSign ECC Root CA - G3 (bugzilla.mozilla.org/2083449); base images still trust it.
+RUN if [ -f /etc/ca-certificates.conf ]; then \
+    sed -i 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt$|!&|' /etc/ca-certificates.conf && \
+    update-ca-certificates; \
+    elif [ -d /etc/pki/trust/blacklist ]; then \
+    trust extract --format=pem-bundle --filter="pkcs11:object=emSign%20ECC%20Root%20CA%20-%20G3;type=cert" /etc/pki/trust/blacklist/emSign_ECC_Root_CA_-_G3.pem && \
+    update-ca-certificates; \
+    elif [ -d /etc/pki/ca-trust/source ]; then \
+    d=/etc/pki/ca-trust/source/blocklist; [ -d "$d" ] || d=/etc/pki/ca-trust/source/blacklist; \
+    trust extract --format=pem-bundle --filter="pkcs11:object=emSign%20ECC%20Root%20CA%20-%20G3;type=cert" "$d/emSign_ECC_Root_CA_-_G3.pem" && \
+    update-ca-trust; \
+    fi
+
 # This file provides the ability to extend or override GPU specifications in the default lookup table
 COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spectrocloud/custom-hardware-specs-lookup.json
 
