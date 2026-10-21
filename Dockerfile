@@ -24,15 +24,11 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     fi
 RUN rm -rf /certs
 
-# CAs to remove from the system trust store: one Mozilla label per line, as `trust list` shows it.
-COPY <<'EOF' /tmp/distrust-ca.txt
-# eMudhra intermediates compromised (bugzilla.mozilla.org/2083449): their roots and the AAA cross-sign root.
-emSign ECC Root CA - G3
-emSign Root TLS CA - G3
-Comodo AAA Services root
-EOF
+# CAs to remove from the system trust store, by Mozilla label (as `trust list` shows it), separated by ";".
+ARG DISTRUST_CA="emSign ECC Root CA - G3;emSign Root TLS CA - G3;Comodo AAA Services root"
+
 RUN <<'EOF'
-names=$(grep -v -e '^#' -e '^$' /tmp/distrust-ca.txt)
+names=$(printf '%s' "$DISTRUST_CA" | tr ';' '\n')
 IFS='
 '
 for n in $names; do
@@ -63,7 +59,6 @@ for n in $names; do
         exit 1
     fi
 done
-rm -f /tmp/distrust-ca.txt
 EOF
 
 # This file provides the ability to extend or override GPU specifications in the default lookup table
