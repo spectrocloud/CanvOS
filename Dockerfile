@@ -24,26 +24,25 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     fi
 RUN rm -rf /certs
 
-# Remove the CAs named in DISTRUST_CA (set in .arg) from the system TLS trust store.
-ARG DISTRUST_CA
-RUN IFS=';'; \
-    for n in $DISTRUST_CA; do \
+# Remove CAs linked to the compromised eMudhra intermediates (bugzilla.mozilla.org/2083449), by Mozilla label.
+RUN IFS=';'; cas="emSign ECC Root CA - G3;emSign Root TLS CA - G3;Comodo AAA Services root"; \
+    for n in $cas; do \
     f=$(printf '%s' "$n" | tr ' ' '_'); \
     if [ -f /etc/ca-certificates.conf ]; then \
-    grep -qxF "mozilla/$f.crt" /etc/ca-certificates.conf && sed -i "s|^mozilla/$f\.crt\$|!&|" /etc/ca-certificates.conf || echo "DISTRUST_CA: $n is not in the trust store"; \
+    grep -qxF "mozilla/$f.crt" /etc/ca-certificates.conf && sed -i "s|^mozilla/$f\.crt\$|!&|" /etc/ca-certificates.conf || echo "distrust CA: $n is not in the trust store"; \
     elif d=$(ls -d /etc/pki/trust/blacklist /etc/pki/ca-trust/source/blocklist /etc/pki/ca-trust/source/blacklist 2>/dev/null | head -n1); [ -n "$d" ]; then \
     u=$(printf '%s' "$n" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g'); \
     trust extract --format=pem-bundle --filter="pkcs11:object=$u;type=cert" "$d/$f.pem"; \
-    [ -s "$d/$f.pem" ] || { rm -f "$d/$f.pem"; echo "DISTRUST_CA: $n is not in the trust store"; }; \
+    [ -s "$d/$f.pem" ] || { rm -f "$d/$f.pem"; echo "distrust CA: $n is not in the trust store"; }; \
     fi; \
     done; \
     if [ -f /etc/ca-certificates.conf ] || [ -d /etc/pki/trust ]; then update-ca-certificates; \
     elif [ -d /etc/pki/ca-trust/source ]; then update-ca-trust; fi; \
-    for n in $DISTRUST_CA; do \
+    for n in $cas; do \
     f=$(printf '%s' "$n" | tr ' ' '_'); \
     if [ -f /etc/ca-certificates.conf ]; then [ ! -e "/etc/ssl/certs/$f.pem" ]; \
     elif command -v trust >/dev/null; then ! trust list --filter=ca-anchors --purpose=server-auth | grep -qFx "    label: $n"; \
-    fi || { echo "DISTRUST_CA: $n is still trusted" >&2; exit 1; }; \
+    fi || { echo "distrust CA: $n is still trusted" >&2; exit 1; }; \
     done
 
 # This file provides the ability to extend or override GPU specifications in the default lookup table
