@@ -24,31 +24,47 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     fi
 RUN rm -rf /certs
 
-# CAs to remove from the trust store, one Mozilla label (as `trust list` shows it) per line.
+# CAs to remove from the system trust store: one Mozilla label per line, as `trust list` shows it.
+COPY <<'EOF' /tmp/distrust-ca.txt
 # eMudhra intermediates compromised (bugzilla.mozilla.org/2083449): their roots and the AAA cross-sign root.
-RUN set -- \
-    "emSign ECC Root CA - G3" \
-    "emSign Root TLS CA - G3" \
-    "Comodo AAA Services root" \
-    ; \
-    for n in "$@"; do \
-    f=$(printf '%s' "$n" | tr ' ' '_'); \
-    if [ -f /etc/ca-certificates.conf ]; then \
-    grep -qxF "mozilla/$f.crt" /etc/ca-certificates.conf && sed -i "s|^mozilla/$f\.crt\$|!&|" /etc/ca-certificates.conf || echo "distrust CA: $n is not in the trust store"; \
-    elif d=$(ls -d /etc/pki/trust/blacklist /etc/pki/ca-trust/source/blocklist /etc/pki/ca-trust/source/blacklist 2>/dev/null | head -n1); [ -n "$d" ]; then \
-    u=$(printf '%s' "$n" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g'); \
-    trust extract --format=pem-bundle --filter="pkcs11:object=$u;type=cert" "$d/$f.pem"; \
-    [ -s "$d/$f.pem" ] || { rm -f "$d/$f.pem"; echo "distrust CA: $n is not in the trust store"; }; \
-    fi; \
-    done; \
-    if [ -f /etc/ca-certificates.conf ] || [ -d /etc/pki/trust ]; then update-ca-certificates; \
-    elif [ -d /etc/pki/ca-trust/source ]; then update-ca-trust; fi; \
-    for n in "$@"; do \
-    f=$(printf '%s' "$n" | tr ' ' '_'); \
-    if [ -f /etc/ca-certificates.conf ]; then [ ! -e "/etc/ssl/certs/$f.pem" ]; \
-    elif command -v trust >/dev/null; then ! trust list --filter=ca-anchors --purpose=server-auth | grep -qFx "    label: $n"; \
-    fi || { echo "distrust CA: $n is still trusted" >&2; exit 1; }; \
-    done
+emSign ECC Root CA - G3
+emSign Root TLS CA - G3
+Comodo AAA Services root
+EOF
+RUN <<'EOF'
+names=$(grep -v -e '^#' -e '^$' /tmp/distrust-ca.txt)
+IFS='
+'
+for n in $names; do
+    f=$(printf '%s' "$n" | tr ' ' '_')
+    if [ -f /etc/ca-certificates.conf ]; then
+        grep -qxF "mozilla/$f.crt" /etc/ca-certificates.conf || echo "distrust CA: $n is not in the trust store"
+        sed -i "s|^mozilla/$f\.crt\$|!&|" /etc/ca-certificates.conf
+    elif d=$(ls -d /etc/pki/trust/blacklist /etc/pki/ca-trust/source/blocklist /etc/pki/ca-trust/source/blacklist 2>/dev/null | head -n1); [ -n "$d" ]; then
+        u=$(printf '%s' "$n" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g')
+        trust extract --format=pem-bundle --filter="pkcs11:object=$u;type=cert" "$d/$f.pem"
+        [ -s "$d/$f.pem" ] || { rm -f "$d/$f.pem"; echo "distrust CA: $n is not in the trust store"; }
+    fi
+done
+if [ -f /etc/ca-certificates.conf ] || [ -d /etc/pki/trust ]; then
+    update-ca-certificates
+elif [ -d /etc/pki/ca-trust/source ]; then
+    update-ca-trust
+fi
+for n in $names; do
+    f=$(printf '%s' "$n" | tr ' ' '_')
+    if [ -f /etc/ca-certificates.conf ]; then
+        [ -e "/etc/ssl/certs/$f.pem" ] && still=1
+    elif command -v trust >/dev/null; then
+        trust list --filter=ca-anchors --purpose=server-auth | grep -qFx "    label: $n" && still=1
+    fi
+    if [ -n "$still" ]; then
+        echo "distrust CA: $n is still trusted" >&2
+        exit 1
+    fi
+done
+rm -f /tmp/distrust-ca.txt
+EOF
 
 # This file provides the ability to extend or override GPU specifications in the default lookup table
 COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spectrocloud/custom-hardware-specs-lookup.json
