@@ -24,9 +24,14 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     fi
 RUN rm -rf /certs
 
-# Remove CAs linked to the compromised eMudhra intermediates (bugzilla.mozilla.org/2083449), by Mozilla label.
-RUN IFS=';'; cas="emSign ECC Root CA - G3;emSign Root TLS CA - G3;Comodo AAA Services root"; \
-    for n in $cas; do \
+# CAs to remove from the trust store, one Mozilla label (as `trust list` shows it) per line.
+# eMudhra intermediates compromised (bugzilla.mozilla.org/2083449): their roots and the AAA cross-sign root.
+RUN set -- \
+    "emSign ECC Root CA - G3" \
+    "emSign Root TLS CA - G3" \
+    "Comodo AAA Services root" \
+    ; \
+    for n in "$@"; do \
     f=$(printf '%s' "$n" | tr ' ' '_'); \
     if [ -f /etc/ca-certificates.conf ]; then \
     grep -qxF "mozilla/$f.crt" /etc/ca-certificates.conf && sed -i "s|^mozilla/$f\.crt\$|!&|" /etc/ca-certificates.conf || echo "distrust CA: $n is not in the trust store"; \
@@ -38,7 +43,7 @@ RUN IFS=';'; cas="emSign ECC Root CA - G3;emSign Root TLS CA - G3;Comodo AAA Ser
     done; \
     if [ -f /etc/ca-certificates.conf ] || [ -d /etc/pki/trust ]; then update-ca-certificates; \
     elif [ -d /etc/pki/ca-trust/source ]; then update-ca-trust; fi; \
-    for n in $cas; do \
+    for n in "$@"; do \
     f=$(printf '%s' "$n" | tr ' ' '_'); \
     if [ -f /etc/ca-certificates.conf ]; then [ ! -e "/etc/ssl/certs/$f.pem" ]; \
     elif command -v trust >/dev/null; then ! trust list --filter=ca-anchors --purpose=server-auth | grep -qFx "    label: $n"; \
