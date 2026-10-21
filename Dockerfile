@@ -9,17 +9,21 @@ ARG NO_PROXY
 
 RUN mkdir -p /certs
 COPY certs/ /certs/
+# Mozilla distrusted emSign ECC Root CA - G3 (bugzilla.mozilla.org/2083449); base images still trust it.
 RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
     cp -a /certs/. /usr/local/share/ca-certificates/ && \
+    sed -i 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt$|!&|' /etc/ca-certificates.conf && \
     update-ca-certificates; \
     fi
 RUN if [ "${OS_DISTRIBUTION}" = "opensuse-leap" ]; then \
     cp -a /certs/. /usr/share/pki/trust/anchors/ && \
+    trust extract --format=pem-bundle --filter="pkcs11:object=emSign%20ECC%20Root%20CA%20-%20G3;type=cert" /etc/pki/trust/blacklist/emSign_ECC_Root_CA_-_G3.pem && \
     update-ca-certificates; \
     fi
 
 RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     cp -a /certs/. /etc/pki/ca-trust/source/anchors/ && \
+    trust extract --format=pem-bundle --filter="pkcs11:object=emSign%20ECC%20Root%20CA%20-%20G3;type=cert" /etc/pki/ca-trust/source/blocklist/emSign_ECC_Root_CA_-_G3.pem && \
     update-ca-trust; \
     fi
 RUN rm -rf /certs
