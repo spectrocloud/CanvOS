@@ -27,7 +27,8 @@ RUN rm -rf /certs
 # Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
 COPY scripts/distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
 RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
-    if [ "${OS_DISTRIBUTION}" = "ubuntu" ] || [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] || [ "${OS_DISTRIBUTION}" = "hadron" ]; then \
+    if [ "${OS_DISTRIBUTION}" = "ubuntu" ] || [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] || \
+       [ "${OS_DISTRIBUTION}" = "sles" ] || [ "${OS_DISTRIBUTION}" = "hadron" ]; then \
         /usr/local/bin/distrust-emudhra-roots.sh; \
     fi
 

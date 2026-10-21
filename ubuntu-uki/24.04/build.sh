@@ -102,7 +102,7 @@ docker buildx build \
   --build-arg KAIROS_INIT_IMAGE="${KAIROS_INIT_IMAGE}" \
   --build-arg KEEP_GPU_FIRMWARE="${KEEP_GPU_FIRMWARE}" \
   --build-arg MODEL=generic \
-  --secret id=distrust-emudhra,src="${SCRIPT_DIR}/../../scripts/distrust-emudhra-roots.sh" \
+  --build-context scripts="${SCRIPT_DIR}/../../scripts" \
   -f "${SCRIPT_DIR}/Dockerfile" \
   -t "${IMAGE_TAG}" \
   "--${OUTPUT}" \

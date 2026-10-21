@@ -21,14 +21,14 @@
 # The three certificates are embedded, so the script needs no network access and
 # works even when the base image no longer ships a root.  The script is idempotent.
 #
-# The eight compromised intermediates cannot be blocked by the trust tools in
-# these images.  An intermediate arrives from the peer and the store only
-# contributes anchors: RHEL writes the reject record only into the legacy
-# ca-bundle.trust.crt, SUSE keeps it in the p11-kit database but emits nothing
-# into /etc/ssl/certs, and Debian has no distrust mechanism for non-anchors.
-# None of the bundles that OpenSSL, Go or containerd load carry the record.
-# Removing the three roots is the only reliable store-level mitigation.
-# See Mozilla bug 2083449.
+# The eight compromised intermediates cannot be blocked through the PEM
+# bundles that OpenSSL, Go and containerd read: an intermediate arrives from
+# the peer and a bundle has no usable distrust record for a non-anchor.
+# p11-kit records the distrust (RHEL writes it into ca-bundle.trust.crt, SUSE
+# keeps it in its database), but the OpenSSL bundle and the hash directory do
+# not carry it.  Go 1.26.10 and later also hard-code the eight intermediates.
+# Removing the three roots is the store-level mitigation.
+# See Mozilla bugs 2083449 and 2084101.
 #
 # Usage:
 #   distrust-emudhra-roots.sh           apply the change and verify it
@@ -39,6 +39,9 @@
 #                        when the host must keep legacy Sectigo chains.  The AAA
 #                        cross-sign of the compromised intermediates stays
 #                        exploitable while AAA is trusted.
+#   EMUDHRA_ALLOW_MISSING_STORE=1
+#                        do not fail when the image has no known trust store.
+#                        Any bundle that the script finds is still checked.
 
 set -eu
 
@@ -53,9 +56,9 @@ case "${1:-}" in
     *) echo "$PROG: unknown argument: $1" >&2; exit 2 ;;
 esac
 
-WORK=${TMPDIR:-/tmp}/emudhra-distrust.$$
-mkdir -p "$WORK"
-trap 'rm -rf "$WORK"' EXIT HUP INT TERM
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/emudhra-distrust.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT
+trap 'rm -rf "$WORK"; exit 130' HUP INT TERM
 
 G3_PEM=$WORK/emSign_ECC_Root_CA_-_G3.pem
 TLS_PEM=$WORK/emSign_Root_TLS_CA_-_G3.pem
@@ -163,14 +166,21 @@ cert_file_is_target() {
 # Debian file names come from the certificate label and differ between
 # distributions (Ubuntu 20.04 calls the AAA root Comodo_AAA_Services_root.crt).
 # Match the known names as a fallback for stores whose copy is not byte identical.
+name_is_aaa() {
+    case $(printf '%s' "$1" | tr '[:upper:]' '[:lower:]') in
+        *aaa_certificate_services*|*comodo_aaa_services_root*) return 0 ;;
+    esac
+    return 1
+}
+
 name_is_target() {
     case $(printf '%s' "$1" | tr '[:upper:]' '[:lower:]') in
         *emsign_ecc_root_ca_-_g3*|*emsign_root_tls_ca_-_g3*) return 0 ;;
-        *aaa_certificate_services*|*comodo_aaa_services_root*)
-            [ "$KEEP_AAA" = "1" ] && return 1
-            return 0
-            ;;
     esac
+    if name_is_aaa "$1"; then
+        [ "$KEEP_AAA" = "1" ] && return 1
+        return 0
+    fi
     return 1
 }
 
@@ -186,6 +196,18 @@ detect_family() {
     fi
 }
 
+# seed_deselect adds a deselected entry when the name is absent from the conf.
+# update-ca-certificates ignores a deselected entry whose file does not exist,
+# so this is safe and closes the window when a package upgrade adds the root.
+seed_deselect() {
+    grep -F -x -q "$2" "$1" && return 0
+    grep -F -x -q "!$2" "$1" && return 0
+    printf '!%s\n' "$2" >> "$1"
+    changed=1
+}
+
+family=$(detect_family)
+
 apply_debian() {
     conf=/etc/ca-certificates.conf
     base=/usr/share/ca-certificates
@@ -198,12 +220,23 @@ apply_debian() {
 
     changed=0
     : > "$new"
-    while IFS= read -r line || [ -n "$line" ]; do
+    while IFS= read -r raw || [ -n "$raw" ]; do
+        # Strip CR and surrounding whitespace.  A line with either is not
+        # matched by update-ca-certificates and leaves a stale hash link.
+        line=$(printf '%s' "$raw" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
         out=$line
         case $line in
-            ''|'#'*|'!'*) ;;
+            ''|'#'*) ;;
+            '!'*)
+                # Re-enable AAA when the operator asks for it.
+                name=${line#!}
+                if [ "$KEEP_AAA" = "1" ] && name_is_aaa "$name"; then
+                    out=$name
+                    changed=1
+                fi
+                ;;
             *)
-                if [ -f "$base/$line" ] && { cert_file_is_target "$base/$line" || name_is_target "$line"; }; then
+                if { [ -f "$base/$line" ] && cert_file_is_target "$base/$line"; } || name_is_target "$line"; then
                     out="!$line"
                     changed=1
                 fi
@@ -212,6 +245,13 @@ apply_debian() {
         printf '%s\n' "$out" >> "$new"
     done < "$conf"
 
+    seed_deselect "$new" mozilla/emSign_ECC_Root_CA_-_G3.crt
+    seed_deselect "$new" mozilla/emSign_Root_TLS_CA_-_G3.crt
+    if [ "$KEEP_AAA" != "1" ]; then
+        seed_deselect "$new" mozilla/AAA_Certificate_Services.crt
+        seed_deselect "$new" mozilla/Comodo_AAA_Services_root.crt
+    fi
+
     if [ "$changed" = "1" ]; then
         cat "$new" > "$conf"
         echo "$PROG: deselected the revoked roots in $conf"
@@ -219,7 +259,9 @@ apply_debian() {
         echo "$PROG: no revoked root is listed in $conf"
     fi
 
-    update-ca-certificates
+    # --fresh also removes hash links that a deleted or malformed entry left
+    # behind in /etc/ssl/certs.
+    update-ca-certificates --fresh
 }
 
 install_blocklist() {
@@ -241,26 +283,69 @@ apply_suse() {
 }
 
 apply_rhel() {
-    install_blocklist /etc/pki/ca-trust/source/blocklist || return 1
+    # RHEL 8 uses source/blacklist; RHEL 9 and 10 use source/blocklist.
+    dir=/etc/pki/ca-trust/source/blocklist
+    [ -d /etc/pki/ca-trust/source/blacklist ] && dir=/etc/pki/ca-trust/source/blacklist
+    install_blocklist "$dir" || return 1
     update-ca-trust
 }
 
-verify() {
+verify_bundles() {
+    BUNDLES_CHECKED=0
     rc=0
-    checked=0
     for b in /etc/ssl/certs/ca-certificates.crt \
              /etc/ssl/ca-bundle.pem \
              /var/lib/ca-certificates/ca-bundle.pem \
              /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem; do
         [ -f "$b" ] || continue
-        checked=1
+        BUNDLES_CHECKED=1
         if bundle_trusts_target "$b"; then
             echo "$PROG: FAIL: $b still trusts a revoked root" >&2
             rc=1
         fi
     done
-    if [ "$checked" = "0" ]; then
-        echo "$PROG: warning: no system CA bundle found" >&2
+    return $rc
+}
+
+verify() {
+    rc=0
+    ANCHORS_CHECKED=0
+
+    # On p11-kit systems the trusted anchor set is authoritative.  It already
+    # excludes certificates in the blacklist or blocklist directory, and it
+    # does not count reject entries in /etc/ssl/certs as trusted.
+    if { [ "$family" = "suse" ] || [ "$family" = "rhel" ]; } && command -v trust >/dev/null 2>&1; then
+        if trust extract --format=pem-bundle --filter=ca-anchors --overwrite "$WORK/anchors.pem" >/dev/null 2>&1 && [ -s "$WORK/anchors.pem" ]; then
+            ANCHORS_CHECKED=1
+            if bundle_trusts_target "$WORK/anchors.pem"; then
+                echo "$PROG: FAIL: the p11-kit anchor set still trusts a revoked root" >&2
+                rc=1
+            fi
+        fi
+    fi
+
+    verify_bundles || rc=1
+
+    # Debian style stores have no p11-kit.  After update-ca-certificates
+    # --fresh every hash link in /etc/ssl/certs is a trusted entry, so scan
+    # them as well as the bundle.
+    if [ "$family" = "debian" ] && [ -d /etc/ssl/certs ]; then
+        for f in /etc/ssl/certs/*; do
+            [ -f "$f" ] || continue
+            case ${f##*/} in
+                [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].[0-9]*) ;;
+                *) continue ;;
+            esac
+            if cert_file_is_target "$f"; then
+                echo "$PROG: FAIL: $f still trusts a revoked root" >&2
+                rc=1
+            fi
+        done
+    fi
+
+    if [ "$BUNDLES_CHECKED" = "0" ] && [ "$ANCHORS_CHECKED" = "0" ]; then
+        echo "$PROG: FAIL: no system CA bundle or anchor set found" >&2
+        rc=1
     fi
     return $rc
 }
@@ -273,7 +358,6 @@ if [ "$CHECK_ONLY" = "1" ]; then
     exit 1
 fi
 
-family=$(detect_family)
 echo "$PROG: trust store family: $family"
 case $family in
     debian) apply_debian ;;
@@ -281,8 +365,12 @@ case $family in
     rhel) apply_rhel ;;
     *)
         if [ "${EMUDHRA_ALLOW_MISSING_STORE:-0}" = "1" ]; then
-            echo "$PROG: warning: no trust store found, nothing to do (EMUDHRA_ALLOW_MISSING_STORE=1)" >&2
-            exit 0
+            echo "$PROG: warning: no trust store found (EMUDHRA_ALLOW_MISSING_STORE=1)" >&2
+            if verify_bundles; then
+                exit 0
+            fi
+            echo "$PROG: verification failed" >&2
+            exit 1
         fi
         echo "$PROG: unknown trust store layout, cannot apply the change" >&2
         exit 1

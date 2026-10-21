@@ -1437,6 +1437,14 @@ base-image:
             fi
     END
 
+    # Mozilla bug 2083449: a package upgrade above can restore a trust store.
+    # Fail the build when a distrusted root is trusted again.
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] || [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ] || [ "$OS_DISTRIBUTION" = "hadron" ]
+        RUN if [ -x /usr/local/bin/distrust-emudhra-roots.sh ]; then \
+                /usr/local/bin/distrust-emudhra-roots.sh --check; \
+            fi
+    END
+
 KAIROS_RELEASE:
     COMMAND
     ARG OS_VERSION
