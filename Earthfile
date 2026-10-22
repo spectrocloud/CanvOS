@@ -344,6 +344,13 @@ uki-provider-image:
     FROM --platform=linux/${ARCH} +ubuntu
     RUN apt-get update && apt-get install -y rsync
 
+    # Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+    # This image starts from the third-party Ubuntu image, not from +base-image, so it needs its
+    # own step.  The FIPS base ships no ca-certificates package, so allow a missing store.
+    COPY scripts/distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
+    RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
+        EMUDHRA_ALLOW_MISSING_STORE=1 /usr/local/bin/distrust-emudhra-roots.sh
+
     WORKDIR /
     COPY --if-exists overlay/files/etc/ /etc/
     IF [ -f /etc/logrotate.d/stylus.conf ]
@@ -1439,7 +1446,7 @@ base-image:
 
     # Mozilla bug 2083449: a package upgrade above can restore a trust store.
     # Fail the build when a distrusted root is trusted again.
-    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] || [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ] || [ "$OS_DISTRIBUTION" = "hadron" ]
+    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] || [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ] || [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "hadron" ]
         RUN if [ -x /usr/local/bin/distrust-emudhra-roots.sh ]; then \
                 /usr/local/bin/distrust-emudhra-roots.sh --check; \
             fi

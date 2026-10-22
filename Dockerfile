@@ -28,7 +28,8 @@ RUN rm -rf /certs
 COPY scripts/distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
 RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
     if [ "${OS_DISTRIBUTION}" = "ubuntu" ] || [ "${OS_DISTRIBUTION}" = "opensuse-leap" ] || \
-       [ "${OS_DISTRIBUTION}" = "sles" ] || [ "${OS_DISTRIBUTION}" = "hadron" ]; then \
+       [ "${OS_DISTRIBUTION}" = "sles" ] || [ "${OS_DISTRIBUTION}" = "rhel" ] || \
+       [ "${OS_DISTRIBUTION}" = "hadron" ]; then \
         /usr/local/bin/distrust-emudhra-roots.sh; \
     fi
 
