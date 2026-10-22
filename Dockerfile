@@ -24,6 +24,11 @@ RUN if [ "${OS_DISTRIBUTION}" = "rhel" ]; then \
     fi
 RUN rm -rf /certs
 
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# Bind-mounted, so the script never lands in an image layer.
+RUN --mount=type=bind,source=scripts/distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh
+
 # This file provides the ability to extend or override GPU specifications in the default lookup table
 COPY overlay/files/etc/spectrocloud/custom-hardware-specs-lookup.json /etc/spectrocloud/custom-hardware-specs-lookup.json
 

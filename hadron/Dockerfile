@@ -34,3 +34,8 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     FIPS_FLAG=$([ "${FIPS}" = "true" ] && echo "--fips" || true) && \
     /kairos-init -l debug -s init -m "generic" -t "${IS_UKI}" --version "${KAIROS_VERSION}" ${FIPS_FLAG}
+
+# build.sh passes the script as the named build context "scripts". Bind-mounted,
+# so the script never lands in an image layer.
+RUN --mount=type=bind,from=scripts,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh

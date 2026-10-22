@@ -344,6 +344,12 @@ uki-provider-image:
     FROM --platform=linux/${ARCH} +ubuntu
     RUN apt-get update && apt-get install -y rsync
 
+    # Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+    # This image starts from the third-party Ubuntu image, not from +base-image, so it needs its
+    # own step. The FIPS base ships no ca-certificates package, so allow a missing store.
+    COPY scripts/distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+    RUN EMUDHRA_ALLOW_MISSING_STORE=1 sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
+
     WORKDIR /
     COPY --if-exists overlay/files/etc/ /etc/
     IF [ -f /etc/logrotate.d/stylus.conf ]
@@ -1436,6 +1442,11 @@ base-image:
                 sed -i 's|\(set baseCmd="[^"]*\)"|\1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nouveau.modeset=0"|' /etc/cos/bootargs.cfg; \
             fi
     END
+
+    # Mozilla bug 2083449: a package upgrade above can restore a trust store.
+    # Fail the build when a distrusted root is trusted again.
+    COPY scripts/distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+    RUN sh /tmp/distrust-emudhra-roots.sh --check; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
 
 KAIROS_RELEASE:
     COMMAND
