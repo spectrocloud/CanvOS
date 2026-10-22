@@ -20,6 +20,9 @@
 #   distrust-emudhra-roots.sh --check               verify the effective policy only
 #   distrust-emudhra-roots.sh --labels "A" --check  verify a specific policy
 #
+# Apply needs write access to the system trust store. Root, a user namespace,
+# ACLs or file ownership all satisfy that. --check is read-only.
+#
 # Environment
 #   EMUDHRA_ALLOW_MISSING_STORE=1   do not fail when no trust store is found
 #   EMUDHRA_STATE_FILE=path         file that records the effective policy
@@ -129,6 +132,20 @@ detect_family() {
     else
         echo unknown
     fi
+}
+
+# The apply path needs write access to the store, not a particular user id.
+# Root, a user namespace, ACLs or file ownership all satisfy this check.
+ensure_writable() {
+    for _p in "$@"; do
+        if [ -e "$_p" ]; then
+            [ -w "$_p" ] || return 1
+        else
+            _parent=$(dirname "$_p")
+            [ -d "$_parent" ] && [ -w "$_parent" ] || return 1
+        fi
+    done
+    return 0
 }
 
 rhel_blocklist_dir() {
@@ -356,9 +373,6 @@ verify_targets() {
 
 FAMILY=$(detect_family)
 
-if [ "$CHECK_ONLY" != "1" ] && [ "$(id -u)" != "0" ]; then
-    die "apply needs root"
-fi
 
 effective_labels
 
@@ -388,6 +402,12 @@ if [ "$FAMILY" = "unknown" ]; then
     fi
     exit 1
 fi
+
+case $FAMILY in
+    debian) ensure_writable /etc/ca-certificates.conf /etc/ssl/certs ;;
+    suse)   ensure_writable /etc/pki/trust/blacklist /etc/ssl/certs /var/lib/ca-certificates ;;
+    rhel)   ensure_writable "$(rhel_blocklist_dir)" /etc/pki/ca-trust/extracted ;;
+esac || die "apply needs write access to the system trust store (run as root, in a user namespace, or grant write access)"
 
 apply_store "$FAMILY"
 write_state
