@@ -33,10 +33,10 @@ REQUESTED_LABELS=
 ALLOW_MISSING_STORE=${EMUDHRA_ALLOW_MISSING_STORE:-0}
 STATE_FILE=${EMUDHRA_STATE_FILE:-/etc/spectrocloud/distrust-emudhra.targets}
 
-# Known roots: label | SPKI SHA-256 | Debian file names, ':' separated.
-KNOWN_ROOTS='emSign ECC Root CA - G3|8d417db2dd8bf5e3084d1e3f196d583849d81bdd4c00c70b9d39369e96b8c782|emSign_ECC_Root_CA_-_G3.crt
-emSign Root TLS CA - G3|c619e4780ed8e0abeda24ad732567de4383a7ea941338f6d1a7d1b49ac792fe9|emSign_Root_TLS_CA_-_G3.crt
-Comodo AAA Services root|bd153ed7b0434f6886b17bce8bbe84ed340c7132d702a8f4fa318f756ecbd6f3|Comodo_AAA_Services_root.crt:AAA_Certificate_Services.crt'
+# Known roots: label | SPKI SHA-256.  The Debian entry is derived from the label.
+KNOWN_ROOTS='emSign ECC Root CA - G3|8d417db2dd8bf5e3084d1e3f196d583849d81bdd4c00c70b9d39369e96b8c782
+emSign Root TLS CA - G3|c619e4780ed8e0abeda24ad732567de4383a7ea941338f6d1a7d1b49ac792fe9
+Comodo AAA Services root|bd153ed7b0434f6886b17bce8bbe84ed340c7132d702a8f4fa318f756ecbd6f3'
 
 log()  { printf '%s: %s\n' "$PROG" "$*"; }
 warn() { printf '%s: %s\n' "$PROG" "$*" >&2; }
@@ -68,8 +68,9 @@ spki_of_label() {
     printf '%s\n' "$KNOWN_ROOTS" | awk -F'|' -v l="$1" '$1 == l { print $2; exit }'
 }
 
-names_of_label() {
-    printf '%s\n' "$KNOWN_ROOTS" | awk -F'|' -v l="$1" '$1 == l { print $3; exit }'
+# Debian names an entry after its label, with spaces as underscores.
+conf_entry_of_label() {
+    printf 'mozilla/%s.crt\n' "$(printf '%s' "$1" | tr ' ' '_')"
 }
 
 is_known_label() {
@@ -158,22 +159,14 @@ apply_debian() {
     done < "$_conf"
 
     while IFS= read -r _label; do
-        _names=$(names_of_label "$_label")
-        _oldifs=$IFS
-        IFS=':'
-        set -f
-        for _name in $_names; do
-            _entry="mozilla/$_name"
-            if grep -F -x -q "$_entry" "$_tmp"; then
-                awk -v e="$_entry" '$0 == e { print "!" e; next } { print }' "$_tmp" > "$_tmp.new"
-                mv "$_tmp.new" "$_tmp"
-            fi
-            if ! grep -F -x -q "!$_entry" "$_tmp"; then
-                printf '!%s\n' "$_entry" >> "$_tmp"
-            fi
-        done
-        set +f
-        IFS=$_oldifs
+        _entry=$(conf_entry_of_label "$_label")
+        if grep -F -x -q "$_entry" "$_tmp"; then
+            awk -v e="$_entry" '$0 == e { print "!" e; next } { print }' "$_tmp" > "$_tmp.new"
+            mv "$_tmp.new" "$_tmp"
+        fi
+        if ! grep -F -x -q "!$_entry" "$_tmp"; then
+            printf '!%s\n' "$_entry" >> "$_tmp"
+        fi
     done < "$WORK/effective.txt"
 
     cat "$_tmp" > "$_conf"
@@ -298,19 +291,8 @@ collect_anchor_dirs() {
 fallback_has_label() {
     _label=$1
     if [ "$FAMILY" = "debian" ]; then
-        _names=$(names_of_label "$_label")
-        _oldifs=$IFS
-        IFS=':'
-        set -f
-        for _name in $_names; do
-            if [ -e "/etc/ssl/certs/$_name.pem" ]; then
-                IFS=$_oldifs
-                set +f
-                return 0
-            fi
-        done
-        set +f
-        IFS=$_oldifs
+        _link=$(printf '%s' "$_label" | tr ' ' '_').pem
+        [ -e "/etc/ssl/certs/$_link" ] && return 0
         return 1
     fi
     if command -v trust >/dev/null 2>&1; then
