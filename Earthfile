@@ -347,10 +347,8 @@ uki-provider-image:
     # Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
     # This image starts from the third-party Ubuntu image, not from +base-image, so it needs its
     # own step.  The FIPS base ships no ca-certificates package, so allow a missing store.
-    COPY scripts/distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
-    RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
-        EMUDHRA_ALLOW_MISSING_STORE=1 /usr/local/bin/distrust-emudhra-roots.sh && \
-        rm -f /usr/local/bin/distrust-emudhra-roots.sh
+    COPY scripts/distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+    RUN EMUDHRA_ALLOW_MISSING_STORE=1 sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
 
     WORKDIR /
     COPY --if-exists overlay/files/etc/ /etc/
@@ -1447,14 +1445,8 @@ base-image:
 
     # Mozilla bug 2083449: a package upgrade above can restore a trust store.
     # Fail the build when a distrusted root is trusted again.
-    IF [ "$OS_DISTRIBUTION" = "ubuntu" ] || [ "$OS_DISTRIBUTION" = "opensuse-leap" ] || [ "$OS_DISTRIBUTION" = "sles" ] || [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "hadron" ]
-        RUN if [ -x /usr/local/bin/distrust-emudhra-roots.sh ]; then \
-                /usr/local/bin/distrust-emudhra-roots.sh --check; \
-            fi
-    END
-
-    # Build tooling, not a runtime component. Keep the check above, then remove it.
-    RUN rm -f /usr/local/bin/distrust-emudhra-roots.sh
+    COPY scripts/distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+    RUN sh /tmp/distrust-emudhra-roots.sh --check; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
 
 KAIROS_RELEASE:
     COMMAND

@@ -30,6 +30,6 @@ RUN if echo "${BASE_OS_IMAGE}" | grep -q opensuse; then \
     fi
 
 # Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
-COPY scripts/distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
-RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
-    /usr/local/bin/distrust-emudhra-roots.sh
+# Bind-mounted, so the script never lands in an image layer.
+RUN --mount=type=bind,source=scripts/distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh

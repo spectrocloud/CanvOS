@@ -36,7 +36,7 @@ RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init -m "generic" -t "${IS_UKI}" --version "${KAIROS_VERSION}" ${FIPS_FLAG}
 
 # Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
-# build.sh passes the script as the named build context "scripts".
-COPY --from=scripts distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
-RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
-    /usr/local/bin/distrust-emudhra-roots.sh
+# build.sh passes the script as the named build context "scripts". Bind-mounted,
+# so the script never lands in an image layer.
+RUN --mount=type=bind,from=scripts,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh

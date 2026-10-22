@@ -94,7 +94,6 @@ COPY oem/09_grub_branding_fixup.yaml /system/oem/09_grub_branding_fixup.yaml
 RUN rm -rf /etc/zypp/credentials.d/* /etc/zypp/services.d/* /etc/SUSEConnect 2>/dev/null || true
 
 # Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
-# build.sh copies the script into the build directory.
-COPY distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
-RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
-    /usr/local/bin/distrust-emudhra-roots.sh
+# build.sh copies the script into the build directory; bind-mounted, no layer.
+RUN --mount=type=bind,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh
