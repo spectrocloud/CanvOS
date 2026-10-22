@@ -179,13 +179,16 @@ apply_p11kit() {
     while IFS= read -r _label; do
         _enc=$(percent_encode "$_label")
         _out="$_dir/$(printf '%s' "$_label" | tr ' ' '_').pem"
+        _tmp=$WORK/extract.pem
+        rm -f "$_tmp"
         if trust extract --format=pem-bundle --filter="pkcs11:object=$_enc;type=cert" \
-                --overwrite "$_out" >/dev/null 2>&1 && [ -s "$_out" ]; then
+                --overwrite "$_tmp" >/dev/null 2>&1 && [ -s "$_tmp" ]; then
+            cp "$_tmp" "$_out"
             chmod 0644 "$_out"
             log "blocklisted: $_label"
         else
-            rm -f "$_out"
-            warn "label not found in the trust store: $_label (the verifier decides)"
+            rm -f "$_tmp"
+            warn "label not found in the trust store: $_label (an existing distrust file is left untouched)"
         fi
     done < "$WORK/effective.txt"
 }
@@ -247,14 +250,17 @@ split_pem() {
     ' "$_file"
 }
 
-dir_has_spki() {
-    _dir=$1
-    _spki=$2
-    for _f in "$_dir"/*; do
-        [ -f "$_f" ] || continue
-        [ "$(spki_of_cert "$_f")" = "$_spki" ] && return 0
-    done
-    return 1
+# Hash every anchor once: one line per certificate, "SPKI path".
+collect_anchor_spkis() {
+    : > "$WORK/anchor-spkis"
+    while IFS= read -r _dir; do
+        [ -d "$_dir" ] || continue
+        for _f in "$_dir"/*; do
+            [ -f "$_f" ] || continue
+            _spki=$(spki_of_cert "$_f")
+            [ -n "$_spki" ] && printf '%s %s\n' "$_spki" "$_f" >> "$WORK/anchor-spkis"
+        done
+    done < "$WORK/anchor-dirs"
 }
 
 # Build the list of places that can hold a trusted anchor.
@@ -317,16 +323,10 @@ verify_targets() {
     done < "$WORK/anchor-dirs"
 
     if have_openssl; then
+        collect_anchor_spkis
         while IFS= read -r _label; do
             _spki=$(spki_of_label "$_label")
-            _found=0
-            while IFS= read -r _dir; do
-                if dir_has_spki "$_dir" "$_spki"; then
-                    _found=1
-                    break
-                fi
-            done < "$WORK/anchor-dirs"
-            if [ "$_found" = "1" ]; then
+            if grep -F -q "$_spki " "$WORK/anchor-spkis"; then
                 warn "still trusted: $_label (SPKI $_spki)"
                 _rc=1
             fi
@@ -355,6 +355,10 @@ verify_targets() {
 # ---------------------------------------------------------------------------
 
 FAMILY=$(detect_family)
+
+if [ "$CHECK_ONLY" != "1" ] && [ "$(id -u)" != "0" ]; then
+    die "apply needs root"
+fi
 
 effective_labels
 
