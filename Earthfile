@@ -349,7 +349,8 @@ uki-provider-image:
     # own step.  The FIPS base ships no ca-certificates package, so allow a missing store.
     COPY scripts/distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
     RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
-        EMUDHRA_ALLOW_MISSING_STORE=1 /usr/local/bin/distrust-emudhra-roots.sh
+        EMUDHRA_ALLOW_MISSING_STORE=1 /usr/local/bin/distrust-emudhra-roots.sh && \
+        rm -f /usr/local/bin/distrust-emudhra-roots.sh
 
     WORKDIR /
     COPY --if-exists overlay/files/etc/ /etc/
@@ -1451,6 +1452,9 @@ base-image:
                 /usr/local/bin/distrust-emudhra-roots.sh --check; \
             fi
     END
+
+    # Build tooling, not a runtime component. Keep the check above, then remove it.
+    RUN rm -f /usr/local/bin/distrust-emudhra-roots.sh
 
 KAIROS_RELEASE:
     COMMAND
