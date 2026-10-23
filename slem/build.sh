@@ -13,6 +13,7 @@ set -ex
 
 mkdir -p /var/slem
 yes | cp ./Dockerfile /var/slem
+cp ../scripts/distrust-emudhra-roots.sh /var/slem/
 cd /var/slem
 mkdir -p repos
 mkdir -p services
