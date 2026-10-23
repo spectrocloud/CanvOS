@@ -8,7 +8,8 @@
 # Design
 #   Policy  : a list of root labels. The default is the three roots named by Mozilla.
 #   Action  : label based. Debian deselects the entry in /etc/ca-certificates.conf;
-#             SUSE and RHEL extract the certificate by label into the blacklist directory.
+#             SUSE and RHEL extract the certificate by label into the
+#             blacklist/blocklist directory (p11-kit renamed it in >= 0.24).
 #   Verdict : certificate based. Verification compares the SHA-256 of the
 #             SubjectPublicKeyInfo of every trusted anchor with the known values.
 #             A label, file name or certificate encoding change therefore fails the
@@ -148,14 +149,6 @@ ensure_writable() {
     return 0
 }
 
-rhel_blocklist_dir() {
-    if [ -d /etc/pki/ca-trust/source/blacklist ]; then
-        echo /etc/pki/ca-trust/source/blacklist
-    else
-        echo /etc/pki/ca-trust/source/blocklist
-    fi
-}
-
 percent_encode() {
     printf '%s' "$1" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g'
 }
@@ -190,18 +183,25 @@ apply_debian() {
     update-ca-certificates --fresh
 }
 
+# Write one extracted certificate into every blocklist directory given.
+# p11-kit < 0.24 reads /etc/pki/trust/blacklist, >= 0.24 reads blocklist.
+# A directory the running p11-kit does not read is harmless, so writing both
+# is safer than guessing the version.
 apply_p11kit() {
-    _dir=$1
-    mkdir -p "$_dir"
+    for _dir in "$@"; do
+        mkdir -p "$_dir"
+    done
     while IFS= read -r _label; do
         _enc=$(percent_encode "$_label")
-        _out="$_dir/$(printf '%s' "$_label" | tr ' ' '_').pem"
         _tmp=$WORK/extract.pem
         rm -f "$_tmp"
         if trust extract --format=pem-bundle --filter="pkcs11:object=$_enc;type=cert" \
                 --overwrite "$_tmp" >/dev/null 2>&1 && [ -s "$_tmp" ]; then
-            cp "$_tmp" "$_out"
-            chmod 0644 "$_out"
+            for _dir in "$@"; do
+                _out="$_dir/$(printf '%s' "$_label" | tr ' ' '_').pem"
+                cp "$_tmp" "$_out"
+                chmod 0644 "$_out"
+            done
             log "blocklisted: $_label"
         else
             rm -f "$_tmp"
@@ -218,12 +218,15 @@ apply_store() {
             ;;
         suse)
             log "trust store family: suse"
-            apply_p11kit /etc/pki/trust/blacklist || return 1
+            apply_p11kit /etc/pki/trust/blacklist /etc/pki/trust/blocklist || return 1
             update-ca-certificates
             ;;
         rhel)
             log "trust store family: rhel"
-            apply_p11kit "$(rhel_blocklist_dir)" || return 1
+            # ca-certificates used blacklist/ before the rename and blocklist/
+            # after it; writing both covers old and new p11-kit.
+            apply_p11kit /etc/pki/ca-trust/source/blacklist \
+                         /etc/pki/ca-trust/source/blocklist || return 1
             update-ca-trust
             ;;
         *)
@@ -405,8 +408,11 @@ fi
 
 case $FAMILY in
     debian) ensure_writable /etc/ca-certificates.conf /etc/ssl/certs ;;
-    suse)   ensure_writable /etc/pki/trust/blacklist /etc/ssl/certs /var/lib/ca-certificates ;;
-    rhel)   ensure_writable "$(rhel_blocklist_dir)" /etc/pki/ca-trust/extracted ;;
+    suse)   ensure_writable /etc/pki/trust/blacklist /etc/pki/trust/blocklist \
+                             /etc/ssl/certs /var/lib/ca-certificates ;;
+    rhel)   ensure_writable /etc/pki/ca-trust/source/blacklist \
+                             /etc/pki/ca-trust/source/blocklist \
+                             /etc/pki/ca-trust/extracted ;;
 esac || die "apply needs write access to the system trust store (run as root, in a user namespace, or grant write access)"
 
 apply_store "$FAMILY"
