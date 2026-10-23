@@ -331,6 +331,18 @@ CHECK_SYSTEMD_VERSION:
         RUN echo "SUPPORTS_SYSTEMD_EXTENSIONS=$(cat /tmp/supports-systemd-extensions)"
     END
 
+DISTRUST_EMUDHRA:
+    COMMAND
+    ARG ALLOW_MISSING=false
+    # Mozilla bug 2083449: a package step can restore the trust store.
+    # Call this at the end of every final image, after all package steps.
+    COPY scripts/distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+    IF [ "$ALLOW_MISSING" = "true" ]
+        RUN EMUDHRA_ALLOW_MISSING_STORE=1 sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
+    ELSE
+        RUN sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
+    END
+
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-ts --keep-own /. rootfs
@@ -361,6 +373,9 @@ uki-provider-image:
     END
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
+
+    DO +DISTRUST_EMUDHRA --ALLOW_MISSING=true
+
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -1105,6 +1120,8 @@ provider-image:
     # Build-time helper only; don't ship it in the final image.
     RUN rm -f /tmp/install-kernel-headers.sh
 
+    DO +DISTRUST_EMUDHRA
+
     SAVE IMAGE --push $IMAGE_PATH
 
 provider-image-rootfs:
@@ -1544,6 +1561,8 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
+
+    DO +DISTRUST_EMUDHRA
 
     # Only push image if not building for MAAS (MAAS uses local image via --load)
     IF [ "$IS_MAAS" = "false" ]
