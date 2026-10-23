@@ -46,6 +46,7 @@ RUN chmod 755 /tmp/trim-gpu-firmware.sh \
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init -m "${MODEL}" -t true --version "${VERSION}"
 
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
 # build.sh passes the script as the named build context "scripts". Bind-mounted,
 # so the script never lands in an image layer.
 RUN --mount=type=bind,from=scripts,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \

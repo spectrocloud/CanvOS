@@ -23,10 +23,9 @@ OUTPUT_TAG="${2:-slem-kairos:5.5}"
 
 cd "$(dirname "$0")"
 
-cp ../../scripts/distrust-emudhra-roots.sh .
-
 # Pass the regcode as a BuildKit secret so it never lands in an image layer.
 REGCODE_FILE="$(mktemp)"
+cp ../../scripts/distrust-emudhra-roots.sh .
 trap 'rm -f "${REGCODE_FILE}" ./distrust-emudhra-roots.sh' EXIT
 printf '%s' "${REGISTRATION_CODE}" > "${REGCODE_FILE}"
 
