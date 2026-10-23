@@ -26,3 +26,11 @@ RUN zypper -n in \
 RUN systemctl disable NetworkManager.service NetworkManager-wait-online.service
 
 RUN /kairos-init -l debug -m "generic" -t false --version "${KAIROS_VERSION}" --skip-step installPackages && rm /kairos-init
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# build.sh copies the script into the build directory. This builder may run a
+# Docker without BuildKit, so copy it, run it, and remove it in the same RUN.
+COPY distrust-emudhra-roots.sh /usr/local/bin/distrust-emudhra-roots.sh
+RUN chmod 0755 /usr/local/bin/distrust-emudhra-roots.sh && \
+    /usr/local/bin/distrust-emudhra-roots.sh; _rc=$?; \
+    rm -f /usr/local/bin/distrust-emudhra-roots.sh; exit $_rc
