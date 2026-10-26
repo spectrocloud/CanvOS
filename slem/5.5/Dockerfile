@@ -92,3 +92,8 @@ COPY oem/09_grub_branding_fixup.yaml /system/oem/09_grub_branding_fixup.yaml
 
 # Scrub subscription data so credentials do not ship in the final image.
 RUN rm -rf /etc/zypp/credentials.d/* /etc/zypp/services.d/* /etc/SUSEConnect 2>/dev/null || true
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# build.sh copies the script into the build directory; bind-mounted, no layer.
+RUN --mount=type=bind,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh
