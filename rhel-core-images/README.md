@@ -1,5 +1,14 @@
 # Kairos RHEL 8 and RHEL 9 images
 
+## Distrust script
+
+The Dockerfiles copy `distrust-emudhra-roots.sh` from the build context.
+Before the build, copy it into this directory and remove it afterwards:
+
+    cp ../scripts/distrust-emudhra-roots.sh .
+    docker build ...
+    rm -f distrust-emudhra-roots.sh
+
 ## Build the image using Red Hat Subscription
 
 Follow steps below to execute the build process on the host with access to Red Hat Subscription Management system (redhat.com) and by using Red Hat username and password.
