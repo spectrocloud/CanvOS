@@ -5,9 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UBUNTU_FIPS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Mozilla bug 2083449: provide the distrust script in the build context.
 cp "${UBUNTU_FIPS_ROOT}/../scripts/distrust-emudhra-roots.sh" "${UBUNTU_FIPS_ROOT}/"
+<<<<<<< HEAD
 # PE-9043: provide the shared auditd disk-space step in the build context.
 cp "${UBUNTU_FIPS_ROOT}/../scripts/set-auditd-disk-actions.sh" "${UBUNTU_FIPS_ROOT}/"
 trap 'rm -f "${UBUNTU_FIPS_ROOT}/distrust-emudhra-roots.sh" "${UBUNTU_FIPS_ROOT}/set-auditd-disk-actions.sh"' EXIT
+=======
+trap 'rm -f "${UBUNTU_FIPS_ROOT}/distrust-emudhra-roots.sh"' EXIT
+>>>>>>> 53e1188 (PE-9894 Distrust the roots compromised in the eMudhra incident (4.10) (#937))
 
 BASE_IMAGE="${1:-ubuntu-noble-fips}"
 VERSION=24.04
