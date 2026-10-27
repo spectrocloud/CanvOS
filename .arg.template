@@ -11,6 +11,11 @@ HTTP_PROXY=
 UPDATE_KERNEL=false
 CLUSTERCONFIG=spc.tgz
 CIS_HARDENING=false
+# PE-9043: relax auditd disk-space actions so a full COS_PERSISTENT cannot halt/boot-loop the node.
+# Deviates from DISA STIG rules auditd_data_disk_full_action, auditd_data_disk_error_action, and
+# auditd_data_retention_admin_space_left_action -- OpenSCAP scans will flag these when enabled.
+# Earthly reads .arg automatically; a CLI --AUDITD_NO_HALT=true override also works.
+AUDITD_NO_HALT=false
 EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 FORCE_INTERACTIVE_INSTALL=false
 

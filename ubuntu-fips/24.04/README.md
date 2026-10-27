@@ -23,6 +23,10 @@ ENABLE_STIG=0 bash build.sh my-fips-base
 SKIP_STIG_BANNER=1 bash build.sh my-fips-stig-nobanner
 ```
 
+### Auditd disk-space actions (PE-9043)
+
+`AUDITD_NO_HALT=true` (`./earthly.sh +iso --AUDITD_NO_HALT=true`) bakes a Kairos drop-in that sets `admin_space_left_action`/`disk_full_action` to `ROTATE` and `disk_error_action` to `SYSLOG` at every boot, preventing a full `COS_PERSISTENT` from halting and boot-looping the node. Note: this release's `fix.sh` does not set any of the three keys, so the change applies to the package/open-auditd defaults — scan impact for those rules depends on the datastream used (see the scan section below). The default (`false`) is unchanged.
+
 The bundled `fix.sh` carries two kinds of **jammy-aligned** changes:
 
 1. **Explicit comments (Kairos / time sync)** — Rules that install **chrony**, remove **systemd-timesyncd**, or edit **chrony.conf** are commented out with `EXCEPTION (CanvOS/Kairos)` notes, matching the intent of `ubuntu-fips/22.04/fix.sh`, so **kairos-init** can keep enabling **systemd-timesyncd**.
