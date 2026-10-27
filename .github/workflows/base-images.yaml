@@ -36,6 +36,11 @@ on:
         required: false
         type: boolean
         default: false
+      tag_suffix:
+        description: "Suffix appended to image tags"
+        required: false
+        type: string
+        default: "-r1"
       registry_prefix:
         description: "Registry prefix for output images"
         required: false
@@ -61,6 +66,7 @@ jobs:
           model = "${{ github.event.inputs.model }}"
           kairos_version = "${{ github.event.inputs.kairos_version }}"
           trusted_boot = "${{ github.event.inputs.trusted_boot }}" == "true"
+          tag_suffix = "${{ github.event.inputs.tag_suffix }}"
 
           matrix = []
 
@@ -70,6 +76,7 @@ jobs:
               tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{kairos_version}"
               if trusted_boot:
                   tag += "-uki"
+              tag += tag_suffix
 
               matrix.append({
                   "base_os": base_os_image,
@@ -78,7 +85,7 @@ jobs:
 
           elif trusted_boot:
               # UKI builds - only Ubuntu 24.04
-              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki"
+              tag = f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-{model}-{kairos_version}-uki{tag_suffix}"
               matrix.append({
                   "base_os": "ubuntu:24.04",
                   "tag": tag,
@@ -95,7 +102,7 @@ jobs:
               ]
 
               for base_os, tag_prefix in combinations:
-                  tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}"
+                  tag = f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{kairos_version}{tag_suffix}"
                   matrix.append({
                       "base_os": base_os,
                       "tag": tag,
