@@ -20,12 +20,13 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.10.10
+ARG PE_VERSION=v4.10.11-rc.2
 ARG KAIROS_VERSION=v4.1.2
 # Version component of the base image tags produced by .github/workflows/base-images.yaml.
 # Those images are tagged with the kairos-init version, so this must track the
 # kairos_init_image input of that workflow — NOT KAIROS_VERSION.
 ARG KAIROS_INIT_VERSION=v0.17.1
+ARG BASE_IMAGE_SUFFIX=-r1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -179,18 +180,21 @@ ARG DEBUG=false
 
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
-    IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
+    IF [ "$OS_VERSION" == 20 ]
+        # 20.04 has no -r1 rebuild.
         ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_INIT_VERSION
+    ELSE IF [ "$OS_VERSION" == 22 ]
+        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_INIT_VERSION$BASE_IMAGE_SUFFIX
     ELSE
         IF [ "$IS_UKI" = "true" ]
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION-uki
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION-uki$BASE_IMAGE_SUFFIX
         ELSE
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION$BASE_IMAGE_SUFFIX
         END
     END
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
-    ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION
+    ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_INIT_VERSION$BASE_IMAGE_SUFFIX
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "hadron" ] && [ "$BASE_IMAGE" = "" ]
     IF [ "$IS_UKI" = "true" ]
@@ -200,7 +204,7 @@ ELSE IF [ "$OS_DISTRIBUTION" = "hadron" ] && [ "$BASE_IMAGE" = "" ]
     ELSE
         LET VARIANT=$KAIROS_INIT_VERSION
     END
-    ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-generic-$VARIANT
+    ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-generic-$VARIANT$BASE_IMAGE_SUFFIX
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE
     ARG BASE_IMAGE
@@ -331,6 +335,18 @@ CHECK_SYSTEMD_VERSION:
         RUN echo "SUPPORTS_SYSTEMD_EXTENSIONS=$(cat /tmp/supports-systemd-extensions)"
     END
 
+DISTRUST_EMUDHRA:
+    COMMAND
+    ARG ALLOW_MISSING=false
+    # Mozilla bug 2083449: a package step can restore the trust store.
+    # Call this at the end of every final image, after all package steps.
+    COPY scripts/distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+    IF [ "$ALLOW_MISSING" = "true" ]
+        RUN EMUDHRA_ALLOW_MISSING_STORE=1 sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
+    ELSE
+        RUN sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
+    END
+
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-ts --keep-own /. rootfs
@@ -361,6 +377,9 @@ uki-provider-image:
     END
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
+
+    DO +DISTRUST_EMUDHRA --ALLOW_MISSING=true
+
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -1105,6 +1124,8 @@ provider-image:
     # Build-time helper only; don't ship it in the final image.
     RUN rm -f /tmp/install-kernel-headers.sh
 
+    DO +DISTRUST_EMUDHRA
+
     SAVE IMAGE --push $IMAGE_PATH
 
 provider-image-rootfs:
@@ -1544,6 +1565,8 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
+
+    DO +DISTRUST_EMUDHRA
 
     # Only push image if not building for MAAS (MAAS uses local image via --load)
     IF [ "$IS_MAAS" = "false" ]
