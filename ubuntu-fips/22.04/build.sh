@@ -3,6 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UBUNTU_FIPS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# Mozilla bug 2083449: provide the distrust script in the build context.
+cp "${UBUNTU_FIPS_ROOT}/../scripts/distrust-emudhra-roots.sh" "${UBUNTU_FIPS_ROOT}/"
+trap 'rm -f "${UBUNTU_FIPS_ROOT}/distrust-emudhra-roots.sh"' EXIT
 
 BASE_IMAGE="${1:-ubuntu-jammy-fips}"
 VERSION=22.04
