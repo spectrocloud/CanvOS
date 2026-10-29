@@ -167,7 +167,7 @@ STIG disables `net.ipv4.ip_forward` and `net.ipv4.conf.all.forwarding` for gener
 
 STIG sets `rp_filter=1` (strict); overlay clusters (Calico, etc.) require `rp_filter=0`. The build overrides via `/etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf`.
 
-**Audit disk-space actions (PE-9043).** STIG sets `disk_full_action` and `disk_error_action` to `halt`, and `admin_space_left_action` to `single`. On an appliance whose audit log lives on `COS_PERSISTENT`, a full partition then halts the node and it boot-loops. Building the installer with `AUDITD_NO_HALT=true` (`./earthly.sh +iso --AUDITD_NO_HALT=true`) bakes a Kairos drop-in that rewrites those three keys at every boot to `ROTATE`/`ROTATE`/`SYSLOG`. This deviates from `auditd_data_disk_full_action_stig` (CCE-88336-3), `auditd_data_disk_error_action_stig` (CCE-88303-3), and `auditd_data_retention_admin_space_left_action` — an OpenSCAP STIG scan on such an image reports those rules as **fail**. The default (`false`) preserves full STIG conformance.
+**Audit disk-space actions (PE-9043).** The STIG base image sets `disk_full_action` and `disk_error_action` to `SYSLOG`, and `admin_space_left_action` to `single`, at build time (after STIG remediation). On an appliance whose audit log lives on `COS_PERSISTENT`, a full partition then halts the node and it boot-loops. These values are persisted in the image at build time; no boot stage is used. All three are STIG-compliant: `disk_full_action` and `disk_error_action` accept SYSLOG/SINGLE/HALT, and `admin_space_left_action` requires `single`. Existing clusters can apply the same values with the cloud-config workaround in `cloudconfigs/35_auditd_space_actions.yaml`.
 
 ### Firewall Configuration
 

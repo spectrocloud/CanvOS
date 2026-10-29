@@ -1,4 +1,4 @@
-# PE-9043 — auditd disk-space actions (only when AUDITD_NO_HALT=true).
+# PE-9043 — auditd disk-space actions (workaround for existing clusters).
 #
 # DISA STIG remediation baked into the FIPS/STIG base images
 # (ubuntu-fips/22.04/fix.sh, rhel-stig/static/stig-fix.sh) sets auditd's
@@ -7,7 +7,8 @@
 # when that partition fills, a halting auditd prevents the node from finishing
 # boot, so the appliance boot-loops.
 #
-# This drop-in is copied to /system/oem/ only when AUDITD_NO_HALT=true. It runs
+# This drop-in is a workaround for existing clusters (apply via cluster profile or
+# user-data); new images get the values at build time. It runs
 # in initramfs.after -- the rootfs is mounted and writable, auditd has not
 # started -- so the effective config is rewritten on EVERY boot without
 # modifying the (read-only) image rootfs. Keyed in-place edit per key; never a
@@ -38,11 +39,11 @@ stages:
               printf '%s = %s\n' "$key" "$value" >> "$conf" || rc=1
             fi
           }
-          set_key admin_space_left_action ROTATE
-          set_key disk_full_action ROTATE
+          set_key admin_space_left_action single
+          set_key disk_full_action SYSLOG
           set_key disk_error_action SYSLOG
           if [ "$rc" -ne 0 ]; then
-            msg="AUDITD_NO_HALT: failed to rewrite one or more keys in $conf"
+            msg="PE-9043: failed to rewrite one or more keys in $conf"
             echo "$msg" >&2
             echo "$msg" > /dev/kmsg 2>/dev/null || true
           fi

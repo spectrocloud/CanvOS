@@ -15,7 +15,7 @@ Examples: `ENABLE_STIG=0 bash build.sh`, `SKIP_STIG_BANNER=1 bash build.sh my-ta
 
 ### Auditd disk-space actions (PE-9043)
 
-The default build is full STIG-conformant. Building the installer with `AUDITD_NO_HALT=true` (`./earthly.sh +iso --AUDITD_NO_HALT=true`) bakes a Kairos drop-in that sets `admin_space_left_action`/`disk_full_action` to `ROTATE` and `disk_error_action` to `SYSLOG` at every boot, so a full `COS_PERSISTENT` cannot halt and boot-loop the node. This deviates from STIG rule `auditd_data_disk_full_action` (the explicitly-set halting key on jammy); an OpenSCAP STIG scan will report that rule as **fail**.
+The FIPS base sets `disk_full_action` and `disk_error_action` to `SYSLOG`, and `admin_space_left_action` to `single`, at build time after STIG remediation. This image does not install `audit` today, so unless auditd is installed there is no `/etc/audit/auditd.conf` to change. Existing clusters can use the cloud-config workaround in `cloudconfigs/35_auditd_space_actions.yaml`.
 
 **Note:** `build.sh` uses the `ubuntu-fips` directory as the Docker build context so shared files (e.g. `restore-ubuntu-default-banners.sh`) resolve correctly.
 

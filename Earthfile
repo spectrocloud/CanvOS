@@ -53,9 +53,6 @@ ARG EDGE_CUSTOM_CONFIG=.edge-custom-config.yaml
 ARG ARCH
 ARG DISABLE_SELINUX=true
 ARG CIS_HARDENING=false
-# PE-9043: when true, bake a Kairos drop-in that relaxes auditd disk-full/error
-# actions (halt -> ROTATE/SYSLOG) so a full COS_PERSISTENT cannot boot-loop the node.
-ARG AUDITD_NO_HALT=false
 # Ubuntu Pro toggle. The token itself is NEVER passed as a build arg.
 # Recommended flow: use the earthly.sh wrapper. Set UBUNTU_PRO_ATTACH=true in
 # .arg (or pass --UBUNTU_PRO_ATTACH=true on the CLI), then run e.g.
@@ -1178,10 +1175,6 @@ base-image:
 
     IF [ "$IS_MAAS" = "true" ]
         COPY cloudconfigs/80_stylus_maas.yaml /system/oem/80_stylus_maas.yaml
-    END
-
-    IF [ "$AUDITD_NO_HALT" = "true" ]
-        COPY cloudconfigs/35_auditd_space_actions.yaml /system/oem/35_auditd_space_actions.yaml
     END
 
     # Ensure the Renesas xHCI (USB 3.0) host controller driver is bundled into the
