@@ -1,4 +1,8 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Mozilla bug 2083449: provide the distrust script in the build context.
+cp "${SCRIPT_DIR}/../scripts/distrust-emudhra-roots.sh" "${SCRIPT_DIR}/"
+trap 'rm -f "${SCRIPT_DIR}/distrust-emudhra-roots.sh"' EXIT
 # Build a RHEL Kairos base image using a direct Red Hat Subscription (subscription.rhsm.redhat.com).
 # For Red Hat Satellite, use build-sat.sh instead.
 #
