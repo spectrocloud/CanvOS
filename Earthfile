@@ -26,7 +26,7 @@ ARG KAIROS_VERSION=v4.1.2
 # Those images are tagged with the kairos-init version, so this must track the
 # kairos_init_image input of that workflow — NOT KAIROS_VERSION.
 ARG KAIROS_INIT_VERSION=v0.17.1
-ARG BASE_IMAGE_SUFFIX=-r1
+ARG BASE_IMAGE_SUFFIX=
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
