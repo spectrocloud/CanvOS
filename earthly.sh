@@ -455,12 +455,23 @@ if [ "$INSTALL_AMD_GPU_DRIVERS_EFFECTIVE" = "true" ] && [ "$AMDGPU_DRIVER_SOURCE
             exit 1
         fi
         # Same tag formula as the Earthfile's BASE_IMAGE_TAG branches.
-        if [ "$_os_ver" = "22" ] || [ "$_os_ver" = "20" ]; then
+        # BASE_IMAGE_SUFFIX is part of the tag (for example -r1 on the rebuilt
+        # kairos base images). Dropping it here makes the prebuild compile
+        # against a different kernel than the provider image uses, which the
+        # install script then rejects as an artifact/kernel mismatch.
+        _suffix="$(peek_arg BASE_IMAGE_SUFFIX "$@")"; _suffix="${_suffix:-${BASE_IMAGE_SUFFIX:-}}"
+        if [ -z "$_suffix" ]; then
+            _suffix="$(sed -n 's/^ARG BASE_IMAGE_SUFFIX=//p' Earthfile 2>/dev/null | head -1)"
+        fi
+        if [ "$_os_ver" = "20" ]; then
+            # 20.04 has no -r1 rebuild and keeps the unsuffixed tag.
             _tag="kairos-${_os_dist}:${_os_ver}.04-core-${_arch}-generic-${_kairos_ver}"
+        elif [ "$_os_ver" = "22" ]; then
+            _tag="kairos-${_os_dist}:${_os_ver}.04-core-${_arch}-generic-${_kairos_ver}${_suffix}"
         elif [ "$_is_uki" = "true" ]; then
-            _tag="kairos-${_os_dist}:${_os_ver}-core-${_arch}-generic-${_kairos_ver}-uki"
+            _tag="kairos-${_os_dist}:${_os_ver}-core-${_arch}-generic-${_kairos_ver}-uki${_suffix}"
         else
-            _tag="kairos-${_os_dist}:${_os_ver}-core-${_arch}-generic-${_kairos_ver}"
+            _tag="kairos-${_os_dist}:${_os_ver}-core-${_arch}-generic-${_kairos_ver}${_suffix}"
         fi
         AMDGPU_BASE_IMAGE="${_kairos_url}/${_tag}"
     fi
