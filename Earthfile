@@ -219,10 +219,8 @@ ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-fips-${TARGETARCH}:${PE_VERSION}
 ELSE
     ARG BIN_TYPE=palette
-    ARG CLI_IMAGE=$SPECTRO_PUB_REPO/edge/palette-edge-cli-${TARGETARCH}:${PE_VERSION}
 END
 
 IF [ "$CUSTOM_TAG" != "" ]
@@ -529,12 +527,12 @@ iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 validate-user-data:
-    FROM --platform=linux/${TARGETARCH} $CLI_IMAGE
+    FROM --platform=linux/${ARCH} $ALPINE_IMG
+    COPY --platform=linux/${ARCH} +stylus-package-image/opt/spectrocloud/bin/palette-agent /usr/local/bin/palette-agent
     COPY --if-exists user-data /user-data
 
-    RUN chmod +x /usr/local/bin/palette-edge-cli;
     RUN if [ -f /user-data ]; then \
-            /usr/local/bin/palette-edge-cli validate -f /user-data; \
+            /usr/local/bin/palette-agent validate-user-data /user-data; \
         else \
             echo "user-data file does not exist."; \
         fi
