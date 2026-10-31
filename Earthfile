@@ -212,7 +212,6 @@ END
 
 ARG STYLUS_BASE=$SPECTRO_PUB_REPO/edge/stylus-framework-linux-$ARCH:$PE_VERSION
 ARG STYLUS_PACKAGE_BASE=$SPECTRO_PUB_REPO/edge/stylus-linux-$ARCH:$PE_VERSION
-ARG PALETTE_AGENT_IMAGE=$SPECTRO_PUB_REPO/edge/palette-agent:$PE_VERSION
 
 IF [ "$FIPS_ENABLED" = "true" ]
     ARG BIN_TYPE=vertex
@@ -509,7 +508,8 @@ iso:
     SAVE ARTIFACT /build/* AS LOCAL ./build/
 
 validate-user-data:
-    FROM --platform=linux/${TARGETARCH} $PALETTE_AGENT_IMAGE
+    FROM --platform=linux/${ARCH} $ALPINE_IMG
+    COPY --platform=linux/${ARCH} +stylus-package-image/opt/spectrocloud/bin/palette-agent /usr/local/bin/palette-agent
     COPY --if-exists user-data /user-data
 
     RUN if [ -f /user-data ]; then \
