@@ -99,6 +99,21 @@ RUN chmod +x /tmp/stig-remediate.sh && \
   /tmp/stig-remediate.sh 2>&1 && \
   rm -f /tmp/stig-remediate.sh
 
+# PE-9043: STIG-compliant auditd disk-space actions that do not halt the node.
+# disk_full_action/disk_error_action accept SYSLOG, SINGLE, or HALT; SYSLOG keeps
+# the node up when the audit partition fills. admin_space_left_action must stay single.
+RUN if [ -f /etc/audit/auditd.conf ]; then \
+      conf=/etc/audit/auditd.conf; \
+      for kv in "disk_full_action=SYSLOG" "disk_error_action=SYSLOG" "admin_space_left_action=single"; do \
+        k=${kv%%=*}; v=${kv#*=}; \
+        if grep -qiE "^[[:space:]]*${k}[[:space:]]*=" "$conf"; then \
+          sed -i -E "s|^[[:space:]]*${k}[[:space:]]*=.*|${k} = ${v}|gi" "$conf"; \
+        else \
+          printf '%s = %s\n' "$k" "$v" >> "$conf"; \
+        fi; \
+      done; \
+    fi
+
 RUN mkdir -p /etc/luet/repos.conf.d
 ## Clear cache
 RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id

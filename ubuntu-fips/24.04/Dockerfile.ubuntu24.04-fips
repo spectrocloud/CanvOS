@@ -54,6 +54,22 @@ RUN chmod +x /tmp/fix.sh /tmp/stig-remediate.sh /tmp/restore-ubuntu-default-bann
     && rm -f /tmp/stig-remediate.sh \
     && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
 
+# PE-9043: STIG-compliant auditd disk-space actions that do not halt the node.
+# disk_full_action/disk_error_action accept SYSLOG, SINGLE, or HALT; SYSLOG keeps
+# the node up when the audit partition fills. admin_space_left_action must stay single.
+# (No-op when auditd is not installed.)
+RUN if [ -f /etc/audit/auditd.conf ]; then \
+      conf=/etc/audit/auditd.conf; \
+      for kv in "disk_full_action=SYSLOG" "disk_error_action=SYSLOG" "admin_space_left_action=single"; do \
+        k=${kv%%=*}; v=${kv#*=}; \
+        if grep -qiE "^[[:space:]]*${k}[[:space:]]*=" "$conf"; then \
+          sed -i -E "s|^[[:space:]]*${k}[[:space:]]*=.*|${k} = ${v}|gi" "$conf"; \
+        else \
+          printf '%s = %s\n' "$k" "$v" >> "$conf"; \
+        fi; \
+      done; \
+    fi
+
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -s init --fips --version "${VERSION}"
 
