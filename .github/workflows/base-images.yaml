@@ -4,7 +4,7 @@ name: Build Kairos Base Images
 # bake, from base-images/docker-bake.hcl:
 #
 #   public-distro  kairosify-ubuntu-22-04, kairosify-ubuntu-24-04,
-#                  kairosify-opensuse-15-6, ubuntu-uki-24-04, slem-5-4
+#                  kairosify-opensuse-16-0, ubuntu-uki-24-04
 #   public-hadron  hadron-std / hadron-fips / hadron-uki / hadron-fips-uki and
 #                  the Spectro hadron-modules image
 #   public         both of the above
@@ -36,9 +36,8 @@ on:
           - all
           - kairosify-ubuntu-22-04
           - kairosify-ubuntu-24-04
-          - kairosify-opensuse-15-6
+          - kairosify-opensuse-16-0
           - ubuntu-uki-24-04
-          - slem-5-4
           - hadron-all
           - hadron-std
           - hadron-fips

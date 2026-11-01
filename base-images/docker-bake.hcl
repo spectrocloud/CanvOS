@@ -17,7 +17,7 @@
 #
 # Secret tiers are groups:
 #   public         no credentials: public-distro + public-hadron
-#   public-distro  upstream-distro bases (kairosify, Ubuntu UKI, SLE Micro 5.4)
+#   public-distro  upstream-distro bases (kairosify, Ubuntu UKI)
 #   public-hadron  Hadron variants + modules image (needs hadron/modules.json)
 #   rhsm        RHSM username/password            (rhel-fips, rhel-core, rhel-stig)
 #   satellite   Satellite activation key          (rhel-core *-satellite)
@@ -163,7 +163,7 @@ function "hadron_module" {
 # Public: credential-free Kairos bases from upstream distro images
 # ===========================================================================
 
-# kairosify-ubuntu-22-04, kairosify-ubuntu-24-04, kairosify-opensuse-15-6
+# kairosify-ubuntu-22-04, kairosify-ubuntu-24-04, kairosify-opensuse-16-0
 target "kairosify" {
   name     = "kairosify-${os.name}"
   inherits = ["_kairosify"]
@@ -171,7 +171,7 @@ target "kairosify" {
     os = [
       { name = "ubuntu-22-04",  image = "ubuntu:22.04",       repo = "kairos-ubuntu",   version = "22.04" },
       { name = "ubuntu-24-04",  image = "ubuntu:24.04",       repo = "kairos-ubuntu",   version = "24.04" },
-      { name = "opensuse-15-6", image = "opensuse/leap:15.6", repo = "kairos-opensuse", version = "leap-15.6" },
+      { name = "opensuse-16-0", image = "opensuse/leap:16.0", repo = "kairos-opensuse", version = "leap-16.0" },
     ]
   }
   args = { BASE_OS_IMAGE = os.image }
@@ -263,12 +263,6 @@ target "rhel-satellite" {
 # ===========================================================================
 # SLE Micro
 # ===========================================================================
-
-target "slem-5-4" {
-  inherits = ["_kairos"]
-  context  = "./slem/5.4"
-  tags     = [kairos_tag("kairos-slem", "5.4", "")]
-}
 
 # Registers a fresh SCC system per build and deregisters it at the end;
 # SCC_NONCE (build timestamp) keeps a cached registration from being reused.
@@ -378,7 +372,6 @@ group "public-distro" {
   targets = [
     "kairosify",
     "ubuntu-uki-24-04",
-    "slem-5-4",
   ]
 }
 
