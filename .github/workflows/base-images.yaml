@@ -1,307 +1,192 @@
-name: Build Kairos Init Base Images
+name: Build Kairos Base Images
 
-# Builds Spectro Kairos base images used as Earthfile BASE_IMAGE inputs.
+# Builds the credential-free ("public") Spectro Kairos base images with docker
+# bake, from base-images/docker-bake.hcl:
 #
-# A single matrix dispatches all base-image builds which do not require credentials:
+#   public-distro  kairosify-ubuntu-22-04, kairosify-ubuntu-24-04,
+#                  kairosify-opensuse-15-6, ubuntu-uki-24-04, slem-5-4
+#   public-hadron  hadron-std / hadron-fips / hadron-uki / hadron-fips-uki and
+#                  the Spectro hadron-modules image
+#   public         both of the above
 #
-#   1. kairosify (docker-bake-kairosify.hcl)
-#        Core distro cores tagged $registry_prefix/kairos-<distro>:<version>-core-...
-#          - Ubuntu 20.04 / 22.04 / 24.04
-#          - openSUSE Leap 15.6
-#          - SLEM 5.4
-#        Also supports a --base_os_image=<image> mode to kairosify an arbitrary
-#        upstream OS.
+# What is built:
+#   base_os_image set     only kairosify-custom from that image (`target` ignored)
+#   target = all          every image above: the bake `public` group (default)
+#   target = hadron-all   all Hadron variants (public-hadron)
+#   target = <one image>  that bake target; Hadron variants also push hadron-modules
 #
-#   2. custom builders for images that kairosify cannot produce
-#        - ubuntu-uki/24.04/build.sh   → Trusted Boot Ubuntu 24.04 base with
-#                                        AMD/NVIDIA firmware trimmed (LP#1958518)
-#        - hadron/build.sh (modules)   → Hadron modules image (prerequisite)
-#        - hadron/build.sh (standard)  → Hadron base image
-#        - hadron/build.sh --fips      → Hadron FIPS base image
-#        - hadron/build.sh --uki       → Hadron Trusted Boot base image
+# Tags come from the bake file, e.g.
+#   <registry>/kairos-ubuntu:24.04-core-amd64-generic-v4.4.0
+#   <registry>/kairos-hadron:v0.5.3-core-amd64-generic-v4.4.0-fips-uki
 #
-# All specialized images are built on every dispatch. Hadron variants share
-# one matrix entry so the modules image is pushed before dependent base images.
+# Every image is single-architecture; run once per arch.
+#
+# Credential tiers (rhsm, satellite, pro, scc) are not built here. Images go to
+# the dev registry; promotion to production is a separate, manual retag.
 
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: "Bake target to build (ignored when base_os_image is set)"
+        required: false
+        type: choice
+        default: "all"
+        options:
+          - all
+          - kairosify-ubuntu-22-04
+          - kairosify-ubuntu-24-04
+          - kairosify-opensuse-15-6
+          - ubuntu-uki-24-04
+          - slem-5-4
+          - hadron-all
+          - hadron-std
+          - hadron-fips
+          - hadron-uki
+          - hadron-fips-uki
       base_os_image:
-        description: "Custom base OS for kairosify (leave empty to use default distro matrix)"
+        description: "Kairosify this upstream image instead (builds only kairosify-custom)"
         required: false
         type: string
         default: ""
-      kairos_init_image:
-        description: "Kairos Init image (its version tags all built images)"
-        required: false
-        type: string
-        default: "quay.io/kairos/kairos-init:v0.17.1"
       arch:
-        description: "Architecture for kairosify and Ubuntu UKI (Hadron builds amd64+arm64)"
+        description: "Architecture"
         required: false
         type: choice
         options:
           - amd64
           - arm64
         default: "amd64"
-      model:
-        description: "Model passed to kairos-init / kairosify"
-        required: false
-        type: string
-        default: "generic"
       kairos_version:
-        description: "Kairos Version (kairos-init --version). Not used in image tags."
+        description: "Kairos version (also the kairos-init image tag and the image tag suffix)"
         required: false
         type: string
-        default: "v4.1.2"
+        default: "v4.4.0"
       hadron_version:
-        description: "Upstream Hadron version tag"
+        description: "Hadron version (must be listed in base-images/hadron/modules.json)"
         required: false
         type: string
-        default: "v0.5.1"
-      registry_prefix:
-        description: "Registry prefix for output images"
+        default: "v0.5.3"
+      registry:
+        description: "Registry prefix for the built images"
         required: false
         type: string
-        default: "us-east1-docker.pkg.dev/spectro-images/dev/pe-8787/edge"
+        default: "us-east1-docker.pkg.dev/spectro-images/edge/base"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: base-images-${{ github.ref_name }}-${{ inputs.arch }}
+  cancel-in-progress: false
+
 jobs:
-  # Derives the kairos-init version tag and creates the complete build matrix.
-  generate-matrix:
+  build:
+    name: Build ${{ inputs.base_os_image != '' && 'kairosify-custom' || inputs.target }} (${{ inputs.arch }})
     runs-on: Luet-BigRunner
-    outputs:
-      build_matrix: ${{ steps.set-matrix.outputs.build_matrix }}
-      init_version: ${{ steps.set-matrix.outputs.init_version }}
-    steps:
-      - name: Generate build matrix
-        id: set-matrix
-        run: |
-          python3 << 'EOF'
-          import json
-          import os
-
-          base_os_image = "${{ github.event.inputs.base_os_image }}".strip()
-          registry_prefix = "${{ github.event.inputs.registry_prefix }}".rstrip("/")
-          arch = "${{ github.event.inputs.arch }}"
-          model = "${{ github.event.inputs.model }}"
-          kairos_init_image = "${{ github.event.inputs.kairos_init_image }}"
-          hadron_version = "${{ github.event.inputs.hadron_version }}"
-
-          def kairos_init_version(image):
-              """Version component of the kairos-init image reference.
-
-              Base images are tagged with the kairos-init version (not the
-              Kairos version) because kairos-init is what determines the
-              layout and contents of the produced image. Earthfile's
-              KAIROS_INIT_VERSION must match this.
-              """
-              ref = image.rsplit("/", 1)[-1]
-              if "@" in ref:  # digest form: kairos-init@sha256:abc...
-                  return ref.split("@", 1)[1].replace(":", "-")
-              if ":" in ref:
-                  return ref.split(":", 1)[1]
-              return "latest"
-
-          init_version = kairos_init_version(kairos_init_image)
-          print(f"Tagging with kairos-init version: {init_version}")
-
-          build_matrix = []
-          if base_os_image:
-              # Custom upstream — single kairosify entry.
-              simple_name = base_os_image.split("/")[-1].replace(":", "-")
-              tag = f"{registry_prefix}/kairos-custom:{simple_name}-core-{arch}-{model}-{init_version}"
-              build_matrix.append({
-                  "name": f"kairos-custom-{simple_name}",
-                  "builder": "kairosify",
-                  "base_os": base_os_image,
-                  "tag": tag,
-              })
-          else:
-              # Images supported by the generic kairosify Dockerfile.
-              combinations = [
-                  ("ubuntu-20.04", "ubuntu:20.04", "kairos-ubuntu:20.04-core"),
-                  ("ubuntu-22.04", "ubuntu:22.04", "kairos-ubuntu:22.04-core"),
-                  ("ubuntu-24.04", "ubuntu:24.04", "kairos-ubuntu:24.04-core"),
-                  ("opensuse-15.6", "opensuse/leap:15.6", "kairos-opensuse:leap-15.6-core"),
-                  (
-                      "slem-5.4",
-                      "registry.suse.com/suse/sle-micro-rancher/5.4:latest",
-                      "kairos-slem:5.4-core",
-                  ),
-              ]
-              for name, base_os, tag_prefix in combinations:
-                  build_matrix.append({
-                      "name": name,
-                      "builder": "kairosify",
-                      "base_os": base_os,
-                      "tag": f"{registry_prefix}/{tag_prefix}-{arch}-{model}-{init_version}",
-                  })
-
-          # These images need their specialized install/init stages and are
-          # always included without separate build toggles.
-          build_matrix.append({
-              "name": "ubuntu-uki-24.04",
-              "builder": "ubuntu-uki",
-              "tag": f"{registry_prefix}/kairos-ubuntu:24.04-core-{arch}-generic-{init_version}-uki",
-          })
-          build_matrix.append({
-              "name": "hadron",
-              "builder": "hadron",
-              "tags": [
-                  f"{registry_prefix}/hadron-modules:{hadron_version}",
-                  f"{registry_prefix}/kairos-hadron:{hadron_version}-core-generic-{init_version}",
-                  f"{registry_prefix}/kairos-hadron:{hadron_version}-core-generic-{init_version}-fips",
-                  f"{registry_prefix}/kairos-hadron:{hadron_version}-core-generic-{init_version}-uki",
-              ],
-          })
-
-          def out(key, value):
-              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-                  f.write(f"{key}={value}\n")
-
-          out("build_matrix", json.dumps(build_matrix))
-          out("init_version", init_version)
-
-          print(f"build_matrix={build_matrix}")
-          print(f"init_version={init_version}")
-          EOF
-
-  build-base-images:
-    needs: generate-matrix
-    runs-on: Luet-BigRunner
-    strategy:
-      matrix:
-        include: ${{ fromJson(needs.generate-matrix.outputs.build_matrix) }}
-      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Set up QEMU (arm64 on an x86 runner)
+        if: inputs.arch == 'arm64'
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Login to registry
-        run: echo "${{ secrets.US_EAST_JSON_KEY_B64 }}" | base64 -d | docker login -u _json_key --password-stdin us-east1-docker.pkg.dev
+      # Inputs reach the shell through env, never through ${{ }} in the script,
+      # so a crafted input cannot inject commands.
+      - name: Resolve targets
+        id: targets
+        env:
+          BASE_OS_IMAGE: ${{ inputs.base_os_image }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BASE_OS_IMAGE}" ]; then
+            targets="kairosify-custom"
+          else
+            case "${TARGET}" in
+              # hadron-modules is implicit: always pushed with Hadron.
+              all)        targets="public" ;;
+              hadron-all) targets="public-hadron" ;;
+              hadron-*)   targets="${TARGET},hadron-modules" ;;
+              *)          targets="${TARGET}" ;;
+            esac
+          fi
+          echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push kairosify image
-        if: matrix.builder == 'kairosify'
-        uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4 # v6
+      - name: Log in to the registry
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          REGISTRY_KEY_B64: ${{ secrets.US_EAST_JSON_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${REGISTRY_KEY_B64}" | base64 -d \
+            | docker login -u _json_key --password-stdin "${REGISTRY%%/*}"
+
+      - name: Build and push
+        id: bake
+        uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4 # v6.10.0
+        env:
+          # Bake variables (base-images/docker-bake.hcl).
+          REGISTRY: ${{ inputs.registry }}
+          ARCH: ${{ inputs.arch }}
+          KAIROS_VERSION: ${{ inputs.kairos_version }}
+          HADRON_VERSION: ${{ inputs.hadron_version }}
+          BASE_OS_IMAGE: ${{ inputs.base_os_image }}
         with:
-          files: docker-bake-kairosify.hcl
-          targets: kairosify
+          source: .
+          workdir: base-images
+          files: |
+            docker-bake.hcl
+            hadron/modules.json
+          targets: ${{ steps.targets.outputs.targets }}
+          # The shared eMudhra distrust script is read from ../scripts.
+          allow: fs.read=..
           push: true
-          set: |
-            kairosify.platform=linux/${{ github.event.inputs.arch }}
-            kairosify.args.BASE_OS_IMAGE=${{ matrix.base_os }}
-            kairosify.args.KAIROS_INIT_IMAGE=${{ github.event.inputs.kairos_init_image }}
-            kairosify.args.KAIROS_VERSION=${{ github.event.inputs.kairos_version }}
-            kairosify.args.MODEL=${{ github.event.inputs.model }}
-            kairosify.tags=${{ matrix.tag }}
-        env:
-          DOCKER_BUILD_SUMMARY: false
-
-      - name: Build and push Ubuntu 24.04 Trusted Boot base
-        if: matrix.builder == 'ubuntu-uki'
-        env:
-          SPECTRO_REPO: ${{ github.event.inputs.registry_prefix }}
-          KAIROS_VERSION: ${{ github.event.inputs.kairos_version }}
-          KAIROS_INIT_VERSION: ${{ needs.generate-matrix.outputs.init_version }}
-          KAIROS_INIT_IMAGE: ${{ github.event.inputs.kairos_init_image }}
-          ARCH: ${{ github.event.inputs.arch }}
-        run: |
-          set -euo pipefail
-          bash ubuntu-uki/24.04/build.sh \
-            --arch "${ARCH}" \
-            --tag "${{ matrix.tag }}" \
-            --push
-
-      - name: Build and push multi-arch Hadron modules and base images
-        if: matrix.builder == 'hadron'
-        env:
-          SPECTRO_REPO: ${{ github.event.inputs.registry_prefix }}
-          KAIROS_VERSION: ${{ github.event.inputs.kairos_version }}
-          KAIROS_INIT_VERSION: ${{ needs.generate-matrix.outputs.init_version }}
-          KAIROS_INIT_IMAGE: ${{ github.event.inputs.kairos_init_image }}
-          HADRON_VERSION: ${{ github.event.inputs.hadron_version }}
-        run: |
-          set -euo pipefail
-          bash hadron/build.sh --target modules --push
-          bash hadron/build.sh --push
-          bash hadron/build.sh --fips --push
-          bash hadron/build.sh --uki --push
-
-      - name: Save build result
-        if: matrix.builder != 'hadron'
-        run: |
-          mkdir -p /tmp/results
-          echo "${{ matrix.tag }}" >> "/tmp/results/${{ matrix.name }}.txt"
-
-      - name: Save Hadron build results
-        if: matrix.builder == 'hadron'
-        env:
-          SPECTRO_REPO: ${{ github.event.inputs.registry_prefix }}
-          KAIROS_INIT_VERSION: ${{ needs.generate-matrix.outputs.init_version }}
-          HADRON_VERSION: ${{ github.event.inputs.hadron_version }}
-        run: |
-          mkdir -p /tmp/results
-          {
-            echo "${SPECTRO_REPO}/hadron-modules:${HADRON_VERSION}"
-            echo "${SPECTRO_REPO}/kairos-hadron:${HADRON_VERSION}-core-generic-${KAIROS_INIT_VERSION}"
-            echo "${SPECTRO_REPO}/kairos-hadron:${HADRON_VERSION}-core-generic-${KAIROS_INIT_VERSION}-fips"
-            echo "${SPECTRO_REPO}/kairos-hadron:${HADRON_VERSION}-core-generic-${KAIROS_INIT_VERSION}-uki"
-          } >> "/tmp/results/${{ matrix.name }}.txt"
-
-      - name: Upload build results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: build-result-${{ matrix.name }}
-          path: /tmp/results/${{ matrix.name }}.txt
-
-  collect-outputs:
-    needs:
-      - generate-matrix
-      - build-base-images
-    if: always() && !cancelled()
-    runs-on: Luet-BigRunner
-    outputs:
-      built_tags: ${{ steps.combine-tags.outputs.tags }}
-    steps:
-      - name: Download all build results
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: build-result-*
-          path: /tmp/results
-          merge-multiple: true
-
-      - name: Combine all tags
-        id: combine-tags
-        run: |
-          TAGS_FILE=/tmp/all_tags.txt
-          find /tmp/results -name "*.txt" -type f -exec cat {} + 2>/dev/null \
-            | grep -v '^$' \
-            | sort -u > "$TAGS_FILE" || true
-          ALL_TAGS=$(jq -R -s -c 'split("\n") | map(select(length > 0))' "$TAGS_FILE")
-          echo "tags=$ALL_TAGS" >> "$GITHUB_OUTPUT"
-          echo "All built tags: $ALL_TAGS"
 
       - name: Summary
+        if: always() && steps.bake.outputs.metadata != ''
+        env:
+          METADATA: ${{ steps.bake.outputs.metadata }}
+          ARCH: ${{ inputs.arch }}
+          KAIROS_VERSION: ${{ inputs.kairos_version }}
+          HADRON_VERSION: ${{ inputs.hadron_version }}
+          REGISTRY: ${{ inputs.registry }}
+          TARGETS: ${{ steps.targets.outputs.targets }}
+          BASE_OS_IMAGE: ${{ inputs.base_os_image }}
         run: |
           {
-            echo "## Base Image Build Summary"
+            echo "## Base image build"
             echo ""
-            echo "**Input Parameters:**"
-            echo "- Base OS Image (kairosify override): ${{ github.event.inputs.base_os_image || 'Default matrix' }}"
-            echo "- Kairos Init Image: ${{ github.event.inputs.kairos_init_image }} (tags all built images)"
-            echo "- Architecture (kairosify/Ubuntu UKI): ${{ github.event.inputs.arch }}"
-            echo "- Hadron architectures: amd64, arm64"
-            echo "- Model: ${{ github.event.inputs.model }}"
-            echo "- Kairos Version: ${{ github.event.inputs.kairos_version }}"
-            echo "- Hadron Version: ${{ github.event.inputs.hadron_version }}"
-            echo "- Registry Prefix: ${{ github.event.inputs.registry_prefix }}"
+            echo "| Input | Value |"
+            echo "|---|---|"
+            echo "| Targets | \`${TARGETS}\` |"
+            if [ -n "${BASE_OS_IMAGE}" ]; then echo "| Base OS image | \`${BASE_OS_IMAGE}\` |"; fi
+            echo "| Architecture | \`${ARCH}\` |"
+            echo "| Kairos version | \`${KAIROS_VERSION}\` |"
+            echo "| Hadron version | \`${HADRON_VERSION}\` |"
+            echo "| Registry | \`${REGISTRY}\` |"
             echo ""
-            echo "**Built Images:**"
-            if [[ -s /tmp/all_tags.txt ]]; then
-              sed 's/.*/- `&`/' /tmp/all_tags.txt
-            else
-              echo "_No image tags were collected._"
-            fi
+            echo "### Pushed images"
+            echo ""
+            echo "| Target | Image | Digest |"
+            echo "|---|---|---|"
+            printf '%s' "${METADATA}" | jq -r '
+              to_entries[]
+              | select(.value | type == "object" and has("image.name"))
+              | . as $t
+              | ($t.value["image.name"] | split(","))[]
+              | "| `\($t.key)` | `\(.)` | `\($t.value["containerimage.digest"] // "")` |"'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Self-hosted runner: do not leave registry credentials in ~/.docker.
+      - name: Log out of the registry
+        if: always()
+        env:
+          REGISTRY: ${{ inputs.registry }}
+        run: docker logout "${REGISTRY%%/*}" || true

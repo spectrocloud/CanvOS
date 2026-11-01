@@ -1,0 +1,24 @@
+{
+  "HADRON_RELEASES": [
+    {
+      "version": "v0.5.1",
+      "modules": [
+        {
+          "name": "drbd",
+          "version": "v9.3.3",
+          "digest": "sha256:af4ca4349b08a3a23a734455f2901bdac0568701e9442bab93a0a8dbd41e3223"
+        }
+      ]
+    },
+    {
+      "version": "v0.5.3",
+      "modules": [
+        {
+          "name": "drbd",
+          "version": "v9.3.4",
+          "digest": "sha256:77206dfbdd88b1fa1d2c538077f734decdf2eb4324d6c50d61f020cda84b3dfc"
+        }
+      ]
+    }
+  ]
+}

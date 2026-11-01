@@ -1,0 +1,48 @@
+ARG HADRON_VERSION=v0.5.3
+# kairos-init is tagged with the Kairos version it installs.
+ARG KAIROS_VERSION=v4.4.0
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_VERSION}
+ARG FIPS=false
+ARG IS_UKI=false
+
+# Per-arch modules image, same name/tag scheme as docker-bake.hcl
+# (hadron_modules_image). Bake overrides it and builds the modules in-graph.
+ARG TARGETARCH
+ARG MODULES_IMAGE=us-east1-docker.pkg.dev/spectro-images/edge/base/hadron-modules:${HADRON_VERSION}-${TARGETARCH}
+
+FROM ${KAIROS_INIT_IMAGE} AS kairos-init
+
+FROM ${MODULES_IMAGE} AS modules
+
+FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION}         AS base-fips-false-uki-false
+FROM ghcr.io/kairos-io/hadron-fips:${HADRON_VERSION}    AS base-fips-true-uki-false
+FROM ghcr.io/kairos-io/hadron-trusted:${HADRON_VERSION} AS base-fips-false-uki-true
+# FIPS + Trusted Boot; upstream publishes it from v0.5.3 on.
+FROM ghcr.io/kairos-io/hadron-fips-trusted:${HADRON_VERSION} AS base-fips-true-uki-true
+
+FROM base-fips-${FIPS}-uki-${IS_UKI} AS base-kairos
+ARG KAIROS_VERSION
+ARG MODEL=generic
+ARG FIPS=false
+ARG IS_UKI=false
+
+# The base image ships /usr/sbin/ip and /sbin/ip as symlinks into /bin/busybox. 
+# Drop them so the modules COPY lands the real iproute2 `ip` as a regular file rather than being resolved by buildkit into
+# /bin/busybox and overwriting the multi-call binary itself.
+RUN rm -f /usr/sbin/ip /sbin/ip
+
+COPY --from=modules / /
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    FIPS_FLAG=$([ "${FIPS}" = "true" ] && echo "--fips" || true) && \
+    /kairos-init -l debug -s install -m "${MODEL}" -t "${IS_UKI}" --version "${KAIROS_VERSION}" ${FIPS_FLAG}
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    FIPS_FLAG=$([ "${FIPS}" = "true" ] && echo "--fips" || true) && \
+    /kairos-init -l debug -s init -m "${MODEL}" -t "${IS_UKI}" --version "${KAIROS_VERSION}" ${FIPS_FLAG}
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# Bind-mounted from the named build context "scripts" (docker-bake.hcl), so the
+# script never lands in an image layer.
+RUN --mount=type=bind,from=scripts,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh

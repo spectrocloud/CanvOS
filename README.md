@@ -16,7 +16,7 @@ The base image definitions reside in the Earthfile located in this repo. This de
 
 ### Base Image
 
-From the Kairos project, this is derived from the operating system distribution chosen (currently Ubuntu, OpenSuse-Leap, and Hadron v0.5.1 supported). It is pulled down as the base image and some adjustments are made to better support Palette. Those adjustments are used to clean and update the image as well as install some required packages.
+From the Kairos project, this is derived from the operating system distribution chosen (currently Ubuntu, OpenSuse-Leap, and Hadron v0.5.3 supported). It is pulled down as the base image and some adjustments are made to better support Palette. Those adjustments are used to clean and update the image as well as install some required packages.
 
 ### Provider Image
 
@@ -243,12 +243,12 @@ do so (now or later) by using -c with the switch command. Example:
 cp .arg.template .arg
 ```
 
-6. To build RHEL core, RHEL FIPS, RHEL 9 STIG, Ubuntu fips, sles, or Hadron base images switch to respective directories and build the base image.
+6. To build RHEL core, RHEL FIPS, RHEL 9 STIG, Ubuntu fips, sles, or Hadron base images, use docker bake from `base-images/` (all targets are defined in `base-images/docker-bake.hcl`).
    The base image built can be passed as argument to build the installer and provider images.
-   Follow the instructions in the respective sub-folders (rhel-fips, rhel-stig, ubuntu-fips, hadron) to create base images.
+   Follow the instructions in the respective sub-folders of `base-images/` (rhel-core-images, rhel-fips, rhel-stig, ubuntu-fips, ubuntu-uki, slem, hadron) to create base images.
    For ubuntu-fips, this image can be used as base image - `gcr.io/spectro-images-public/ubuntu-fips:v3.0.11`
-   For RHEL 9 STIG, see `rhel-stig/README.md` for build instructions.
-   For Hadron, the supported version is `v0.5.1`. Build with `hadron/build.sh` (see `hadron/build.sh` for flags), or set `OS_DISTRIBUTION=hadron` and `OS_VERSION=v0.5.1` so Earthfile resolves the published Kairos Hadron base image.
+   For RHEL 9 STIG, see `base-images/rhel-stig/README.md` for build instructions.
+   For Hadron, the default version is `v0.5.3` (supported releases are listed in `base-images/hadron/modules.json`). Build with docker bake from `base-images/` (see `base-images/hadron/README.md`), or set `OS_DISTRIBUTION=hadron` and `OS_VERSION=v0.5.3` so Earthfile resolves the published Kairos Hadron base image.
    Skip this step if your base image is ubuntu or opensuse-leap. If you are building ubuntu or opensuse-leap installer images, do not pass the BASE_IMAGE attribute as an arg to build command.
 
 7. Modify the `.arg` file as needed. Primarily, you must define the tag you want to use for your images. For example, if the operating system is `ubuntu` and the tag is `demo`, the image artefact will name as `ttl.sh/ubuntu:k3s-1.25.2-v3.4.3-demo`. The **.arg** file defines the following variables:
@@ -259,7 +259,7 @@ cp .arg.template .arg
 | IMAGE_REGISTRY              | Image registry name that will store the image artifacts. The default value points to the _ttl.sh_ image registry, an anonymous and ephemeral Docker image registry where images live for a maximum of 24 hours by default. If you wish to make the images exist longer than 24 hours, you can use any other image registry to suit your needs. | String  | `ttl.sh`                   |
 | OS_DISTRIBUTION             | OS distribution of your choice. For example, it can be `ubuntu`, `opensuse-leap`, `rhel`, `sles` or `hadron`                                                                                                                                                                                                     | String  | `ubuntu`                   |
 | IMAGE_REPO                  | Image repository name in your chosen registry.                                                                                                                                                                                                                                                                                                 | String  | `$OS_DISTRIBUTION`         |
-| OS_VERSION                  | OS version. For Ubuntu, the possible values are `20`,`22`, and `24`. Whereas for openSUSE Leap, the possible value is `15.6`. For sles, possible values are `5.4`. For Hadron, the supported version is `v0.5.1`. This example uses `22` for Ubuntu.                                                                  | String  | `22`                       |
+| OS_VERSION                  | OS version. For Ubuntu, the possible values are `22.04` and `24.04` (`22` and `24` are also accepted for the base image). Whereas for openSUSE Leap, the possible value is `15.6`. For sles, possible values are `5.4`. For Hadron, the default version is `v0.5.3` (supported releases are listed in `base-images/hadron/modules.json`). This example uses `22` for Ubuntu.                                                                  | String  | `22`                       |
 | K8S_DISTRIBUTION            | Kubernetes distribution name. It can be one of these: `k3s`, `rke2`, `kubeadm`, `kubeadm-fips`, or `nodeadm`.                                                                                                                                                                                                                                  | String  | `k3s`                      |
 | BUNDLE_K8S_AND_AGENT_PROVIDER | Bundle Kubernetes binaries and the agent-provider binaries into UKI and non-UKI provider images even when the base OS supports systemd extensions. Provider images only; the installer ISO always uses the real systemd-extension probe.                                                                                                     | boolean | `true`                    |
 | ISO_NAME                    | Name of the Edge installer ISO image. In this example, the name is _palette-edge-installer_.                                                                                                                                                                                                                                                   | String  | `palette-edge-installer`   |
@@ -507,25 +507,25 @@ To build the fips enabled ubuntu installer image
 To build the RHEL 9 STIG installer image (non-FIPS)
 
 ```shell
-# First, build and push the base image (see rhel-stig/README.md)
+# First, build and push the base image (see base-images/rhel-stig/README.md)
 # Then use the full registry path:
-./earthly.sh +iso --BASE_IMAGE=<your-registry>/rhel9-byoi-stig:latest --OS_DISTRIBUTION=rhel --ARCH=amd64
+./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.4.0-stig --OS_DISTRIBUTION=rhel --ARCH=amd64
 ```
 
 To build the RHEL 9 STIG FIPS installer image
 
 ```shell
-# First, build and push the base image (see rhel-stig/README.md)
+# First, build and push the base image (see base-images/rhel-stig/README.md)
 # Then use the full registry path:
-./earthly.sh +iso --BASE_IMAGE=<your-registry>/rhel9-byoi-stig-fips:latest --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
+./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.4.0-fips-stig --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
 ```
 
 **Note**: For RHEL 9 STIG images, you must:
-1. First build the base image using `rhel-stig/build.sh.rhel9` (see `rhel-stig/README.md`)
-2. Tag and push the image to a Docker registry (Earthly cannot use local-only images)
+1. First build and push the base image with `docker buildx bake --allow=fs.read=.. rhel-stig-9 --push` (or `rhel-stig-9-fips`) from `base-images/`, with `REGISTRY` set to your registry (see `base-images/rhel-stig/README.md`)
+2. The image must be in a Docker registry (Earthly cannot use local-only images)
 3. Use the full registry path in the `BASE_IMAGE` argument
 
-RHEL 9 STIG images require Red Hat subscription credentials and apply DISA STIG security hardening. Firewall rules must be configured at runtime for Palette cluster operations - see `rhel-stig/README.md` for firewall configuration details.
+RHEL 9 STIG images require Red Hat subscription credentials and apply DISA STIG security hardening. Firewall rules must be configured at runtime for Palette cluster operations - see `base-images/rhel-stig/README.md` for firewall configuration details.
 
 Output
 

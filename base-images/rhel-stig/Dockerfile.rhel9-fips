@@ -1,0 +1,122 @@
+# kairos-init is tagged with the Kairos version it installs.
+ARG KAIROS_VERSION=v4.4.0
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_VERSION}
+FROM ${KAIROS_INIT_IMAGE} AS kairos-init
+FROM registry.access.redhat.com/ubi9-init:9.4-6
+
+ARG KAIROS_VERSION
+ARG MODEL=generic
+
+RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm -y
+# Credentials come from two BuildKit env secrets (never in image layers, build
+# args, or docker history); they are exported for this RUN only.
+RUN --mount=type=secret,id=RHSM_USERNAME,env=RHSM_USERNAME \
+    --mount=type=secret,id=RHSM_PASSWORD,env=RHSM_PASSWORD \
+    : "${RHSM_USERNAME:?missing --secret id=RHSM_USERNAME,env=RHSM_USERNAME}" \
+    && : "${RHSM_PASSWORD:?missing --secret id=RHSM_PASSWORD,env=RHSM_PASSWORD}" \
+    && rm -f /etc/rhsm-host \
+    && subscription-manager register --username "$RHSM_USERNAME" --password "$RHSM_PASSWORD" \
+    && yum repolist \
+    && subscription-manager attach --auto \
+    && subscription-manager repos --enable rhel-9-for-x86_64-appstream-rpms \
+    && yum repolist
+RUN echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
+
+COPY overlay/rhel9/ /
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+COPY --from=kairos-init /kairos-init /kairos-init
+
+# Let Kairos install packages first (provides network config, luet packages, etc.)
+RUN /kairos-init -l debug -m "${MODEL}" -s install --fips --version "${KAIROS_VERSION}"
+
+# Add STIG extras + network stack + storage (Kairos may not install these on RHEL base)
+# gdisk/cloud-utils-growpart needed for dracut; iscsi-initiator-utils for Longhorn
+# Generate machine-id because https://bugzilla.redhat.com/show_bug.cgi?id=1737355#c6
+RUN uuidgen > /etc/machine-id && dnf install -y \
+  scap-security-guide \
+  openscap-scanner \
+  firewalld \
+  gdisk \
+  efibootmgr \
+  conntrack \
+  ncurses \
+  socat \
+  kbd \
+  grub2 \
+  audit \
+  haveged \
+  open-vm-tools \
+  cloud-utils-growpart \
+  systemd-networkd \
+  systemd-resolved \
+  systemd-timesyncd \
+  iscsi-initiator-utils \
+  ethtool \
+  tcpdump \
+  gnutls-utils \
+  nss-tools \
+  rng-tools \
+  rsyslog-gnutls \
+  && dnf clean all
+
+RUN sed -i 's/\bsource\b/./g' /system/oem/00_rootfs.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/09_openrc_services.yaml
+RUN sed -i 's/\bsource\b/./g' /system/oem/50_recovery.yaml
+
+RUN mkdir -p /run/lock
+RUN touch /usr/libexec/.keep
+
+# Configure the box. The ubi image masks services for containers, we unmask them
+RUN systemctl list-unit-files |grep masked |cut -f 1 -d " " | xargs systemctl unmask
+RUN systemctl enable getty@tty1.service
+RUN systemctl enable getty@tty2.service
+RUN systemctl enable getty@tty3.service
+RUN systemctl enable systemd-networkd
+RUN systemctl enable systemd-resolved
+RUN systemctl enable sshd
+RUN systemctl disable selinux-autorelabel-mark.service
+RUN systemctl unmask systemd-udevd
+RUN systemctl enable systemd-udevd
+RUN systemctl unmask systemd-logind.service
+RUN systemctl enable systemd-logind.service
+
+# Run init stage; skip cleanup (removes dracut/squashfs needed for boot)
+RUN /kairos-init -l debug -m "${MODEL}" -s init --fips --version "${KAIROS_VERSION}" --skip-step cleanup
+
+RUN dnf install -y dracut dracut-network dracut-live dracut-squash dhcp-client \
+  && dnf clean all
+
+COPY dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+# Disable SELinux
+RUN echo "SELINUX=disabled" > /etc/selinux/config
+
+RUN rm -rf /boot/initramfs-*
+
+COPY overlay/rhel9/ /
+
+# Note: Some remediation rules may fail (e.g., download-dependent rules) - this is expected
+# Static STIG content (optional): for reproducible releases, run scripts/update-stig-content.sh
+COPY static/ /tmp/stig-static/
+COPY stig-remediate.sh /tmp/stig-remediate.sh
+RUN chmod +x /tmp/stig-remediate.sh && \
+  /tmp/stig-remediate.sh 2>&1 && \
+  rm -f /tmp/stig-remediate.sh
+
+RUN mkdir -p /etc/luet/repos.conf.d
+## Clear cache
+# kairos-init's cleanup step (skipped above) is what deletes SSH host keys, so remove
+# any generated during the build here; sshd-keygen creates per-node keys on first boot.
+RUN rm -rf /var/cache/* && journalctl --vacuum-size=1K  && rm /etc/machine-id && rm -f /etc/ssh/ssh_host_*
+
+RUN subscription-manager unregister
+
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# Bind-mounted from the `scripts` build context; it never lands in an image layer.
+RUN --mount=type=bind,from=scripts,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh
