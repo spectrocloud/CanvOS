@@ -144,6 +144,11 @@ jobs:
           # Build record artifact (.dockerbuild): logs, timings, provenance; no
           # secrets. Public repo, credential-free builds: keep it, but briefly.
           DOCKER_BUILD_RECORD_RETENTION_DAYS: 7
+          # Keep provenance out of the metadata output only (the images still
+          # carry their provenance attestation). With it, `all` produces
+          # metadata over the 128 KiB per-variable limit and the Summary step
+          # cannot start ("Argument list too long").
+          BUILDX_METADATA_PROVENANCE: disabled
         with:
           source: .
           workdir: base-images
