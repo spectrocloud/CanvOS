@@ -71,13 +71,17 @@ on:
         description: "Registry prefix for the built images"
         required: false
         type: string
-        default: "us-east1-docker.pkg.dev/spectro-images/edge/base"
+        default: "us-east1-docker.pkg.dev/spectro-images/dev/edge/base"
 
 permissions:
   contents: read
 
+# One run at a time per target and arch; different targets run in parallel.
+# No branch in the key: tags carry no branch name, so the same target built from
+# two branches would push to the same tags. The group is per dispatch value, so
+# overlapping choices (e.g. `all` and `hadron-fips`) can still run together.
 concurrency:
-  group: base-images-${{ github.ref_name }}-${{ inputs.arch }}
+  group: base-images-${{ inputs.arch }}-${{ inputs.base_os_image != '' && format('kairosify-custom-{0}', inputs.base_os_image) || inputs.target }}
   cancel-in-progress: false
 
 jobs:
