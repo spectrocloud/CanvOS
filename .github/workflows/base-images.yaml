@@ -142,6 +142,9 @@ jobs:
           KAIROS_VERSION: ${{ inputs.kairos_version }}
           HADRON_VERSION: ${{ inputs.hadron_version }}
           BASE_OS_IMAGE: ${{ inputs.base_os_image }}
+          # Build record artifact (.dockerbuild): logs, timings, provenance; no
+          # secrets. Public repo, credential-free builds: keep it, but briefly.
+          DOCKER_BUILD_RECORD_RETENTION_DAYS: 7
         with:
           source: .
           workdir: base-images
