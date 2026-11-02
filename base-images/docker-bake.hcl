@@ -20,7 +20,7 @@
 #   public-distro  upstream-distro bases (kairosify, Ubuntu UKI)
 #   public-hadron  Hadron variants + modules image (needs hadron/modules.json)
 #   rhsm        RHSM username/password            (rhel-fips, rhel-core, rhel-stig)
-#   satellite   Satellite activation key          (rhel-core *-satellite)
+#   satellite   Satellite activation key          (rhel-*-sat)
 #   pro         Ubuntu Pro attach config          (ubuntu-fips)
 #   scc         SUSE registration code            (slem 5.5)
 #
@@ -60,8 +60,8 @@ variable "KAIROS_VERSION" { default = "v4.4.0" }
 # equal to KAIROS_VERSION.
 variable "KAIROS_INIT_IMAGE" { default = "quay.io/kairos/kairos-init:${KAIROS_VERSION}" }
 
-# kairosify-custom: any upstream OS image to kairosify (not part of a group).
-#   BASE_OS_IMAGE=rockylinux:9 docker buildx bake --allow=fs.read=.. kairosify-custom
+# custom: any upstream OS image to kairosify (not part of a group).
+#   BASE_OS_IMAGE=rockylinux:9 docker buildx bake --allow=fs.read=.. custom
 variable "BASE_OS_IMAGE" { default = "" }
 
 
@@ -122,7 +122,7 @@ function "kairos_tag" {
 # forces a real bool, so a quoted "1" or "True" in an override file is
 # normalised (or rejected) here instead of reaching the Dockerfile as-is.
 #   bool_flag: "1"/"0"        (ubuntu-fips ENABLE_STIG, SKIP_STIG_BANNER)
-#   bool_str:  "true"/"false" (ubuntu-uki KEEP_GPU_FIRMWARE)
+#   bool_str:  "true"/"false" (ubuntu-24-04-uki KEEP_GPU_FIRMWARE)
 function "bool_flag" {
   params = [value]
   result = value ? "1" : "0"
@@ -163,9 +163,10 @@ function "hadron_module" {
 # Public: credential-free Kairos bases from upstream distro images
 # ===========================================================================
 
-# kairosify-ubuntu-22-04, kairosify-ubuntu-24-04, kairosify-opensuse-16-0
+# ubuntu-22-04, ubuntu-24-04, opensuse-16-0 (upstream image + kairos-init via
+# Dockerfile.kairosify; `kairosify` builds all three)
 target "kairosify" {
-  name     = "kairosify-${os.name}"
+  name     = os.name
   inherits = ["_kairosify"]
   matrix = {
     os = [
@@ -178,8 +179,8 @@ target "kairosify" {
   tags = [kairos_tag(os.repo, os.version, "")]
 }
 
-# Any upstream image: BASE_OS_IMAGE=<image> docker buildx bake kairosify-custom
-target "kairosify-custom" {
+# Any upstream image: BASE_OS_IMAGE=<image> docker buildx bake custom
+target "custom" {
   inherits = ["_kairosify"]
   args     = { BASE_OS_IMAGE = BASE_OS_IMAGE }
   tags     = [kairos_tag("kairos-custom", image_name(BASE_OS_IMAGE), "")]
@@ -190,7 +191,7 @@ target "kairosify-custom" {
 # ===========================================================================
 
 # AMD/NVIDIA GPU firmware is trimmed unless KEEP_GPU_FIRMWARE=true.
-target "ubuntu-uki-24-04" {
+target "ubuntu-24-04-uki" {
   inherits = ["_kairos"]
   context  = "./ubuntu-uki/24.04"
   args = {
@@ -204,9 +205,10 @@ target "ubuntu-uki-24-04" {
 # Ubuntu FIPS (+ STIG)
 # ===========================================================================
 
-# ubuntu-fips-22-04, ubuntu-fips-24-04
+# ubuntu-22-04-fips, ubuntu-24-04-fips (`ubuntu-fips` builds both). STIG is the
+# ENABLE_STIG setting, so it shows in the tag (-fips-stig) but not in the name.
 target "ubuntu-fips" {
-  name       = "ubuntu-fips-${replace(ver, ".", "-")}"
+  name       = "ubuntu-${replace(ver, ".", "-")}-fips"
   matrix     = { ver = ["22.04", "24.04"] }
   inherits   = ["_kairos"]
   context    = "./ubuntu-fips"
@@ -224,9 +226,9 @@ target "ubuntu-fips" {
 # RHEL: core, FIPS, STIG (direct RHSM) and Satellite
 # ===========================================================================
 
-# rhel-core-9, rhel-core-10, rhel-fips-9, rhel-fips-10
+# rhel-9, rhel-10, rhel-9-fips, rhel-10-fips (`rhel` builds all four)
 target "rhel" {
-  name       = "rhel-${flavor}-${ver}"
+  name       = flavor == "fips" ? "rhel-${ver}-fips" : "rhel-${ver}"
   matrix     = { flavor = ["core", "fips"], ver = ["9", "10"] }
   inherits   = ["_kairos", "_rhsm"]
   context    = flavor == "core" ? "./rhel-core-images" : "./rhel-fips"
@@ -234,9 +236,9 @@ target "rhel" {
   tags       = [kairos_tag("kairos-rhel", ver, flavor == "fips" ? "-fips" : "")]
 }
 
-# rhel-stig-9, rhel-stig-9-fips
+# rhel-9-stig, rhel-9-fips-stig (`rhel-stig` builds both)
 target "rhel-stig" {
-  name       = "rhel-stig-9${fips}"
+  name       = "rhel-9${fips}-stig"
   matrix     = { fips = ["", "-fips"] }
   inherits   = ["_kairos", "_rhsm"]
   context    = "./rhel-stig"
@@ -244,9 +246,9 @@ target "rhel-stig" {
   tags       = [kairos_tag("kairos-rhel", "9", "${fips}-stig")]
 }
 
-# rhel-core-9-satellite, rhel-core-10-satellite
+# rhel-9-sat, rhel-10-sat (`rhel-satellite` builds both)
 target "rhel-satellite" {
-  name       = "rhel-core-${ver}-satellite"
+  name       = "rhel-${ver}-sat"
   matrix     = { ver = ["9", "10"] }
   inherits   = ["_kairos"]
   context    = "./rhel-core-images"
@@ -294,21 +296,22 @@ target "hadron-modules" {
   platforms = ["linux/${ARCH}"]
 }
 
-# hadron-std, hadron-fips, hadron-uki, hadron-fips-uki.
+# hadron, hadron-fips, hadron-uki, hadron-fips-uki (`hadron-all` builds all four;
+# the definition is not called `hadron`, or that name would select every variant).
 # FIPS + UKI needs HADRON_VERSION >= v0.5.3 (first hadron-fips-trusted release).
 #
 # The `contexts` entry keyed by the modules image ref makes the Dockerfile's
 # `FROM ${MODULES_IMAGE}` resolve to the hadron-modules target built in the same
 # bake run, instead of whatever is (or isn't) in the registry. A standalone
 # `docker build` without that context still pulls MODULES_IMAGE.
-target "hadron" {
-  name       = "hadron-${v.name}"
+target "hadron-all" {
+  name       = v.name
   matrix = {
     v = [
-      { name = "std",      fips = false, uki = false },
-      { name = "fips",     fips = true,  uki = false },
-      { name = "uki",      fips = false, uki = true  },
-      { name = "fips-uki", fips = true,  uki = true  },
+      { name = "hadron",          fips = false, uki = false },
+      { name = "hadron-fips",     fips = true,  uki = false },
+      { name = "hadron-uki",      fips = false, uki = true  },
+      { name = "hadron-fips-uki", fips = true,  uki = true  },
     ]
   }
   inherits   = ["_kairos"]
@@ -371,14 +374,14 @@ group "public" {
 group "public-distro" {
   targets = [
     "kairosify",
-    "ubuntu-uki-24-04",
+    "ubuntu-24-04-uki",
   ]
 }
 
 # Hadron variants plus the modules image (so it is pushed too).
 # Needs -f hadron/modules.json.
 group "public-hadron" {
-  targets = ["hadron", "hadron-modules"]
+  targets = ["hadron-all", "hadron-modules"]
 }
 
 group "rhsm" {

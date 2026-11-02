@@ -11,11 +11,11 @@ export RHSM_USERNAME='<RHSM username>'
 export RHSM_PASSWORD='<RHSM password>'
 
 cd base-images
-docker buildx bake --allow=fs.read=.. rhel-fips-9 --load
-docker buildx bake --allow=fs.read=.. rhel-fips-10 --load
+docker buildx bake --allow=fs.read=.. rhel-9-fips --load
+docker buildx bake --allow=fs.read=.. rhel-10-fips --load
 
 # both, pushed to REGISTRY
-docker buildx bake --allow=fs.read=.. rhel-fips-9 rhel-fips-10 --push
+docker buildx bake --allow=fs.read=.. rhel-9-fips rhel-10-fips --push
 ```
 
 Images are tagged `<REGISTRY>/kairos-rhel:<9|10>-core-<ARCH>-<MODEL>-<KAIROS_VERSION>-fips`

@@ -19,7 +19,7 @@ Earthfile `+base-image`, not in this Dockerfile.
 | `Dockerfile`           | Two-stage kairos-init flow + guest agent + trim |
 | `trim-gpu-firmware.sh` | Default AMD/NVIDIA firmware/module removal      |
 
-Built by the `ubuntu-uki-24-04` target in `base-images/docker-bake.hcl`.
+Built by the `ubuntu-24-04-uki` target in `base-images/docker-bake.hcl`.
 
 
 
@@ -62,10 +62,10 @@ Policy marker: `/etc/canvos/uki-gpu-firmware-policy`
 From `base-images/`:
 
 ```bash
-docker buildx bake --allow=fs.read=.. ubuntu-uki-24-04 --load            # amd64, local docker
-docker buildx bake --allow=fs.read=.. ubuntu-uki-24-04 --push            # push amd64
-ARCH=arm64 docker buildx bake --allow=fs.read=.. ubuntu-uki-24-04 --push # push arm64
-KEEP_GPU_FIRMWARE=true docker buildx bake --allow=fs.read=.. ubuntu-uki-24-04 --load
+docker buildx bake --allow=fs.read=.. ubuntu-24-04-uki --load            # amd64, local docker
+docker buildx bake --allow=fs.read=.. ubuntu-24-04-uki --push            # push amd64
+ARCH=arm64 docker buildx bake --allow=fs.read=.. ubuntu-24-04-uki --push # push arm64
+KEEP_GPU_FIRMWARE=true docker buildx bake --allow=fs.read=.. ubuntu-24-04-uki --load
 ```
 
 Bake variables (set as environment variables):
@@ -79,7 +79,7 @@ Bake variables (set as environment variables):
 | `MODEL`             | `generic`                                       | Passed to kairos-init `-m` and used in the tag                 |
 | `REGISTRY`          | `us-east1-docker.pkg.dev/spectro-images/edge/base` | Tag prefix (dev registry)                                   |
 
-Pass `KEEP_GPU_FIRMWARE` as a variable, not `--set ubuntu-uki-24-04.args.KEEP_GPU_FIRMWARE=…`:
+Pass `KEEP_GPU_FIRMWARE` as a variable, not `--set ubuntu-24-04-uki.args.KEEP_GPU_FIRMWARE=…`:
 `--set` bypasses the bool normalisation, so a value like `True` would silently trim.
 
 Tag:
@@ -106,7 +106,7 @@ Then build the installer as usual (`./earthly.sh +uki-iso`, etc.).
 
 1. Rebuild the base with firmware kept:
    ```bash
-   KEEP_GPU_FIRMWARE=true REGISTRY=myreg docker buildx bake --allow=fs.read=.. ubuntu-uki-24-04 --push
+   KEEP_GPU_FIRMWARE=true REGISTRY=myreg docker buildx bake --allow=fs.read=.. ubuntu-24-04-uki --push
    ```
 2. Or enable Earthfile air-gapped GPU driver install on the trimmed base
   (`INSTALL_NVIDIA_GPU_DRIVERS=true` *or* `INSTALL_AMD_GPU_DRIVERS=true`) —

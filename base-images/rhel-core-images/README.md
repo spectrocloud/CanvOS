@@ -14,11 +14,11 @@ export RHSM_USERNAME='<RHSM username>'
 export RHSM_PASSWORD='<RHSM password>'
 
 cd base-images
-docker buildx bake --allow=fs.read=.. rhel-core-9 --load
-docker buildx bake --allow=fs.read=.. rhel-core-10 --load
+docker buildx bake --allow=fs.read=.. rhel-9 --load
+docker buildx bake --allow=fs.read=.. rhel-10 --load
 
 # both, pushed to REGISTRY
-docker buildx bake --allow=fs.read=.. rhel-core-9 rhel-core-10 --push
+docker buildx bake --allow=fs.read=.. rhel-9 rhel-10 --push
 ```
 
 Images are tagged `<REGISTRY>/kairos-rhel:<9|10>-core-<ARCH>-<MODEL>-<KAIROS_VERSION>`
@@ -60,7 +60,7 @@ The build must run on an `x86_64` host. Emulating `linux/amd64` on Apple Silicon
 
 This scenario is for the environment where Red Hat Satellite must be used and access to public Red Hat repositories is not possible. For this case use Dockerfiles `Dockerfile.rhel9.sat` and `Dockerfile.rhel10.sat` - these files are modified to use Red Hat Satellite Activation key to register host and install all required packages.
 
-The Satellite images are the `rhel-core-9-satellite` and `rhel-core-10-satellite`
+The Satellite images are the `rhel-9-sat` and `rhel-10-sat`
 bake targets (tag suffix `-sat`). See [Build the image](#build-the-image) below.
 
 ### Prerequisites
@@ -95,11 +95,11 @@ export SAT_HOST='<Satellite hostname>'                     # e.g. katello.spectr
 export KAIROS_INIT_IMAGE='<mirrored kairos-init image>'    # e.g. quay.spectrocloud.dev/kairos/kairos-init:v4.4.0
 
 cd base-images
-docker buildx bake --allow=fs.read=.. rhel-core-9-satellite \
-  --set rhel-core-9-satellite.args.BASE_IMAGE=<mirrored ubi9-init image> --load
+docker buildx bake --allow=fs.read=.. rhel-9-sat \
+  --set rhel-9-sat.args.BASE_IMAGE=<mirrored ubi9-init image> --load
 ```
 
-Use `rhel-core-10-satellite` (and a mirrored `ubi10-init` image) for RHEL 10.
+Use `rhel-10-sat` (and a mirrored `ubi10-init` image) for RHEL 10.
 `BASE_IMAGE` has no bake variable, so it is set per target with `--set`; without
 it the Dockerfile default (the public UBI image) is used.
 

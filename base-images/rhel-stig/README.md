@@ -25,8 +25,8 @@ export RHSM_USERNAME='<RHSM username>'
 export RHSM_PASSWORD='<RHSM password>'
 
 cd base-images
-docker buildx bake --allow=fs.read=.. rhel-stig-9 --load        # STIG
-docker buildx bake --allow=fs.read=.. rhel-stig-9-fips --load   # STIG + FIPS
+docker buildx bake --allow=fs.read=.. rhel-9-stig --load        # STIG
+docker buildx bake --allow=fs.read=.. rhel-9-fips-stig --load   # STIG + FIPS
 docker buildx bake --allow=fs.read=.. rhel-stig --push          # both, pushed to REGISTRY
 ```
 

@@ -7,7 +7,7 @@
 
   ```bash
   cd base-images
-  docker buildx bake --allow=fs.read=.. ubuntu-fips-22-04 --load
+  docker buildx bake --allow=fs.read=.. ubuntu-22-04-fips --load
   ```
 
 - Use the generated base image as input in installer generation with `earthly +iso`
@@ -21,9 +21,9 @@ The attach config reaches the build only as a BuildKit secret; it is never part 
 | `ENABLE_STIG` | `true` | Run DISA STIG remediation (`fix.sh`). Set to `false` (or `0`) for FIPS-only builds without STIG. |
 | `SKIP_STIG_BANNER` | `true` | With STIG enabled, restore stock Ubuntu login banners instead of the USG DoD banner (`/etc/issue`, SSH `Banner`, GDM, `/etc/profile.d/ssh_confirm.sh`). |
 
-Examples: `ENABLE_STIG=false docker buildx bake --allow=fs.read=.. ubuntu-fips-22-04`, `UBUNTU_PRO_CONFIG=$HOME/.config/ubuntu-pro.yaml docker buildx bake --allow=fs.read=.. --allow=fs.read=$HOME/.config ubuntu-fips-22-04`.
+Examples: `ENABLE_STIG=false docker buildx bake --allow=fs.read=.. ubuntu-22-04-fips`, `UBUNTU_PRO_CONFIG=$HOME/.config/ubuntu-pro.yaml docker buildx bake --allow=fs.read=.. --allow=fs.read=$HOME/.config ubuntu-22-04-fips`.
 
-Pass these as variables, not `--set ubuntu-fips-22-04.args.ENABLE_STIG=…`: `--set` bypasses the bool-to-`1`/`0` conversion.
+Pass these as variables, not `--set ubuntu-22-04-fips.args.ENABLE_STIG=…`: `--set` bypasses the bool-to-`1`/`0` conversion.
 
 **Note:** the build context is the `ubuntu-fips` directory so shared files (e.g. `restore-ubuntu-default-banners.sh`) resolve correctly.
 

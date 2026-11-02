@@ -2,8 +2,8 @@
 
 | Release | Directory | Build |
 | ------- | --------- | ----- |
-| 24.04 (noble), FIPS + STIG | [`24.04/`](24.04/README.md) | `docker buildx bake --allow=fs.read=.. ubuntu-fips-24-04` |
-| 22.04 (jammy), FIPS + STIG | [`22.04/`](22.04/README.md) | `docker buildx bake --allow=fs.read=.. ubuntu-fips-22-04` |
+| 24.04 (noble), FIPS + STIG | [`24.04/`](24.04/README.md) | `docker buildx bake --allow=fs.read=.. ubuntu-24-04-fips` |
+| 22.04 (jammy), FIPS + STIG | [`22.04/`](22.04/README.md) | `docker buildx bake --allow=fs.read=.. ubuntu-22-04-fips` |
 
 Run the bake commands from `base-images/`. Both releases need an Ubuntu Pro token.
 They read it from the shared `pro-attach-config.yaml` in this directory, a

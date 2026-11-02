@@ -22,7 +22,7 @@ RUN dnf install -y 'https://download.fedoraproject.org/pub/epel/epel-release-lat
 # layer or in `docker history`. docker-bake.hcl (target _rhsm) wires this up:
 #
 #   export RHSM_USERNAME='you@example.com' RHSM_PASSWORD='...'
-#   docker buildx bake --allow=fs.read=.. rhel-fips-9
+#   docker buildx bake --allow=fs.read=.. rhel-9-fips
 RUN --mount=type=secret,id=RHSM_USERNAME,env=RHSM_USERNAME \
     --mount=type=secret,id=RHSM_PASSWORD,env=RHSM_PASSWORD \
     : "${RHSM_USERNAME:?missing --secret id=RHSM_USERNAME,env=RHSM_USERNAME}" \

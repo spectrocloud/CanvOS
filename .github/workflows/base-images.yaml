@@ -3,16 +3,14 @@ name: Build Kairos Base Images
 # Builds the credential-free ("public") Spectro Kairos base images with docker
 # bake, from base-images/docker-bake.hcl:
 #
-#   public-distro  kairosify-ubuntu-22-04, kairosify-ubuntu-24-04,
-#                  kairosify-opensuse-16-0, ubuntu-uki-24-04
-#   public-hadron  hadron-std / hadron-fips / hadron-uki / hadron-fips-uki and
+#   public-distro  ubuntu-22-04, ubuntu-24-04, opensuse-16-0, ubuntu-24-04-uki
+#   public-hadron  hadron / hadron-fips / hadron-uki / hadron-fips-uki and
 #                  the Spectro hadron-modules image
 #   public         both of the above
 #
 # What is built:
-#   base_os_image set     only kairosify-custom from that image (`target` ignored)
+#   base_os_image set     only `custom`, kairosified from that image (`target` ignored)
 #   target = all          every image above: the bake `public` group (default)
-#   target = hadron-all   all Hadron variants (public-hadron)
 #   target = <one image>  that bake target; Hadron variants also push hadron-modules
 #
 # Tags come from the bake file, e.g.
@@ -34,17 +32,16 @@ on:
         default: "all"
         options:
           - all
-          - kairosify-ubuntu-22-04
-          - kairosify-ubuntu-24-04
-          - kairosify-opensuse-16-0
-          - ubuntu-uki-24-04
-          - hadron-all
-          - hadron-std
+          - ubuntu-22-04
+          - ubuntu-24-04
+          - opensuse-16-0
+          - ubuntu-24-04-uki
+          - hadron
           - hadron-fips
           - hadron-uki
           - hadron-fips-uki
       base_os_image:
-        description: "Kairosify this upstream image instead (builds only kairosify-custom)"
+        description: "Kairosify this upstream image instead (builds only the custom target)"
         required: false
         type: string
         default: ""
@@ -80,12 +77,12 @@ permissions:
 # two branches would push to the same tags. The group is per dispatch value, so
 # overlapping choices (e.g. `all` and `hadron-fips`) can still run together.
 concurrency:
-  group: base-images-${{ inputs.arch }}-${{ inputs.base_os_image != '' && format('kairosify-custom-{0}', inputs.base_os_image) || inputs.target }}
+  group: base-images-${{ inputs.arch }}-${{ inputs.base_os_image != '' && format('custom-{0}', inputs.base_os_image) || inputs.target }}
   cancel-in-progress: false
 
 jobs:
   build:
-    name: Build ${{ inputs.base_os_image != '' && 'kairosify-custom' || inputs.target }} (${{ inputs.arch }})
+    name: Build ${{ inputs.base_os_image != '' && 'custom' || inputs.target }} (${{ inputs.arch }})
     runs-on: Luet-BigRunner
     steps:
       - name: Checkout code
@@ -110,14 +107,13 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${BASE_OS_IMAGE}" ]; then
-            targets="kairosify-custom"
+            targets="custom"
           else
             case "${TARGET}" in
               # hadron-modules is implicit: always pushed with Hadron.
-              all)        targets="public" ;;
-              hadron-all) targets="public-hadron" ;;
-              hadron-*)   targets="${TARGET},hadron-modules" ;;
-              *)          targets="${TARGET}" ;;
+              all)             targets="public" ;;
+              hadron|hadron-*) targets="${TARGET},hadron-modules" ;;
+              *)               targets="${TARGET}" ;;
             esac
           fi
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"

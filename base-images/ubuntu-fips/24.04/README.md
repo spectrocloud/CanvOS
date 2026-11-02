@@ -3,7 +3,7 @@
 - Create the Ubuntu Pro attach config once (shared by 22.04 and 24.04; git-ignored, never commit it):
   `cp ../pro-attach-config.yaml.template ../pro-attach-config.yaml` and replace `REPLACE_WITH_TOKEN`
   with your token. Or point `UBUNTU_PRO_CONFIG` at a file outside the repo.
-- Build from `base-images/` with docker bake: `docker buildx bake --allow=fs.read=.. ubuntu-fips-24-04 --load`
+- Build from `base-images/` with docker bake: `docker buildx bake --allow=fs.read=.. ubuntu-24-04-fips --load`
 
 ### Build options (bake variables, set as environment variables)
 
@@ -18,16 +18,16 @@ Examples:
 cd base-images
 
 # FIPS + full STIG (default)
-docker buildx bake --allow=fs.read=.. ubuntu-fips-24-04 --load
+docker buildx bake --allow=fs.read=.. ubuntu-24-04-fips --load
 
 # FIPS only, no STIG remediation
-ENABLE_STIG=false docker buildx bake --allow=fs.read=.. ubuntu-fips-24-04 --load
+ENABLE_STIG=false docker buildx bake --allow=fs.read=.. ubuntu-24-04-fips --load
 
 # STIG with the USG DoD login banner kept
-SKIP_STIG_BANNER=false docker buildx bake --allow=fs.read=.. ubuntu-fips-24-04 --load
+SKIP_STIG_BANNER=false docker buildx bake --allow=fs.read=.. ubuntu-24-04-fips --load
 ```
 
-Pass these as variables, not `--set ubuntu-fips-24-04.args.ENABLE_STIG=…`: `--set` bypasses the bool-to-`1`/`0` conversion.
+Pass these as variables, not `--set ubuntu-24-04-fips.args.ENABLE_STIG=…`: `--set` bypasses the bool-to-`1`/`0` conversion.
 
 The bundled `fix.sh` carries two kinds of **jammy-aligned** changes:
 

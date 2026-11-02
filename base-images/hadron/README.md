@@ -7,11 +7,11 @@ they consume. Everything is driven by `base-images/docker-bake.hcl`.
 | Target           | What it builds                                                                 |
 | ---------------- | ------------------------------------------------------------------------------ |
 | `hadron-modules` | Spectro modules layer: DRBD (kernel-coupled), rsyslog, logrotate, iproute2, jq, open-vm-tools, qemu-guest-agent |
-| `hadron-std`     | Kairos on `ghcr.io/kairos-io/hadron`                                           |
+| `hadron`         | Kairos on `ghcr.io/kairos-io/hadron`                                           |
 | `hadron-fips`    | Kairos on `ghcr.io/kairos-io/hadron-fips` (kairos-init `--fips`)              |
 | `hadron-uki`     | Kairos on `ghcr.io/kairos-io/hadron-trusted` (Trusted Boot)                   |
 | `hadron-fips-uki`| Kairos on `ghcr.io/kairos-io/hadron-fips-trusted` (FIPS + Trusted Boot; Hadron v0.5.3+) |
-| `hadron`         | all four variants                                                              |
+| `hadron-all`     | all four variants                                                              |
 | `public-hadron`  | group: the four variants plus `hadron-modules` (pushes the modules image too)  |
 
 ## Build
@@ -23,13 +23,13 @@ bake file (see [Kernel modules](#kernel-modules-modulesjson)):
 cd base-images
 
 # preview the resolved config (no build)
-docker buildx bake -f docker-bake.hcl -f hadron/modules.json --print hadron-std
+docker buildx bake -f docker-bake.hcl -f hadron/modules.json --print hadron
 
 # build one variant into the local docker image store
-docker buildx bake --allow=fs.read=.. -f docker-bake.hcl -f hadron/modules.json hadron-std --load
+docker buildx bake --allow=fs.read=.. -f docker-bake.hcl -f hadron/modules.json hadron --load
 
 # build and push all four variants (add hadron-modules, or use public-hadron, to push the modules image too)
-docker buildx bake --allow=fs.read=.. -f docker-bake.hcl -f hadron/modules.json hadron --push
+docker buildx bake --allow=fs.read=.. -f docker-bake.hcl -f hadron/modules.json hadron-all --push
 ```
 
 Instead of repeating `-f`, set the file list once per shell (or in CI):
@@ -44,7 +44,7 @@ read from `../scripts`.
 
 `hadron-modules` does not need to be built or pushed first: every Hadron
 variant builds it in the same bake run and uses it directly (the `contexts`
-entry on the `hadron` target), instead of pulling it from the registry.
+entry on the `hadron-all` definition), instead of pulling it from the registry.
 
 ## Variables
 

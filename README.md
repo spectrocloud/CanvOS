@@ -521,7 +521,7 @@ To build the RHEL 9 STIG FIPS installer image
 ```
 
 **Note**: For RHEL 9 STIG images, you must:
-1. First build and push the base image with `docker buildx bake --allow=fs.read=.. rhel-stig-9 --push` (or `rhel-stig-9-fips`) from `base-images/`, with `REGISTRY` set to your registry (see `base-images/rhel-stig/README.md`)
+1. First build and push the base image with `docker buildx bake --allow=fs.read=.. rhel-9-stig --push` (or `rhel-9-fips-stig`) from `base-images/`, with `REGISTRY` set to your registry (see `base-images/rhel-stig/README.md`)
 2. The image must be in a Docker registry (Earthly cannot use local-only images)
 3. Use the full registry path in the `BASE_IMAGE` argument
 
