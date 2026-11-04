@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_org.ssgproject.content_tailoring_pe9043_ubuntu2404">
+  <xccdf:benchmark href="ssg-ubuntu2404-ds.xml"/>
+  <xccdf:version time="2026-10-30T00:00:00">1.0</xccdf:version>
+  <xccdf:Profile id="xccdf_org.ssgproject.content_profile_stig_pe9043" extends="xccdf_org.ssgproject.content_profile_stig">
+    <xccdf:title>STIG with PE-9043 auditd disk-space values</xccdf:title>
+    <xccdf:description>Selects the auditd disk-space rules and refines disk_full_action/disk_error_action to syslog (STIG-accepted); admin_space_left_action stays single.</xccdf:description>
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_auditd_data_disk_full_action" selected="true"/>
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_auditd_data_disk_error_action" selected="true"/>
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_auditd_data_retention_admin_space_left_action" selected="true"/>
+    <xccdf:refine-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_full_action" selector="syslog"/>
+    <xccdf:refine-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_error_action" selector="syslog"/>
+    <xccdf:refine-value idref="xccdf_org.ssgproject.content_value_var_auditd_admin_space_left_action" selector="single"/>
+  </xccdf:Profile>
+</xccdf:Tailoring>
