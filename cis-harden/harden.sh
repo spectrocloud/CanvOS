@@ -1067,9 +1067,19 @@ harden_auth() {
 		config_lines="auth required pam_wheel.so use_uid"
 	fi
 
-	# Add configuration lines to the top of the file
+	# Insert the wheel restriction AFTER pam_rootok.so, not before it.
+	# PAM discards a `sufficient` success once a prior `required` module has
+	# already failed, so prepending above pam_rootok denies root and hangs any
+	# `su` invoked in a non-interactive build (e.g. the postgresql-16 postinst
+	# when TWO_NODE=true). Ubuntu's own comments name this exact trap. See PE-9383.
 	if [[ -f /etc/pam.d/su ]]; then
-		echo -e "$config_lines\n$(cat /etc/pam.d/su)" > /etc/pam.d/su
+		if grep -qE '^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_rootok\.so' /etc/pam.d/su; then
+			awk -v L="$config_lines" \
+				'{print} /^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_rootok\.so/ && !done {print L; done=1}' \
+				/etc/pam.d/su > /etc/pam.d/su.new && mv /etc/pam.d/su.new /etc/pam.d/su
+		else
+			echo -e "$config_lines\n$(cat /etc/pam.d/su)" > /etc/pam.d/su
+		fi
 		echo "Configuration to ensure access to the su command is restricted have been made"
 	fi
 

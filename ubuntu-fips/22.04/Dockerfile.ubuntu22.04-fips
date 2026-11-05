@@ -59,3 +59,8 @@ RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} +
     rm -rf /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# The build script copies the script into the build context.
+COPY distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+RUN sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc

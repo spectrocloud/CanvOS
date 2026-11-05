@@ -20,8 +20,9 @@ ARG SPECTRO_LUET_REPO=us-docker.pkg.dev/palette-images/edge
 ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 
 # Spectro Cloud and Kairos tags.
-ARG PE_VERSION=v4.9.34-rc.1
+ARG PE_VERSION=v4.9.44-rc.7
 ARG KAIROS_VERSION=v4.0.4
+ARG BASE_IMAGE_SUFFIX=-r1
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos
@@ -38,11 +39,11 @@ ARG PROVIDER_MARKER_BASE_URL=https://storage.googleapis.com/spectro-prow-artifac
 # (<provider>/latest_stable_release_<stream>.txt, content e.g. 4.10.7 -- the same files nickfury reads)
 # and printed to the build log. latest_stable_image_<stream>.txt holds a full image ref, not a tag.
 # If a file can't be fetched or isn't a version, the pinned fallback after "||" keeps the build working.
-ARG K3S_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-k3s/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.5; echo "provider-k3s (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
-ARG KUBEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-kubeadm/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.8; echo "provider-kubeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
-ARG RKE2_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-rke2/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.3; echo "provider-rke2 (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
-ARG NODEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-nodeadm/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.3; echo "provider-nodeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
-ARG CANONICAL_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-canonical/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.3; echo "provider-canonical (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG K3S_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-k3s/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.10; echo "provider-k3s (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG KUBEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-kubeadm/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.12; echo "provider-kubeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG RKE2_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-rke2/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.8; echo "provider-rke2 (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG NODEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-nodeadm/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.6; echo "provider-nodeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG CANONICAL_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-canonical/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.6; echo "provider-canonical (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
@@ -114,18 +115,21 @@ IF [ "$IS_UKI" = "true" ]
 END
 
 IF [ "$OS_DISTRIBUTION" = "ubuntu" ] && [ "$BASE_IMAGE" = "" ]
-    IF [ "$OS_VERSION" == 22 ] || [ "$OS_VERSION" == 20 ]
+    IF [ "$OS_VERSION" == 20 ]
+        # 20.04 has no -r1 rebuild.
         ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION
+    ELSE IF [ "$OS_VERSION" == 22 ]
+        ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION.04-core-$ARCH-generic-$KAIROS_VERSION$BASE_IMAGE_SUFFIX
     ELSE
         IF [ "$IS_UKI" = "true" ]
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION-uki$BASE_IMAGE_SUFFIX
         ELSE
-            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+            ARG BASE_IMAGE_TAG=kairos-$OS_DISTRIBUTION:$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION$BASE_IMAGE_SUFFIX
         END
     END
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "opensuse-leap" ] && [ "$BASE_IMAGE" = "" ]
-    ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION
+    ARG BASE_IMAGE_TAG=kairos-opensuse:leap-$OS_VERSION-core-$ARCH-generic-$KAIROS_VERSION$BASE_IMAGE_SUFFIX
     ARG BASE_IMAGE=$KAIROS_BASE_IMAGE_URL/$BASE_IMAGE_TAG
 ELSE IF [ "$OS_DISTRIBUTION" = "rhel" ] || [ "$OS_DISTRIBUTION" = "sles" ]
     # Check for default value for rhel
@@ -212,6 +216,18 @@ BASE_ALPINE:
     COPY --if-exists certs/ /etc/ssl/certs/
     RUN update-ca-certificates
 
+DISTRUST_EMUDHRA:
+    COMMAND
+    ARG ALLOW_MISSING=false
+    # Mozilla bug 2083449: a package step can restore the trust store.
+    # Call this at the end of every final image, after all package steps.
+    COPY scripts/distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+    IF [ "$ALLOW_MISSING" = "true" ]
+        RUN EMUDHRA_ALLOW_MISSING_STORE=1 sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
+    ELSE
+        RUN sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
+    END
+
 iso-image-rootfs:
     FROM --platform=linux/${ARCH} +iso-image
     SAVE ARTIFACT --keep-ts --keep-own /. rootfs
@@ -236,6 +252,9 @@ uki-provider-image:
     COPY --keep-ts --platform=linux/${ARCH} +install-k8s/output/ /k8s
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
     COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
+
+    DO +DISTRUST_EMUDHRA --ALLOW_MISSING=true
+
     SAVE IMAGE --push $IMAGE_PATH
 
 trust-boot-unpack:
@@ -671,6 +690,8 @@ provider-image:
     # Build-time helper only; don't ship it in the final image.
     RUN rm -f /tmp/install-kernel-headers.sh
 
+    DO +DISTRUST_EMUDHRA
+
     SAVE IMAGE --push $IMAGE_PATH
 
 provider-image-rootfs:
@@ -744,7 +765,8 @@ base-image:
         END
 
         RUN apt-get update && \
-            DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
+            export DEBIAN_FRONTEND=noninteractive && \
+            apt-get install --no-install-recommends kbd zstd vim iputils-ping bridge-utils curl tcpdump ethtool rsyslog logrotate -y
 
         LET APT_UPGRADE_FLAGS="-y"
         IF [ "$UPDATE_KERNEL" = "false" ]
@@ -752,7 +774,8 @@ base-image:
                 if dpkg -l linux-image-generic > /dev/null; then apt-mark hold linux-image-generic linux-headers-generic linux-generic; fi
         ELSE
             SET APT_UPGRADE_FLAGS="-y --with-new-pkgs"
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
                 apt-get install -y linux-image-generic-hwe-$OS_VERSION
         END
 
@@ -760,7 +783,8 @@ base-image:
         # tldr: apt-get upgrade -y doesn't install new packages, so we need to use --with-new-pkgs
 
         IF [ "$IS_UKI" = "false" ]
-            RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+            RUN export DEBIAN_FRONTEND=noninteractive && \
+                apt-get update && \
                 apt-get upgrade $APT_UPGRADE_FLAGS && \
                 apt-get install --no-install-recommends -y \
                     util-linux \ # Provides essential utilities for Linux systems, including disk management tools.
@@ -964,6 +988,8 @@ iso-image:
     RUN rm -f /etc/ssh/ssh_host_* /etc/ssh/moduli
     RUN touch /etc/machine-id \
         && chmod 444 /etc/machine-id
+
+    DO +DISTRUST_EMUDHRA
 
     # Only push image if not building for MAAS (MAAS uses local image via --load)
     IF [ "$IS_MAAS" = "false" ]
