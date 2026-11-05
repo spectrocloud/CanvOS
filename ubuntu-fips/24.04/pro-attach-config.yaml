@@ -1,3 +1,0 @@
-token: "REPLACE_WITH_TOKEN" # TODO: Set this to your authentication token
-enable_services:
-  - fips-updates

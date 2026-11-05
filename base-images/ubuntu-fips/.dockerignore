@@ -1,0 +1,3 @@
+# Never send the Ubuntu Pro attach config (token) to the builder as build context.
+# It reaches the build only as a BuildKit secret (bake: secret src=...).
+**/pro-attach-config.yaml

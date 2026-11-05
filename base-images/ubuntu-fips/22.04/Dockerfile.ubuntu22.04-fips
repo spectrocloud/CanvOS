@@ -1,0 +1,85 @@
+# kairos-init is tagged with the Kairos version it installs.
+ARG VERSION=v4.4.0
+ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${VERSION}
+FROM ${KAIROS_INIT_IMAGE} AS kairos-init
+
+FROM ubuntu:22.04
+ARG VERSION
+ARG MODEL=generic
+ARG ENABLE_STIG=1
+ARG SKIP_STIG_BANNER=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# NOTE: --fips is NOT passed here. Unlike RHEL (where subscription-manager enables FIPS repos
+# before this step), Ubuntu FIPS packages require Ubuntu PRO, which is only attached in the
+# apt-get install block below. kairos-init would fail with "FIPS is not supported on Ubuntu
+# without a PRO account and extra packages" if --fips were used at this stage.
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -m "${MODEL}" -s install --version "${VERSION}"
+# Remove default kernel that Kairos-init installs and purge leftover configs
+RUN apt-get remove -y linux-base linux-image-generic-hwe-22.04 && apt-get autoremove -y \
+    && dpkg -l 'linux-*' | awk '/^(ii|rc)/ && $2 !~ /fips/ {print $2}' | xargs -r apt-get purge -y
+## THIS comes from the Ubuntu documentation: https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/tutorials/create_a_fips_docker_image.html
+## I've just added "linux-image-fips" in the package list
+## If you want to use secureboot with fips, you need to install the shim-signed package
+## from the Ubuntu PRO repos as its signed with adifferent key
+# required=true: fail fast if bake did not supply the attach config.
+# The REPLACE_WITH_TOKEN check catches a copy of pro-attach-config.yaml.template
+# that was never filled in.
+RUN --mount=type=secret,id=pro-attach-config,required=true \
+    if grep -q REPLACE_WITH_TOKEN /run/secrets/pro-attach-config; then \
+        echo 'pro-attach-config still contains the REPLACE_WITH_TOKEN placeholder' >&2; exit 1; \
+    fi \
+    && apt-get update \
+    && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
+    && pro attach --attach-config /run/secrets/pro-attach-config \
+    && apt-get upgrade -y \
+    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools qemu-guest-agent cracklib-runtime \
+    ## && pro enable usg \
+    ## && apt install -y usg \
+    ## && usg fix disa_stig \
+    && pro detach --assume-yes \
+    # Fail the layer if any Pro credential survived detach.
+    && test ! -e /etc/apt/auth.conf.d/90ubuntu-advantage \
+    && test ! -e /var/lib/ubuntu-advantage/private/machine-token.json \
+    && rm -f /var/log/ubuntu-advantage*.log
+
+COPY 22.04/dracut.conf /etc/dracut.conf.d/kairos-fips.conf
+
+# Bundle the Renesas xHCI (USB 3.0) host controller driver into the initramfs so
+# installation from USB media works on hardware using that chipset. Consumed by the
+# `kairos-init -s init` dracut run below (the Earthfile skips dracut for FIPS builds).
+COPY 99-usb-media.conf /etc/dracut.conf.d/99-usb-media.conf
+
+# Copy the custom dracut modules.fips that includes 2 missing modules
+COPY modules.fips /tmp/modules.fips
+RUN kernel=$(ls /lib/modules | head -n1) && mv /tmp/modules.fips /lib/modules/${kernel}/modules.fips
+
+COPY 22.04/fix.sh /tmp/fix.sh
+COPY stig-remediate.sh /tmp/stig-remediate.sh
+COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
+RUN chmod +x /tmp/fix.sh /tmp/stig-remediate.sh /tmp/restore-ubuntu-default-banners.sh \
+    && if [ "$ENABLE_STIG" = "1" ]; then /tmp/stig-remediate.sh; fi \
+    && rm -f /tmp/stig-remediate.sh \
+    && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
+
+# --fips is passed here (not at install stage) because Ubuntu PRO has been attached and all
+# FIPS packages (linux-image-fips, strongswan-hmac, etc.) are already installed above.
+# This sets KAIROS_FIPS="true" in /etc/kairos-release so the image is correctly identified
+# as a FIPS build. fips=1 on the kernel cmdline must still be set via cloud-config extra_cmdline.
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -m "${MODEL}" -s init --fips --version "${VERSION}"
+
+# Symlink kernel HMAC
+RUN kernel=$(ls /boot/vmlinuz-* | head -n1) && ln -sf ."${kernel#/boot/}".hmac /boot/.vmlinuz.hmac
+
+# Clear cache
+RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} + && \
+    rm -rf /tmp/* /var/tmp/* && \
+    journalctl --vacuum-size=1K || true && \
+    rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# Bind-mounted from the `scripts` build context; it never lands in an image layer.
+RUN --mount=type=bind,from=scripts,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh
