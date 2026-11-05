@@ -1,0 +1,49 @@
+# PE-9043 — auditd disk-space actions (workaround for existing clusters).
+#
+# DISA STIG remediation baked into the FIPS/STIG base images
+# (ubuntu-fips/22.04/fix.sh, rhel-stig/static/stig-fix.sh) sets auditd's
+# disk_full_action / disk_error_action to halt, and admin_space_left_action to
+# single. On an immutable Kairos node the audit log lives on COS_PERSISTENT;
+# when that partition fills, a halting auditd prevents the node from finishing
+# boot, so the appliance boot-loops.
+#
+# This drop-in is a workaround for existing clusters (apply via cluster profile or
+# user-data); new images get the values at build time. It runs
+# in initramfs.after -- the rootfs is mounted and writable, auditd has not
+# started -- so the effective config is rewritten on EVERY boot without
+# modifying the (read-only) image rootfs. Keyed in-place edit per key; never a
+# whole-file replacement, so unrelated STIG content is preserved.
+name: "auditd disk-space actions"
+stages:
+  initramfs.after:
+    - name: "rewrite auditd disk-space actions"
+      if: '[ -f /etc/audit/auditd.conf ]'
+      commands:
+        - |
+          conf=/etc/audit/auditd.conf
+          rc=0
+          set_key() {
+            key="$1"
+            value="$2"
+            if grep -qiE "^[[:space:]]*${key}[[:space:]]*=" "$conf"; then
+              # -i in place, -E ERE, gi = case-insensitive key match (normalises
+              # a STIG-uppercased key back to canonical lowercase). --follow-symlinks
+              # matches the STIG remediation's own sed usage.
+              sed -i --follow-symlinks -E \
+                "s|^[[:space:]]*${key}[[:space:]]*=.*|${key} = ${value}|gi" "$conf" || rc=1
+            else
+              # Never append onto a non-terminated last line.
+              if [ -s "$conf" ] && [ -n "$(tail -c 1 -- "$conf")" ]; then
+                printf '\n' >> "$conf" || rc=1
+              fi
+              printf '%s = %s\n' "$key" "$value" >> "$conf" || rc=1
+            fi
+          }
+          set_key admin_space_left_action single
+          set_key disk_full_action SYSLOG
+          set_key disk_error_action SYSLOG
+          if [ "$rc" -ne 0 ]; then
+            msg="PE-9043: failed to rewrite one or more keys in $conf"
+            echo "$msg" >&2
+            echo "$msg" > /dev/kmsg 2>/dev/null || true
+          fi

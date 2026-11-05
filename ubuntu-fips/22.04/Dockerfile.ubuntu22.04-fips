@@ -24,7 +24,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools qemu-guest-agent cracklib-runtime \
+    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools qemu-guest-agent cracklib-runtime auditd \
     ## && pro enable usg \
     ## && apt install -y usg \
     ## && usg fix disa_stig \
@@ -48,6 +48,7 @@ RUN chmod +x /tmp/fix.sh /tmp/stig-remediate.sh /tmp/restore-ubuntu-default-bann
     && if [ "$ENABLE_STIG" = "1" ]; then /tmp/stig-remediate.sh; fi \
     && rm -f /tmp/stig-remediate.sh \
     && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
+
 
 # --fips is passed here (not at install stage) because Ubuntu PRO has been attached and all
 # FIPS packages (linux-image-fips, strongswan-hmac, etc.) are already installed above.

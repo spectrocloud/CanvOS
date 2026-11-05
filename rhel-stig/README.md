@@ -167,6 +167,8 @@ STIG disables `net.ipv4.ip_forward` and `net.ipv4.conf.all.forwarding` for gener
 
 STIG sets `rp_filter=1` (strict); overlay clusters (Calico, etc.) require `rp_filter=0`. The build overrides via `/etc/sysctl.d/99-zzz-kubernetes-rp-filter.conf`.
 
+**Audit disk-space actions (PE-9043).** The STIG base image sets `disk_full_action` and `disk_error_action` to `SYSLOG`, and `admin_space_left_action` to `single`, at build time (after STIG remediation). On an appliance whose audit log lives on `COS_PERSISTENT`, a full partition then halts the node and it boot-loops. These values are persisted in the image at build time; no boot stage is used. All three are STIG-compliant: `disk_full_action` and `disk_error_action` accept SYSLOG/SINGLE/HALT, and `admin_space_left_action` requires `single`. Existing clusters can apply the same values with the cloud-config workaround in `docs/pe-9043-auditd-workaround.yaml`.
+
 ### Firewall Configuration
 
 No firewall ports or zones are opened by default. Configure firewall rules via **user-data** or **cluster profile** as needed for your environment.
