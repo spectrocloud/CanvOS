@@ -33,11 +33,20 @@ ARG BASE_IMAGE_URL=quay.io/kairos
 # (kairos-sdk v0.25.2). Kairos upstream: AuroraBoot#713, kairos-sdk#0.25.2.
 ARG AURORABOOT_VERSION=v0.26.2
 ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
-ARG K3S_PROVIDER_VERSION=v4.10.7
-ARG KUBEADM_PROVIDER_VERSION=v4.10.4
-ARG RKE2_PROVIDER_VERSION=v4.10.6
-ARG NODEADM_PROVIDER_VERSION=v4.10.2
-ARG CANONICAL_PROVIDER_VERSION=v4.10.4
+# Release-stream suffix for the GCS "latest stable" files (rc-4.10 -> 410).
+# Derived from the git branch name, falling back to PE_VERSION for feature branches and tags.
+ARG PROVIDER_VERSION_STREAM=$(s=$(echo "${EARTHLY_GIT_BRANCH}" | grep -oE '[0-9]+\.[0-9]+' | head -n1); [ -z "$s" ] && s=$(echo "${PE_VERSION}" | grep -oE '[0-9]+\.[0-9]+' | head -n1); echo "$s" | tr -d '.')
+ARG PROVIDER_MARKER_BASE_URL=https://storage.googleapis.com/spectro-prow-artifacts/release
+
+# Provider versions are read at build time from the files each provider's release build publishes
+# (<provider>/latest_stable_release_<stream>.txt, content e.g. 4.10.7 -- the same files nickfury reads)
+# and printed to the build log. latest_stable_image_<stream>.txt holds a full image ref, not a tag.
+# If a file can't be fetched or isn't a version, the pinned fallback after "||" keeps the build working.
+ARG K3S_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-k3s/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.10.7; echo "provider-k3s (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG KUBEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-kubeadm/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.10.4; echo "provider-kubeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG RKE2_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-rke2/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.10.6; echo "provider-rke2 (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG NODEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-nodeadm/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.10.2; echo "provider-nodeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG CANONICAL_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-canonical/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.10.4; echo "provider-canonical (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
