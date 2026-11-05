@@ -34,14 +34,15 @@ ARG AURORABOOT_IMAGE=quay.io/kairos/auroraboot:$AURORABOOT_VERSION
 ARG PROVIDER_VERSION_STREAM=$(s=$(echo "${EARTHLY_GIT_BRANCH}" | grep -oE '[0-9]+\.[0-9]+' | head -n1); [ -z "$s" ] && s=$(echo "${PE_VERSION}" | grep -oE '[0-9]+\.[0-9]+' | head -n1); echo "$s" | tr -d '.')
 ARG PROVIDER_MARKER_BASE_URL=https://storage.googleapis.com/spectro-prow-artifacts/release
 
-# Provider versions are read at build time from the GCS marker files
-# (<provider>/latest_stable_image_<stream>.txt) and printed to the build log.
-# If a marker can't be fetched, the pinned fallback after "||" keeps the build working.
-ARG K3S_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-k3s/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.5; echo "provider-k3s (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
-ARG KUBEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-kubeadm/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.8; echo "provider-kubeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
-ARG RKE2_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-rke2/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.3; echo "provider-rke2 (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
-ARG NODEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-nodeadm/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.3; echo "provider-nodeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
-ARG CANONICAL_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-canonical/latest_stable_image_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); [ -n "$v" ] || v=v4.9.3; echo "provider-canonical (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+# Provider versions are read at build time from the files each provider's release build publishes
+# (<provider>/latest_stable_release_<stream>.txt, content e.g. 4.10.7 -- the same files nickfury reads)
+# and printed to the build log. latest_stable_image_<stream>.txt holds a full image ref, not a tag.
+# If a file can't be fetched or isn't a version, the pinned fallback after "||" keeps the build working.
+ARG K3S_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-k3s/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.5; echo "provider-k3s (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG KUBEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-kubeadm/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.8; echo "provider-kubeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG RKE2_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-rke2/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.3; echo "provider-rke2 (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG NODEADM_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-nodeadm/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.3; echo "provider-nodeadm (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
+ARG CANONICAL_PROVIDER_VERSION=$(v=$(wget -qO- "${PROVIDER_MARKER_BASE_URL}/provider-canonical/latest_stable_release_${PROVIDER_VERSION_STREAM}.txt" 2>/dev/null | tr -d '[:space:]'); echo "$v" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+' && v="v${v#v}" || v=v4.9.3; echo "provider-canonical (stream ${PROVIDER_VERSION_STREAM}) -> $v" >&2; echo "$v")
 
 # Variables used in the builds. Update for ADVANCED use cases only. Modify in .arg file or via CLI arguments.
 ARG OS_DISTRIBUTION
