@@ -30,3 +30,4 @@ spectro-luet-auth.yaml
 spc.tgz
 efi-size-check/target/
 cloud-images/config/user-data.yaml
+pro-attach-config.yaml

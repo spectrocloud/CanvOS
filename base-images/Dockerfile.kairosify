@@ -1,0 +1,37 @@
+ARG KAIROS_INIT_IMAGE
+ARG BASE_OS_IMAGE
+
+FROM ${KAIROS_INIT_IMAGE} AS kairos-init
+FROM ${BASE_OS_IMAGE} AS baseos
+
+ARG MODEL=generic
+ARG KAIROS_VERSION
+ARG TRUSTED_BOOT
+ARG BASE_OS_IMAGE
+
+COPY --from=kairos-init /kairos-init /kairos-init
+RUN /kairos-init -l debug -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}" && rm /kairos-init
+
+# open-vm-tools: kairos-init installs the VMware guest agent for the SUSE family
+# but not for Debian/Ubuntu, and the ubuntu-kairos-base Dockerfile that used to
+# install it explicitly is no longer part of this build. Without vmtoolsd running,
+# vSphere reports blank IP Addresses / DNS Name for the guest (PE-9173).
+#
+# The distro comes from the image's /etc/os-release, not from its name, so a
+# mirrored or renamed base image (e.g. a registry proxy path) gets the same setup.
+RUN . /etc/os-release; \
+    case "${ID}" in \
+      ubuntu) \
+        apt-get update && apt-get install -y --no-install-recommends \
+            dracut dracut-network isc-dhcp-common isc-dhcp-client cloud-guest-utils \
+            open-vm-tools dracut-live \
+        && systemctl enable open-vm-tools.service ;; \
+      opensuse*) \
+        zypper refresh && zypper update -y && \
+        zypper install -y dracut dhcp-client squashfs ;; \
+    esac
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# Bind-mounted, so the script never lands in an image layer.
+RUN --mount=type=bind,from=scripts,source=distrust-emudhra-roots.sh,target=/tmp/distrust-emudhra-roots.sh \
+    sh /tmp/distrust-emudhra-roots.sh
