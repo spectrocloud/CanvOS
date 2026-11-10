@@ -8,7 +8,7 @@ ARG IS_UKI=false
 # Per-arch modules image, same name/tag scheme as docker-bake.hcl
 # (hadron_modules_image). Bake overrides it and builds the modules in-graph.
 ARG TARGETARCH
-ARG MODULES_IMAGE=us-east1-docker.pkg.dev/spectro-images/edge/base/hadron-modules:${HADRON_VERSION}-${TARGETARCH}
+ARG MODULES_IMAGE=us-east1-docker.pkg.dev/spectro-images/dev/edge/base/hadron-modules:${HADRON_VERSION}-${TARGETARCH}
 
 FROM ${KAIROS_INIT_IMAGE} AS kairos-init
 

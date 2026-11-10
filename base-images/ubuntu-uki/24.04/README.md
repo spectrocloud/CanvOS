@@ -77,7 +77,7 @@ Bake variables (set as environment variables):
 | `KAIROS_VERSION`    | `v4.4.0`                                        | `kairos-init --version`, kairos-init tag, output tag component |
 | `KAIROS_INIT_IMAGE` | `quay.io/kairos/kairos-init:${KAIROS_VERSION}`  | Complete kairos-init image reference (mirrors only)            |
 | `MODEL`             | `generic`                                       | Passed to kairos-init `-m` and used in the tag                 |
-| `REGISTRY`          | `us-east1-docker.pkg.dev/spectro-images/edge/base` | Tag prefix (dev registry)                                   |
+| `REGISTRY`          | `us-east1-docker.pkg.dev/spectro-images/dev/edge/base` | Tag prefix (dev registry)                                   |
 
 Pass `KEEP_GPU_FIRMWARE` as a variable, not `--set ubuntu-24-04-uki.args.KEEP_GPU_FIRMWARE=…`:
 `--set` bypasses the bool normalisation, so a value like `True` would silently trim.

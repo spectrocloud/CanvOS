@@ -47,7 +47,7 @@
 # Dev registry by default. Production (palette-images, palette-images-fips) is
 # only reached by a manual retag/promotion, so Ubuntu Pro FIPS images, which
 # must never be published, cannot be pushed there by accident.
-variable "REGISTRY" { default = "us-east1-docker.pkg.dev/spectro-images/edge/base" }
+variable "REGISTRY" { default = "us-east1-docker.pkg.dev/spectro-images/dev/edge/base" }
 variable "ARCH"     { default = "amd64" }
 variable "MODEL"    { default = "generic" }
 

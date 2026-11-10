@@ -57,7 +57,7 @@ Set as environment variables (e.g. `HADRON_VERSION=v0.5.3 docker buildx bake …
 | `KAIROS_VERSION`    | `v4.4.0`                                         | Kairos release; also the kairos-init image tag                             |
 | `KAIROS_INIT_IMAGE` | `quay.io/kairos/kairos-init:${KAIROS_VERSION}`   | Override only to use a mirror                                              |
 | `MODEL`             | `generic`                                        | Passed to kairos-init `-m` and used in the tag                             |
-| `REGISTRY`          | `us-east1-docker.pkg.dev/spectro-images/edge/base` | Registry prefix for all tags (dev; production is a manual promotion)     |
+| `REGISTRY`          | `us-east1-docker.pkg.dev/spectro-images/dev/edge/base` | Registry prefix for all tags (dev; production is a manual promotion)     |
 
 ## Tags
 
