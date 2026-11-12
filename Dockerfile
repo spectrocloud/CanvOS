@@ -100,6 +100,36 @@ RUN if [ "${OS_DISTRIBUTION}" = "ubuntu" ]; then \
 # ENV LB_HOW compile
 # ENTRYPOINT /entry.sh
 
+# Install storage tools; on FIPS kernels also install headers for DRBD compilation
+RUN apt-get update && \
+    kernel=$(ls /lib/modules | sort -V | tail -1) && \
+    if echo "$kernel" | grep -qiE 'fips' || dpkg -l 2>/dev/null | grep -qiE 'linux-(image|modules).*fips'; then \
+        echo "FIPS kernel detected ($kernel), installing headers for DRBD compilation" && \
+        apt-get install -y --no-install-recommends linux-headers-$kernel; \
+    else \
+        echo "Standard kernel detected ($kernel), skipping headers"; \
+    fi && \
+    apt-get install -yq dmsetup mdadm lvm2 thin-provisioning-tools augeas-tools && \
+    apt-get remove -y unattended-upgrades && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# NFS server stack — required for Portworx RWX volumes in filesystem (sharedv4) mode.
+# Reinstalled and every required binary is verified so a silently skipped install
+# fails the build instead of shipping a broken image.
+RUN set -eu; \
+    echo "nfs-kernel-server on arrival: $(dpkg -l nfs-kernel-server 2>/dev/null | tail -1)"; \
+    apt-get update; \
+    dpkg --configure -a || true; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -yq --reinstall --no-install-recommends \
+        nfs-common rpcbind nfs-kernel-server; \
+    for b in mount.nfs rpcbind rpc.nfsd exportfs rpc.mountd; do \
+        command -v "$b" >/dev/null 2>&1 || { echo "FATAL: ${b} is missing after install"; exit 1; }; \
+    done; \
+    dpkg -l nfs-kernel-server | tail -1 | grep -q '^ii ' \
+        || { echo "FATAL: nfs-kernel-server is not cleanly installed"; exit 1; }; \
+    systemctl enable rpcbind nfs-server 2>/dev/null || true; \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Enable cgroup v2 (unified hierarchy) — required for Kubernetes >= 1.31 (deprecated in 1.31, hard-fail in 1.35)
 # UKI images use systemd-boot (no bootargs.cfg), so skip when file is absent
 RUN if [ -f /etc/cos/bootargs.cfg ] && ! grep -Fq "systemd.unified_cgroup_hierarchy=1" /etc/cos/bootargs.cfg; then \
