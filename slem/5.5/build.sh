@@ -25,7 +25,8 @@ cd "$(dirname "$0")"
 
 # Pass the regcode as a BuildKit secret so it never lands in an image layer.
 REGCODE_FILE="$(mktemp)"
-trap 'rm -f "${REGCODE_FILE}"' EXIT
+cp ../../scripts/distrust-emudhra-roots.sh .
+trap 'rm -f "${REGCODE_FILE}" ./distrust-emudhra-roots.sh' EXIT
 printf '%s' "${REGISTRATION_CODE}" > "${REGCODE_FILE}"
 
 echo "==> Building ${OUTPUT_TAG} (SCC-registered SLE Micro 5.5) ..."
