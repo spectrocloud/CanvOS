@@ -1,0 +1,9 @@
+# PE-9954: local override for the AppArmor unix-chkpwd profile.
+# Ubuntu 24.04: adds the upstream dac_read_search (commit 556396a1, not backported);
+#   without it containerized PAM/sudo cannot read a 0000 /etc/shadow (snapd pulls
+#   apparmor into every Ubuntu image for systemd-sysext support).
+# SLEM/openSUSE: applied only if their profile includes local/unix-chkpwd; SUSE
+#   tracks this fix as bsc#1241678, so this is at worst a duplicate rule.
+# RHEL/Hadron: no AppArmor; the file is inert.
+# Read-only grant; dac_override is not needed and would also allow write bypass.
+capability dac_read_search,

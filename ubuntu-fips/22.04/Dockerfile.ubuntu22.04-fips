@@ -24,11 +24,7 @@ RUN --mount=type=secret,id=pro-attach-config \
     && apt-get install --no-install-recommends -y ubuntu-advantage-tools ca-certificates \
     && pro attach --attach-config /run/secrets/pro-attach-config \
     && apt-get upgrade -y \
-    ## open-vm-tools: kairos-init installs the VMware guest agent for the SUSE family but not
-    ## for Debian/Ubuntu. Without vmtoolsd running, vSphere reports blank IP Addresses / DNS
-    ## Name for the guest (PE-9173). Not a crypto module, so no FIPS impact. The 20.04 and
-    ## 24.04 FIPS images already install it here; this brings 22.04 to parity.
-    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools cracklib-runtime \
+    && apt-get install -y strongswan strongswan-hmac openssh-client openssh-server linux-image-fips linux-headers-fips shim-signed open-vm-tools qemu-guest-agent cracklib-runtime \
     ## && pro enable usg \
     ## && apt install -y usg \
     ## && usg fix disa_stig \
@@ -68,3 +64,8 @@ RUN find /var/cache -mindepth 1 -maxdepth 1 ! -name 'cracklib' -exec rm -rf {} +
     rm -rf /tmp/* /var/tmp/* && \
     journalctl --vacuum-size=1K || true && \
     rm -f /etc/machine-id /var/lib/dbus/machine-id /etc/hostname || true
+
+# Mozilla bug 2083449: distrust the roots that chain to the compromised eMudhra intermediates.
+# The build script copies the script into the build context.
+COPY distrust-emudhra-roots.sh /tmp/distrust-emudhra-roots.sh
+RUN sh /tmp/distrust-emudhra-roots.sh; _rc=$?; rm -f /tmp/distrust-emudhra-roots.sh; exit $_rc
