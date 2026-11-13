@@ -230,6 +230,10 @@ ELSE
 END
 
 ARG IMAGE_PATH=$IMAGE_REGISTRY/$IMAGE_REPO:$K8S_DISTRIBUTION-$K8S_VERSION-$IMAGE_TAG
+# Recovery images carry no Kubernetes distribution, so they get their own identity.
+# IMAGE_TAG already carries PE_VERSION, so the recovery tag adds only the -uki suffix.
+ARG RECOVERY_IMAGE_PATH=$IMAGE_REGISTRY/recovery-$IMAGE_REPO:$IMAGE_TAG
+ARG RECOVERY_IMAGE_PATH_UKI=$IMAGE_REGISTRY/recovery-$IMAGE_REPO:$IMAGE_TAG-uki
 
 alpine-all:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +alpine
@@ -250,9 +254,11 @@ build-all-images:
     IF [ "$ARCH" = "arm64" ]
         BUILD --platform=linux/arm64 +iso-image
         BUILD --platform=linux/arm64 +iso
+        BUILD --platform=linux/arm64 +build-recovery-image
     ELSE IF [ "$ARCH" = "amd64" ]
         BUILD --platform=linux/amd64 +iso-image
         BUILD --platform=linux/amd64 +iso
+        BUILD --platform=linux/amd64 +build-recovery-image
     END
 
 build-provider-images:
@@ -404,6 +410,86 @@ trust-boot-unpack:
     END
 
     SAVE ARTIFACT /trusted-boot/*
+
+# Publishes a recovery image: the rootfs a fresh install writes, with no
+# Kubernetes distribution and no agent-provider plugin. An operator pins it with
+# system.recovery.uri, and a cluster delete then resets the host to it.
+build-recovery-image:
+    IF [ "$IS_UKI" = "true" ]
+        BUILD +uki-recovery-image
+    ELSE
+        BUILD +recovery-image
+    END
+
+# GRUB: the install rootfs, plus the local-ui overlay build-iso applies to it.
+recovery-image:
+    FROM --platform=linux/${ARCH} +iso-image
+    COPY --if-exists local-ui.tar /opt/spectrocloud/
+    RUN if [ -f /opt/spectrocloud/local-ui.tar ]; then \
+            tar -xf /opt/spectrocloud/local-ui.tar -C /opt/spectrocloud && \
+            rm -f /opt/spectrocloud/local-ui.tar; \
+        fi
+    DO +DISTRUST_EMUDHRA --ALLOW_MISSING=true
+
+    SAVE IMAGE --push $RECOVERY_IMAGE_PATH
+
+# UKI: the same rootfs, wrapped as a signed UKI container image.
+build-recovery-trustedboot-image:
+    FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
+    COPY --platform=linux/${ARCH} --keep-own +iso-image-rootfs/rootfs /build/image
+    COPY secure-boot/enrollment/ secure-boot/private-keys/ secure-boot/public-keys/ /keys
+    RUN mkdir -p /output
+    RUN CMD="auroraboot" && \
+        if [ "$DEBUG" = "true" ]; then CMD="$CMD --debug"; fi && \
+        $CMD build-uki -t container -d /output \
+            --boot-branding "$BRANDING" \
+            --public-keys /keys \
+            --sb-key /keys/db.key \
+            --sb-cert /keys/db.pem \
+            --tpm-pcr-private-key /keys/tpm2-pcr-private.pem \
+            dir:/build/image
+    SAVE ARTIFACT /output/* AS LOCAL ./trusted-boot/
+
+recovery-trustedboot-unpack:
+    COPY (+third-party/luet --binary=luet) /usr/bin/luet
+    COPY --platform=linux/${ARCH} +build-recovery-trustedboot-image/ /image
+    RUN FILE="file:/$(find /image -type f -name "*.tar" | head -n 1)" && \
+        luet util unpack $FILE /trusted-boot
+
+    # Same kairos-agent < v2.26.0 shim as trust-boot-unpack: an old agent reads
+    # type-1 "efi <path>" entries, not "uki <path>".
+    IF [ "$OS_DISTRIBUTION" != "hadron" ]
+        RUN set -e; \
+            entries=/trusted-boot/loader/entries; \
+            loader=/trusted-boot/loader/loader.conf; \
+            test -d "$entries" && test -f "$loader"; \
+            find "$entries" -maxdepth 1 -name '*.conf' -exec sed -i 's|^uki |efi |' {} +; \
+            if ! grep -q '^default ' "$loader"; then \
+                { printf 'default norole.conf\n'; cat "$loader"; } > "$loader.new" && mv "$loader.new" "$loader"; \
+            fi; \
+            grep -q '^efi /EFI/kairos/norole.efi$' "$entries/norole.conf"; \
+            grep -q '^default norole.conf$' "$loader"
+    END
+
+    SAVE ARTIFACT /trusted-boot/*
+
+uki-recovery-image:
+    FROM --platform=linux/${ARCH} +ubuntu
+    RUN apt-get update && apt-get install -y rsync
+
+    WORKDIR /
+    COPY --platform=linux/${ARCH} +recovery-trustedboot-unpack/ /trusted-boot
+    COPY --if-exists overlay/files/etc/ /etc/
+    IF [ -f /etc/logrotate.d/stylus.conf ]
+        RUN chmod 644 /etc/logrotate.d/stylus.conf
+    END
+    COPY +kairos-agent/kairos-agent /usr/bin/kairos-agent
+    COPY --if-exists "$EDGE_CUSTOM_CONFIG" /oem/.edge_custom_config.yaml
+    COPY --if-exists +stylus-image/etc/kairos/80_stylus.yaml /etc/kairos/80_stylus.yaml
+
+    DO +DISTRUST_EMUDHRA --ALLOW_MISSING=true
+
+    SAVE IMAGE --push $RECOVERY_IMAGE_PATH_UKI
 
 stylus-image-pack:
     COPY (+third-party/luet --binary=luet) /usr/bin/luet
