@@ -313,6 +313,16 @@ else
     print_debug "STIG remediation completed with non-zero exit ($REMEDIATION_EXIT_CODE); see $REMEDIATION_LOG"
 fi
 
+# PE-9043: enforce non-halting auditd disk-space actions after remediation, so
+# regenerated content cannot reintroduce HALT. No-op when auditd is not installed.
+if [ -x /tmp/set-auditd-disk-actions.sh ]; then
+    if ! /tmp/set-auditd-disk-actions.sh; then
+        print_debug "WARNING: could not set auditd disk-space actions"
+    fi
+else
+    print_debug "WARNING: /tmp/set-auditd-disk-actions.sh not found; auditd disk-space actions not enforced"
+fi
+
 REMEDIATION_SCRIPT_SAVED="$LOG_DIR/stig-fix.sh"
 cp "$REMEDIATION_SCRIPT" "$REMEDIATION_SCRIPT_SAVED"
 print_debug "Saved remediation script to $REMEDIATION_SCRIPT_SAVED"

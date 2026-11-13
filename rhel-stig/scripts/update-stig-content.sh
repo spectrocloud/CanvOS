@@ -13,7 +13,8 @@ RHEL_STIG_DIR="$(dirname "$SCRIPT_DIR")"
 STATIC_DIR="$RHEL_STIG_DIR/static"
 VERSION="${1:-}"
 CONTENT_REPO="https://github.com/ComplianceAsCode/content"
-PROFILE="xccdf_org.ssgproject.content_profile_stig"
+PROFILE="xccdf_org.ssgproject.content_profile_stig_pe9043"
+TAILORING_FILE="$STATIC_DIR/pe9043-tailoring.xml"
 XCCDF_FILE="ssg-rhel9-ds.xml"
 
 if [ -z "$VERSION" ]; then
@@ -63,20 +64,32 @@ cp "$XCCDF_PATH" "$STATIC_DIR/$XCCDF_FILE"
 echo "Copied XCCDF to $STATIC_DIR/$XCCDF_FILE"
 
 # Generate remediation script
-if command -v oscap &>/dev/null; then
-    echo "Generating remediation script..."
-    oscap xccdf generate fix --profile "$PROFILE" --template urn:xccdf:fix:script:sh \
-        "$STATIC_DIR/$XCCDF_FILE" > "$STATIC_DIR/stig-fix.sh" 2>/dev/null || true
-    if [ -s "$STATIC_DIR/stig-fix.sh" ]; then
-        chmod +x "$STATIC_DIR/stig-fix.sh"
-        echo "Generated $STATIC_DIR/stig-fix.sh"
-    else
-        rm -f "$STATIC_DIR/stig-fix.sh"
-        echo "WARNING: Could not generate remediation script. Use system packages as fallback."
-    fi
-else
-    echo "WARNING: oscap not found. Install openscap-scanner to generate static remediation script."
+if ! command -v oscap &>/dev/null; then
+    echo "ERROR: oscap not found. Install openscap-scanner to generate the static remediation script."
+    exit 1
 fi
+if [ ! -f "$TAILORING_FILE" ]; then
+    echo "ERROR: tailoring file not found: $TAILORING_FILE"
+    exit 1
+fi
+
+echo "Generating remediation script (profile $PROFILE, tailoring $TAILORING_FILE)..."
+if ! oscap xccdf generate fix \
+    --profile "$PROFILE" \
+    --tailoring-file "$TAILORING_FILE" \
+    --template urn:xccdf:fix:script:sh \
+    "$STATIC_DIR/$XCCDF_FILE" > "$STATIC_DIR/stig-fix.sh" 2>/dev/null; then
+    rm -f "$STATIC_DIR/stig-fix.sh"
+    echo "ERROR: oscap failed to generate $STATIC_DIR/stig-fix.sh"
+    exit 1
+fi
+if [ ! -s "$STATIC_DIR/stig-fix.sh" ]; then
+    rm -f "$STATIC_DIR/stig-fix.sh"
+    echo "ERROR: generated $STATIC_DIR/stig-fix.sh is empty"
+    exit 1
+fi
+chmod +x "$STATIC_DIR/stig-fix.sh"
+echo "Generated $STATIC_DIR/stig-fix.sh"
 
 # Write VERSION file
 echo "# STIG content version - pin for reproducible releases" > "$STATIC_DIR/VERSION"
