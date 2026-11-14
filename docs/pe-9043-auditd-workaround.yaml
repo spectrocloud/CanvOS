@@ -1,11 +1,13 @@
 # PE-9043 — auditd disk-space actions (workaround for existing clusters).
 #
-# DISA STIG remediation baked into the FIPS/STIG base images
-# (ubuntu-fips/22.04/fix.sh, rhel-stig/static/stig-fix.sh) sets auditd's
+# DISA STIG remediation baked into images built before PE-9043
+# (ubuntu-fips/22.04/fix.sh and the RHEL static remediation) sets auditd's
 # disk_full_action / disk_error_action to halt, and admin_space_left_action to
 # single. On an immutable Kairos node the audit log lives on COS_PERSISTENT;
 # when that partition fills, a halting auditd prevents the node from finishing
-# boot, so the appliance boot-loops.
+# boot, so the appliance boot-loops. Images built with the PE-9043 change set
+# both actions to SYSLOG at build time; this drop-in exists for clusters still
+# running the older images.
 #
 # This drop-in is a workaround for existing clusters (apply via cluster profile or
 # user-data); new images get the values at build time. It runs
