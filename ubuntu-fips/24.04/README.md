@@ -23,6 +23,10 @@ ENABLE_STIG=0 bash build.sh my-fips-base
 SKIP_STIG_BANNER=1 bash build.sh my-fips-stig-nobanner
 ```
 
+### Auditd disk-space actions (PE-9043)
+
+This image does not install `audit`, so it has no `/etc/audit/auditd.conf` to change. The shared post-remediation step (`scripts/set-auditd-disk-actions.sh`, also used by the RHEL STIG images) sets `disk_full_action` and `disk_error_action` to `SYSLOG` and `admin_space_left_action` to `single` whenever auditd is present; on this image it is a no-op. Existing clusters that run auditd can use the cloud-config workaround in `docs/pe-9043-auditd-workaround.yaml`.
+
 The bundled `fix.sh` carries two kinds of **jammy-aligned** changes:
 
 1. **Explicit comments (Kairos / time sync)** — Rules that install **chrony**, remove **systemd-timesyncd**, or edit **chrony.conf** are commented out with `EXCEPTION (CanvOS/Kairos)` notes, matching the intent of `ubuntu-fips/22.04/fix.sh`, so **kairos-init** can keep enabling **systemd-timesyncd**.

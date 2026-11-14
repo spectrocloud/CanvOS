@@ -224,6 +224,17 @@ else
     print_debug "Check $REMEDIATION_LOG for details"
 fi
 
+# PE-9043: enforce non-halting auditd disk-space actions after remediation, so
+# regenerated content cannot reintroduce HALT. Also covers the generated-script
+# fallback above. No-op when auditd is not installed.
+if [ -x /tmp/set-auditd-disk-actions.sh ]; then
+    if ! /tmp/set-auditd-disk-actions.sh; then
+        print_debug "WARNING: could not set auditd disk-space actions"
+    fi
+else
+    print_debug "WARNING: /tmp/set-auditd-disk-actions.sh not found; auditd disk-space actions not enforced"
+fi
+
 # Clean up stubs
 rm -rf "$STUB_DIR" || true
 
