@@ -25,7 +25,7 @@ SKIP_STIG_BANNER=1 bash build.sh my-fips-stig-nobanner
 
 ### Auditd disk-space actions (PE-9043)
 
-This image does not install `audit`, so it has no `/etc/audit/auditd.conf` to change. The shared post-remediation step (`scripts/set-auditd-disk-actions.sh`, also used by the RHEL STIG images) sets `disk_full_action` and `disk_error_action` to `SYSLOG` and `admin_space_left_action` to `single` whenever auditd is present; on this image it is a no-op. Existing clusters that run auditd can use the cloud-config workaround in `docs/pe-9043-auditd-workaround.yaml`.
+The STIG remediation installs `auditd` (the `package_audit_installed` rule) and enables it. The shared post-remediation step (`scripts/set-auditd-disk-actions.sh`, also used by the RHEL STIG images) runs after remediation and sets `disk_full_action` and `disk_error_action` to `SYSLOG` and `admin_space_left_action` to `single` in `/etc/audit/auditd.conf`. Existing clusters can apply the same values with the cloud-config workaround in `docs/pe-9043-auditd-workaround.yaml`.
 
 The bundled `fix.sh` carries two kinds of **jammy-aligned** changes:
 
