@@ -94,10 +94,19 @@ RUN rm -rf /boot/initramfs-*
 # Static STIG content (optional): for reproducible releases, run scripts/update-stig-content.sh
 # and ensure static/ contains ssg-rhel9-ds.xml and stig-fix.sh
 COPY static/ /tmp/stig-static/
+COPY set-auditd-disk-actions.sh /tmp/set-auditd-disk-actions.sh
 COPY stig-remediate.sh /tmp/stig-remediate.sh
-RUN chmod +x /tmp/stig-remediate.sh && \
+RUN chmod +x /tmp/stig-remediate.sh /tmp/set-auditd-disk-actions.sh && \
   /tmp/stig-remediate.sh 2>&1 && \
-  rm -f /tmp/stig-remediate.sh
+  rm -f /tmp/stig-remediate.sh /tmp/set-auditd-disk-actions.sh
+
+# PE-9043: fail the build if STIG content reintroduces a halting auditd action.
+RUN if [ -f /etc/audit/auditd.conf ] && \
+      grep -qiE '^[[:space:]]*[a-z_]*_action[[:space:]]*=[[:space:]]*HALT([[:space:]]|$)' /etc/audit/auditd.conf; then \
+      echo "PE-9043: halting auditd action present in /etc/audit/auditd.conf" >&2; \
+      grep -inE 'HALT' /etc/audit/auditd.conf >&2 || true; \
+      exit 1; \
+    fi
 
 RUN mkdir -p /etc/luet/repos.conf.d
 ## Clear cache

@@ -4,7 +4,9 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Mozilla bug 2083449: provide the distrust script in the build context.
 cp "${SCRIPT_DIR}/../scripts/distrust-emudhra-roots.sh" "${SCRIPT_DIR}/"
-trap 'rm -f "${SCRIPT_DIR}/distrust-emudhra-roots.sh"' EXIT
+# PE-9043: provide the shared auditd disk-space step in the build context.
+cp "${SCRIPT_DIR}/../scripts/set-auditd-disk-actions.sh" "${SCRIPT_DIR}/"
+trap 'rm -f "${SCRIPT_DIR}/distrust-emudhra-roots.sh" "${SCRIPT_DIR}/set-auditd-disk-actions.sh"' EXIT
 cd "$SCRIPT_DIR" || exit 1
 
 usage() {

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_org.ssgproject.content_tailoring_pe9043">
+  <xccdf:benchmark href="ssg-rhel9-ds.xml"/>
+  <xccdf:version time="2026-10-30T00:00:00">1.0</xccdf:version>
+  <xccdf:Profile id="xccdf_org.ssgproject.content_profile_stig_pe9043" extends="xccdf_org.ssgproject.content_profile_stig">
+    <xccdf:title>STIG with PE-9043 availability values</xccdf:title>
+    <xccdf:description>Refines auditd disk-space actions to SYSLOG (a STIG-accepted value) so a full COS_PERSISTENT cannot halt the node. admin_space_left_action remains single (required by auditd_data_retention_admin_space_left_action).</xccdf:description>
+    <xccdf:refine-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_full_action" selector="syslog"/>
+    <xccdf:refine-value idref="xccdf_org.ssgproject.content_value_var_auditd_disk_error_action" selector="syslog"/>
+  </xccdf:Profile>
+</xccdf:Tailoring>
