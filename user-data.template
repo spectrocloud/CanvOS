@@ -42,10 +42,18 @@ stylus:
            enp0s3:
                # type of network dhcp or static
                type: static
-               # Ip address including the mask bits
-               ipAddress: 10.0.10.25/24
-               # Gateway for the static ip.
-               gateway: 10.0.10.1
+               # All addresses in CIDR form, primary first. Takes precedence over ipAddress.
+               # Set one address per family for a dual-stack host.
+               addresses:
+                 - 10.0.10.25/24
+                 - fd00:150::25/64
+               # One default gateway per address family. Takes precedence over gateway.
+               gateways:
+                 - 10.0.10.1
+                 - fd00:150::1
+               # Single-address fields still work when addresses and gateways are absent.
+               # ipAddress: 10.0.10.25/24
+               # gateway: 10.0.10.1
                # interface specific nameserver
                nameserver: 10.10.128.8
            enp0s4:
