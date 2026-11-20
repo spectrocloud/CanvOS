@@ -48,10 +48,11 @@ COPY 24.04/99-usb-media.conf /etc/dracut.conf.d/99-usb-media.conf
 
 COPY 24.04/fix.sh /tmp/fix.sh
 COPY stig-remediate.sh /tmp/stig-remediate.sh
+COPY set-auditd-disk-actions.sh /tmp/set-auditd-disk-actions.sh
 COPY restore-ubuntu-default-banners.sh /tmp/restore-ubuntu-default-banners.sh
-RUN chmod +x /tmp/fix.sh /tmp/stig-remediate.sh /tmp/restore-ubuntu-default-banners.sh \
+RUN chmod +x /tmp/fix.sh /tmp/stig-remediate.sh /tmp/set-auditd-disk-actions.sh /tmp/restore-ubuntu-default-banners.sh \
     && if [ "$ENABLE_STIG" = "1" ]; then /tmp/stig-remediate.sh; fi \
-    && rm -f /tmp/stig-remediate.sh \
+    && rm -f /tmp/stig-remediate.sh /tmp/set-auditd-disk-actions.sh \
     && if [ "$ENABLE_STIG" = "1" ] && [ "$SKIP_STIG_BANNER" = "1" ]; then bash /tmp/restore-ubuntu-default-banners.sh; fi
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
@@ -131,16 +132,25 @@ RUN set -e; \
     #      etc.), which matches the 22.04 effective outcome
     #   c) stripping any lingering pam_sss.so line as a belt-and-braces
     #
+    # fix.sh's cac_unix (Conflicts: unix) replaces the stock unix profile.
+    # Deleting cac_* above leaves no selected profile that provides pam_unix,
+    # so re-enable the stock unix profile before the forced regenerate.
+    #
     # Compliance trade-off: this removes the STIG pam_faillock/pam_faildelay
     # hardening from the PAM stack. pam_faillock policies persist in
     # /etc/security/faillock.conf and /etc/security/pwquality.conf so they
     # can be re-added via a separate, correctly-ordered pam-config post-deploy.
     rm -f /usr/share/pam-configs/cac_* 2>/dev/null || true; \
     if command -v pam-auth-update >/dev/null 2>&1; then \
+      DEBIAN_FRONTEND=noninteractive pam-auth-update --enable unix 2>/dev/null || true; \
       DEBIAN_FRONTEND=noninteractive pam-auth-update --force --package 2>/dev/null || true; \
     fi; \
     for _pam in /etc/pam.d/common-auth /etc/pam.d/common-session /etc/pam.d/common-session-noninteractive /etc/pam.d/common-account /etc/pam.d/common-password; do \
       [ -f "$_pam" ] && sed -i '/pam_sss\.so/d' "$_pam" || true; \
+    done; \
+    for _pam in common-auth common-account common-password; do \
+      grep -Eq '^(auth|account|password)[[:space:]].*pam_unix\.so' "/etc/pam.d/$_pam" \
+        || { echo "FATAL: pam_unix.so missing from /etc/pam.d/$_pam" >&2; exit 1; }; \
     done; \
     for _u in sssd.service sssd-sudo.socket sssd-pac.socket sssd-autofs.socket sssd-ssh.socket sssd-nss.socket sssd-pam.socket sssd-pam-priv.socket sssd-kcm.socket sssd-kcm.service; do \
       ln -sf /dev/null "/etc/systemd/system/$_u"; \

@@ -13,6 +13,10 @@
 
 Examples: `ENABLE_STIG=0 bash build.sh`, `SKIP_STIG_BANNER=1 bash build.sh my-tag`.
 
+### Auditd disk-space actions (PE-9043)
+
+The STIG remediation installs `auditd` (the `package_audit_installed` rule) and enables it. The shared post-remediation step (`scripts/set-auditd-disk-actions.sh`, also used by the RHEL STIG images) runs after remediation and sets `disk_full_action` and `disk_error_action` to `SYSLOG` and `admin_space_left_action` to `single` in `/etc/audit/auditd.conf`. Existing clusters can apply the same values with the cloud-config workaround in `docs/pe-9043-auditd-workaround.yaml`.
+
 **Note:** `build.sh` uses the `ubuntu-fips` directory as the Docker build context so shared files (e.g. `restore-ubuntu-default-banners.sh`) resolve correctly.
 
 The system is not enabling FIPS by default in kernel space. 
