@@ -23,7 +23,7 @@ ARG KAIROS_BASE_IMAGE_URL=$SPECTRO_PUB_REPO/edge
 ARG PE_VERSION=v4.10.0-rc.2
 # Kairos release. Also the version component of the base image tags built from
 # base-images/docker-bake.hcl (kairos-init is tagged with the Kairos version).
-ARG KAIROS_VERSION=v4.4.0
+ARG KAIROS_VERSION=v4.5.2
 ARG K3S_FLAVOR_TAG=k3s1
 ARG RKE2_FLAVOR_TAG=rke2r1
 ARG BASE_IMAGE_URL=quay.io/kairos

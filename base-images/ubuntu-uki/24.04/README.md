@@ -74,7 +74,7 @@ Bake variables (set as environment variables):
 | ------------------- | ----------------------------------------------- | -------------------------------------------------------------- |
 | `ARCH`              | `amd64`                                         | Target architecture (`amd64` or `arm64`)                       |
 | `KEEP_GPU_FIRMWARE` | `false`                                         | Keep full GPU firmware (larger UKI)                            |
-| `KAIROS_VERSION`    | `v4.4.0`                                        | `kairos-init --version`, kairos-init tag, output tag component |
+| `KAIROS_VERSION`    | `v4.5.2`                                        | `kairos-init --version`, kairos-init tag, output tag component |
 | `KAIROS_INIT_IMAGE` | `quay.io/kairos/kairos-init:${KAIROS_VERSION}`  | Complete kairos-init image reference (mirrors only)            |
 | `MODEL`             | `generic`                                       | Passed to kairos-init `-m` and used in the tag                 |
 | `REGISTRY`          | `us-east1-docker.pkg.dev/spectro-images/dev/edge/base` | Tag prefix (dev registry)                                   |
@@ -97,7 +97,7 @@ In `.arg`:
 OS_DISTRIBUTION=ubuntu
 OS_VERSION=24.04
 IS_UKI=true
-BASE_IMAGE=us-docker.pkg.dev/palette-images/edge/kairos-ubuntu:24.04-core-amd64-generic-v4.4.0-uki
+BASE_IMAGE=us-docker.pkg.dev/palette-images/edge/kairos-ubuntu:24.04-core-amd64-generic-v4.5.2-uki
 ```
 
 Then build the installer as usual (`./earthly.sh +uki-iso`, etc.).

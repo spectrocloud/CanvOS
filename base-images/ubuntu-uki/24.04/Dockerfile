@@ -9,7 +9,7 @@
 #   - ship those blobs as a signed sysext (Kairos Trusted Boot pattern).
 #
 # kairos-init is tagged with the Kairos version it installs.
-ARG VERSION=v4.4.0
+ARG VERSION=v4.5.2
 ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${VERSION}
 
 FROM ${KAIROS_INIT_IMAGE} AS kairos-init

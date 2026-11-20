@@ -53,7 +53,7 @@ variable "MODEL"    { default = "generic" }
 
 # Kairos release. It is passed to kairos-init --version, is the tag of the
 # kairos-init image, and is the version component of every base image tag.
-variable "KAIROS_VERSION" { default = "v4.4.0" }
+variable "KAIROS_VERSION" { default = "v4.5.2" }
 
 # kairos-init is published with the same tag as the Kairos release it installs.
 # Override only to use a mirror (e.g. an air-gapped registry); keep the tag

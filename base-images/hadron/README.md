@@ -54,7 +54,7 @@ Set as environment variables (e.g. `HADRON_VERSION=v0.5.3 docker buildx bake …
 | ------------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
 | `HADRON_VERSION`    | `v0.5.3`                                         | Upstream Hadron release; must have an entry in `modules.json`              |
 | `ARCH`              | `amd64`                                          | Target architecture (`amd64` or `arm64`); one image per arch               |
-| `KAIROS_VERSION`    | `v4.4.0`                                         | Kairos release; also the kairos-init image tag                             |
+| `KAIROS_VERSION`    | `v4.5.2`                                         | Kairos release; also the kairos-init image tag                             |
 | `KAIROS_INIT_IMAGE` | `quay.io/kairos/kairos-init:${KAIROS_VERSION}`   | Override only to use a mirror                                              |
 | `MODEL`             | `generic`                                        | Passed to kairos-init `-m` and used in the tag                             |
 | `REGISTRY`          | `us-east1-docker.pkg.dev/spectro-images/dev/edge/base` | Registry prefix for all tags (dev; production is a manual promotion)     |
@@ -69,7 +69,7 @@ arm64 builder avoids emulating the modules compile).
 <REGISTRY>/hadron-modules:<HADRON_VERSION>-<ARCH>
 ```
 
-For example `kairos-hadron:v0.5.3-core-amd64-generic-v4.4.0-fips-uki` and
+For example `kairos-hadron:v0.5.3-core-amd64-generic-v4.5.2-fips-uki` and
 `hadron-modules:v0.5.3-amd64`.
 
 ## Kernel modules (`modules.json`)
