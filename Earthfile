@@ -1109,8 +1109,16 @@ provider-image:
         RUN mkdir -p /opt/spectrocloud/bin && \
             curl -L https://github.com/k3s-io/kine/releases/download/v${KINE_VERSION}/kine-amd64 | install -m 755 /dev/stdin /opt/spectrocloud/bin/kine
 
-        # Ensure psql works ootb for the postgres user
-        RUN su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/etc/perl:/usr/lib/x86_64-linux-gnu/perl5/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34:/usr/lib/x86_64-linux-gnu/perl-base" > ~/.bash_profile'
+        # Ensure psql works ootb for the postgres user.
+        # postgresql-common >= 294 creates the postgres user via systemd-sysusers and
+        # relies on systemd-tmpfiles to create its home directory; tmpfiles only runs
+        # when systemd is PID 1, which is not the case in this build container. The
+        # home then falls to pg_createcluster and ends up root-owned, so the postgres
+        # user cannot write into it. Make sure the home exists and belongs to postgres
+        # before writing the profile (home path is taken from the passwd entry so this
+        # also covers openSUSE's /var/lib/pgsql).
+        RUN install -d -o postgres -g postgres -m 0755 "$(getent passwd postgres | cut -d: -f6)" && \
+            su postgres -c 'echo "export PERL5LIB=/usr/share/perl/5.34:/etc/perl:/usr/lib/x86_64-linux-gnu/perl5/5.34:/usr/share/perl5:/usr/lib/x86_64-linux-gnu/perl/5.34:/usr/lib/x86_64-linux-gnu/perl-base" > ~/.bash_profile'
 
         # Ensure psql waits for the network to be online
         RUN sed -i 's/After=network.target/After=network-online.target/' /lib/systemd/system/postgresql@.service
