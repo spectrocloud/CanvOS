@@ -81,6 +81,13 @@ RUN zypper --non-interactive rm -y --clean-deps \
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
     /kairos-init -l debug -m "generic" -t "${TRUSTED_BOOT}" --version "${KAIROS_VERSION}"
 
+# kairos-init disables NetworkManager but ships no .network; /usr/lib cannot be masked by the persistent /etc/systemd bind mount, and 20- still loses to the 10-<iface>.network Stylus writes from site user-data.
+COPY overlay/ /
+
+# kairos-init enables networkd unguarded and its binary comes from a repo whose key has expired, so assert rather than ship an image with no network stack.
+RUN test -x /usr/lib/systemd/systemd-networkd && \
+    systemctl is-enabled systemd-networkd systemd-resolved sshd
+
 # Workaround for a kairos-agent v2.30.2 install-time mount-lifecycle bug:
 # 08_grub.yaml's after-install "Grub branding" cp writes /grubmenu to
 # /tmp/mnt/STATE, which is a tmpfs directory on SUSE because COS_STATE is
