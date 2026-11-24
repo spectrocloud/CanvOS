@@ -1,12 +1,13 @@
 ---
 name: audit-backports
-description: Audit merged main PRs labeled backport-<release> and report which never landed on the rc/release branch. Covers CanvOS together with stylus, crony and eclipse. Use when checking backport coverage for a release or preparing a release cut.
+description: Audit merged main PRs labeled backport-<release>, report which never landed on the rc/release branch, and list PRs on main that still need a backport. Covers CanvOS together with stylus and its release dependencies. Use when checking backport coverage for a release or preparing a release cut.
 ---
 
 # Audit backports
 
 A fix merged to `main` reaches the release line only if its automated backport
-lands. The audit runs across stylus and every repository it consumes for a
+lands — or nobody adds the `backport-<line>` label and the PR is forgotten. The
+audit reports both, across stylus and every repository it consumes for a
 release — `CanvOS`, `crony`, `eclipse`, `agent-mode`, and the `go.mod`
 dependencies — so a CanvOS backport is not judged in isolation from the others.
 
@@ -38,6 +39,7 @@ four repositories.
 | Failed | Backport PR closed unmerged |
 | Pending | Backport PR open |
 | Not triggered | `backport-<target>` set without `auto-backport` |
+| Unlabeled | On `main`, not on the release line, no label — review at release time |
 
 CanvOS uses `backport-rc-<major>.<minor>` labels and
 `backport/rc-<major>.<minor>/pr-<n>` branches. Dependencies with no `rc-*` branch
