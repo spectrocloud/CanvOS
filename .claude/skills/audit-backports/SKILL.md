@@ -6,9 +6,9 @@ description: Audit merged main PRs labeled backport-<release> and report which n
 # Audit backports
 
 A fix merged to `main` reaches the release line only if its automated backport
-lands. The audit runs across the four repositories that ship an Edge release:
-`stylus`, `crony`, `CanvOS`, `eclipse` — so a CanvOS backport is not judged in
-isolation from the others.
+lands. The audit runs across stylus and every repository it consumes for a
+release — `CanvOS`, `crony`, `eclipse`, `agent-mode`, and the `go.mod`
+dependencies — so a CanvOS backport is not judged in isolation from the others.
 
 The canonical script and workflow live in the stylus repository:
 
@@ -40,7 +40,8 @@ four repositories.
 | Not triggered | `backport-<target>` set without `auto-backport` |
 
 CanvOS uses `backport-rc-<major>.<minor>` labels and
-`backport/rc-<major>.<minor>/pr-<n>` branches, same as the other three.
+`backport/rc-<major>.<minor>/pr-<n>` branches. Dependencies with no `rc-*` branch
+backport straight to `release-<major>.<minor>`; `--target rc-4.10` covers both.
 
 ## Full details
 
