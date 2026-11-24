@@ -1,0 +1,29 @@
+# Palette Edge shipped kdump defaults; do not edit.
+#
+#   /etc/default/kdump-tools.default   this file
+#   /etc/default/kdump-tools.override  user overrides (KEY=value) configs in this file, written by a yip initramfs stage
+#   /etc/default/kdump-tools           built by kdump-merge from the two above before each
+#                                      kdump-tools unit starts; the only file kdump-tools reads.
+#                                      Not in the image.
+#
+# KEY=value lines only: systemd also reads the generated file as an EnvironmentFile.
+
+# kdump is switched on by reserving memory (crashkernel=), not by this value.
+USE_KDUMP=1
+
+# Read-only image paths. kdump-config rewrites /var/lib/kdump on every load.
+KDUMP_KERNEL=/usr/lib/kdump/vmlinuz
+KDUMP_INITRD=/usr/lib/kdump/initrd.img
+
+# On COS_PERSISTENT; /var/crash is lost at the reboot after a capture.
+KDUMP_COREDIR=/usr/local/kdump
+KDUMP_NUM_DUMPS=3
+KDUMP_DUMP_DMESG=1
+
+# Excludes user, cache and free pages.
+MAKEDUMP_ARGS="-F -c -d 31"
+
+# Capture-kernel arguments. A non-empty value replaces the package default list, so all
+# of it is repeated. kho=off: Kexec HandOver otherwise takes most of the reservation and
+# the capture kernel runs out of memory. Override arguments are added in front of these.
+KDUMP_CMDLINE_APPEND="reset_devices systemd.unit=kdump-tools-dump.service nr_cpus=1 irqpoll usbcore.nousb kho=off"

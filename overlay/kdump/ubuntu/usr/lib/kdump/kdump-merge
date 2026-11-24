@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+#
+# kdump-merge -- generate /etc/default/kdump-tools from the image defaults and the
+# operator overrides.
+#
+#   kdump-merge             merge (ExecStartPre of both kdump-tools units)
+#   kdump-merge --reserved  exit 1 when kdump cannot capture here: no crash memory reserved,
+#                           or the Kairos recovery system (ExecCondition)
+#
+#   /etc/default/kdump-tools.default   image defaults (input)
+#   /etc/default/kdump-tools.override  operator overrides, KEY=value (input, optional)
+#   /etc/default/kdump-tools           output, rewritten from scratch on every run
+#
+# Overridable keys:
+#   KDUMP_NUM_DUMPS       1-10
+#   KDUMP_DUMP_DMESG      0 or 1
+#   KDUMP_CMDLINE_APPEND  extra capture-kernel arguments, put before the image's own; arguments
+#                         the image sets, or with characters outside [A-Za-z0-9_.,:/+=-], are dropped
+# Anything else is ignored with a warning. The override is parsed, never sourced.
+# Always exits 0. The output is first written as a plain copy of the defaults, then rebuilt with the
+# overrides and swapped in, so if a later step fails, kdump-tools still runs with the image defaults.
+# -f: capture arguments are split on whitespace and must never be globbed.
+set -fuo pipefail
+
+DEFAULTS="${KDUMP_DEFAULTS:-/etc/default/kdump-tools.default}"
+OVERRIDE="${KDUMP_OVERRIDE:-/etc/default/kdump-tools.override}"
+CONF="${KDUMP_CONF:-/etc/default/kdump-tools}"
+CRASH_SIZE="${KDUMP_CRASH_SIZE_FILE:-/sys/kernel/kexec_crash_size}"
+VMCORE="${KDUMP_VMCORE_FILE:-/proc/vmcore}"
+RECOVERY="${KDUMP_RECOVERY_FILE:-/run/cos/recovery_mode}"
+
+# Capture-kernel arguments only the image may set, besides those in its default list.
+IMAGE_ARGS="crashkernel root cos-img/filename elfcorehdr init"
+
+declare -A defaults=()    # key -> value in the defaults file
+declare -A overrides=()   # key -> value to write
+rejected=()               # items reported in the output header
+lineno=0
+
+log()  { echo "kdump-merge: $*"; }
+warn() { echo "kdump-merge: WARNING: $*" >&2; }
+
+# reject <item> <message>: report and remember an ignored override.
+reject() { warn "${OVERRIDE}:${lineno}: $2"; rejected+=("$1"); }
+
+# --- --reserved -------------------------------------------------------------------
+
+check_reserved() {
+    [ -e "$VMCORE" ] && return 0                     # capture boot
+    # Recovery has no persistent storage, so a capture would be lost; with kdump off,
+    # pstore keeps the panic log instead.
+    if [ -e "$RECOVERY" ]; then
+        log "kdump off: recovery system (no persistent storage; pstore records panics instead)"
+        return 1
+    fi
+    if [ ! -e "$CRASH_SIZE" ]; then
+        log "kdump off: this kernel has no kexec crash support"
+        return 1
+    fi
+    # Reads fail with EBUSY during a kexec load, so only a definite 0 means "off".
+    if [ "$(cat "$CRASH_SIZE" 2>/dev/null)" = 0 ]; then
+        log "kdump off: no crash kernel memory reserved (crashkernel= not set, or no range matches this machine's RAM)"
+        return 1
+    fi
+    return 0
+}
+
+# --- merge ------------------------------------------------------------------------
+
+trim() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    printf '%s' "${s%"${s##*[![:space:]]}"}"
+}
+
+unquote() {
+    if [[ "$1" =~ ^\"(.*)\"$ ]] || [[ "$1" =~ ^\'(.*)\'$ ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+    else
+        printf '%s' "$1"
+    fi
+}
+
+set_num_dumps() {
+    if [[ "$1" =~ ^0*([1-9]|10)$ ]]; then
+        overrides[KDUMP_NUM_DUMPS]="${BASH_REMATCH[1]}"
+    else
+        reject KDUMP_NUM_DUMPS "KDUMP_NUM_DUMPS must be 1-10, got '$1'; default kept"
+    fi
+}
+
+set_dump_dmesg() {
+    if [ "$1" = 0 ] || [ "$1" = 1 ]; then
+        overrides[KDUMP_DUMP_DMESG]="$1"
+    else
+        reject KDUMP_DUMP_DMESG "KDUMP_DUMP_DMESG must be 0 or 1, got '$1'; default kept"
+    fi
+}
+
+# Valid, unique operator arguments the image does not own, then the image's arguments.
+set_cmdline_append() {
+    local required owned tok extra=""
+    required="${defaults[KDUMP_CMDLINE_APPEND]-}"
+    owned="$IMAGE_ARGS"
+    for tok in $required; do owned="$owned ${tok%%=*}"; done
+
+    for tok in $1; do
+        if [[ ! "$tok" =~ ^[A-Za-z0-9_.,:/+-][A-Za-z0-9_.,:/+=-]*$ ]]; then
+            reject "$tok" "capture argument '${tok}' has characters that are not allowed; dropped"
+            continue
+        fi
+        case " $required $extra " in *" $tok "*) continue ;; esac      # duplicate
+        case " $owned " in *" ${tok%%=*} "*)
+            reject "$tok" "capture argument '${tok}' is set by the image; dropped"
+            continue ;;
+        esac
+        extra="${extra:+$extra }$tok"
+    done
+    overrides[KDUMP_CMDLINE_APPEND]="${extra:+$extra }$required"
+}
+
+parse_override() {
+    local line key value
+    while IFS= read -r line || [ -n "$line" ]; do
+        lineno=$((lineno + 1))
+        line="$(trim "$line")"
+        case "$line" in ''|'#'*) continue ;; esac
+        if [[ ! "$line" =~ ^([A-Z][A-Z0-9_]*)=(.*)$ ]]; then
+            reject "line ${lineno}" "not KEY=value, ignored"
+            continue
+        fi
+        key="${BASH_REMATCH[1]}"
+        value="$(unquote "${BASH_REMATCH[2]}")"
+        case "$key" in
+            KDUMP_NUM_DUMPS)      set_num_dumps "$value" ;;
+            KDUMP_DUMP_DMESG)     set_dump_dmesg "$value" ;;
+            KDUMP_CMDLINE_APPEND) set_cmdline_append "$value" ;;
+            *)                    reject "$key" "${key} cannot be overridden; default kept" ;;
+        esac
+    done < "$OVERRIDE"
+}
+
+# The defaults file is plain KEY=value (systemd reads the output as an EnvironmentFile).
+load_defaults() {
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+        [[ "$line" =~ ^([A-Z][A-Z0-9_]*)=(.*)$ ]] && defaults[${BASH_REMATCH[1]}]="$(unquote "${BASH_REMATCH[2]}")"
+    done < "$DEFAULTS"
+}
+
+# write_config <source>: the defaults with overridden values, written atomically.
+write_config() {
+    local source="$1" tmp line key
+    tmp="$(mktemp "$(dirname "$CONF")/.kdump-tools.XXXXXX" 2>/dev/null)" || return 1
+    {
+        echo "# Generated by /usr/lib/kdump/kdump-merge from ${DEFAULTS}. Overrides: ${source}"
+        [ "${#rejected[@]}" -gt 0 ] && echo "# Rejected: ${rejected[*]}"
+        while IFS= read -r line || [ -n "$line" ]; do
+            key="${line%%=*}"
+            if [[ "$line" =~ ^[A-Z][A-Z0-9_]*= ]] && [ -n "${overrides[$key]+set}" ]; then
+                printf '%s="%s"\n' "$key" "${overrides[$key]}"
+            else
+                printf '%s\n' "$line"
+            fi
+        done < "$DEFAULTS"
+    } > "$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$CONF" && return 0
+    rm -f "$tmp"
+    return 1
+}
+
+main() {
+    if [ "${1:-}" = "--reserved" ]; then
+        check_reserved
+        exit
+    fi
+
+    if [ ! -r "$DEFAULTS" ]; then
+        warn "${DEFAULTS} is missing; leaving ${CONF} unchanged"
+        exit 0
+    fi
+    cp -f "$DEFAULTS" "$CONF" 2>/dev/null || warn "cannot write ${CONF}"
+
+    load_defaults
+    local source="none (${OVERRIDE} absent)"
+    if [ -r "$OVERRIDE" ]; then
+        source="$OVERRIDE"
+        parse_override
+    fi
+
+    if ! write_config "$source"; then
+        warn "cannot write ${CONF}; leaving it unchanged"
+        exit 0
+    fi
+    local applied="" key
+    for key in "${!overrides[@]}"; do
+        [ "${overrides[$key]}" != "${defaults[$key]-}" ] && applied="${applied:+$applied }${key}=\"${overrides[$key]}\""
+    done
+    log "overrides from ${source}: ${applied:-none}"
+    exit 0
+}
+
+main "$@"
