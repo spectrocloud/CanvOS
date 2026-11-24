@@ -544,9 +544,7 @@ build-iso:
     FROM --platform=linux/${ARCH} $AURORABOOT_IMAGE
     ENV ISO_NAME=${ISO_NAME}
     COPY overlay/files-iso/ /overlay/
-    # Kairos reads the install config from the ISO root. On read-only media it
-    # no longer pulls user-data at boot, so it must be present at /config.yaml.
-    COPY --if-exists +validate-user-data/user-data /overlay/config.yaml
+    COPY --if-exists +validate-user-data/user-data /overlay/files-iso/config.yaml
     COPY --if-exists "$EDGE_CUSTOM_CONFIG" /overlay/.edge_custom_config.yaml
 
     # Generate grub.cfg based on FORCE_INTERACTIVE_INSTALL setting (without modifying source)
