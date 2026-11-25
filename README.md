@@ -509,7 +509,7 @@ To build the RHEL 9 STIG installer image (non-FIPS)
 ```shell
 # First, build and push the base image (see base-images/rhel-stig/README.md)
 # Then use the full registry path:
-./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.5.2-stig --OS_DISTRIBUTION=rhel --ARCH=amd64
+./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.7.0-stig --OS_DISTRIBUTION=rhel --ARCH=amd64
 ```
 
 To build the RHEL 9 STIG FIPS installer image
@@ -517,7 +517,7 @@ To build the RHEL 9 STIG FIPS installer image
 ```shell
 # First, build and push the base image (see base-images/rhel-stig/README.md)
 # Then use the full registry path:
-./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.5.2-fips-stig --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
+./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.7.0-fips-stig --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
 ```
 
 **Note**: For RHEL 9 STIG images, you must:

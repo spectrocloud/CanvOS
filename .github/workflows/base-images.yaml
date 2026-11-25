@@ -14,8 +14,8 @@ name: Build Kairos Base Images
 #   target = <one image>  that bake target; Hadron variants also push hadron-modules
 #
 # Tags come from the bake file, e.g.
-#   <registry>/kairos-ubuntu:24.04-core-amd64-generic-v4.5.2
-#   <registry>/kairos-hadron:v0.5.3-core-amd64-generic-v4.5.2-fips-uki
+#   <registry>/kairos-ubuntu:24.04-core-amd64-generic-v4.7.0
+#   <registry>/kairos-hadron:v0.5.3-core-amd64-generic-v4.7.0-fips-uki
 #
 # Every image is single-architecture; run once per arch.
 #
@@ -57,7 +57,7 @@ on:
         description: "Kairos version (also the kairos-init image tag and the image tag suffix)"
         required: false
         type: string
-        default: "v4.5.2"
+        default: "v4.7.0"
       hadron_version:
         description: "Hadron version (must be listed in base-images/hadron/modules.json)"
         required: false

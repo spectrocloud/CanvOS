@@ -92,7 +92,7 @@ From `base-images/`, with docker bake (RHEL 9 and 10):
 export SATELLITE_ACTIVATION_KEY='<activation key name>'   # secret
 export SAT_ORG='<Satellite organization>'                  # e.g. test-org
 export SAT_HOST='<Satellite hostname>'                     # e.g. katello.spectrocloud.dev
-export KAIROS_INIT_IMAGE='<mirrored kairos-init image>'    # e.g. quay.spectrocloud.dev/kairos/kairos-init:v4.5.2
+export KAIROS_INIT_IMAGE='<mirrored kairos-init image>'    # e.g. quay.spectrocloud.dev/kairos/kairos-init:v4.7.0
 
 cd base-images
 docker buildx bake --allow=fs.read=.. rhel-9-sat \

@@ -1,6 +1,6 @@
 ARG HADRON_VERSION=v0.5.3
 # kairos-init is tagged with the Kairos version it installs.
-ARG KAIROS_VERSION=v4.5.2
+ARG KAIROS_VERSION=v4.7.0
 ARG KAIROS_INIT_IMAGE=quay.io/kairos/kairos-init:${KAIROS_VERSION}
 ARG FIPS=false
 ARG IS_UKI=false

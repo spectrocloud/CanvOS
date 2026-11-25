@@ -50,10 +50,10 @@ Then use the full registry path in Earthly:
 
 ```bash
 # For non-FIPS
-./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.5.2-stig --OS_DISTRIBUTION=rhel --ARCH=amd64
+./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.7.0-stig --OS_DISTRIBUTION=rhel --ARCH=amd64
 
 # For FIPS
-./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.5.2-fips-stig --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
+./earthly.sh +iso --BASE_IMAGE=<your-registry>/kairos-rhel:9-core-amd64-generic-v4.7.0-fips-stig --OS_DISTRIBUTION=rhel --FIPS_ENABLED=true --ARCH=amd64
 ```
 
 **Important**: Earthly cannot use local-only Docker images. The image must be pushed to a registry that Earthly can access.
