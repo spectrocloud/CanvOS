@@ -420,6 +420,62 @@ INSTALL_AMD_GPU_DRIVERS_EFFECTIVE="${INSTALL_AMD_GPU_DRIVERS_EFFECTIVE:-${INSTAL
 AMDGPU_DRIVER_SOURCE_EFFECTIVE="$(peek_arg AMDGPU_DRIVER_SOURCE "$@")"
 AMDGPU_DRIVER_SOURCE_EFFECTIVE="${AMDGPU_DRIVER_SOURCE_EFFECTIVE:-${AMDGPU_DRIVER_SOURCE:-dkms}}"
 
+# ---------------------------------------------------------------------------
+# GPU kernel-module signing for Secure Boot (AMD + NVIDIA driver pre-install).
+#
+# GPU_MODULE_SIGNING=required (default) makes the build FAIL unless MOK_PRIV and
+# MOK_DER (the signing key and its certificate, content not paths; the pipeline
+# reads them from Vault) are set and are a matching pair. Every module is then
+# signed and verified, and the build fails if any is unsigned.
+#   AMD    : signed on this host by scripts/prebuild-amdgpu-artifact.sh; the key
+#            never enters Earthly. The image build only verifies the modules
+#            against the pinned certificate hash passed below.
+#   NVIDIA : modules are built inside the image, so the key reaches that single
+#            RUN as an Earthly secret (never a build arg, never in .arg or the
+#            layer), the same way UBUNTU_PRO_KEY travels.
+# Set GPU_MODULE_SIGNING=off (in .arg or --GPU_MODULE_SIGNING=off) to build
+# GPU images that are NOT Secure Boot ready.
+# ---------------------------------------------------------------------------
+INSTALL_NVIDIA_GPU_DRIVERS_EFFECTIVE="$(peek_arg INSTALL_NVIDIA_GPU_DRIVERS "$@")"
+INSTALL_NVIDIA_GPU_DRIVERS_EFFECTIVE="${INSTALL_NVIDIA_GPU_DRIVERS_EFFECTIVE:-${INSTALL_NVIDIA_GPU_DRIVERS:-false}}"
+GPU_MODULE_SIGNING_EFFECTIVE="$(peek_arg GPU_MODULE_SIGNING "$@")"
+GPU_MODULE_SIGNING_EFFECTIVE="${GPU_MODULE_SIGNING_EFFECTIVE:-${GPU_MODULE_SIGNING:-required}}"
+export GPU_MODULE_SIGNING="$GPU_MODULE_SIGNING_EFFECTIVE"
+
+if [ "$INSTALL_NVIDIA_GPU_DRIVERS_EFFECTIVE" = "true" ] || [ "$INSTALL_AMD_GPU_DRIVERS_EFFECTIVE" = "true" ]; then
+    if [ -f .arg ] && grep -qE '^[[:space:]]*(MOK_PRIV|MOK_DER)[[:space:]]*=' .arg; then
+        echo >&2 "ERROR: MOK_PRIV / MOK_DER must not be set in .arg (build args leak into the cache and 'docker history')."
+        echo >&2 "       Export them as environment variables instead."
+        exit 1
+    fi
+    case "$GPU_MODULE_SIGNING_EFFECTIVE" in
+        required)
+            if ! bash scripts/sign-kernel-modules.sh check-key; then
+                echo >&2 "ERROR: GPU_MODULE_SIGNING=required but no usable signing key. Export MOK_PRIV and MOK_DER"
+                echo >&2 "       (PEM or base64 content, from Vault), or pass --GPU_MODULE_SIGNING=off for an image that"
+                echo >&2 "       will not load these drivers under Secure Boot."
+                exit 1
+            fi
+            GPU_MODULE_SIGN_CERT_SHA256_EFFECTIVE="$(bash scripts/sign-kernel-modules.sh fingerprint)"
+            set -- "$@" "--GPU_MODULE_SIGNING=required" "--GPU_MODULE_SIGN_CERT_SHA256=${GPU_MODULE_SIGN_CERT_SHA256_EFFECTIVE}"
+            if [ "$INSTALL_NVIDIA_GPU_DRIVERS_EFFECTIVE" = "true" ]; then
+                export MOK_PRIV MOK_DER
+                DOCKER_SECRET_ENV+=(-e MOK_PRIV -e MOK_DER)
+                EARTHLY_SECRET_ARGS+=(--secret MOK_PRIV --secret MOK_DER)
+            fi
+            echo "GPU module signing: required (certificate SHA-256 ${GPU_MODULE_SIGN_CERT_SHA256_EFFECTIVE})"
+            ;;
+        off)
+            set -- "$@" "--GPU_MODULE_SIGNING=off"
+            echo "WARNING: GPU_MODULE_SIGNING=off -- GPU kernel modules will be UNSIGNED and will not load under Secure Boot." >&2
+            ;;
+        *)
+            echo >&2 "ERROR: GPU_MODULE_SIGNING must be 'required' or 'off' (got: '$GPU_MODULE_SIGNING_EFFECTIVE')."
+            exit 1
+            ;;
+    esac
+fi
+
 if [ "$INSTALL_AMD_GPU_DRIVERS_EFFECTIVE" = "true" ] && [ "$AMDGPU_DRIVER_SOURCE_EFFECTIVE" = "dkms" ]; then
     # Derive the same BASE_IMAGE the Earthfile derives, so we compile against
     # the same rootfs Earthly is about to build on. Only Ubuntu is supported

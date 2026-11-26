@@ -66,6 +66,19 @@
 #                            6.16.13, 30.30.1 line). Ignored in inbox mode. See
 #                            docs/amd-gpu-airgapped.md for the operator<->driver
 #                            compatibility matrix.
+#   GPU_MODULE_SIGNING       required | off. Default: required. Secure Boot module
+#                            signing (see scripts/sign-kernel-modules.sh). In
+#                            required mode the build FAILS if the signing key is
+#                            absent or any amdgpu module is unsigned or signed by
+#                            another key. Modules built in-container are signed
+#                            with MOK_PRIV/MOK_DER; a pre-built artifact is only
+#                            verified, against GPU_MODULE_SIGN_CERT_SHA256 (the
+#                            pinned SHA-256 of the signing cert). "off" ships
+#                            unsigned modules and does not work with Secure Boot.
+#                            Ignored in inbox mode (distro-signed in-tree driver).
+#   GPU_MODULE_SIGNING_DEFERRED  1 = the caller (prebuild-amdgpu-artifact.sh) signs
+#                            and verifies the modules after this script, so
+#                            signing is skipped here. Internal; do not set by hand.
 #   AMDGPU_INSTALL_SMI       true | false. Default: true. Install the amd-smi
 #                            host CLI and symlink into /usr/bin, for parity with
 #                            nvidia-smi. Prefers amdrocm-amdsmi from repo.amd.com
@@ -201,6 +214,7 @@ AMDGPU_DRIVER_SOURCE="${AMDGPU_DRIVER_SOURCE:-dkms}"
 AMDGPU_DRIVER_RELEASE="${AMDGPU_DRIVER_RELEASE:-31.40}"
 AMDGPU_REBUILD_INITRD="${AMDGPU_REBUILD_INITRD:-false}"
 AMDGPU_INSTALL_SMI="${AMDGPU_INSTALL_SMI:-true}"
+GPU_MODULE_SIGNING="${GPU_MODULE_SIGNING:-required}"
 AMDGPU_ROCM_APT_VERSION="${AMDGPU_ROCM_APT_VERSION:-latest}"
 AMDGPU_SMI_INSTALLED=""   # set to "yes" by install_amd_smi on success
 AMDSMI_PKG=""             # set by ensure_rocm_repo to the resolvable amd-smi package
@@ -210,6 +224,57 @@ case "${AMDGPU_DRIVER_SOURCE}" in
     dkms|inbox) ;;
     *) die "AMDGPU_DRIVER_SOURCE must be 'dkms' or 'inbox' (got: '${AMDGPU_DRIVER_SOURCE}')." ;;
 esac
+
+case "${GPU_MODULE_SIGNING}" in
+    required|off) ;;
+    *) die "GPU_MODULE_SIGNING must be 'required' or 'off' (got: '${GPU_MODULE_SIGNING}')." ;;
+esac
+
+# Secure Boot module signing helper (shared with install-nvidia-drivers.sh).
+SIGN_HELPER=""
+for _c in "${BASH_SOURCE[0]%/*}/sign-kernel-modules.sh" /tmp/sign-kernel-modules.sh; do
+    [ -r "${_c}" ] && { SIGN_HELPER="${_c}"; break; }
+done
+
+# Sign every module under /lib/modules/<kver>/updates and verify the result.
+# Required mode: a missing key, a missing helper or any unsigned module is fatal.
+sign_amdgpu_modules() {
+    if [ "${GPU_MODULE_SIGNING}" = "off" ]; then
+        warn "GPU_MODULE_SIGNING=off: amdgpu modules are UNSIGNED and will be rejected under Secure Boot."
+        return 0
+    fi
+    if [ "${GPU_MODULE_SIGNING_DEFERRED:-0}" = "1" ]; then
+        # Set by scripts/prebuild-amdgpu-artifact.sh: this container runs third-party
+        # package scripts, so the key is NOT mounted here. The caller signs and
+        # verifies the modules on the host before the artifact is used.
+        log "Module signing deferred to the caller (key is not available in this container)."
+        return 0
+    fi
+    [ -n "${SIGN_HELPER}" ] || die "GPU_MODULE_SIGNING=required but sign-kernel-modules.sh was not found next to this script or in /tmp."
+    log "Signing amdgpu modules for ${KVER} (Secure Boot) ..."
+    bash "${SIGN_HELPER}" sign "${KVER}" "/lib/modules/${KVER}/updates" \
+        || die "signing the amdgpu modules failed. Refusing to produce unsigned GPU modules."
+    # Ship the public certificate beside the modules so a consumer of a pre-built
+    # artifact can verify them (and pin the cert's SHA-256).
+    bash "${SIGN_HELPER}" export-cert /etc/canvos/gpu-module-signer.der \
+        || die "could not export the signing certificate."
+}
+
+# Verify only (no key needed): used when consuming a pre-built artifact.
+verify_amdgpu_modules() {
+    if [ "${GPU_MODULE_SIGNING}" = "off" ]; then
+        warn "GPU_MODULE_SIGNING=off: not checking amdgpu module signatures."
+        return 0
+    fi
+    [ -n "${SIGN_HELPER}" ] || die "GPU_MODULE_SIGNING=required but sign-kernel-modules.sh was not found next to this script or in /tmp."
+    [ -n "${GPU_MODULE_SIGN_CERT_SHA256:-}" ] || die "GPU_MODULE_SIGNING=required but GPU_MODULE_SIGN_CERT_SHA256 is not set; \
+cannot tell whether the artifact was signed by the expected key."
+    local cert="/etc/canvos/gpu-module-signer.der"
+    [ -s "${cert}" ] || die "the artifact carries no signing certificate (${cert}); it was not built with module signing."
+    GPU_MODULE_SIGN_CERT_FILE="${cert}" bash "${SIGN_HELPER}" verify "/lib/modules/${KVER}/updates" \
+        || die "the pre-built amdgpu artifact is unsigned or signed by an unexpected key. \
+Delete build/amdgpu-artifact-*.tar.gz and rebuild with MOK_PRIV/MOK_DER set."
+}
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -335,6 +400,10 @@ Artifact was built for a different kernel? Delete build/amdgpu-artifact-*.tar.gz
 and rebuild (AMDGPU_FORCE_REBUILD=1) or verify BASE_IMAGE matches."
     fi
 
+    # Secure Boot: every module in the artifact must be signed by the pinned key.
+    # Fails the build otherwise, so an unsigned artifact can never reach the image.
+    verify_amdgpu_modules
+
     log "Running depmod -a ${KVER} ..."
     depmod -a "${KVER}" || die "depmod failed for ${KVER}."
 
@@ -415,7 +484,7 @@ apt-get install -y --no-install-recommends \
     build-essential gcc make \
     dkms kmod libc6-dev initramfs-tools \
     bc bison flex libelf-dev libssl-dev dwarves \
-    cpio xz-utils \
+    cpio xz-utils zstd openssl \
     || die "failed to install build toolchain."
 
 # ---------------------------------------------------------------------------
@@ -490,16 +559,19 @@ apt-get update || warn "apt-get update after adding the AMD repo failed."
 # and the amdgpu-dkms postinst returns non-zero. Empty sign_tool tells DKMS
 # to skip signing entirely, sidestepping the mokutil invocation.
 #
-# CAVEAT: modules produced this way are unsigned -- consistent with the
-# Secure Boot / UKI limitation already documented in docs/amd-gpu-airgapped.md.
+# DKMS's own signing is therefore off, and the modules are signed afterwards by
+# sign_amdgpu_modules (scripts/sign-kernel-modules.sh) with the MOK key. That
+# also replaces the throw-away key DKMS can generate on its own, which no
+# firmware trusts. With GPU_MODULE_SIGNING=off the modules stay unsigned.
 # ---------------------------------------------------------------------------
-log "Disabling DKMS module signing (container has no UEFI efivars) ..."
+log "Disabling DKMS module signing (container has no UEFI efivars); modules are signed after the build ..."
 mkdir -p /etc/dkms/framework.conf.d
 cat > /etc/dkms/framework.conf.d/canvos-no-mok-signing.conf <<'EOF'
 # Managed by CanvOS install-amdgpu-drivers.sh
 # Empty sign_tool tells DKMS to skip module signing. Required for building
 # amdgpu-dkms inside container image builds where /sys/firmware/efi/efivars
-# is not available. Modules are unsigned; this path does not support Secure Boot.
+# is not available. The modules are signed afterwards by
+# scripts/sign-kernel-modules.sh (see install-amdgpu-drivers.sh).
 sign_tool=""
 EOF
 
@@ -608,6 +680,9 @@ fi
 
 log "Verified: amdgpu DKMS module installed for ${KVER}."
 find "${MODDIR}/updates" -name 'amdgpu.ko*' 2>/dev/null | sed 's/^/  /'
+
+# Secure Boot: sign every DKMS-built module and verify, before depmod / initrd / tar.
+sign_amdgpu_modules
 
 # ---------------------------------------------------------------------------
 # 8. Autoload amdgpu at boot (no blacklist needed -- dkms replaces the in-tree

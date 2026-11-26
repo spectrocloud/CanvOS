@@ -279,10 +279,14 @@ list if the bundle builder doesn't auto-detect them. Verify on a node with
 
 ## Limitations / caveats
 
-- **Secure Boot / UKI is not supported by this path.** When `IS_UKI=true`, DKMS
-  modules are unsigned and will not load under Secure Boot; that requires MOK
-  signing, which this script does **not** implement. Use the standard (non-UKI)
-  Ubuntu image for GPU nodes.
+- **Secure Boot:** the DKMS modules are signed with the MOK key by a dedicated
+  build step (`GPU_MODULE_SIGNING=required`, the default; see
+  `scripts/sign-kernel-modules.sh` and `.arg.template`). The key reaches that
+  step only as an Earthly secret, and the build fails if the key is absent or any
+  module is unsigned. The host must enroll the matching MOK certificate before
+  the modules will load; with `GPU_MODULE_SIGNING=off` they are unsigned and
+  Secure Boot rejects them. UKI images are not covered by this path: use the
+  standard (non-UKI) Ubuntu image for GPU nodes.
 - **amd64 / Ubuntu only.** The script targets apt-based Ubuntu images on
   `x86_64` (with a best-effort `sbsa` path for arm64). Non-Ubuntu distributions
   are out of scope.

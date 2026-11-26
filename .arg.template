@@ -120,6 +120,17 @@ FORCE_INTERACTIVE_INSTALL=false
 # NVIDIA_INSTALL_CONTAINER_TOOLKIT=false    # true to also pre-install nvidia-container-toolkit on host (then toolkit.enabled=false)
 # NVIDIA_REBUILD_INITRD=true                # Rebuild initrd so the nouveau blacklist applies at early boot
 
+# Secure Boot signing of the GPU kernel modules (applies when either GPU driver
+# pre-install above is enabled). See scripts/sign-kernel-modules.sh.
+# GPU_MODULE_SIGNING=required                # required (default) | off. required: the build FAILS unless
+#                                            #   every GPU module is signed and verified with the MOK key.
+#                                            #   off: unsigned modules, rejected under Secure Boot.
+# The key pair is NEVER set here. Export it in the environment before ./earthly.sh:
+#   export MOK_PRIV="$(cat MOK.priv)"        # private key, PEM text (or base64)
+#   export MOK_DER="$(base64 < MOK.der)"     # certificate, PEM text or base64 of the DER
+# earthly.sh pins the certificate's SHA-256 for the image build, signs AMD modules on the
+# build host and passes the key to NVIDIA's signing step as an Earthly secret only.
+
 # AMD Instinct GPU driver pre-install (for running the AMD GPU Operator in air-gapped
 # environments with driver.enable=false). Mutually exclusive with the NVIDIA options
 # above. See scripts/install-amdgpu-drivers.sh and docs/amd-gpu-airgapped.md for details.
