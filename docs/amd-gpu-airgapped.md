@@ -310,8 +310,14 @@ operator pods reach `Ready`.
 
 ## Limitations / caveats
 
-- **Secure Boot / UKI is not supported by this path** (unsigned DKMS modules
-  won't load). Use the standard (non-UKI) Ubuntu image for GPU nodes.
+- **Secure Boot:** in `dkms` mode the modules are signed with the MOK key
+  (`GPU_MODULE_SIGNING=required`, the default; see `scripts/sign-kernel-modules.sh`
+  and `.arg.template`) and the build fails if any is unsigned. The host must
+  enroll the matching MOK certificate before the modules will load. With
+  `GPU_MODULE_SIGNING=off` the modules are unsigned and Secure Boot rejects them.
+  `inbox` mode uses Ubuntu's own in-tree driver, which is signed by Canonical,
+  and is not touched by module signing. UKI images are not covered by this path:
+  use the standard (non-UKI) Ubuntu image for GPU nodes.
 - **amd64 / Ubuntu only.**
 - **Version alignment is yours to own** — `AMDGPU_DRIVER_RELEASE` must line up
   with the ROCm version of the operator images you bundle.

@@ -116,6 +116,14 @@ ARG AMDGPU_DRIVER_RELEASE=31.40
 # in-buildkit DKMS install (which fails in buildkit's RUN sandbox -- see docs)
 # and simply extracts the pre-built modules + firmware + config drop-ins.
 ARG AMDGPU_ARTIFACT_PATH=""
+# Secure Boot signing of the GPU kernel modules (AMD amdgpu + NVIDIA nvidia*).
+# required (default): the build fails unless every module is signed by the pinned
+# certificate. The key itself is NEVER a build arg: earthly.sh forwards MOK_PRIV /
+# MOK_DER as Earthly secrets (NVIDIA) or signs on the host (AMD) and passes only the
+# public certificate's SHA-256 here. off: unsigned modules (no Secure Boot).
+# See scripts/sign-kernel-modules.sh.
+ARG GPU_MODULE_SIGNING=required
+ARG GPU_MODULE_SIGN_CERT_SHA256=""
 # Default false: amdgpu is intentionally omitted from the initrd (see
 # scripts/install-amdgpu-drivers.sh -- multi-GPU amdgpu init emits enough
 # udev events to blow past dracut-initqueue's udev-settle timeout, dropping
@@ -1311,16 +1319,56 @@ base-image:
         IF [ "$INSTALL_NVIDIA_GPU_DRIVERS" = "true" ]
             COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
             COPY scripts/install-nvidia-drivers.sh /tmp/install-nvidia-drivers.sh
-            RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-nvidia-drivers.sh && \
-                NVIDIA_DRIVER_BRANCH="$NVIDIA_DRIVER_BRANCH" \
-                NVIDIA_DRIVER_TYPE="$NVIDIA_DRIVER_TYPE" \
-                NVIDIA_USE_CUDA_REPO="$NVIDIA_USE_CUDA_REPO" \
-                NVIDIA_INSTALL_FABRICMANAGER="$NVIDIA_INSTALL_FABRICMANAGER" \
-                NVIDIA_INSTALL_IMEX="$NVIDIA_INSTALL_IMEX" \
-                NVIDIA_INSTALL_CONTAINER_TOOLKIT="$NVIDIA_INSTALL_CONTAINER_TOOLKIT" \
-                NVIDIA_REBUILD_INITRD="$NVIDIA_REBUILD_INITRD" \
-                /tmp/install-nvidia-drivers.sh && \
-                rm -f /tmp/install-nvidia-drivers.sh /tmp/install-kernel-headers.sh
+            COPY scripts/sign-kernel-modules.sh /tmp/sign-kernel-modules.sh
+            IF [ "$GPU_MODULE_SIGNING" = "off" ]
+                RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-nvidia-drivers.sh && \
+                    GPU_MODULE_SIGNING=off \
+                    NVIDIA_DRIVER_BRANCH="$NVIDIA_DRIVER_BRANCH" \
+                    NVIDIA_DRIVER_TYPE="$NVIDIA_DRIVER_TYPE" \
+                    NVIDIA_USE_CUDA_REPO="$NVIDIA_USE_CUDA_REPO" \
+                    NVIDIA_INSTALL_FABRICMANAGER="$NVIDIA_INSTALL_FABRICMANAGER" \
+                    NVIDIA_INSTALL_IMEX="$NVIDIA_INSTALL_IMEX" \
+                    NVIDIA_INSTALL_CONTAINER_TOOLKIT="$NVIDIA_INSTALL_CONTAINER_TOOLKIT" \
+                    NVIDIA_REBUILD_INITRD="$NVIDIA_REBUILD_INITRD" \
+                    /tmp/install-nvidia-drivers.sh && \
+                    rm -f /tmp/install-nvidia-drivers.sh /tmp/install-kernel-headers.sh /tmp/sign-kernel-modules.sh
+            ELSE
+                # Two RUNs, so the signing key never shares a process tree with the
+                # third-party package scripts (NVIDIA / Ubuntu postinst, DKMS) that
+                # the install script executes:
+                #   1. install + build the modules, no key present;
+                #   2. a RUN that signs the built modules in place (extract-sign-
+                #      reinsert) and verifies them. The key arrives as an Earthly
+                #      secret (env var that exists only for that RUN; never a build
+                #      arg, a layer, the cache key or `docker history`).
+                # If MOK_PRIV / MOK_DER are missing, Earthly aborts before RUN 2,
+                # and the helper fails on a missing or mismatched key. Either way
+                # no unsigned image is produced.
+                RUN chmod 755 /tmp/install-kernel-headers.sh /tmp/install-nvidia-drivers.sh && \
+                    GPU_MODULE_SIGNING=required \
+                    GPU_MODULE_SIGNING_DEFERRED=1 \
+                    NVIDIA_DRIVER_BRANCH="$NVIDIA_DRIVER_BRANCH" \
+                    NVIDIA_DRIVER_TYPE="$NVIDIA_DRIVER_TYPE" \
+                    NVIDIA_USE_CUDA_REPO="$NVIDIA_USE_CUDA_REPO" \
+                    NVIDIA_INSTALL_FABRICMANAGER="$NVIDIA_INSTALL_FABRICMANAGER" \
+                    NVIDIA_INSTALL_IMEX="$NVIDIA_INSTALL_IMEX" \
+                    NVIDIA_INSTALL_CONTAINER_TOOLKIT="$NVIDIA_INSTALL_CONTAINER_TOOLKIT" \
+                    NVIDIA_REBUILD_INITRD="$NVIDIA_REBUILD_INITRD" \
+                    /tmp/install-nvidia-drivers.sh && \
+                    rm -f /tmp/install-nvidia-drivers.sh /tmp/install-kernel-headers.sh
+                RUN --secret MOK_PRIV --secret MOK_DER \
+                    kver=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
+                    find "/lib/modules/${kver}/updates" -name 'nvidia*.ko*' | grep -q . && \
+                    echo "Signing NVIDIA kernel modules for ${kver} (Secure Boot); key supplied as an Earthly secret" && \
+                    GPU_MODULE_SIGN_CERT_SHA256="$GPU_MODULE_SIGN_CERT_SHA256" \
+                    GPU_MODULE_SIGN_STATUS_FILE=/etc/canvos/gpu-module-signing.status \
+                        bash /tmp/sign-kernel-modules.sh sign "${kver}" "/lib/modules/${kver}/updates" && \
+                    GPU_MODULE_SIGN_CERT_SHA256="$GPU_MODULE_SIGN_CERT_SHA256" \
+                        bash /tmp/sign-kernel-modules.sh export-cert /etc/canvos/gpu-module-signer.der && \
+                    GPU_MODULE_SIGN_CERT_FILE=/etc/canvos/gpu-module-signer.der \
+                        bash /tmp/sign-kernel-modules.sh verify "/lib/modules/${kver}/updates" && \
+                    rm -f /tmp/sign-kernel-modules.sh
+            END
         END
 
         # AMD Instinct GPU driver (amdgpu-dkms) + kernel module, built against the
@@ -1334,16 +1382,23 @@ base-image:
             # this stage just extracts the resulting modules + firmware + drop-ins.
             IF [ "$AMDGPU_DRIVER_SOURCE" = "dkms" ] && [ "$AMDGPU_ARTIFACT_PATH" != "" ]
                 COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+                COPY scripts/sign-kernel-modules.sh /tmp/sign-kernel-modules.sh
                 COPY "$AMDGPU_ARTIFACT_PATH" /tmp/amdgpu-artifact.tar.gz
+                # The artifact was signed on the build host (scripts/prebuild-amdgpu-artifact.sh).
+                # No key is needed here: install-amdgpu-drivers.sh verifies every module in the
+                # artifact against the pinned GPU_MODULE_SIGN_CERT_SHA256 and fails the build
+                # if any is unsigned or signed by another key.
                 RUN --privileged \
                     chmod 755 /tmp/install-amdgpu-drivers.sh && \
                     AMDGPU_DRIVER_SOURCE=dkms \
                     AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
                     AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
                     AMDGPU_INSTALL_SMI="$AMDGPU_INSTALL_SMI" \
+                    GPU_MODULE_SIGNING="$GPU_MODULE_SIGNING" \
+                    GPU_MODULE_SIGN_CERT_SHA256="$GPU_MODULE_SIGN_CERT_SHA256" \
                     AMDGPU_ARTIFACT_PATH=/tmp/amdgpu-artifact.tar.gz \
                     /tmp/install-amdgpu-drivers.sh && \
-                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/amdgpu-artifact.tar.gz
+                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/amdgpu-artifact.tar.gz /tmp/sign-kernel-modules.sh
             ELSE
                 # inbox mode, OR dkms mode without a pre-built artifact (which
                 # will fail in buildkit's sandbox, but we let install-amdgpu-
@@ -1352,14 +1407,19 @@ base-image:
                 # in-buildkit DKMS path; inbox mode doesn't use it.
                 COPY scripts/install-kernel-headers.sh /tmp/install-kernel-headers.sh
                 COPY scripts/install-amdgpu-drivers.sh /tmp/install-amdgpu-drivers.sh
+                COPY scripts/sign-kernel-modules.sh /tmp/sign-kernel-modules.sh
+                # No key is available here, so in required mode the in-buildkit DKMS path
+                # fails rather than producing unsigned modules. Inbox mode keeps Ubuntu's
+                # own (distro-signed) in-tree driver and is not touched by module signing.
                 RUN --privileged \
                     chmod 755 /tmp/install-kernel-headers.sh /tmp/install-amdgpu-drivers.sh && \
                     AMDGPU_DRIVER_SOURCE="$AMDGPU_DRIVER_SOURCE" \
                     AMDGPU_DRIVER_RELEASE="$AMDGPU_DRIVER_RELEASE" \
                     AMDGPU_REBUILD_INITRD="$AMDGPU_REBUILD_INITRD" \
                     AMDGPU_INSTALL_SMI="$AMDGPU_INSTALL_SMI" \
+                    GPU_MODULE_SIGNING="$GPU_MODULE_SIGNING" \
                     /tmp/install-amdgpu-drivers.sh && \
-                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh
+                    rm -f /tmp/install-amdgpu-drivers.sh /tmp/install-kernel-headers.sh /tmp/sign-kernel-modules.sh
             END
         END
 

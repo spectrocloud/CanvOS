@@ -82,6 +82,21 @@
 #   NVIDIA_REBUILD_INITRD       "true" to rebuild the initrd so the nouveau
 #                               blacklist takes effect in early boot.
 #                               Default: true
+#   GPU_MODULE_SIGNING          required | off. Default: required. Secure Boot
+#                               module signing (scripts/sign-kernel-modules.sh).
+#                               required: every DKMS-built module under
+#                               /lib/modules/<kver>/updates is signed with the MOK
+#                               key (MOK_PRIV / MOK_DER, passed as Earthly secrets
+#                               and never written into the image) and verified; the
+#                               build FAILS if the key is absent, doesn't match the
+#                               certificate, or any module ends up unsigned.
+#                               off: unsigned modules, which Secure Boot rejects.
+#   GPU_MODULE_SIGN_CERT_SHA256 Pin: SHA-256 of the signing certificate (DER). The
+#                               build fails if MOK_DER is a different certificate.
+#   GPU_MODULE_SIGNING_DEFERRED 1 = the Earthfile signs the modules in a separate,
+#                               later RUN (the key is kept out of this one, which
+#                               executes third-party package scripts), so this
+#                               script neither needs nor uses the key.
 #
 set -u
 
@@ -99,6 +114,28 @@ NVIDIA_INSTALL_FABRICMANAGER="${NVIDIA_INSTALL_FABRICMANAGER:-true}"
 NVIDIA_INSTALL_IMEX="${NVIDIA_INSTALL_IMEX:-true}"
 NVIDIA_INSTALL_CONTAINER_TOOLKIT="${NVIDIA_INSTALL_CONTAINER_TOOLKIT:-false}"
 NVIDIA_REBUILD_INITRD="${NVIDIA_REBUILD_INITRD:-true}"
+GPU_MODULE_SIGNING="${GPU_MODULE_SIGNING:-required}"
+case "${GPU_MODULE_SIGNING}" in
+    required|off) ;;
+    *) die "GPU_MODULE_SIGNING must be 'required' or 'off' (got: '${GPU_MODULE_SIGNING}')." ;;
+esac
+
+# Secure Boot module signing helper (shared with install-amdgpu-drivers.sh).
+SIGN_HELPER=""
+for _c in "${BASH_SOURCE[0]%/*}/sign-kernel-modules.sh" /tmp/sign-kernel-modules.sh; do
+    [ -r "${_c}" ] && { SIGN_HELPER="${_c}"; break; }
+done
+if [ "${GPU_MODULE_SIGNING}" = "required" ] && [ "${GPU_MODULE_SIGNING_DEFERRED:-0}" = "1" ]; then
+    log "Module signing deferred: the modules are signed by a later build step, not here."
+elif [ "${GPU_MODULE_SIGNING}" = "required" ]; then
+    # Fail before the long driver install, not after it.
+    [ -n "${SIGN_HELPER}" ] || die "GPU_MODULE_SIGNING=required but sign-kernel-modules.sh was not found next to this script or in /tmp."
+    bash "${SIGN_HELPER}" check-key \
+        || die "GPU_MODULE_SIGNING=required but no usable signing key (MOK_PRIV / MOK_DER). \
+Refusing to build NVIDIA modules that Secure Boot would reject."
+else
+    warn "GPU_MODULE_SIGNING=off: NVIDIA modules will be UNSIGNED and rejected under Secure Boot."
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -121,6 +158,7 @@ apt-get install -y --no-install-recommends \
     ca-certificates curl wget gnupg \
     build-essential gcc make \
     dkms kmod libc6-dev pkg-config \
+    zstd xz-utils openssl \
     || die "failed to install build toolchain."
 
 # ---------------------------------------------------------------------------
@@ -253,6 +291,32 @@ else
     die "no nvidia*.ko modules found under ${MODDIR} -- DKMS build did not \
 produce modules for the image kernel. Check that linux-headers-${KVER} and a \
 matching gcc are installed."
+fi
+
+# ---------------------------------------------------------------------------
+# 7b. Secure Boot: sign every DKMS-built module (extract-sign-reinsert in place),
+#     then verify. Runs before depmod / initrd so nothing downstream sees an
+#     unsigned module. DKMS may already have signed with a throw-away key it
+#     generated inside the container; that signature is replaced, because no
+#     firmware trusts it.
+# ---------------------------------------------------------------------------
+if [ "${GPU_MODULE_SIGNING}" = "required" ] && [ "${GPU_MODULE_SIGNING_DEFERRED:-0}" != "1" ]; then
+    log "Signing NVIDIA kernel modules for ${KVER} (Secure Boot) ..."
+    if ! find "${MODDIR}/updates" -name 'nvidia*.ko*' 2>/dev/null | grep -q .; then
+        find "${MODDIR}" -name 'nvidia*.ko*' 2>/dev/null | sed 's/^/    /' >&2
+        die "no nvidia modules under ${MODDIR}/updates to sign. They came from somewhere \
+other than DKMS, and only DKMS-built modules can be signed with our key."
+    fi
+    GPU_MODULE_SIGN_STATUS_FILE=/etc/canvos/gpu-module-signing.status \
+        bash "${SIGN_HELPER}" sign "${KVER}" "${MODDIR}/updates" \
+        || die "GPU MODULE SIGNING: FAILED (nvidia): signing the NVIDIA modules failed. Refusing to produce unsigned GPU modules."
+    mkdir -p /etc/canvos
+    bash "${SIGN_HELPER}" export-cert /etc/canvos/gpu-module-signer.der \
+        || die "could not export the signing certificate."
+    # Belt and braces: re-verify what is actually on disk, from the exported public cert only.
+    GPU_MODULE_SIGN_CERT_FILE=/etc/canvos/gpu-module-signer.der \
+        bash "${SIGN_HELPER}" verify "${MODDIR}/updates" \
+        || die "post-sign verification of the NVIDIA modules failed."
 fi
 
 # ---------------------------------------------------------------------------
