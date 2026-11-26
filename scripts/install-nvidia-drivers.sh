@@ -307,8 +307,9 @@ if [ "${GPU_MODULE_SIGNING}" = "required" ] && [ "${GPU_MODULE_SIGNING_DEFERRED:
         die "no nvidia modules under ${MODDIR}/updates to sign. They came from somewhere \
 other than DKMS, and only DKMS-built modules can be signed with our key."
     fi
-    bash "${SIGN_HELPER}" sign "${KVER}" "${MODDIR}/updates" \
-        || die "signing the NVIDIA modules failed. Refusing to produce unsigned GPU modules."
+    GPU_MODULE_SIGN_STATUS_FILE=/etc/canvos/gpu-module-signing.status \
+        bash "${SIGN_HELPER}" sign "${KVER}" "${MODDIR}/updates" \
+        || die "GPU MODULE SIGNING: FAILED (nvidia): signing the NVIDIA modules failed. Refusing to produce unsigned GPU modules."
     mkdir -p /etc/canvos
     bash "${SIGN_HELPER}" export-cert /etc/canvos/gpu-module-signer.der \
         || die "could not export the signing certificate."

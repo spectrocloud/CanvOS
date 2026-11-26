@@ -1359,7 +1359,9 @@ base-image:
                 RUN --secret MOK_PRIV --secret MOK_DER \
                     kver=$(printf '%s\n' /lib/modules/* | xargs -n1 basename | sort -V | tail -1) && \
                     find "/lib/modules/${kver}/updates" -name 'nvidia*.ko*' | grep -q . && \
+                    echo "Signing NVIDIA kernel modules for ${kver} (Secure Boot); key supplied as an Earthly secret" && \
                     GPU_MODULE_SIGN_CERT_SHA256="$GPU_MODULE_SIGN_CERT_SHA256" \
+                    GPU_MODULE_SIGN_STATUS_FILE=/etc/canvos/gpu-module-signing.status \
                         bash /tmp/sign-kernel-modules.sh sign "${kver}" "/lib/modules/${kver}/updates" && \
                     GPU_MODULE_SIGN_CERT_SHA256="$GPU_MODULE_SIGN_CERT_SHA256" \
                         bash /tmp/sign-kernel-modules.sh export-cert /etc/canvos/gpu-module-signer.der && \

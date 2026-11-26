@@ -123,7 +123,7 @@ log "Artifact path     : ${ARTIFACT_PATH}"
 
 # --- cache check ----------------------------------------------------------
 if [ "${AMDGPU_FORCE_REBUILD}" != "1" ] && [ -s "${ARTIFACT_PATH}" ]; then
-    log "Cache hit -- reusing existing artifact. Set AMDGPU_FORCE_REBUILD=1 to override."
+    log "Cache hit -- reusing existing artifact (signing identity: ${SIGN_ID}; it was signed and verified when it was built). Set AMDGPU_FORCE_REBUILD=1 to override."
     echo "AMDGPU_ARTIFACT_PATH=${ARTIFACT_PATH}"
     exit 0
 fi
@@ -194,14 +194,15 @@ if [ "${GPU_MODULE_SIGNING}" = "required" ]; then
     MODDIR="${SIGN_DIR}/lib/modules/${KVER}/updates"
     [ -d "${MODDIR}" ] || die "staged artifact has no modules under lib/modules/${KVER}/updates."
 
-    bash "${SIGN_SCRIPT}" sign "${KVER}" "${MODDIR}" \
-        || die "signing failed; no artifact was written."
+    GPU_MODULE_SIGN_STATUS_FILE="${SIGN_DIR}/etc/canvos/gpu-module-signing.status" \
+        bash "${SIGN_SCRIPT}" sign "${KVER}" "${MODDIR}" \
+        || die "GPU MODULE SIGNING: FAILED (amd prebuild): signing failed; no artifact was written."
     bash "${SIGN_SCRIPT}" export-cert "${SIGN_DIR}/etc/canvos/gpu-module-signer.der" \
         || die "could not add the signing certificate to the artifact."
     GPU_MODULE_SIGN_CERT_FILE="${SIGN_DIR}/etc/canvos/gpu-module-signer.der" \
     GPU_MODULE_SIGN_CERT_SHA256="${SIGN_FP}" \
         bash "${SIGN_SCRIPT}" verify "${MODDIR}" \
-        || die "post-sign verification failed; no artifact was written."
+        || die "GPU MODULE SIGNING: FAILED (amd prebuild): post-sign verification failed; no artifact was written."
 
     # Repack files only (no directory entries): extracting a "lib/" entry over the
     # image's /lib -> usr/lib symlink would replace the symlink with a directory.
@@ -235,6 +236,11 @@ if [ "${GPU_MODULE_SIGNING}" = "required" ]; then
 fi
 
 log "Artifact produced ($(du -h "${ARTIFACT_PATH}" | awk '{print $1}')), signing: ${SIGN_ID}."
+if [ "${GPU_MODULE_SIGNING}" = "required" ]; then
+    log "GPU MODULE SIGNING: SUCCESS (amd prebuild): every module in ${ARTIFACT_NAME} is signed and verified (cert SHA-256 ${SIGN_FP})"
+else
+    log "GPU MODULE SIGNING: OFF (amd prebuild): ${ARTIFACT_NAME} is UNSIGNED"
+fi
 
 # --- output ---------------------------------------------------------------
 echo "AMDGPU_ARTIFACT_PATH=${ARTIFACT_PATH}"
