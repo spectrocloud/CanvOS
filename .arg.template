@@ -126,8 +126,8 @@ FORCE_INTERACTIVE_INSTALL=false
 #                                            #   every GPU module is signed and verified with the MOK key.
 #                                            #   off: unsigned modules, rejected under Secure Boot.
 # The key pair is NEVER set here. Export it in the environment before ./earthly.sh:
-#   export MOK_PRIV="$(base64 < MOK.priv)"   # private key, base64 (as stored in Vault devsecops/data/secure-boot)
-#   export MOK_DER="$(base64 < MOK.der)"     # certificate, base64 (same Vault path). PEM text is accepted too.
+#   export MOK_PRIV="$(base64 < MOK.priv)"   # private key, base64 (Vault devsecops/data/secure-boot, key AIL_MOK.priv)
+#   export MOK_DER="$(base64 < MOK.der)"     # certificate, base64 (Vault key AIL_MOK.der). PEM text is accepted too.
 # earthly.sh pins the certificate's SHA-256 for the image build, signs AMD modules on the
 # build host and passes the key to NVIDIA's signing step as an Earthly secret only.
 
