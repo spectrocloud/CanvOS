@@ -54,8 +54,10 @@ die() {
 log() { echo "[sign-kernel-modules] $*" >&2; }
 dbg() { [ "${GPU_MODULE_SIGNING_DEBUG:-0}" != "1" ] || echo "[sign-kernel-modules] debug: $*" >&2; }
 
-WORK=""
+WORK=""     # key material and certificates: tmpfs when available, always removed
+BIG=""      # large temporary module copies: a normal directory (see mk_workdir)
 cleanup() {
+    [ -z "${BIG}" ] || rm -rf "${BIG}"
     if [ -n "${WORK}" ] && [ -d "${WORK}" ]; then
         find "${WORK}" -type f -exec sh -c 'command -v shred >/dev/null 2>&1 && shred -u "$1" 2>/dev/null || rm -f "$1"' _ {} \; 2>/dev/null || true
         rm -rf "${WORK}"
@@ -73,6 +75,12 @@ mk_workdir() {
     else
         WORK="$(mktemp -d "${TMPDIR:-/tmp}/modsign.XXXXXX")"
     fi
+    # Module copies must NOT live in /dev/shm: inside a BuildKit RUN that is a ~64 MB tmpfs,
+    # and amdgpu.ko alone is ~40 MB unpacked (two copies are held while verifying), which ran
+    # it out of space ("No space left on device" -> a bogus MALFORMED signature). They hold no
+    # secrets, so a plain temp directory (removed on exit) is fine.
+    BIG="$(mktemp -d "${GPU_MODULE_SIGN_TMPDIR:-${TMPDIR:-/tmp}}/modsign-mods.XXXXXX")"
+    dbg "key material in ${WORK}; module temp files in ${BIG}"
 }
 
 # ---------------------------------------------------------------------------
@@ -262,12 +270,12 @@ sig_signer_cn() {
 }
 
 sign_one() { # <kver> <sign-file-or-empty> <module>
-    local kver="$1" sf="$2" m="$3" body="${WORK}/body.ko" sig="${WORK}/sig.der" prev="none (unsigned)" size
+    local kver="$1" sf="$2" m="$3" body="${BIG}/body.ko" sig="${BIG}/sig.der" prev="none (unsigned)" size
     decompress "$m" "${body}"
     if has_magic "${body}"; then
-        split_module "${body}" "${WORK}/stripped.ko" "${sig}" || die "$m: has a malformed signature trailer."
+        split_module "${body}" "${BIG}/stripped.ko" "${sig}" || die "$m: has a malformed signature trailer."
         prev="signed by '$(sig_signer_cn "${sig}")' (not our key; replacing it)"
-        mv -f "${WORK}/stripped.ko" "${body}"
+        mv -f "${BIG}/stripped.ko" "${body}"
     fi
     size=$(wc -c < "${body}" | tr -d ' ')
     log "signing ${m##*/}: previous signature: ${prev}; ${size} bytes unsigned; method: $([ -n "${sf}" ] && echo sign-file || echo openssl)"
@@ -283,8 +291,8 @@ sign_one() { # <kver> <sign-file-or-empty> <module>
             printf '\0\0\2\0\0\0\0\0'
             be32 "$(wc -c < "${sig}" | tr -d ' ')"
             printf '%s\n' "${MAGIC}"
-        } > "${WORK}/signed.ko"
-        mv -f "${WORK}/signed.ko" "${body}"
+        } > "${BIG}/signed.ko"
+        mv -f "${BIG}/signed.ko" "${body}"
     fi
     dbg "${m##*/}: signed module is $(wc -c < "${body}" | tr -d ' ') bytes (signature + trailer added: $(( $(wc -c < "${body}" | tr -d ' ') - size )) bytes)"
     recompress "${body}" "$m"
@@ -293,13 +301,15 @@ sign_one() { # <kver> <sign-file-or-empty> <module>
 }
 
 verify_one() { # <module> -> 0 ok, 1 unsigned / bad
-    local m="$1" body="${WORK}/vbody.ko" content="${WORK}/vcontent.ko" sig="${WORK}/vsig.der" rc=0
-    decompress "$m" "${body}"
+    local m="$1" body="${BIG}/vbody.ko" content="${BIG}/vcontent.ko" sig="${BIG}/vsig.der" rc=0
+    decompress "$m" "${body}" || die "$m: could not unpack the module (disk full in ${BIG}?)."
     if ! has_magic "${body}"; then
         echo "UNSIGNED  $m (no module signature)" >&2; rm -f "${body}"; return 1
     fi
-    if ! split_module "${body}" "${content}" "${sig}"; then
-        echo "MALFORMED $m (bad signature trailer)" >&2; rm -f "${body}"; return 1
+    local srr=0
+    split_module "${body}" "${content}" "${sig}" || srr=$?
+    if [ "${srr}" -ne 0 ]; then
+        echo "MALFORMED $m (bad signature trailer, or a write failed: $(df -h "${BIG}" 2>/dev/null | awk 'NR==2 {print $4" free in "$6}'))" >&2; rm -f "${body}"; return 1
     fi
     if openssl cms -verify -binary -inform DER -in "${sig}" -content "${content}" \
             -certfile "${CERT_PEM}" -noverify -nointern -purpose any -out /dev/null 2>/dev/null; then
