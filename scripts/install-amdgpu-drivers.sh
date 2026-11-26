@@ -269,6 +269,16 @@ verify_amdgpu_modules() {
     [ -n "${SIGN_HELPER}" ] || die "GPU_MODULE_SIGNING=required but sign-kernel-modules.sh was not found next to this script or in /tmp."
     [ -n "${GPU_MODULE_SIGN_CERT_SHA256:-}" ] || die "GPU_MODULE_SIGNING=required but GPU_MODULE_SIGN_CERT_SHA256 is not set; \
 cannot tell whether the artifact was signed by the expected key."
+    # The artifact path exits before the toolchain install below, so the base image may
+    # not have the tools the verifier needs yet (modules are .ko.zst; signatures are CMS).
+    local need=""
+    command -v openssl >/dev/null 2>&1 || need="${need} openssl"
+    command -v zstd >/dev/null 2>&1 || need="${need} zstd"
+    if [ -n "${need}" ]; then
+        log "Installing${need} to verify module signatures ..."
+        apt-get update -qq && apt-get install -y --no-install-recommends ${need} \
+            || die "could not install${need}, needed to verify the amdgpu module signatures."
+    fi
     local cert="/etc/canvos/gpu-module-signer.der"
     [ -s "${cert}" ] || die "the artifact carries no signing certificate (${cert}); it was not built with module signing."
     GPU_MODULE_SIGN_CERT_FILE="${cert}" bash "${SIGN_HELPER}" verify "/lib/modules/${KVER}/updates" \
